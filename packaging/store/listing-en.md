@@ -52,6 +52,12 @@ Sign documents digitally
 • See every signature in a document in the Signatures panel: whether it's intact, who signed
   and whether the file changed afterwards.
 
+Translate as you read
+• Select text and choose Translate to see it in another language in a bubble beside it. Copy
+  the translation or add it to the page as a note.
+• Use MyMemory with no account, or your own free DeepL, Azure AI Translator or LibreTranslate
+  key. Translation is off until you turn it on, and only the text you select is sent.
+
 Also included
 • Compare two versions of a document and see what changed.
 • An accessibility checker, tag editor and experimental auto-tagging.
@@ -71,11 +77,12 @@ https://github.com/linguagraph/pdf-editor.
 
 ## What's new in this version [up to 1,500 characters]
 
-• Digital signatures: sign PDFs with a USB token, smart card or certificate file, with an
-  optional trusted timestamp.
-• New Signatures panel: check the signatures in a document, offline.
-• Request signatures: place a named signature box for each signer and email them the file.
-• Starts much faster.
+• Translate selected text: choose Translate on the text toolbar or the right-click menu to see
+  a translation in a bubble beside the selection, then copy it or add it as a note.
+• Works with MyMemory (no account needed), DeepL API Free, Azure AI Translator or your own
+  LibreTranslate server. Set it up in Preferences ▸ Translation.
+• Private by default: translation is off until you agree once, and only the selected text is
+  sent to the service you pick. API keys are stored encrypted.
 
 ## Product features [up to 20, each up to 200 characters]
 
@@ -132,7 +139,9 @@ starts LibreOffice, if installed, to convert Office files. It doesn't need an ac
 credentials. To try it, open any PDF from File ▸ Open, or from Explorer with "Open with".
 Digital signing needs a certificate of the tester's own; any .pfx file works. A USB token's PIN
 prompt comes from Windows or the token's software. A timestamp connects only to a server the
-user enters, and that option is off by default.
+user enters, and that option is off by default. Translation (select text, then Translate) is
+off until the user agrees to a one-time notice; it then sends only the selected text to the
+chosen service. MyMemory needs no key, so it can be tested without an account.
 
 ## Images
 
