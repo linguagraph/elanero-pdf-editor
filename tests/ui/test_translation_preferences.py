@@ -46,6 +46,13 @@ def messages(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
     return shown
 
 
+def fake_dpapi(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reversible stand-in for DPAPI, so the stored-key path is the same on every OS."""
+    monkeypatch.setattr(secrets, "can_encrypt", lambda: True)
+    monkeypatch.setattr(secrets, "encrypt", lambda data: b"sealed:" + data)
+    monkeypatch.setattr(secrets, "decrypt", lambda data: data.removeprefix(b"sealed:"))
+
+
 def encryption_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     def refuse(_data: bytes) -> bytes:
         raise SecretError("Windows refused")
@@ -114,6 +121,7 @@ def test_the_connection_test_says_what_it_sends(qtbot, settings: AppSettings) ->
 def test_a_key_that_cant_be_encrypted_turns_translation_off_and_saves_the_rest(
     qtbot, settings: AppSettings, monkeypatch: pytest.MonkeyPatch, messages
 ) -> None:
+    fake_dpapi(monkeypatch)
     settings.set_translation_key("deepl", "old-key:fx")  # what is stored now
     encryption_fails(monkeypatch)
     d = PreferencesDialog(settings)
