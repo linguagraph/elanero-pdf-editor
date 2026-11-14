@@ -49,7 +49,7 @@ Test notes.
 def test_the_real_listing_is_valid() -> None:
     """What the next release will send: this fails the PR that breaks it."""
     listing = store_listing.load()
-    assert "Digital signatures" in listing.release_notes
+    assert "Translate selected text" in listing.release_notes
     assert listing.features[0] == "Edit text and images directly in your PDF"
     assert "PDF editor" in listing.keywords
     assert "runFullTrust" in listing.notes_for_certification
@@ -64,7 +64,7 @@ def test_the_real_listing_reads_right_once_unwrapped() -> None:
     assert "\nPrivate by design\nElanero works offline." in listing.description
     assert "\nEdit the document itself\n• Change text" in listing.description
     assert (
-        "• Digital signatures: sign PDFs with a USB token, smart card or certificate file, with"
+        "• Translate selected text: choose Translate on the text toolbar or the right-click menu"
         in (listing.release_notes)
     )
     assert all(line.startswith("•") for line in listing.release_notes.splitlines())
