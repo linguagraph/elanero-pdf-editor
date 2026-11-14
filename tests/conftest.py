@@ -12,6 +12,20 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "generated"
 
 
+@pytest.fixture(autouse=True)
+def _no_translation_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may reach a translation service: the default opener refuses, loudly.
+
+    Tests that need replies pass their own opener to the clients or fake the translator.
+    """
+    from pdfeditor.services.translation import http as translation_http
+
+    def refuse(request: object, timeout: float) -> object:
+        raise AssertionError(f"a test tried to reach a translation service: {request!r}")
+
+    monkeypatch.setattr(translation_http, "urllib_opener", refuse)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--update-goldens",

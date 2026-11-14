@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QUrl
+import urllib.parse
+
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -20,16 +22,27 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pdfeditor.core import secrets
+from pdfeditor.core.secrets import SecretError
 from pdfeditor.services import file_association
+from pdfeditor.services.translation import (
+    PRIVACY_NOTICE_URL,
+    SERVICES,
+    TranslationConfig,
+    make_translator,
+)
+from pdfeditor.services.translation.base import COMMON_LANGUAGES, TranslationError
 from pdfeditor.ui.color_picker import pick_color
 from pdfeditor.ui.dialogs.base import FormDialog, add_row, caption, form_layout
 from pdfeditor.ui.i18n import available_languages
+from pdfeditor.ui.jobs import Job
 from pdfeditor.ui.settings import AppSettings
 from pdfeditor.ui.style.tokens import ACCENT_PRESETS, METRICS
 from pdfeditor.ui.theme import theme_manager
 
 CUSTOM = "custom"
-CATEGORIES = ("General", "Appearance", "Tools", "Performance", "Shortcuts")
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")  # plain http is fine only on this PC
+CATEGORIES = ("General", "Appearance", "Tools", "Translation", "Performance", "Shortcuts")
 
 
 def _swatch(color: str) -> QIcon:
@@ -166,6 +179,9 @@ class PreferencesDialog(FormDialog):
             "Edit Text & Images runs OCR on scanned pages and replaces the scanned text with "
             "real text, so you can double-click a paragraph to edit it.",
         )
+
+        # -- Translation (TR4): the same settings as the first-use notice, plus the keys
+        self._build_translation(settings)
 
         # -- Performance
         form = self.page_forms["Performance"]
@@ -337,7 +353,219 @@ class PreferencesDialog(FormDialog):
             self._select_accent(color.to_hex())
         self._previous_accent = self.accent.currentIndex()
 
+    # -- translation -----------------------------------------------------------------------
+    def _build_translation(self, settings: AppSettings) -> None:
+        form = self.page_forms["Translation"]
+        self.translation_enabled = QCheckBox("Translate selected text online")
+        self.translation_enabled.setChecked(settings.translation_enabled)
+        add_row(
+            form,
+            "",
+            self.translation_enabled,
+            "Off until you agree. Only the text you select is sent, and only when you choose "
+            "Translate.",
+        )
+        self.translation_service = QComboBox()
+        self.translation_service.setAccessibleName("Translation service")
+        for service_id, name in SERVICES.items():
+            self.translation_service.addItem(name, service_id)
+        self.translation_service.setCurrentIndex(
+            max(0, self.translation_service.findData(settings.translation_service))
+        )
+        self.translation_service.currentIndexChanged.connect(self._service_changed)
+        add_row(form, "Service:", self.translation_service)
+
+        # Each service's own fields sit in one group, shown only for the chosen service.
+        self._service_groups: dict[str, QWidget] = {}
+        self._service_forms: dict[str, QFormLayout] = {}
+        self.email = QLineEdit(settings.translation_email)
+        self.email.setPlaceholderText("Optional")
+        self._service_group(
+            "mymemory",
+            "Email:",
+            self.email,
+            "Optional. MyMemory allows more translations a day for a registered email, which "
+            "it receives with each request.",
+        )
+        self.deepl_key = QLineEdit(settings.translation_key("deepl"))
+        self.deepl_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.deepl_key.setAccessibleName("DeepL API key")
+        self._service_group(
+            "deepl",
+            "API key:",
+            self.deepl_key,
+            "Your DeepL API key. Free keys end in “:fx”. It's stored encrypted for your Windows "
+            "account.",
+        )
+        self.libre_url = QLineEdit(settings.libretranslate_url)
+        self.libre_url.setPlaceholderText("https://")
+        self.libre_url.setAccessibleName("LibreTranslate server address")
+        self._service_group(
+            "libretranslate",
+            "Server:",
+            self.libre_url,
+            "The address of a LibreTranslate server, yours or a public one. Only http and "
+            "https work.",
+        )
+        self.libre_key = QLineEdit(settings.translation_key("libretranslate"))
+        self.libre_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.libre_key.setAccessibleName("LibreTranslate API key")
+        self._service_group(
+            "libretranslate",
+            "API key:",
+            self.libre_key,
+            "Only if the server asks for one. Stored encrypted for your Windows account.",
+        )
+        self.libre_warning = caption(
+            "Text and key are sent unencrypted over http://. Use https:// unless the server "
+            "runs on this computer."
+        )
+        self.libre_warning.setVisible(False)
+        self._service_forms["libretranslate"].addRow(self.libre_warning)
+        self.libre_url.textChanged.connect(self._update_libre_warning)
+        self._update_libre_warning()
+        self._show_service_groups()
+
+        self.target = QComboBox()
+        self.target.setAccessibleName("Default target language")
+        self.target.addItem("Same as the app", "")
+        for code, name in sorted(COMMON_LANGUAGES.items(), key=lambda item: item[1]):
+            self.target.addItem(name, code)
+        self.target.setCurrentIndex(max(0, self.target.findData(settings.translation_target)))
+        add_row(
+            form,
+            "Default language:",
+            self.target,
+            "The language selected text is translated into. The bubble remembers the last one "
+            "you chose.",
+        )
+
+        self.test_button = QPushButton("Test Connection")
+        self.test_button.clicked.connect(self.test_connection)
+        self.test_status = caption("")
+        self.test_status.setAccessibleName("Connection test result")
+        test_line = QHBoxLayout()
+        test_line.setSpacing(METRICS.space(2))
+        test_line.addWidget(self.test_button)
+        test_line.addWidget(caption("Sends a short test text to the service."), 1)
+        test_column = QVBoxLayout()
+        test_column.setContentsMargins(0, 0, 0, 0)
+        test_column.addLayout(test_line)
+        test_column.addWidget(self.test_status)
+        test_row = QWidget()
+        test_row.setLayout(test_column)
+        add_row(form, "", test_row)
+        self._test_job: Job | None = None
+
+        privacy = caption(
+            "Only the selected text is sent, to the service you choose, and only when you "
+            "translate. The service sees the text and your IP address. "
+            f'<a href="{PRIVACY_NOTICE_URL}">What Elanero sends, and to whom</a>'
+        )
+        privacy.setTextFormat(Qt.TextFormat.RichText)
+        privacy.setOpenExternalLinks(True)
+        form.addRow("", privacy)
+
+    def _service_group(self, service: str, label: str, field: QWidget, help_text: str) -> None:
+        """Add one field of ``service`` to its group (the group is made on first use)."""
+        if service not in self._service_groups:
+            group = QWidget()
+            group_form = form_layout(group)
+            group_form.setContentsMargins(0, 0, 0, 0)
+            self._service_groups[service] = group
+            self._service_forms[service] = group_form
+            self.page_forms["Translation"].addRow(group)
+        add_row(self._service_forms[service], label, field, help_text)
+
+    def _update_libre_warning(self, *_args: object) -> None:
+        parts = urllib.parse.urlsplit(self.libre_url.text().strip())
+        plain_remote = parts.scheme == "http" and parts.hostname not in LOCAL_HOSTS
+        self.libre_warning.setVisible(plain_remote)
+
+    def _show_service_groups(self) -> None:
+        chosen = str(self.translation_service.currentData())
+        form = self.page_forms["Translation"]
+        for service, group in self._service_groups.items():
+            form.setRowVisible(group, service == chosen)
+
+    def _service_changed(self, _index: int) -> None:
+        self._show_service_groups()
+        self.test_status.setText("")
+
+    def _config_from_fields(self) -> TranslationConfig:
+        return TranslationConfig(
+            mymemory_email=self.email.text().strip(),
+            deepl_key=self.deepl_key.text().strip(),
+            libretranslate_url=self.libre_url.text().strip(),
+            libretranslate_key=self.libre_key.text().strip(),
+        )
+
+    def test_connection(self) -> None:
+        """Try the chosen service with the values on this page (not the saved ones)."""
+        if self._test_job is not None:
+            return
+        try:
+            translator = make_translator(
+                str(self.translation_service.currentData()), self._config_from_fields()
+            )
+        except TranslationError as exc:
+            self.test_status.setText(exc.message)
+            return
+
+        def work(job: Job) -> tuple[bool, str]:
+            try:
+                translator.test_connection(job.token)
+            except TranslationError as exc:
+                return False, exc.message
+            return True, "Connected. The service answered."
+
+        job = Job(work, label="Test translation service")
+        job.finished.connect(self._on_test_done)  # bound methods: dropped with the dialog
+        job.failed.connect(self._on_test_failed)
+        self._test_job = job
+        self.test_button.setEnabled(False)
+        self.test_status.setText("Testing…")
+        job.start()
+
+    def _on_test_done(self, outcome: object) -> None:
+        if self._test_job is None:
+            return  # cancelled when the dialog closed
+        self._test_job = None
+        self.test_button.setEnabled(True)
+        if isinstance(outcome, tuple):
+            self.test_status.setText(str(outcome[1]))
+        else:
+            self.test_status.setText("The test failed. Try again.")
+
+    def _on_test_failed(self, _message: str) -> None:
+        self._on_test_done(None)
+
+    def done(self, result: int) -> None:
+        if self._test_job is not None:
+            self._test_job.cancel()
+            self._test_job = None
+        super().done(result)
+
     def accept(self) -> None:
+        # Everything that can fail is checked before anything is written, so a failure
+        # leaves the saved settings as they were.
+        identity = ""
+        if self.translation_enabled.isChecked():
+            try:
+                translator = make_translator(
+                    str(self.translation_service.currentData()), self._config_from_fields()
+                )
+            except TranslationError as exc:
+                QMessageBox.warning(self, "Translation", exc.message)
+                return
+            identity = translator.cache_id
+        try:
+            for value in (self.deepl_key.text().strip(), self.libre_key.text().strip()):
+                if value and secrets.can_encrypt():
+                    secrets.encrypt(value.encode("utf-8"))  # raises before anything is saved
+        except SecretError as exc:
+            QMessageBox.warning(self, "Translation", f"The API key couldn't be saved: {exc}")
+            return
         s = self.settings
         s.author = self.author.text().strip()
         s.default_zoom = str(self.zoom.currentData())
@@ -354,4 +582,13 @@ class PreferencesDialog(FormDialog):
         s.single_window = self.single_window.isChecked()
         s.undo_disk_mb = self.undo_disk.value()
         s.cache_mb = self.cache.value()
+        s.translation_enabled = self.translation_enabled.isChecked()
+        if identity:  # switching translation on is the consent for this service
+            s.translation_consented = identity
+        s.translation_service = str(self.translation_service.currentData())
+        s.translation_email = self.email.text()
+        s.libretranslate_url = self.libre_url.text()
+        s.translation_target = str(self.target.currentData() or "")
+        s.set_translation_key("deepl", self.deepl_key.text())
+        s.set_translation_key("libretranslate", self.libre_key.text())
         super().accept()

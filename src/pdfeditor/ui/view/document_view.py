@@ -14,6 +14,7 @@ from PySide6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
     QEvent,
+    QPoint,
     QPointF,
     QRect,
     QRectF,
@@ -113,6 +114,7 @@ class DocumentView(QGraphicsView):
     tool_used = Signal()  # a creation tool made something (one-shot tools end)
     annotation_activated = Signal(object)  # AnnotationModel double-clicked
     annotation_context_menu = Signal(object, object)  # AnnotationModel, global QPoint
+    text_context_menu = Signal(object)  # global QPoint, over a text selection (Select tool)
     note_clicked = Signal(object, object)  # AnnotationModel (sticky note), global QPoint
     document_changed = Signal(object)  # tuple[Change, ...] after the view has updated itself
     user_activity = Signal()  # mouse moved, wheel turned or pinched over the pages
@@ -929,6 +931,14 @@ class DocumentView(QGraphicsView):
             QToolTip.showText(event.globalPosition().toPoint(), text, self)
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        # A comment under the pointer keeps its own menu (the select tool emits it on press).
+        if (
+            self.tool.name == "select"
+            and self.annotation_at(self.mapToScene(event.pos())) is None
+            and self.selection_contains(event.pos())  # a QAbstractScrollArea: viewport pixels
+        ):
+            self.text_context_menu.emit(event.globalPos())
+            return
         if self.tool.name in ("select", "hand"):
             super().contextMenuEvent(event)
             return
@@ -1025,6 +1035,18 @@ class DocumentView(QGraphicsView):
 
     def has_selection(self) -> bool:
         return self.selection is not None and not self.selection.is_empty
+
+    def selection_contains(self, pos: QPoint) -> bool:
+        """Whether viewport point ``pos`` is over the selected text itself (its line boxes,
+        not the bounds of the whole selection)."""
+        if not self.has_selection():
+            return False
+        for page in self.visible_pages():
+            for rect in self._selection_rects_for(page):
+                bounds = self.viewport_rect([(page, rect)])
+                if bounds is not None and bounds.contains(pos):
+                    return True
+        return False
 
     def selected_text(self) -> str:
         if self.selection is None or self.selection.is_empty:

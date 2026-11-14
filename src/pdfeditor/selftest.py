@@ -629,6 +629,23 @@ def _checks(workdir: Path) -> list[tuple[str, Check]]:
             raise AssertionError(f"instance slots {indexes}, expected [0, 1]")
         return f"New Window runs {Path(program).name} {' '.join(args)}; slots {indexes}"
 
+    def translation() -> str:
+        """The Windows DPAPI call is native code (ctypes), so it's exercised in the frozen exe
+        too; the text cleanup is pure Python and checked alongside it."""
+        from pdfeditor.core.secrets import can_encrypt, decrypt, encrypt
+        from pdfeditor.services.translation.text import clean_pdf_text, split_chunks
+
+        if clean_pdf_text("a trans-\nlation") != "a translation":
+            raise AssertionError("line joining is wrong")
+        if "".join(split_chunks("one. two three", 6)) != "one. two three":
+            raise AssertionError("chunks don't rejoin to the text")
+        if not can_encrypt():
+            return "text cleanup OK (secrets stay in memory on this platform)"
+        sealed = encrypt(b"self-test secret")
+        if decrypt(sealed) != b"self-test secret":
+            raise AssertionError("DPAPI round trip failed")
+        return "text cleanup and DPAPI round trip OK"
+
     return [
         ("engine", engine),
         ("open bundled sample", open_sample),
@@ -654,6 +671,7 @@ def _checks(workdir: Path) -> list[tuple[str, Check]]:
         ("licenses", licenses),
         ("branding", branding),
         ("instances", instances),
+        ("translation", translation),
     ]
 
 

@@ -128,6 +128,7 @@ from pdfeditor.ui.tools.base import Tool
 from pdfeditor.ui.tools.hand import HandTool
 from pdfeditor.ui.tools.select import SelectTool
 from pdfeditor.ui.tools_controller import ToolsController
+from pdfeditor.ui.translate_controller import TranslateController
 from pdfeditor.ui.view.document_view import DocumentView
 from pdfeditor.ui.view.mode_banner import Mode, ModeBanner
 from pdfeditor.ui.view.note_popup import NotePopup
@@ -358,6 +359,7 @@ class MainWindow(QMainWindow):
         self.optimize = OptimizeController(self)
         self.compare = CompareController(self)
         self.pdfa = PdfaController(self)
+        self.translate = TranslateController(self)  # the bubble behind Translate (TR3)
         self.contextual = ContextualToolbars(self)  # mini toolbars over the selection
         self.panels.insert(3, self.protect.panel)
         self.nav_panels.add_panel(self.protect.panel, "redactions", "eraser", 3)
@@ -930,6 +932,7 @@ class MainWindow(QMainWindow):
         view.annotation_selection_changed.connect(self._update_ui)
         view.annotation_activated.connect(self.edit_annotation)
         view.annotation_context_menu.connect(self.annotation_menu)
+        view.text_context_menu.connect(self.text_menu)
         # Tools belong to their document: these act on the view that sent them.
         view.escape_pressed.connect(lambda: self.set_tool("select", view))
         view.back_to_select.connect(lambda: self.set_tool("select", view))
@@ -1175,9 +1178,26 @@ class MainWindow(QMainWindow):
         ShortcutsDialog(self.shortcuts, self).exec()
 
     def show_preferences(self) -> None:
-        if PreferencesDialog(self.prefs, self).exec():
+        self.open_preferences()
+
+    def open_preferences(self, category: str = "") -> None:
+        """Preferences, opened on ``category`` (a page name) when given."""
+        dialog = PreferencesDialog(self.prefs, self)
+        if category:
+            dialog.show_category(category)
+        if dialog.exec():
             self._apply_prefs()
             self.set_theme(Theme(self.prefs.theme))
+
+    def text_menu(self, pos: QPoint) -> None:
+        """Right-click on selected text (Select tool)."""
+        view = self.current_view()
+        if view is None or not view.has_selection():
+            return
+        menu = QMenu(self)
+        menu.addAction(self.tr("Copy"), view.copy_selection)
+        menu.addAction(self.tr("Translate…"), lambda: self.translate.start(view))
+        menu.exec(pos)
 
     def offer_recovery(self, dialog: RecoveryDialog | None = None) -> int:
         """After a crash, offer the recovery copies left behind. Returns documents reopened."""
