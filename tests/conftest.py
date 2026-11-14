@@ -13,6 +13,15 @@ FIXTURES = ROOT / "tests" / "fixtures" / "generated"
 
 
 @pytest.fixture(autouse=True)
+def _no_session_translation_keys() -> None:
+    """Where DPAPI isn't available (Linux), keys live in a process-wide dict for the run.
+    Clear it so one test's key can't leak into the next."""
+    from pdfeditor.ui import settings as settings_module
+
+    settings_module._SESSION_KEYS.clear()
+
+
+@pytest.fixture(autouse=True)
 def _no_translation_network(
     monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:
