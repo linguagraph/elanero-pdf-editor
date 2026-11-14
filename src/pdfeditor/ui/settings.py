@@ -2,18 +2,28 @@
 
 from __future__ import annotations
 
+import base64
 import getpass
 import json
+import logging
 
 from PySide6.QtCore import QSettings
 
+from pdfeditor.core import secrets
+from pdfeditor.core.secrets import SecretError
 from pdfeditor.model.fonts import FontRef
 from pdfeditor.model.scan import ScanCleanup
 from pdfeditor.services.ocr import OcrOptions, installed_languages, pick_languages
+from pdfeditor.services.translation import DEFAULT_SERVICE, SERVICES, TranslationConfig
+from pdfeditor.services.translation.libretranslate import ServerLanguage, normalize_url
 from pdfeditor.ui.style.tokens import is_color
+
+log = logging.getLogger(__name__)
 
 DEFAULT_ZOOMS = ("fit_width", "fit_page", "100")
 MAX_RECENT_FONTS = 8
+# Translation keys kept in memory only, where DPAPI isn't available (never written to disk).
+_SESSION_KEYS: dict[str, str] = {}
 
 
 def _default_author() -> str:
@@ -240,6 +250,159 @@ class AppSettings:
         existing = [r for r in self.recent_fonts if r != ref]
         updated = [ref, *existing][:MAX_RECENT_FONTS]
         self.qs.setValue("fonts/recent", json.dumps([r.to_dict() for r in updated]))
+
+    # translation (TR2): off until the user agrees once; keys are encrypted (see translation_key)
+    @property
+    def translation_enabled(self) -> bool:
+        """The user has agreed to send selected text to the translation service."""
+        return self._bool("translation/enabled", False)
+
+    @translation_enabled.setter
+    def translation_enabled(self, value: bool) -> None:
+        self.qs.setValue("translation/enabled", "true" if value else "false")
+
+    @property
+    def translation_consented(self) -> str:
+        """The service identity (its ``cache_id``, which includes a LibreTranslate server's
+        address) the user agreed to send selected text to. Another service asks again."""
+        return self._str("translation/consented", "")
+
+    @translation_consented.setter
+    def translation_consented(self, value: str) -> None:
+        self.qs.setValue("translation/consented", value)
+
+    @property
+    def translation_service(self) -> str:
+        value = self._str("translation/service", DEFAULT_SERVICE)
+        return value if value in SERVICES else DEFAULT_SERVICE
+
+    @translation_service.setter
+    def translation_service(self, value: str) -> None:
+        self.qs.setValue("translation/service", value if value in SERVICES else DEFAULT_SERVICE)
+
+    @property
+    def translation_email(self) -> str:
+        """Optional: MyMemory raises its daily limit for a registered email."""
+        return self._str("translation/email", "")
+
+    @translation_email.setter
+    def translation_email(self, value: str) -> None:
+        self.qs.setValue("translation/email", value.strip())
+
+    @property
+    def libretranslate_url(self) -> str:
+        return self._str("translation/libretranslate_url", "")
+
+    @libretranslate_url.setter
+    def libretranslate_url(self, value: str) -> None:
+        self.qs.setValue("translation/libretranslate_url", value.strip())
+
+    @property
+    def azure_region(self) -> str:
+        """The Azure resource's region (e.g. "westeurope"); empty for a global resource."""
+        return self._str("translation/azure_region", "")
+
+    @azure_region.setter
+    def azure_region(self, value: str) -> None:
+        self.qs.setValue("translation/azure_region", value.strip())
+
+    def store_libretranslate_languages(self, url: str, languages: list[ServerLanguage]) -> None:
+        """The server's language list, kept with the address it came from."""
+        self.qs.setValue("translation/libretranslate_languages_url", normalize_url(url))
+        self.qs.setValue(
+            "translation/libretranslate_languages",
+            json.dumps([list(item) for item in languages]),
+        )
+
+    def libretranslate_language_list(self, url: str) -> list[ServerLanguage] | None:
+        """The stored list, but only if it was fetched from this same address."""
+        if self._str("translation/libretranslate_languages_url", "") != normalize_url(url):
+            return None
+        try:
+            stored = json.loads(self._str("translation/libretranslate_languages", ""))
+        except (json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(stored, list):
+            return None
+        out = [
+            (str(item[0]), str(item[1]), str(item[2]))
+            for item in stored
+            if isinstance(item, list) and len(item) == 3
+        ]
+        return out or None
+
+    @property
+    def translation_target(self) -> str:
+        """Default target language code ("" = the app's language)."""
+        return self._str("translation/target", "")
+
+    @translation_target.setter
+    def translation_target(self, value: str) -> None:
+        self.qs.setValue("translation/target", value)
+
+    @property
+    def translation_last_source(self) -> str:
+        return self._str("translation/last_source", "")
+
+    @translation_last_source.setter
+    def translation_last_source(self, value: str) -> None:
+        self.qs.setValue("translation/last_source", value)
+
+    def translation_key(self, name: str) -> str:
+        """A stored key: ``name`` is "deepl" or "libretranslate".
+
+        On Windows the QSettings value is DPAPI ciphertext (base64), readable only by this
+        Windows account. Elsewhere keys are kept in memory for this run only, never on disk.
+        """
+        if not secrets.can_encrypt():
+            return _SESSION_KEYS.get(name, "")
+        blob = self._str(f"translation/{name}_key", "")
+        if not blob:
+            return ""
+        try:
+            return secrets.decrypt(base64.b64decode(blob)).decode("utf-8")
+        except (SecretError, ValueError):
+            log.warning("a stored %s key can't be read; it must be entered again", name)
+            return ""
+
+    def sealed_translation_key(self, value: str) -> str:
+        """``value`` in its stored form, encrypted now: base64 DPAPI ciphertext on Windows
+        (raises :class:`SecretError` if that fails). Where DPAPI isn't available the key is
+        returned as it is, and only ever kept in memory (see :meth:`store_sealed_translation_key`).
+        """
+        value = value.strip()
+        if not value or not secrets.can_encrypt():
+            return value
+        return base64.b64encode(secrets.encrypt(value.encode("utf-8"))).decode("ascii")
+
+    def store_sealed_translation_key(self, name: str, sealed: str) -> None:
+        """Store what :meth:`sealed_translation_key` returned. Cannot fail on encryption, so a
+        caller can save it after other settings without a half-saved state."""
+        if not secrets.can_encrypt():
+            if sealed:
+                _SESSION_KEYS[name] = sealed
+            else:
+                _SESSION_KEYS.pop(name, None)
+            return
+        if sealed:
+            self.qs.setValue(f"translation/{name}_key", sealed)
+        else:
+            self.qs.remove(f"translation/{name}_key")
+
+    def set_translation_key(self, name: str, value: str) -> None:
+        self.store_sealed_translation_key(name, self.sealed_translation_key(value))
+
+    def translation_config(self) -> TranslationConfig:
+        """The settings the translation services need, keys included."""
+        return TranslationConfig(
+            mymemory_email=self.translation_email,
+            deepl_key=self.translation_key("deepl"),
+            libretranslate_url=self.libretranslate_url,
+            libretranslate_key=self.translation_key("libretranslate"),
+            libretranslate_languages=self.libretranslate_language_list(self.libretranslate_url),
+            azure_key=self.translation_key("azure"),
+            azure_region=self.azure_region,
+        )
 
     # OCR: the options of the last run, preselected next time (and used by automatic OCR)
     @property

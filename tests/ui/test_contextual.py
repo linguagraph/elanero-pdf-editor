@@ -124,8 +124,9 @@ def test_text_selection_shows_toolbar_above_or_below(qtbot, window: MainWindow, 
     assert abs(bar.geometry().center().x() - sel.center().x()) <= 2
     assert QApplication.focusWidget() is view  # showing it didn't take the keyboard
     names = [b.accessibleName() for b in bar.visible_buttons()]
-    assert names[:6] == [
+    assert names[:7] == [
         "Copy",
+        "Translate",
         "Highlight",
         "Underline",
         "Strikethrough",

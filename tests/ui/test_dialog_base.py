@@ -234,6 +234,91 @@ def test_preferences_shortcuts_page(window: MainWindow, monkeypatch) -> None:
     alone.close()
 
 
+# -- preferences: Translation (TR4) ---------------------------------------------------------
+def test_translation_page_saves_its_settings(qtbot, settings: AppSettings) -> None:
+    d = PreferencesDialog(settings)
+    qtbot.addWidget(d)
+    assert not d.translation_enabled.isChecked()  # off until the user agrees
+    d.translation_enabled.setChecked(True)
+    d.translation_service.setCurrentIndex(d.translation_service.findData("deepl"))
+    d.deepl_key.setText("  dk-secret:fx ")
+    d.email.setText("me@example.com")
+    d.libre_url.setText("https://lt.example.org")
+    d.target.setCurrentIndex(d.target.findData("de"))
+    d.accept()
+    assert settings.translation_enabled is True
+    assert settings.translation_service == "deepl"
+    assert settings.translation_key("deepl") == "dk-secret:fx"
+    assert settings.translation_email == "me@example.com"
+    assert settings.libretranslate_url == "https://lt.example.org"
+    assert settings.translation_target == "de"
+    again = PreferencesDialog(settings)
+    qtbot.addWidget(again)
+    assert again.translation_service.currentData() == "deepl"
+    assert again.deepl_key.text() == "dk-secret:fx"
+    assert again.target.currentData() == "de"
+
+
+def test_translation_fields_follow_the_chosen_service(qtbot, settings: AppSettings) -> None:
+    d = PreferencesDialog(settings)
+    qtbot.addWidget(d)
+    d.translation_service.setCurrentIndex(d.translation_service.findData("mymemory"))
+    assert not d._service_groups["mymemory"].isHidden()
+    assert d._service_groups["deepl"].isHidden()
+    assert d._service_groups["libretranslate"].isHidden()
+    d.translation_service.setCurrentIndex(d.translation_service.findData("libretranslate"))
+    assert d._service_groups["mymemory"].isHidden()
+    assert not d._service_groups["libretranslate"].isHidden()
+    d.translation_service.setCurrentIndex(d.translation_service.findData("deepl"))
+    assert not d._service_groups["deepl"].isHidden()
+
+
+def test_translation_test_connection_reports_in_place(
+    qtbot, settings: AppSettings, monkeypatch
+) -> None:
+    from pdfeditor.services.translation.base import AuthError
+
+    class Answers:
+        error: AuthError | None = None
+
+        def __init__(self, service_id: str, config: object) -> None:
+            self.service_id = service_id
+
+        def languages(self) -> dict[str, str]:
+            return {"de": "German"}
+
+        def test_connection(self, token: object = None) -> None:
+            if Answers.error is not None:
+                raise Answers.error
+
+    import pdfeditor.ui.dialogs.preferences as prefs_module
+
+    monkeypatch.setattr(prefs_module, "make_translator", lambda sid, cfg: Answers(sid, cfg))
+    d = PreferencesDialog(settings)
+    qtbot.addWidget(d)
+    d.translation_service.setCurrentIndex(d.translation_service.findData("deepl"))
+    d.test_button.click()
+    qtbot.waitUntil(lambda: d._test_job is None, timeout=5000)
+    assert d.test_status.text() == "Connected. The service answered."
+    Answers.error = AuthError("DeepL rejected the API key.")
+    d.test_button.click()
+    qtbot.waitUntil(lambda: d._test_job is None, timeout=5000)
+    assert d.test_status.text() == "DeepL rejected the API key."
+    assert d.test_button.isEnabled()
+
+
+def test_translation_test_connection_explains_a_bad_configuration(
+    qtbot, settings: AppSettings
+) -> None:
+    d = PreferencesDialog(settings)
+    qtbot.addWidget(d)
+    d.translation_service.setCurrentIndex(d.translation_service.findData("libretranslate"))
+    d.libre_url.setText("ftp://nope")
+    d.test_button.click()  # no job: the address is refused before anything is sent
+    assert d._test_job is None
+    assert "starting with https" in d.test_status.text()
+
+
 # -- migrated dialogs ------------------------------------------------------------------------------
 def migrated(window: MainWindow, view) -> dict[str, Callable[[], FormDialog]]:
     n = view.page_count

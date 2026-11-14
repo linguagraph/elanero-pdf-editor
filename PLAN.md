@@ -482,6 +482,18 @@ Keys come from three routes behind one signer interface: the Windows certificate
 6. Cancel at the PIN prompt: "cancelled", no file written. Press Cancel in the app while the prompt is open: takes effect once the prompt is answered, no file written.
 7. *Request Signatures (not tested with Acrobat):* request two signatures in Elanero, open the `-for-signature.pdf` in Acrobat, sign one field, and check that its placeholder is replaced while the other field stays empty and both signatures validate.
 
+### Phase TR: Translate selected text (M), issue #115
+
+Translate the selected text with a free online service and show the translation in a bubble next to the selection. The services are MyMemory (the default, no key), DeepL API Free (the user's key) and LibreTranslate (a server URL and an optional key). It's opt-in: nothing is sent until the user accepts a one-time notice, and only the selected text is ever sent. No new runtime dependencies (`urllib` only).
+
+- [x] **TR1 Translation service.** `services/translation/`: a `Translator` protocol and capabilities (`detects_source`, `max_request_bytes`, languages), the MyMemory, DeepL Free and LibreTranslate clients, PDF text cleanup (joining broken lines and hyphenated words), splitting text at sentence boundaries to fit request limits, a cache in memory, typed errors (offline, quota, bad key, too long) and cancellation. Tests use mocked HTTP only.
+- [x] **TR2 Settings and key storage.** `AppSettings` translation preferences (enabled/consented, service, MyMemory email, LibreTranslate URL, last source and target). API keys are encrypted with DPAPI (`ctypes`, Windows; elsewhere kept in memory only) and never logged.
+- [x] **TR3 Bubble.** A Translate button on the text mini toolbar and in the selection's context menu. The first-use consent notice. A popover with a spinner, From/To pickers ("Detect" only when the service detects the language; otherwise the document's `/Lang` or the last one used), Copy, Add as note (highlight + note, one undo step), attribution and errors. Esc, clicking outside or a new selection closes it and cancels the job.
+- [x] **TR4 Preferences → Translation.** An on/off switch, the service, a key/URL/email per service, the default target language, Test connection, and a privacy note.
+- [x] **TR6 Azure AI Translator.** A fourth service: Translator v3 (`POST https://api.cognitive.microsofttranslator.com/translate?api-version=3.0`), the user's key (DPAPI) and optional region, source detection, per-service codes, and error mapping (401 auth; 403001 free quota; 429 rate). Preferences fields, consent, PRIVACY.md and the Store listing.
+- [x] **TR7 Open points from review.** Preferences saves the other settings when translation can't be switched on (invalid URL, a key that can't be encrypted), keeps translation off and says why. LibreTranslate's Test connection stores the server's `/languages` list, and the pickers offer only those. An opt-in live smoke test (`network` marker, skipped by default).
+- [x] **TR5 Docs.** `PRIVACY.md` (what's sent, to whom, when) and a line in the Store listing.
+
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.
 - A permissive engine backend (pypdfium2 + pikepdf) implementing `engine/base.py`. The contract tests from Phase 1 are its acceptance suite.

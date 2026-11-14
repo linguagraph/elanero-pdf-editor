@@ -1,7 +1,7 @@
 """Floating mini toolbars next to what's selected (Phase U7).
 
-* Text selected with the Select tool: Copy, Highlight, Underline, Strikeout, Add note, Redact
-  (and Edit text where the engine can edit content).
+* Text selected with the Select tool: Copy, Translate, Highlight, Underline, Strikeout, Add
+  note, Redact (and Edit text where the engine can edit content).
 * A comment or shape selected: color, opacity, Reply, Delete (locked ones: Reply and info).
 * Pages selected in the organizer: Rotate left/right, Delete, Extract.
 
@@ -307,6 +307,12 @@ class ContextualToolbars:
             _tr("Copy"),
             self.w.act_copy.trigger,
             _tr("Copy ({keys})").format(keys=copy_keys) if copy_keys else "",
+        )
+        self.translate_button = bar.add_button(
+            "languages",
+            _tr("Translate"),
+            lambda: self.w.translate.start(self.view),
+            _tr("Translate the selected text"),
         )
         bar.add_separator()
         self.highlight_button = bar.add_button(

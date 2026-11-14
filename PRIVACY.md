@@ -4,7 +4,8 @@ _Applies to every version of Elanero: the Microsoft Store app, the installer and
 `Elanero.exe`._
 
 **Elanero collects no personal data.** It has no accounts, no telemetry, no analytics, no
-advertising and no crash reporting to us. Your documents never leave your computer.
+advertising and no crash reporting to us. Your documents never leave your computer, except
+text you choose to translate.
 
 ## What stays on your computer
 
@@ -27,6 +28,16 @@ Elanero works offline. It connects to the internet only when you ask it to:
 - **Downloading an OCR language.** Elanero downloads the language file from GitHub
   (`github.com/tesseract-ocr/tessdata_fast`). GitHub sees your IP address, as with any
   download; see [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
+- **Translating selected text.** Translation is off until you agree to it once. After that,
+  when you select text and choose Translate, Elanero sends only that selected text to the
+  service you picked: MyMemory (Translated.net), DeepL, Microsoft Azure AI Translator, or a
+  LibreTranslate server you enter.
+  The service sees the text and your IP address. With MyMemory you can add an email address,
+  which is sent with each request for a higher daily limit. Each service's privacy policy is
+  linked from the notice and from Preferences ▸ Translation. Your DeepL, Azure or LibreTranslate key
+  is stored encrypted for your Windows account, and is sent only to that service. The Azure
+  region, if you enter one, is stored as plain text. Nothing is
+  sent in the background, and you can turn translation off in Preferences.
 - **Opening a link.** When you click a web link in a document or in Elanero, it opens in your
   web browser.
 - **Adding a timestamp to a signature.** If you turn on "Add a trusted timestamp" when signing

@@ -61,8 +61,9 @@ Also included
 
 Private by design
 Elanero works offline. It has no account, no telemetry and no ads, and your documents never
-leave your computer. It goes online only when you ask it to: to download an OCR language, or
-to add a timestamp to a signature from a timestamp server you choose.
+leave your computer. It goes online only when you ask it to: to download an OCR language, to
+translate selected text (off until you turn it on), or to add a timestamp to a signature from
+a timestamp server you choose.
 
 Open source
 Elanero is free software under the GNU AGPL-3.0-or-later. Its source code is at
@@ -95,6 +96,7 @@ https://github.com/linguagraph/pdf-editor.
 15. Free and open source (AGPL-3.0-or-later)
 16. Sign PDFs digitally with a USB token, smart card or certificate file
 17. Check a document's digital signatures, and request signatures from others
+18. Translate selected text in a bubble, with MyMemory, DeepL, Azure or your own LibreTranslate server
 
 ## Search terms [up to 7]
 
