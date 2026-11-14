@@ -13,11 +13,16 @@ FIXTURES = ROOT / "tests" / "fixtures" / "generated"
 
 
 @pytest.fixture(autouse=True)
-def _no_translation_network(monkeypatch: pytest.MonkeyPatch) -> None:
+def _no_translation_network(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
     """No test may reach a translation service: the default opener refuses, loudly.
 
     Tests that need replies pass their own opener to the clients or fake the translator.
+    The opt-in live tests (marked ``network``) are the only exception.
     """
+    if request.node.get_closest_marker("network"):
+        return
     from pdfeditor.services.translation import http as translation_http
 
     def refuse(request: object, timeout: float) -> object:

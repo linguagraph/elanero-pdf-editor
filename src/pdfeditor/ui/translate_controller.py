@@ -76,6 +76,8 @@ def recipient_of(translator: Translator) -> str:
     if translator.id == "libretranslate":
         host = urllib.parse.urlsplit(translator.homepage).netloc
         return f"the LibreTranslate server at {host} (its operator's privacy policy applies)"
+    if translator.id == "azure":
+        return "Microsoft Azure AI Translator"
     return translator.name
 
 

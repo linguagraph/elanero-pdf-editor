@@ -30,11 +30,13 @@ Elanero works offline. It connects to the internet only when you ask it to:
   download; see [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
 - **Translating selected text.** Translation is off until you agree to it once. After that,
   when you select text and choose Translate, Elanero sends only that selected text to the
-  service you picked: MyMemory (Translated.net), DeepL, or a LibreTranslate server you enter.
+  service you picked: MyMemory (Translated.net), DeepL, Microsoft Azure AI Translator, or a
+  LibreTranslate server you enter.
   The service sees the text and your IP address. With MyMemory you can add an email address,
   which is sent with each request for a higher daily limit. Each service's privacy policy is
-  linked from the notice and from Preferences ▸ Translation. Your DeepL or LibreTranslate key
-  is stored encrypted for your Windows account, and is sent only to that service. Nothing is
+  linked from the notice and from Preferences ▸ Translation. Your DeepL, Azure or LibreTranslate key
+  is stored encrypted for your Windows account, and is sent only to that service. The Azure
+  region, if you enter one, is stored as plain text. Nothing is
   sent in the background, and you can turn translation off in Preferences.
 - **Opening a link.** When you click a web link in a document or in Elanero, it opens in your
   web browser.

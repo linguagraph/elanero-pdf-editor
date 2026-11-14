@@ -22,16 +22,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core import secrets
 from pdfeditor.core.secrets import SecretError
 from pdfeditor.services import file_association
 from pdfeditor.services.translation import (
     PRIVACY_NOTICE_URL,
     SERVICES,
     TranslationConfig,
+    configuration_problem,
     make_translator,
 )
 from pdfeditor.services.translation.base import COMMON_LANGUAGES, TranslationError
+from pdfeditor.services.translation.libretranslate import LibreTranslateTranslator, ServerLanguage
 from pdfeditor.ui.color_picker import pick_color
 from pdfeditor.ui.dialogs.base import FormDialog, add_row, caption, form_layout
 from pdfeditor.ui.i18n import available_languages
@@ -43,6 +44,11 @@ from pdfeditor.ui.theme import theme_manager
 CUSTOM = "custom"
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")  # plain http is fine only on this PC
 CATEGORIES = ("General", "Appearance", "Tools", "Translation", "Performance", "Shortcuts")
+
+
+def _sentence(text: str) -> str:
+    """Capitalize the first letter only: brand names keep their case."""
+    return text[:1].upper() + text[1:]
 
 
 def _swatch(color: str) -> QIcon:
@@ -424,14 +430,29 @@ class PreferencesDialog(FormDialog):
         self._service_forms["libretranslate"].addRow(self.libre_warning)
         self.libre_url.textChanged.connect(self._update_libre_warning)
         self._update_libre_warning()
+        self.azure_key = QLineEdit(settings.translation_key("azure"))
+        self.azure_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.azure_key.setAccessibleName("Azure key")
+        self._service_group(
+            "azure",
+            "Key:",
+            self.azure_key,
+            "Your Azure AI Translator key. Stored encrypted for your Windows account.",
+        )
+        self.azure_region = QLineEdit(settings.azure_region)
+        self.azure_region.setPlaceholderText("e.g. westeurope; leave empty for a global resource")
+        self.azure_region.setAccessibleName("Azure region")
+        self._service_group(
+            "azure",
+            "Region:",
+            self.azure_region,
+            "The region of your Azure resource, if it has one.",
+        )
         self._show_service_groups()
 
         self.target = QComboBox()
         self.target.setAccessibleName("Default target language")
-        self.target.addItem("Same as the app", "")
-        for code, name in sorted(COMMON_LANGUAGES.items(), key=lambda item: item[1]):
-            self.target.addItem(name, code)
-        self.target.setCurrentIndex(max(0, self.target.findData(settings.translation_target)))
+        self._fill_target(str(self.translation_service.currentData()), settings.translation_target)
         add_row(
             form,
             "Default language:",
@@ -491,13 +512,46 @@ class PreferencesDialog(FormDialog):
     def _service_changed(self, _index: int) -> None:
         self._show_service_groups()
         self.test_status.setText("")
+        # The target list belongs to the service; the current choice survives if it's offered.
+        self._fill_target(
+            str(self.translation_service.currentData()), str(self.target.currentData() or "")
+        )
+
+    def _fill_target(self, service_id: str, keep: str) -> None:
+        """Rebuild the default-target combo for ``service_id``, selecting ``keep``. A code the
+        service doesn't offer is still listed, under its own code, so it isn't silently lost."""
+        offered = self._offered_languages(service_id)
+        self.target.clear()
+        self.target.addItem("Same as the app", "")
+        for code, name in sorted(offered.items(), key=lambda item: item[1]):
+            self.target.addItem(name, code)
+        if keep and keep not in offered:
+            self.target.addItem(keep, keep)
+        self.target.setCurrentIndex(max(0, self.target.findData(keep)))
+
+    def _offered_languages(self, service_id: str) -> dict[str, str]:
+        """The languages ``service_id`` offers: a LibreTranslate server's own list (once Test
+        connection has stored it for the saved address), else the service's built-in list."""
+        settings = self.settings
+        try:
+            if service_id == "libretranslate":
+                url = settings.libretranslate_url
+                stored = settings.libretranslate_language_list(url)
+                return LibreTranslateTranslator(url, languages=stored).languages()
+            return make_translator(service_id, TranslationConfig()).languages()
+        except TranslationError:
+            return dict(COMMON_LANGUAGES)
 
     def _config_from_fields(self) -> TranslationConfig:
+        url = self.libre_url.text().strip()
         return TranslationConfig(
             mymemory_email=self.email.text().strip(),
             deepl_key=self.deepl_key.text().strip(),
-            libretranslate_url=self.libre_url.text().strip(),
+            libretranslate_url=url,
             libretranslate_key=self.libre_key.text().strip(),
+            libretranslate_languages=self.settings.libretranslate_language_list(url),
+            azure_key=self.azure_key.text().strip(),
+            azure_region=self.azure_region.text().strip(),
         )
 
     def test_connection(self) -> None:
@@ -512,12 +566,19 @@ class PreferencesDialog(FormDialog):
             self.test_status.setText(exc.message)
             return
 
-        def work(job: Job) -> tuple[bool, str]:
+        def work(job: Job) -> tuple[bool, str, list[ServerLanguage] | None, str]:
             try:
                 translator.test_connection(job.token)
             except TranslationError as exc:
-                return False, exc.message
-            return True, "Connected. The service answered."
+                return False, exc.message, None, ""
+            if not isinstance(translator, LibreTranslateTranslator):
+                return True, "Connected. The service answered.", None, ""
+            # The server's language list is a bonus: if it can't be read, the test still passes.
+            try:
+                languages: list[ServerLanguage] | None = translator.fetch_languages(job.token)
+            except TranslationError:
+                languages = None
+            return True, "Connected. The service answered.", languages, translator.base_url
 
         job = Job(work, label="Test translation service")
         job.finished.connect(self._on_test_done)  # bound methods: dropped with the dialog
@@ -532,10 +593,14 @@ class PreferencesDialog(FormDialog):
             return  # cancelled when the dialog closed
         self._test_job = None
         self.test_button.setEnabled(True)
-        if isinstance(outcome, tuple):
-            self.test_status.setText(str(outcome[1]))
-        else:
+        if not isinstance(outcome, tuple) or len(outcome) != 4:
             self.test_status.setText("The test failed. Try again.")
+            return
+        ok, message, languages, address = outcome
+        if ok and languages and address:
+            # Kept with the address it came from; a failed fetch never reaches here.
+            self.settings.store_libretranslate_languages(str(address), list(languages))
+        self.test_status.setText(str(message))
 
     def _on_test_failed(self, _message: str) -> None:
         self._on_test_done(None)
@@ -547,25 +612,38 @@ class PreferencesDialog(FormDialog):
         super().done(result)
 
     def accept(self) -> None:
-        # Everything that can fail is checked before anything is written, so a failure
-        # leaves the saved settings as they were.
+        """Save every setting. A translation problem never blocks the rest: translation is
+        left off, the reason is said once, and the other preferences are saved all the same."""
+        service = str(self.translation_service.currentData())
+        config = self._config_from_fields()
+        problems: list[str] = []  # why translation is left off
+        notes: list[str] = []  # a key that couldn't be saved (its old value is kept)
         identity = ""
         if self.translation_enabled.isChecked():
+            problem = configuration_problem(service, config)
+            if problem:
+                problems.append(problem)
+            else:
+                identity = make_translator(service, config).cache_id
+        keys = {
+            "deepl": ("DeepL", self.deepl_key.text().strip()),
+            "libretranslate": ("LibreTranslate", self.libre_key.text().strip()),
+            "azure": ("Azure", self.azure_key.text().strip()),
+        }
+        # Each key is encrypted once, here, so a failure can only happen before anything is saved.
+        to_save: dict[str, str] = {}  # name -> the stored form
+        for name, (label, value) in keys.items():
             try:
-                translator = make_translator(
-                    str(self.translation_service.currentData()), self._config_from_fields()
-                )
-            except TranslationError as exc:
-                QMessageBox.warning(self, "Translation", exc.message)
-                return
-            identity = translator.cache_id
-        try:
-            for value in (self.deepl_key.text().strip(), self.libre_key.text().strip()):
-                if value and secrets.can_encrypt():
-                    secrets.encrypt(value.encode("utf-8"))  # raises before anything is saved
-        except SecretError as exc:
-            QMessageBox.warning(self, "Translation", f"The API key couldn't be saved: {exc}")
-            return
+                sealed = self.settings.sealed_translation_key(value)
+            except SecretError:
+                notes.append(f"the {label} key couldn't be saved, so the old key is kept")
+                if name == service and identity:
+                    problems.append(f"the {label} key couldn't be saved")
+                    identity = ""
+                continue
+            to_save[name] = sealed
+        translation_on = bool(identity) and not problems
+
         s = self.settings
         s.author = self.author.text().strip()
         s.default_zoom = str(self.zoom.currentData())
@@ -582,13 +660,29 @@ class PreferencesDialog(FormDialog):
         s.single_window = self.single_window.isChecked()
         s.undo_disk_mb = self.undo_disk.value()
         s.cache_mb = self.cache.value()
-        s.translation_enabled = self.translation_enabled.isChecked()
-        if identity:  # switching translation on is the consent for this service
+        # The translation settings that are valid are saved; the switch only goes on when the
+        # configuration is complete, and switching on is the consent for this service.
+        s.translation_enabled = translation_on
+        if translation_on:
             s.translation_consented = identity
-        s.translation_service = str(self.translation_service.currentData())
+        s.translation_service = service
         s.translation_email = self.email.text()
         s.libretranslate_url = self.libre_url.text()
+        s.azure_region = self.azure_region.text()
         s.translation_target = str(self.target.currentData() or "")
-        s.set_translation_key("deepl", self.deepl_key.text())
-        s.set_translation_key("libretranslate", self.libre_key.text())
+        for name, sealed in to_save.items():
+            s.store_sealed_translation_key(name, sealed)  # cannot fail: nothing to encrypt
+        if problems:
+            QMessageBox.information(
+                self,
+                "Translation",
+                f"Translation was left off: {'; '.join(problems)}. "
+                "Your other preferences were saved.",
+            )
+        elif notes:
+            QMessageBox.information(
+                self,
+                "Translation",
+                f"{_sentence('; '.join(notes))}. Your other preferences were saved.",
+            )
         super().accept()

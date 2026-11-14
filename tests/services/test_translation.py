@@ -468,7 +468,7 @@ def test_registry_builds_each_service_with_its_config() -> None:
         libretranslate_key="lk",
         opener=rec,
     )
-    assert set(tr.SERVICES) == {"mymemory", "deepl", "libretranslate"}
+    assert set(tr.SERVICES) == {"mymemory", "deepl", "libretranslate", "azure"}
     assert isinstance(tr.make_translator("mymemory", config), MyMemoryTranslator)
     assert isinstance(tr.make_translator("deepl", config), DeepLTranslator)
     assert isinstance(tr.make_translator("libretranslate", config), LibreTranslateTranslator)

@@ -190,8 +190,11 @@ class TranslateBubble(QFrame):
         source = str(self.from_combo.currentData() or "")
         if not detects and source and self.to_combo.currentData() == source:
             # Translating into the language it's already in does nothing: pick another.
-            for code in FALLBACK_TARGETS:
-                if code != source and self.to_combo.findData(code) >= 0:
+            # The preferred ones first, then whatever the service offers (a server's own list
+            # may have neither English nor these); the first that differs from the source.
+            offered = [str(self.to_combo.itemData(i)) for i in range(self.to_combo.count())]
+            for code in [*FALLBACK_TARGETS, *offered]:
+                if code and code != source and self.to_combo.findData(code) >= 0:
                     self._select(self.to_combo, [code])
                     break
 

@@ -284,6 +284,9 @@ def test_translation_test_connection_reports_in_place(
         def __init__(self, service_id: str, config: object) -> None:
             self.service_id = service_id
 
+        def languages(self) -> dict[str, str]:
+            return {"de": "German"}
+
         def test_connection(self, token: object = None) -> None:
             if Answers.error is not None:
                 raise Answers.error

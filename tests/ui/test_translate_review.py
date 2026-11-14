@@ -345,3 +345,35 @@ def test_a_partial_result_cannot_be_added_as_a_note(qtbot, window, fixture_pdf) 
     assert bubble.copy_button.isEnabled()
     assert not bubble.note_button.isEnabled()
     assert bubble.note_button.toolTip() == "Only part of the text was translated"
+
+
+def test_the_pickers_offer_only_the_translators_languages(qtbot, window, fixture_pdf) -> None:
+    class Listed(Fake):
+        def languages(self) -> dict[str, str]:
+            return {"de": "German", "no": "Norwegian"}  # e.g. a LibreTranslate server's list
+
+    view = window.open_path(fixture_pdf("text_multipage"))
+    select(view)
+    bubble = open_bubble(window, view, Listed())
+    wait_idle(qtbot, bubble)
+    offered = {bubble.to_combo.itemData(i) for i in range(bubble.to_combo.count())}
+    assert offered == {"de", "no"}
+    assert {bubble.from_combo.itemData(i) for i in range(bubble.from_combo.count())} == {"de", "no"}
+
+
+def test_a_list_without_the_target_or_english_falls_back_without_crashing(
+    qtbot, window, fixture_pdf
+) -> None:
+    class Listed(Fake):
+        def languages(self) -> dict[str, str]:
+            return {"de": "German", "no": "Norwegian"}  # no English, no French
+
+    window.prefs.translation_target = "fr"
+    window.prefs.translation_last_source = ""
+    view = window.open_path(fixture_pdf("text_multipage"))
+    select(view)
+    bubble = open_bubble(window, view, Listed())
+    wait_idle(qtbot, bubble)
+    assert bubble.from_combo.currentData() == "de"  # the first language offered
+    assert bubble.to_combo.currentData() == "no"  # the first that differs from the source
+    assert (bubble.translation() or "").startswith("[no]")

@@ -72,6 +72,9 @@ class TranslationError(Exception):
         super().__init__(message)
         self.message = message
         self.partial = partial
+        # The results of the texts that were translated before this error, set by the batch
+        # helpers below; the selection code turns them into ``partial``.
+        self.done: list[Translation] = []
 
 
 class OfflineError(TranslationError):
@@ -132,3 +135,44 @@ class Translator(Protocol):
     def test_connection(self, token: CancelToken | None = None) -> None:
         """Raise a :class:`TranslationError` if the service can't be used with this config."""
         ...
+
+
+def translate_each(
+    translator: Translator,
+    texts: list[str],
+    source: str | None,
+    target: str,
+    token: CancelToken | None = None,
+) -> list[Translation]:
+    """Translate the texts one request each. Later texts reuse the language the first one
+    detected, so they skip detection."""
+    done: list[Translation] = []
+    current = source
+    for text in texts:
+        if token is not None:
+            token.check()
+        try:
+            result = translator.translate(text, current, target, token)
+        except TranslationError as exc:
+            exc.done = list(done)
+            raise
+        done.append(result)
+        if current is None and result.source_detected:
+            current = result.source_detected
+    return done
+
+
+def translate_batch(
+    translator: Translator,
+    texts: list[str],
+    source: str | None,
+    target: str,
+    token: CancelToken | None = None,
+) -> list[Translation]:
+    """Translate several texts: in as few requests as the service allows when it batches
+    (its own ``translate_many``), else one request per text."""
+    batched = getattr(translator, "translate_many", None)
+    if batched is not None:
+        result: list[Translation] = batched(texts, source, target, token)
+        return result
+    return translate_each(translator, texts, source, target, token)

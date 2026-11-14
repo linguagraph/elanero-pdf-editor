@@ -50,7 +50,7 @@ def request_json(
     *,
     method: str = "GET",
     headers: dict[str, str] | None = None,
-    body: dict[str, Any] | None = None,
+    body: Any = None,  # any JSON value: an object, or a list (Azure)
     opener: Opener | None = None,
 ) -> tuple[int, Any]:
     """Send a request and return ``(status, decoded JSON or None)``.
@@ -64,7 +64,7 @@ def request_json(
     data = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")
-        all_headers["Content-Type"] = "application/json; charset=utf-8"
+        all_headers.setdefault("Content-Type", "application/json; charset=utf-8")
     try:
         request = urllib.request.Request(url, data=data, headers=all_headers, method=method)
         send = opener or urllib_opener

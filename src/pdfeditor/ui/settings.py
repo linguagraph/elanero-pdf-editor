@@ -15,6 +15,7 @@ from pdfeditor.model.fonts import FontRef
 from pdfeditor.model.scan import ScanCleanup
 from pdfeditor.services.ocr import OcrOptions, installed_languages, pick_languages
 from pdfeditor.services.translation import DEFAULT_SERVICE, SERVICES, TranslationConfig
+from pdfeditor.services.translation.libretranslate import ServerLanguage, normalize_url
 from pdfeditor.ui.style.tokens import is_color
 
 log = logging.getLogger(__name__)
@@ -297,6 +298,40 @@ class AppSettings:
         self.qs.setValue("translation/libretranslate_url", value.strip())
 
     @property
+    def azure_region(self) -> str:
+        """The Azure resource's region (e.g. "westeurope"); empty for a global resource."""
+        return self._str("translation/azure_region", "")
+
+    @azure_region.setter
+    def azure_region(self, value: str) -> None:
+        self.qs.setValue("translation/azure_region", value.strip())
+
+    def store_libretranslate_languages(self, url: str, languages: list[ServerLanguage]) -> None:
+        """The server's language list, kept with the address it came from."""
+        self.qs.setValue("translation/libretranslate_languages_url", normalize_url(url))
+        self.qs.setValue(
+            "translation/libretranslate_languages",
+            json.dumps([list(item) for item in languages]),
+        )
+
+    def libretranslate_language_list(self, url: str) -> list[ServerLanguage] | None:
+        """The stored list, but only if it was fetched from this same address."""
+        if self._str("translation/libretranslate_languages_url", "") != normalize_url(url):
+            return None
+        try:
+            stored = json.loads(self._str("translation/libretranslate_languages", ""))
+        except (json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(stored, list):
+            return None
+        out = [
+            (str(item[0]), str(item[1]), str(item[2]))
+            for item in stored
+            if isinstance(item, list) and len(item) == 3
+        ]
+        return out or None
+
+    @property
     def translation_target(self) -> str:
         """Default target language code ("" = the app's language)."""
         return self._str("translation/target", "")
@@ -330,19 +365,32 @@ class AppSettings:
             log.warning("a stored %s key can't be read; it must be entered again", name)
             return ""
 
-    def set_translation_key(self, name: str, value: str) -> None:
+    def sealed_translation_key(self, value: str) -> str:
+        """``value`` in its stored form, encrypted now: base64 DPAPI ciphertext on Windows
+        (raises :class:`SecretError` if that fails). Where DPAPI isn't available the key is
+        returned as it is, and only ever kept in memory (see :meth:`store_sealed_translation_key`).
+        """
         value = value.strip()
+        if not value or not secrets.can_encrypt():
+            return value
+        return base64.b64encode(secrets.encrypt(value.encode("utf-8"))).decode("ascii")
+
+    def store_sealed_translation_key(self, name: str, sealed: str) -> None:
+        """Store what :meth:`sealed_translation_key` returned. Cannot fail on encryption, so a
+        caller can save it after other settings without a half-saved state."""
         if not secrets.can_encrypt():
-            if value:
-                _SESSION_KEYS[name] = value
+            if sealed:
+                _SESSION_KEYS[name] = sealed
             else:
                 _SESSION_KEYS.pop(name, None)
             return
-        if not value:
+        if sealed:
+            self.qs.setValue(f"translation/{name}_key", sealed)
+        else:
             self.qs.remove(f"translation/{name}_key")
-            return
-        blob = base64.b64encode(secrets.encrypt(value.encode("utf-8"))).decode("ascii")
-        self.qs.setValue(f"translation/{name}_key", blob)
+
+    def set_translation_key(self, name: str, value: str) -> None:
+        self.store_sealed_translation_key(name, self.sealed_translation_key(value))
 
     def translation_config(self) -> TranslationConfig:
         """The settings the translation services need, keys included."""
@@ -351,6 +399,9 @@ class AppSettings:
             deepl_key=self.translation_key("deepl"),
             libretranslate_url=self.libretranslate_url,
             libretranslate_key=self.translation_key("libretranslate"),
+            libretranslate_languages=self.libretranslate_language_list(self.libretranslate_url),
+            azure_key=self.translation_key("azure"),
+            azure_region=self.azure_region,
         )
 
     # OCR: the options of the last run, preselected next time (and used by automatic OCR)

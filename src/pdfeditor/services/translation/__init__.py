@@ -11,9 +11,11 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.services.translation.azure import AzureTranslator
 from pdfeditor.services.translation.base import (
     PRIVACY_NOTICE_URL,
     ConfigError,
@@ -24,10 +26,11 @@ from pdfeditor.services.translation.base import (
     TranslationError,
     Translator,
     base_code,
+    translate_batch,
 )
 from pdfeditor.services.translation.deepl import DeepLTranslator
 from pdfeditor.services.translation.http import Opener
-from pdfeditor.services.translation.libretranslate import LibreTranslateTranslator
+from pdfeditor.services.translation.libretranslate import LibreTranslateTranslator, ServerLanguage
 from pdfeditor.services.translation.mymemory import MyMemoryTranslator
 from pdfeditor.services.translation.text import clean_pdf_text, split_chunks
 
@@ -43,6 +46,7 @@ __all__ = [
     "TranslationError",
     "Translator",
     "clear_cache",
+    "configuration_problem",
     "make_translator",
     "translate_selection",
 ]
@@ -52,6 +56,7 @@ SERVICES: dict[str, str] = {
     "mymemory": MyMemoryTranslator.name,
     "deepl": DeepLTranslator.name,
     "libretranslate": LibreTranslateTranslator.name,
+    "azure": AzureTranslator.name,
 }
 DEFAULT_SERVICE = "mymemory"
 CACHE_SIZE = 64
@@ -66,6 +71,11 @@ class TranslationConfig:
     deepl_key: str = ""
     libretranslate_url: str = ""
     libretranslate_key: str = ""
+    # The server's own language list (code -> name), when Test connection has stored one for
+    # this address; None means the built-in list.
+    libretranslate_languages: list[ServerLanguage] | None = None
+    azure_key: str = ""
+    azure_region: str = ""
     opener: Opener | None = None  # tests only: replaces the network
 
 
@@ -76,9 +86,30 @@ def make_translator(service_id: str, config: TranslationConfig) -> Translator:
         return DeepLTranslator(config.deepl_key, config.opener)
     if service_id == "libretranslate":
         return LibreTranslateTranslator(
-            config.libretranslate_url, config.libretranslate_key, config.opener
+            config.libretranslate_url,
+            config.libretranslate_key,
+            config.opener,
+            languages=config.libretranslate_languages,
         )
+    if service_id == "azure":
+        return AzureTranslator(config.azure_key, config.azure_region, config.opener)
     raise ServiceError(f"Unknown translation service: {service_id}")
+
+
+def configuration_problem(service_id: str, config: TranslationConfig) -> str | None:
+    """Why ``service_id`` can't be used with ``config`` yet, or None if it can.
+
+    Checks what the service needs before a request is possible: a key, or a server address.
+    """
+    if service_id == "deepl" and not config.deepl_key.strip():
+        return "the DeepL API key is missing"
+    if service_id == "azure" and not config.azure_key.strip():
+        return "the Azure key is missing"
+    try:
+        make_translator(service_id, config)
+    except TranslationError as exc:
+        return exc.message
+    return None
 
 
 _cache: OrderedDict[tuple[str, str | None, str, str], Translation] = OrderedDict()
@@ -88,6 +119,22 @@ _cache_lock = threading.Lock()
 def clear_cache() -> None:
     with _cache_lock:
         _cache.clear()
+
+
+def _assemble(units: Iterable[tuple[str, str]], results: list[Translation]) -> str:
+    """The translated text: each unit's body replaced by its result, its trailing whitespace
+    kept. Units whose body is empty stand for themselves. Stops at the first missing result."""
+    remaining = iter(results)
+    out: list[str] = []
+    for body, trailing in units:
+        if not body:
+            out.append(trailing)
+            continue
+        result = next(remaining, None)
+        if result is None:
+            break
+        out.append(result.text + trailing)
+    return "".join(out)
 
 
 def translate_selection(
@@ -125,28 +172,16 @@ def translate_selection(
             log.debug("translation served from cache (%s)", translator.id)
             return cached
 
-    pieces: list[str] = []
-    detected = None
-    current_source = source
     chunks = split_chunks(text, translator.max_request_bytes)
+    units = [(chunk.rstrip(), chunk[len(chunk.rstrip()) :]) for chunk in chunks]
+    bodies = [body for body, _trailing in units if body]
     try:
-        for chunk in chunks:
-            if token is not None:
-                token.check()
-            body = chunk.rstrip()
-            trailing = chunk[len(body) :]  # the paragraph break or space that followed it
-            if not body:
-                pieces.append(chunk)
-                continue
-            result = translator.translate(body, current_source, target, token)
-            pieces.append(result.text + trailing)
-            if detected is None and result.source_detected:
-                detected = result.source_detected
-                current_source = detected  # later chunks skip detection
+        results = translate_batch(translator, bodies, source, target, token)
     except TranslationError as exc:
-        exc.partial = "".join(pieces)
+        exc.partial = _assemble(units, exc.done)
         raise
-    translation = Translation("".join(pieces), detected, translator.id)
+    detected = next((r.source_detected for r in results if r.source_detected), None)
+    translation = Translation(_assemble(units, results), detected, translator.id)
     log.info(
         "translated %d characters in %d request(s) with %s",
         len(text),

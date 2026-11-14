@@ -96,7 +96,7 @@ https://github.com/linguagraph/pdf-editor.
 15. Free and open source (AGPL-3.0-or-later)
 16. Sign PDFs digitally with a USB token, smart card or certificate file
 17. Check a document's digital signatures, and request signatures from others
-18. Translate selected text in a bubble, with MyMemory, DeepL or your own LibreTranslate server
+18. Translate selected text in a bubble, with MyMemory, DeepL, Azure or your own LibreTranslate server
 
 ## Search terms [up to 7]
 

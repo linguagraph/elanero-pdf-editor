@@ -90,6 +90,7 @@ qt_api = "pyside6"
 markers = [
     "slow: long-running tests (large fixtures, OCR)",
     "gui: tests that need a Qt application",
+    "network: talks to a real translation service; runs only with ELANERO_LIVE_TRANSLATION=1",
 ]
 
 [tool.importlinter]
