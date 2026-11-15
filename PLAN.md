@@ -346,7 +346,7 @@ With no certificate, **MSIX is the only way into the Store**, so it's the primar
   - **Private testers first:** upload the MSIX to a new submission with a private audience (or a package flight), fill in the listing, age rating, pricing (free) and markets, then submit for certification.
   - **Certification report:** fix any findings, then make the listing public.
   - **Record the outcome:** the Store ID and listing URL go in `RELEASING.md` and the README ("Get it from Microsoft" badge).
-- [ ] **S9 Release automation.** _(partial: `RELEASING.md` documents every step; `release.yml` builds `v*` tags into a GitHub release and uploads the MSIX as a draft Store submission after approval, secrets set; pending: a first real run on a tag, `bump_version.py`)_
+- [ ] **S9 Release automation.** _(partial: `RELEASING.md` documents every step; `release.yml` builds `v*` tags into a GitHub release and uploads the MSIX as a draft Store submission after approval, secrets set; the first real run succeeded on v0.3.1 (v0.3.0's run failed), including the `github-release` and `microsoft-store` jobs; pending: `bump_version.py`)_
   - **Build on release tags:** a CI workflow builds and tests the MSIX on `v*` tags and attaches it to the GitHub release, next to the portable exe and the Inno Setup installer.
   - **Version bump:** `scripts/bump_version.py` updates `pyproject.toml`, the exe version resource, the manifest and `CHANGELOG.md` together.
   - **Optional publishing:** submit updates with the Microsoft Store Developer CLI (`msstore publish`), using Partner Center API credentials (an Entra ID app) stored as GitHub secrets. Until that's set up, upload manually.
@@ -360,6 +360,8 @@ With no certificate, **MSIX is the only way into the Store**, so it's the primar
   - **Phase 17:** signing also closes its code-signing item and stops SmartScreen warning on direct downloads.
 
 Done when the app is listed publicly in the Store, installs and updates through it, passes the self-test through its execution alias, opens PDFs from Explorer, and every Store release matches a public source tag.
+
+_Issue #88 closed 2026-11-15: the Store channel ships through `release.yml` (v0.3.1 was submitted to Microsoft). The unticked items above are tracked here, not in #88; the phase is done only when the listing is public._
 
 ### Phase F: Font management (M–L)
 Goal: when editing or adding text, offer the fonts installed on the computer as well as the document's own fonts, the way Acrobat does. The chosen font must be embedded correctly and kept small, and a font's license must be respected.
@@ -448,8 +450,8 @@ Nothing can embed a font from the system.
 ### CI and release speed, issue #109
 
 - [x] One CI run per PR, nothing repeated after the merge. Fast checks first, then the Windows tests and one build. Docs-only PRs run nothing (`scripts/ci_changes.py`); the install tests run only when packaging changed. The nightly run and releases run everything, including Linux and the performance budgets.
-- [x] One build of the app per pipeline. `build_exe.py --all` writes the portable exe and the app folder in one PyInstaller run, and the installer and MSIX are made from that build. A release used to build the app three times, and each CI run four times. _(The release path runs only on a pushed tag, so the next release is its first real test.)_
-- [x] The Store release needs no Partner Center visit (#110). After the owner approves the `microsoft-store` deployment, the workflow uploads the package, sends the listing from `packaging/store/listing-en.md` (`scripts/store_submit.py`) and commits. A missing section, a text over a Store limit or an old What's New stops the release before anything is built. _(Tested against a fake API only: the next release is its first real run. `STORE_SUBMIT=false` stops at the draft.)_
+- [x] One build of the app per pipeline. `build_exe.py --all` writes the portable exe and the app folder in one PyInstaller run, and the installer and MSIX are made from that build. A release used to build the app three times, and each CI run four times. _(Tested for real on v0.3.1: the pushed tag's run built the app in CI and published the release.)_
+- [x] The Store release needs no Partner Center visit (#110). After the owner approves the `microsoft-store` deployment, the workflow uploads the package, sends the listing from `packaging/store/listing-en.md` (`scripts/store_submit.py`) and commits. A missing section, a text over a Store limit or an old What's New stops the release before anything is built. _(Tested for real on v0.3.1: the upload and listing submission ran in `release.yml`. `STORE_SUBMIT=false` stops at the draft.)_
 
 ### Phase S: Digital signing (M–L), issue #94
 Goal: sign PDFs digitally, above all with USB tokens and smart cards (national qualified e-signature tokens), from the self-contained exe. PAdES B-B, optionally B-T, always an incremental update.
