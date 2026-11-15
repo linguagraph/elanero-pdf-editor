@@ -90,6 +90,7 @@ from pdfeditor.ui.document_tabs import DocumentTabWidget
 from pdfeditor.ui.edit_controller import EDIT_TOOLS, EditController, make_edit_tool
 from pdfeditor.ui.export_controller import ExportController
 from pdfeditor.ui.focus_regions import FocusRegions, Region, focusable
+from pdfeditor.ui.help import open_docs
 from pdfeditor.ui.i18n import QT_TRANSLATE_NOOP
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.job_center import JobCenter, ProgressChip
@@ -375,6 +376,7 @@ class MainWindow(QMainWindow):
         apply_short_labels(self.ribbon.button_actions())
         self._refresh_tooltips()
         self.shortcuts.changed.append(self._refresh_tooltips)
+        self.shortcuts.changed.append(self.ribbon.refresh_help_tooltip)
         self.focus_regions = self._create_focus_regions()
         self.nav_panels.escape_pressed.connect(self.focus_page)
         self.inspector_panels.escape_pressed.connect(self.focus_page)
@@ -579,6 +581,10 @@ class MainWindow(QMainWindow):
             "Previous Pane", lambda: self.cycle_focus(-1), "Shift+F6", None, False
         )
         self.act_prev_pane.setObjectName("previous-pane")
+        # F1 is free (Ctrl+F1 collapses the ribbon). A command like any other: command search
+        # and the shortcut editor list it, and it works with no document open.
+        self.act_help = a("Elanero &Help", self.show_help, "F1", None, False)
+        self.act_help.setObjectName("help")
         self.act_about = a("&About Elanero", self.show_about, None, None, False)
         # Home/End belong to the view (it handles them itself); keep them out of window shortcuts.
         self.act_first.setShortcut(QKeySequence())
@@ -715,6 +721,8 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.signing.act_request)
 
         help_menu = mb.addMenu("&Help")
+        help_menu.addAction(self.act_help)
+        help_menu.addSeparator()
         help_menu.addAction(self.act_about)
 
         # The ☰ button offers the same menus; with the bar hidden, Alt+letter still opens them.
@@ -744,6 +752,7 @@ class MainWindow(QMainWindow):
         )
         self.tool_actions["select"].setIconText("Select")
         self.tool_actions["hand"].setIconText("Hand")
+        self.ribbon.set_help_action(self.act_help)
         self.ribbon.set_quick_actions(
             [
                 self.tool_actions["select"],
@@ -1690,6 +1699,9 @@ class MainWindow(QMainWindow):
         else:
             self.notify(f"No editable text uses {font}.")
         return len(chosen)
+
+    def show_help(self) -> None:
+        open_docs(parent=self)
 
     def show_about(self) -> None:
         engine_version = ""

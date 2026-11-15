@@ -7,6 +7,8 @@ sensitive content, convert files, and sign documents digitally—all on your own
 No account, subscription, advertising, or telemetry. Document processing happens locally.
 See [Privacy](#privacy) for the optional network connections.
 
+📖 **[User guide](https://linguagraph.github.io/pdf-editor/)**: step-by-step help for every feature (also F1 in the app).
+
 [Download](#download-and-install) · [Features](#features) · [Digital signing](#digital-signing)
 · [Screenshots](#screenshots) · [Limitations](#limitations-and-feature-status)
 · [Contributing](#contributing)
@@ -209,22 +211,22 @@ Read the full [privacy policy](PRIVACY.md) for details.
 Elanero on Windows with a PDF open and the document signing controls visible. This image
 shows the signing tools, rather than a completed signature.
 
-![Elanero displaying a PDF with page thumbnails and signing controls](docs/images/elanero-opened-pdf-signing.png)
+![Elanero displaying a PDF with page thumbnails and signing controls](docs/guide/images/elanero-opened-pdf-signing.png)
 
 The following ribbon views show the welcome screen; document-dependent controls are disabled
 until a PDF is open.
 
 ### Comments and markup
 
-![Elanero Comment ribbon](docs/images/elanero-03-comments.png)
+![Elanero Comment ribbon](docs/guide/images/elanero-03-comments.png)
 
 ### Page organization
 
-![Elanero Organize ribbon](docs/images/elanero-02-organize.png)
+![Elanero Organize ribbon](docs/guide/images/elanero-02-organize.png)
 
 ### OCR, conversion, and other tools
 
-![Elanero Tools ribbon](docs/images/elanero-04-tools.png)
+![Elanero Tools ribbon](docs/guide/images/elanero-04-tools.png)
 
 ## Limitations and feature status
 

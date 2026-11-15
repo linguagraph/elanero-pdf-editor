@@ -12,6 +12,7 @@ saving too.
 
 ## Progress tracking (required)
 
+- User-facing features also update the matching page in `docs/guide/` (the user guide), in the same change.
 - `PLAN.md` is the single source of truth for progress. When you finish a todo item, tick its
   checkbox (`- [x]`) in the same change. Only tick an item when its tests and checks pass.
 - If an item is done only partially, leave it unticked and append a short note, e.g.

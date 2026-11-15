@@ -63,6 +63,7 @@ from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Engine
 from pdfeditor.services.thumbnails import first_page_thumbnail
 from pdfeditor.ui.flow_layout import FlowLayout
+from pdfeditor.ui.help import open_docs
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.jobs import Job
 from pdfeditor.ui.recent_files import RecentFiles
@@ -435,6 +436,14 @@ class StartPage(QWidget):
         # translations, instead of setting a minimum width for the whole page.
         self.quick_row = FlowLayout(spacing=m.space(2))
         layout.addLayout(self.quick_row)
+        # Below the quick actions: a flat button that looks like a link (keyboard reachable).
+        self.guide_link = QPushButton(icon("book-open"), self.tr("Read the user guide"), column)
+        self.guide_link.setObjectName("StartGuideLink")
+        self.guide_link.setFlat(True)
+        self.guide_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.guide_link.setToolTip(self.tr("Open the Elanero user guide in your web browser"))
+        self.guide_link.clicked.connect(lambda _=False: open_docs(parent=self))
+        layout.addWidget(self.guide_link, 0, Qt.AlignmentFlag.AlignLeft)
 
         layout.addSpacing(m.space(2))
         header = QHBoxLayout()
@@ -492,7 +501,8 @@ class StartPage(QWidget):
             self.quick_buttons[label] = button
             QWidget.setTabOrder(previous, button)
             previous = button
-        QWidget.setTabOrder(previous, self.recent_view)
+        QWidget.setTabOrder(previous, self.guide_link)
+        QWidget.setTabOrder(self.guide_link, self.recent_view)
 
     # -- recent files ---------------------------------------------------------------------
     def refresh(self) -> None:

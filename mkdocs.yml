@@ -1,0 +1,74 @@
+# The Elanero user guide: Markdown in docs/guide, published to GitHub Pages by
+# .github/workflows/docs.yml. Build locally with: uv run mkdocs build --strict
+# (the docs extra in pyproject.toml pins MkDocs and the Material theme).
+site_name: Elanero User Guide
+site_description: How to read, edit, review, organize, redact, recognize, convert, optimize,
+  sign and translate PDFs with Elanero - PDF Editor.
+site_url: https://linguagraph.github.io/pdf-editor/
+# Must match pdfeditor.DOCS_URL (a unit test checks it).
+repo_url: https://github.com/linguagraph/pdf-editor
+repo_name: linguagraph/pdf-editor
+edit_uri: edit/main/docs/guide/
+docs_dir: docs/guide
+copyright: Elanero is free software under AGPL-3.0-or-later.
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.action.edit
+    - content.action.view
+# Anchors (#headings) are checked too: strict builds fail on a link to a missing heading.
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Interface: interface.md
+  - Reading and navigation: reading.md
+  - Editing text and images: editing.md
+  - Comments and review: comments.md
+  - Pages: pages.md
+  - Redaction and security: security.md
+  - OCR and scanned documents: ocr.md
+  - Export and conversion: export.md
+  - Optimize and compare: optimize-compare.md
+  - PDF/A and accessibility: pdfa-accessibility.md
+  - Digital signatures: signing.md
+  - Translation: translation.md
+  - Preferences: preferences.md
+  - Keyboard shortcuts: keyboard-shortcuts.md
+  - Troubleshooting: troubleshooting.md
+  - Privacy: privacy.md

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QBoxLayout,
     QLabel,
@@ -11,11 +12,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor import APP_DISPLAY_NAME, PRIVACY_URL, SOURCE_URL, __version__
+from pdfeditor import APP_DISPLAY_NAME, DOCS_URL, PRIVACY_URL, SOURCE_URL, __version__
 from pdfeditor.bundle import channel
 from pdfeditor.licenses import about_text, license_text, notices
 from pdfeditor.ui.branding import app_icon, wordmark
 from pdfeditor.ui.dialogs.base import FormDialog
+from pdfeditor.ui.help import docs_url, open_docs
 from pdfeditor.ui.theme import theme_manager
 
 WORDMARK_HEIGHT = 72
@@ -55,12 +57,15 @@ class AboutDialog(FormDialog):
         outer = self.layout()
         assert isinstance(outer, QBoxLayout)
         outer.insertWidget(0, self.brand)
+        docs = f'<a href="{docs_url()}">{self.tr("Documentation")}</a>'
         head = QLabel(
-            f'Source code: <a href="{SOURCE_URL}">{SOURCE_URL}</a><br>'
+            f'{docs} · Source code: <a href="{SOURCE_URL}">{SOURCE_URL}</a><br>'
             f'<a href="{PRIVACY_URL}">Privacy policy</a>: no data collected; works offline.',
             self,
         )
-        head.setOpenExternalLinks(True)
+        # Links are followed here, not by Qt: the guide opens through ui/help.py, and the
+        # others through the same opener, so every link goes through one place.
+        head.linkActivated.connect(self._follow)
         head.setWordWrap(True)
         self.tabs = QTabWidget(self)
         self.tabs.setAccessibleName("About pages")
@@ -70,3 +75,9 @@ class AboutDialog(FormDialog):
         self.tabs.addTab(_text(license_text(), "License"), "License (AGPL-3.0)")
         self.add_widget(head)
         self.add_widget(self.tabs, 1)
+
+    def _follow(self, url: str) -> None:
+        if url == DOCS_URL:
+            open_docs(parent=self)
+        else:
+            QDesktopServices.openUrl(QUrl(url))

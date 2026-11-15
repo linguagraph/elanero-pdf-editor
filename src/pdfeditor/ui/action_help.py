@@ -78,6 +78,7 @@ SHORT_LABELS: dict[str, str] = {
 
 HELP: dict[str, str] = {
     "open": "Open a PDF from your computer.",
+    "help": "Open the Elanero user guide in your web browser.",
     "save": "Save your changes to this file.",
     "print": "Print the document or save it as a PDF, with a live preview.",
     "document-properties": "Title, author, fonts, security and other file details.",

@@ -390,7 +390,12 @@ def test_keyboard_tab_order(qtbot, pdf_copy) -> None:
     w = _window_with_recent(qtbot, [pdf_copy("images")])
     try:
         start = w.start_page
-        order = [start.open_button, *start.quick_buttons.values(), start.recent_view]
+        order = [
+            start.open_button,
+            *start.quick_buttons.values(),
+            start.guide_link,
+            start.recent_view,
+        ]
         for a, b in itertools.pairwise(order):
             assert _next_focusable(a) is b, (a, b)
     finally:

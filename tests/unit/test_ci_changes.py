@@ -18,6 +18,8 @@ import ci_changes
         ["README.md", "docs/microsoft-store-submission.md"],
         ["LICENSE"],
         [".github/CODEOWNERS"],
+        ["mkdocs.yml"],
+        ["docs/guide/signing.md", "docs/guide/images/elanero-02-organize.png"],
     ],
 )
 def test_docs_alone_skip_everything(paths: list[str]) -> None:

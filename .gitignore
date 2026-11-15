@@ -25,3 +25,6 @@ tests/fixtures/real/scanned_dryer_manual.pdf
 
 # The Store package identity from Partner Center (copy of msix/identity.example.json)
 packaging/msix/identity.json
+
+# The user guide build output (mkdocs build)
+site/
