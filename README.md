@@ -7,7 +7,9 @@ sensitive content, convert files, and sign documents digitally—all on your own
 No account, subscription, advertising, or telemetry. Document processing happens locally.
 See [Privacy](#privacy) for the optional network connections.
 
-📖 **[User guide](https://linguagraph.github.io/elanero-pdf-editor/)**: step-by-step help for every feature (also F1 in the app).
+🌐 **[Website](https://linguagraph.github.io/elanero-pdf-editor/)**: what Elanero does, and downloads.
+
+📖 **[User guide](https://linguagraph.github.io/elanero-pdf-editor/guide/)**: step-by-step help for every feature (also F1 in the app).
 
 [Download](#download-and-install) · [Features](#features) · [Digital signing](#digital-signing)
 · [Screenshots](#screenshots) · [Limitations](#limitations-and-feature-status)
