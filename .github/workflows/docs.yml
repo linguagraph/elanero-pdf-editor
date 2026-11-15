@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  site:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
           path: site
 
   deploy:
-    needs: build
+    needs: site
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     # Only deploys queue on the Pages group: a pull request build never cancels or waits for one.
     concurrency:

@@ -72,8 +72,8 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     assert workflow["permissions"] == {"contents": "read"}
     jobs = workflow["jobs"]
     assert jobs["deploy"]["permissions"] == {"pages": "write", "id-token": "write"}
-    assert "permissions" not in jobs["build"]
-    build_steps = jobs["build"]["steps"]
+    assert "permissions" not in jobs["site"]
+    build_steps = jobs["site"]["steps"]
     assert any("mkdocs build --strict" in str(s.get("run", "")) for s in build_steps)
     build_uses = [str(s.get("uses", "")) for s in build_steps]
     assert any(u.startswith("actions/configure-pages@v5") for u in build_uses)
