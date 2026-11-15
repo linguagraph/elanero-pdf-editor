@@ -28,8 +28,9 @@ Microsoft Store version checks for updates by itself (see below).
 
 - **Checking for updates in the Microsoft Store (Store version only).** Once a day, and when you
   choose Help > Check for Updates, Elanero asks the Microsoft Store (Microsoft) whether a newer
-  version is out. Nothing else is sent: no document, no text and no file name. Microsoft sees your
-  IP address, as with any Store request. You can turn the daily check off in Preferences > General;
+  version is out. Elanero sends no document, text or file name; the request goes through Windows'
+  Microsoft Store service and is handled under Microsoft's privacy statement. Your IP address is
+  seen by that service, as with any Store request. You can turn the daily check off in Preferences > General;
   the Help command still works. The installer and the portable version never check.
 - **Downloading an OCR language.** Elanero downloads the language file from GitHub
   (`github.com/tesseract-ocr/tessdata_fast`). GitHub sees your IP address, as with any

@@ -120,8 +120,9 @@ class PreferencesDialog(FormDialog):
             self.store_check,
             self.tr(
                 "Once a day, Elanero asks the Microsoft Store whether a new version is out, and "
-                "shows a button when one is. Nothing else is sent. Help ▸ Check for Updates asks "
-                "at any time."
+                "shows a button when one is. Elanero sends no document, text or file name; the "
+                "request goes through Windows' Microsoft Store service and is handled under "
+                "Microsoft's privacy statement. Help ▸ Check for Updates asks at any time."
             ),
         )
         packaged = bundle.is_packaged()

@@ -94,12 +94,27 @@ def default_backend() -> StoreBackend | None:
     return WinRTStoreBackend() if sys.platform == "win32" else None
 
 
+def _enter_mta() -> None:
+    """Put the calling worker thread in COM's multithreaded apartment, which the Store calls
+    expect from a thread that isn't the GUI thread. A thread that already has an apartment of
+    another mode refuses (RPC_E_CHANGED_MODE); that is harmless, because the calls then run in
+    the apartment the thread already has, so the error is only logged."""
+    try:
+        from winrt.runtime import ApartmentType, init_apartment
+
+        init_apartment(ApartmentType.MULTI_THREADED)
+    except Exception:
+        log.debug("COM apartment left as it is", exc_info=True)
+
+
 class WinRTStoreBackend:
     """:class:`StoreBackend` on pywinrt. Each call is self-contained: a fresh context and its
-    own ``asyncio.run``, so it can be called from any worker thread."""
+    own ``asyncio.run``, so it can be called from any worker thread. Each call first enters the
+    multithreaded COM apartment (see :func:`_enter_mta`)."""
 
     def pending_updates(self) -> int:
         """Raises when WinRT can't answer (not a Store install, no network): see check_updates."""
+        _enter_mta()
         from winrt.windows.services.store import StoreContext
 
         async def check() -> int:
@@ -110,6 +125,7 @@ class WinRTStoreBackend:
         return asyncio.run(check())
 
     def request_install(self, hwnd: int) -> InstallResult:
+        _enter_mta()
         from winrt.runtime.interop import initialize_with_window
         from winrt.windows.services.store import StoreContext, StorePackageUpdateState
 

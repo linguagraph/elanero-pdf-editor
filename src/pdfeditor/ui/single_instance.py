@@ -135,12 +135,14 @@ class InstanceSlot:
     def __init__(self, root: Path | None = None) -> None:
         self.index = 0
         self._lock: QLockFile | None = None
+        self._root: Path | None = None
         try:
             root = root or data_dir() / "instances"
             root.mkdir(parents=True, exist_ok=True)
         except OSError as exc:  # only the window offset depends on it: never block startup
             log.warning("no instance slot (%s); opening at the saved position", exc)
             return
+        self._root = root
         self.index = MAX_SLOTS - 1
         for index in range(MAX_SLOTS):
             lock = QLockFile(str(root / f"{index}.lock"))
@@ -149,6 +151,23 @@ class InstanceSlot:
                 self.index, self._lock = index, lock
                 return
         log.warning("all %d instance slots are taken", MAX_SLOTS)
+
+    def others_running(self) -> int:
+        """How many other running copies hold a slot. A slot whose lock another live process
+        holds can't be taken, so it is counted; a free one is released again at once."""
+        if self._root is None:
+            return 0
+        count = 0
+        for index in range(MAX_SLOTS):
+            if self._lock is not None and index == self.index:
+                continue  # our own
+            lock = QLockFile(str(self._root / f"{index}.lock"))
+            lock.setStaleLockTime(0)
+            if lock.tryLock(0):
+                lock.unlock()
+            else:
+                count += 1
+        return count
 
     def release(self) -> None:
         if self._lock is not None:

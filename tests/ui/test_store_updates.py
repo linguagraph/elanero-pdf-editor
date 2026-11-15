@@ -1,10 +1,11 @@
 """The Microsoft Store update indicator and install flow, with a fake backend (never the Store).
 
-The window is a plain widget and the host a fake: the real main window's close prompts are
-checked in test_main_window; here the install's own decisions are what matter."""
+The window is a plain widget and the host a fake here; the real main window's close prompts and
+its busy lock are checked in test_store_window."""
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 
 import pytest
@@ -38,13 +39,38 @@ class FakeBackend:
         return self.result
 
 
+class BlockingBackend(FakeBackend):
+    """Holds each call until the test releases it, to keep a job in flight."""
+
+    def __init__(self, pending: int = 0, result: InstallResult | None = None) -> None:
+        super().__init__(pending, result)
+        self.release = threading.Event()
+
+    def pending_updates(self) -> int:
+        self.release.wait(5)
+        return super().pending_updates()
+
+    def request_install(self, hwnd: int) -> InstallResult:
+        self.release.wait(5)
+        return super().request_install(hwnd)
+
+
 class FakeHost:
-    def __init__(self, confirm: bool = True, close_ok: bool = True) -> None:
+    def __init__(
+        self,
+        confirm: bool = True,
+        close_ok: bool = True,
+        others: int = 0,
+        close_after: bool = True,
+    ) -> None:
         self.confirm_answer = confirm
-        self.close_answer = close_ok
-        self.confirms = 0
+        self.close_answer = close_ok  # the prompts before the install
+        self.close_after_answer = close_after  # the close once the Store is done
+        self.others = others
+        self.confirms: list[str] = []
         self.close_prompts = 0
-        self.closed_for_update = 0
+        self.closes = 0
+        self.busy: list[bool] = []
         self.notes: list[tuple[str, str]] = []
 
     def notify(self, text: str, kind: str = "info") -> object:
@@ -52,15 +78,22 @@ class FakeHost:
         return None
 
     def confirm(self, title: str, text: str, action_label: str) -> bool:
-        self.confirms += 1
+        self.confirms.append(text)
         return self.confirm_answer
 
     def confirm_close(self) -> bool:
         self.close_prompts += 1
         return self.close_answer
 
-    def close_for_update(self) -> None:
-        self.closed_for_update += 1
+    def close_after_update(self) -> bool:
+        self.closes += 1
+        return self.close_after_answer
+
+    def set_update_busy(self, busy: bool) -> None:
+        self.busy.append(busy)
+
+    def other_windows(self) -> int:
+        return self.others
 
 
 @pytest.fixture
@@ -151,14 +184,26 @@ def test_failed_check_is_not_reported_as_up_to_date(qtbot, window, prefs, packag
     assert host.notes[-1][1] == "error"
 
 
+def test_on_demand_check_while_one_runs_says_so(qtbot, window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
+    host = FakeHost()
+    backend = BlockingBackend(pending=0)
+    controller = make(window, prefs, host, backend)
+    controller.check()
+    controller.check(on_demand=True)
+    assert host.notes == [("A check is already running.", "info")]
+    backend.release.set()
+    wait_until(qtbot, lambda: controller._check_job is None)
+
+
 def test_cancelled_close_prompt_aborts_the_install(window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
     host = FakeHost(confirm=True, close_ok=False)
     backend = FakeBackend(pending=1)
     controller = make(window, prefs, host, backend)
     controller.install()
-    assert host.confirms == 1 and host.close_prompts == 1
+    assert len(host.confirms) == 1 and host.close_prompts == 1
     assert backend.installs == []
-    assert host.closed_for_update == 0
+    assert host.busy == []  # never locked: nothing was installed
+    assert host.closes == 0
 
 
 def test_declined_confirmation_asks_nothing_else(window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
@@ -168,18 +213,38 @@ def test_declined_confirmation_asks_nothing_else(window, prefs, packaged) -> Non
     assert host.close_prompts == 0 and backend.installs == []
 
 
-def test_successful_install_closes_the_window_without_asking_again(
-    qtbot,
-    window,
-    prefs,
-    packaged,  # type: ignore[no-untyped-def]
-) -> None:
+def test_confirmation_says_every_window_closes(window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
+    host = FakeHost(confirm=False, others=0)
+    make(window, prefs, host, FakeBackend(pending=1)).install()
+    assert "closes every open Elanero window" in host.confirms[0]
+    assert "other Elanero" not in host.confirms[0]
+
+    host = FakeHost(confirm=False, others=1)
+    make(window, prefs, host, FakeBackend(pending=1)).install()
+    assert "One other Elanero window is open." in host.confirms[-1]
+    assert "recovery copies" in host.confirms[-1]
+
+    host = FakeHost(confirm=False, others=3)
+    make(window, prefs, host, FakeBackend(pending=1)).install()
+    assert "3 other Elanero windows are open." in host.confirms[-1]
+
+
+def test_install_locks_the_window_then_asks_to_close(qtbot, window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
     host = FakeHost()
     backend = FakeBackend(pending=1)
     controller = make(window, prefs, host, backend)
     controller.install()
-    wait_until(qtbot, lambda: host.closed_for_update == 1)
+    wait_until(qtbot, lambda: host.closes == 1)
     assert backend.installs == [int(window.winId())]
+    assert host.busy == [True, False]  # locked for the install, unlocked on the result
+
+
+def test_refused_close_after_install_says_to_close(qtbot, window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
+    host = FakeHost(close_after=False)  # the prompts pass, but the close is cancelled
+    controller = make(window, prefs, host, FakeBackend(pending=1))
+    controller.install()
+    wait_until(qtbot, lambda: bool(host.notes))
+    assert host.notes[-1] == ("Close Elanero to finish installing the update.", "info")
 
 
 def test_failed_install_opens_the_store_page(qtbot, window, prefs, packaged, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -193,8 +258,9 @@ def test_failed_install_opens_the_store_page(qtbot, window, prefs, packaged, mon
     make(window, prefs, host, backend).install()
     wait_until(qtbot, lambda: bool(opened))
     assert opened == [STORE_URL]
-    assert host.closed_for_update == 0
+    assert host.closes == 0
     assert host.notes and host.notes[-1][1] == "error"
+    assert host.busy == [True, False]
 
 
 def test_cancelled_store_prompt_says_so_and_stays_open(qtbot, window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
@@ -203,7 +269,37 @@ def test_cancelled_store_prompt_says_so_and_stays_open(qtbot, window, prefs, pac
     make(window, prefs, host, backend).install()
     wait_until(qtbot, lambda: bool(host.notes))
     assert host.notes[-1][0] == "The update was not installed."
-    assert host.closed_for_update == 0
+    assert host.closes == 0
+
+
+def test_closing_with_a_check_in_flight_raises_nothing(qtbot, window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
+    host = FakeHost()
+    backend = BlockingBackend(pending=2)
+    controller = make(window, prefs, host, backend)
+    controller.check(on_demand=True)
+    controller.shutdown()  # the window is closing while the Store answers
+    backend.release.set()
+    qtbot.wait(300)  # the late result arrives; it must go nowhere
+    assert controller.button.isHidden()
+    assert host.notes == []  # a closing window reports nothing
+
+
+def test_closing_with_a_failing_check_in_flight_raises_nothing(
+    qtbot, window, prefs, packaged
+) -> None:  # type: ignore[no-untyped-def]
+    class Failing(BlockingBackend):
+        def pending_updates(self) -> int:
+            self.release.wait(5)
+            raise OSError("no Store")
+
+    host = FakeHost()
+    backend = Failing()
+    controller = make(window, prefs, host, backend)
+    controller.check(on_demand=True)
+    controller.shutdown()
+    backend.release.set()
+    qtbot.wait(300)
+    assert host.notes == []
 
 
 def test_schedule_starts_once_in_the_store_build(window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
@@ -213,3 +309,20 @@ def test_schedule_starts_once_in_the_store_build(window, prefs, packaged) -> Non
     assert controller._scheduled and controller._repeat.isActive()
     assert FIRST_CHECK_MS == 15_000
     assert controller._repeat.interval() == 24 * 60 * 60 * 1000
+
+
+def test_shutdown_stops_the_daily_check(window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
+    controller = make(window, prefs, FakeHost(), FakeBackend())
+    controller.schedule()
+    controller.shutdown()
+    assert not controller._repeat.isActive()
+
+
+def test_a_lone_instance_has_no_other_windows(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from pdfeditor.ui.single_instance import InstanceSlot
+
+    slot = InstanceSlot(root=tmp_path / "instances")
+    try:
+        assert slot.others_running() == 0
+    finally:
+        slot.release()

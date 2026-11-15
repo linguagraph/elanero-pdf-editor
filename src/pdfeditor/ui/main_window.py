@@ -119,7 +119,7 @@ from pdfeditor.ui.sign_controller import (
     RequestSignaturesTool,
     SignController,
 )
-from pdfeditor.ui.single_instance import start_new_window
+from pdfeditor.ui.single_instance import InstanceSlot, start_new_window
 from pdfeditor.ui.stamp_menu import StampMenu
 from pdfeditor.ui.start_page import StartPage
 from pdfeditor.ui.store_updates import StoreUpdates
@@ -238,7 +238,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(1280, 860)
         self.setAcceptDrops(True)
-        self._closing_for_update = False  # the Store update closes the window, prompts done
+        # The instance slot of this process (set by app.py): counts the other open windows
+        self.instance_slot: InstanceSlot | None = None
         self._cascade_index = 0
         self._cascaded_geometry = QRect()
         self._geometry_restored = False
@@ -1727,10 +1728,31 @@ class MainWindow(QMainWindow):
         user cancelled any of them. Used by closing and by the Store update, so both ask alike."""
         return all(self._confirm_discard(view) for view in self.views())
 
-    def close_for_update(self) -> None:
-        """Close now: the Store is installing an update and the prompts were already answered."""
-        self._closing_for_update = True
-        self.close()
+    def close_after_update(self) -> bool:
+        """The Store has installed the update: close through the normal close flow, so any
+        document edited while the install ran is asked about. False if the user cancelled."""
+        return self.close()
+
+    def set_update_busy(self, busy: bool) -> None:
+        """While the Store installs, the document, ribbon, menus and side panels are locked, so
+        nothing can change under the install; the window itself can still be closed."""
+        for widget in (
+            self.centralWidget(),
+            self.ribbon,
+            self.menu_bar,
+            self.nav_dock,
+            self.inspector_dock,
+        ):
+            if widget is not None:
+                widget.setEnabled(not busy)
+        if busy:
+            self.setCursor(Qt.CursorShape.BusyCursor)
+        else:
+            self.unsetCursor()
+
+    def other_windows(self) -> int:
+        """Other Elanero windows (other processes) that are open, from the instance slots."""
+        return self.instance_slot.others_running() if self.instance_slot is not None else 0
 
     # -- menu bar and ribbon --------------------------------------------------------------
     def _set_menu_bar_shown(self, shown: bool) -> None:
@@ -1911,9 +1933,10 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if not self._closing_for_update and not self.confirm_close():
+        if not self.confirm_close():
             event.ignore()
             return
+        self.store_updates.shutdown()  # no Store job reports back to a closing window
         self.jobs.cancel_all()  # and wait, before the documents they read are closed
         self.combine.shutdown()  # restores the docks before their layout is saved
         self.toasts.clear()

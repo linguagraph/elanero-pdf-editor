@@ -146,6 +146,7 @@ def run(argv: list[str]) -> int:
         splash.set_progress(0.6)
         window = MainWindow()
         window.cascade(slot.index)
+        window.instance_slot = slot  # counts the other open windows (Store update prompt)
         server = InstanceServer(parent=window)
         # Files handed over while the splash is still up wait for the window: opening them
         # now would put password prompts and errors behind the splash.
