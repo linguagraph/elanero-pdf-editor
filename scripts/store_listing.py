@@ -31,6 +31,8 @@ MAX_LICENSE_TERMS = 10000
 SUPPORT_AND_LEGAL = "Support and legal"
 COPYRIGHT = "Copyright and trademark info"
 LICENSE_TERMS = "Additional license terms"
+# The heading's key in sections(), which strips the "[up to 1,500 characters]" note.
+WHATS_NEW = "What's new in this version"
 
 
 class ListingError(Exception):
@@ -124,7 +126,7 @@ def parse(text: str) -> Listing:
     listing = Listing(
         short_description=unwrap(_required(found, "Short description")),
         description=unwrap(_required(found, "Description")),
-        release_notes=unwrap(_required(found, "What's new in this version")),
+        release_notes=unwrap(_required(found, WHATS_NEW)),
         features=features,
         keywords=keywords,
         notes_for_certification=unwrap(_required(found, "Notes for certification")),
@@ -157,10 +159,15 @@ def _git(*args: str) -> str | None:
 
 
 def check_notes_changed(new: Listing, previous: str | None, tag_message: str) -> None:
-    """What's New must describe this release. ``previous`` is the last tag's listing, if any."""
+    """What's New must describe this release. ``previous`` is the last tag's listing, if any.
+
+    Only What's New is read from ``previous``: the old listing may predate a section the current
+    format requires, and that must not fail this release. A missing What's New counts as changed.
+    """
     if previous is None or SAME_NOTES_MARKER in tag_message:
         return
-    if parse(previous).release_notes == new.release_notes:
+    previous_notes = unwrap(sections(previous).get(WHATS_NEW, ""))
+    if previous_notes and previous_notes == new.release_notes:
         raise ListingError(
             "What's New is the same as in the last release. Update it in "
             f"{LISTING_PATH_IN_GIT}, or put {SAME_NOTES_MARKER} in the tag's message if this "
