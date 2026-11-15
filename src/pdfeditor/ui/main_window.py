@@ -240,6 +240,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         # The instance slot of this process (set by app.py): counts the other open windows
         self.instance_slot: InstanceSlot | None = None
+        self._locked_actions: dict[QAction, bool] = {}  # action -> enabled before the lock
         self._cascade_index = 0
         self._cascaded_geometry = QRect()
         self._geometry_restored = False
@@ -1734,8 +1735,11 @@ class MainWindow(QMainWindow):
         return self.close()
 
     def set_update_busy(self, busy: bool) -> None:
-        """While the Store installs, the document, ribbon, menus and side panels are locked, so
-        nothing can change under the install; the window itself can still be closed."""
+        """While the Store installs, the document, ribbon, menus, side panels and every window
+        action are locked, so nothing can change under the install (a disabled action also
+        drops its keyboard shortcut). The window itself is not closed by this; closing is
+        refused until the install ends (see closeEvent). Unlocking restores each action's own
+        enabled state, so an action that was disabled stays disabled."""
         for widget in (
             self.centralWidget(),
             self.ribbon,
@@ -1746,9 +1750,23 @@ class MainWindow(QMainWindow):
             if widget is not None:
                 widget.setEnabled(not busy)
         if busy:
+            self._locked_actions = {action: action.isEnabled() for action in self._window_actions()}
+            for action in self._locked_actions:
+                action.setEnabled(False)
             self.setCursor(Qt.CursorShape.BusyCursor)
         else:
+            for action, enabled in self._locked_actions.items():
+                action.setEnabled(enabled)
+            self._locked_actions = {}
             self.unsetCursor()
+
+    def _window_actions(self) -> list[QAction]:
+        """Every action of the window: the ones in its menus and bars, and the ones only
+        added to the window (a shortcut works through either)."""
+        found: dict[int, QAction] = {id(a): a for a in self.findChildren(QAction)}
+        for action in self.actions():
+            found[id(action)] = action
+        return list(found.values())
 
     def other_windows(self) -> int:
         """Other Elanero windows (other processes) that are open, from the instance slots."""
@@ -1933,6 +1951,12 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self.store_updates.busy:
+            # The Store is installing: closing now would leave the install running with no
+            # window. Refused before any prompt; the install's own close follows it.
+            self.notify("Elanero is installing an update. Wait for the Microsoft Store to finish.")
+            event.ignore()
+            return
         if not self.confirm_close():
             event.ignore()
             return

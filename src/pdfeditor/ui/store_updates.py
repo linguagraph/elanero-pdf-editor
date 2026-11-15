@@ -141,11 +141,13 @@ class StoreUpdates(QObject):
         what it found, even when the automatic checks are off."""
         if self._closed:
             return
+        if self.busy:  # an install is running: the Store is busy with it
+            if on_demand:
+                self.host.notify(self.tr("An update is installing."))
+            return
         if self._check_job is not None:
             if on_demand:
                 self.host.notify(self.tr("A check is already running."))
-            return
-        if self.busy:  # an install is running: nothing to check against
             return
         if self.backend is None or not bundle.is_packaged():
             if on_demand:
@@ -174,6 +176,8 @@ class StoreUpdates(QObject):
         if count is None or not isinstance(count, int):
             if on_demand:
                 self.host.notify(self.tr("Couldn't check the Microsoft Store right now."), "error")
+            return
+        if self.busy:  # the result arrived mid-install: the indicator stays as it is
             return
         self.set_pending(count)
         if not on_demand:

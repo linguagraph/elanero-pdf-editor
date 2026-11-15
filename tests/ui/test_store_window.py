@@ -132,3 +132,57 @@ def test_busy_lock_is_released_after_a_failed_install(
     assert window.centralWidget().isEnabled()
     assert window.isVisible()
     assert window.close()
+
+
+def test_close_during_an_install_is_refused_with_a_toast(
+    qtbot, fixture_pdf, store, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    window = window_with_document(qtbot, fixture_pdf)
+    monkeypatch.setattr(window, "confirm", lambda *args: True)  # "Install and Close"
+    notes: list[str] = []
+    monkeypatch.setattr(window, "notify", lambda text, *a, **k: notes.append(text))
+
+    window.store_updates.install()  # the Store is working (the fake waits for release)
+    assert not window.close(), "closing during an install must be refused"
+    assert window.isVisible()
+    assert notes == ["Elanero is installing an update. Wait for the Microsoft Store to finish."]
+
+    # The install handler still works: the Store finishes, and the normal close follows.
+    store.release.set()
+    qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
+    assert not window.isVisible()
+
+
+def test_window_actions_do_nothing_while_the_install_runs(
+    qtbot, fixture_pdf, store, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """Every window action is locked: a shortcut is an action's trigger, and a disabled action
+    neither fires nor runs its slot. Ctrl+O's action is among them (it's not triggered here,
+    since an enabled Open would open a modal dialog); the probe stands in for the shortcuts."""
+    from PySide6.QtGui import QAction, QKeySequence
+
+    window = window_with_document(qtbot, fixture_pdf)
+    hits: list[str] = []
+    probe = QAction("probe", window)
+    probe.setShortcut(QKeySequence("Ctrl+Alt+F12"))
+    probe.triggered.connect(lambda: hits.append("probe"))
+    window.addAction(probe)
+    dead = QAction("already disabled", window)
+    dead.setEnabled(False)
+    window.addAction(dead)
+
+    probe.trigger()
+    assert hits == ["probe"], "positive control: an enabled action runs"
+
+    window.set_update_busy(True)
+    assert not window.act_open.isEnabled()  # Ctrl+O's action is locked
+    assert not probe.isEnabled()
+    probe.trigger()
+    assert hits == ["probe"], "a locked action must do nothing"
+
+    window.set_update_busy(False)
+    assert probe.isEnabled()  # restored to what it was before the lock
+    assert not dead.isEnabled()  # disabled before the lock: still disabled after it
+    probe.trigger()
+    assert hits == ["probe", "probe"]
+    assert window.close()

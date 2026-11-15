@@ -5,6 +5,9 @@ its busy lock are checked in test_store_window."""
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import threading
 from collections.abc import Callable
 
@@ -326,3 +329,87 @@ def test_a_lone_instance_has_no_other_windows(tmp_path) -> None:  # type: ignore
         assert slot.others_running() == 0
     finally:
         slot.release()
+
+
+class TwoGates(FakeBackend):
+    """Holds the check and the install separately, so a check can finish mid-install."""
+
+    def __init__(self, pending: int = 0) -> None:
+        super().__init__(pending)
+        self.check_gate = threading.Event()
+        self.install_gate = threading.Event()
+
+    def pending_updates(self) -> int:
+        self.check_gate.wait(5)
+        return super().pending_updates()
+
+    def request_install(self, hwnd: int) -> InstallResult:
+        self.install_gate.wait(5)
+        return super().request_install(hwnd)
+
+
+def test_on_demand_check_during_an_install_says_so(qtbot, window, prefs, packaged) -> None:  # type: ignore[no-untyped-def]
+    host = FakeHost()
+    backend = BlockingBackend(pending=1)
+    controller = make(window, prefs, host, backend)
+    controller.install()
+    controller.check(on_demand=True)
+    assert host.notes == [("An update is installing.", "info")]
+    backend.release.set()
+    wait_until(qtbot, lambda: controller._install_job is None)
+
+
+def test_a_check_result_mid_install_does_not_show_the_indicator(
+    qtbot, window, prefs, packaged
+) -> None:  # type: ignore[no-untyped-def]
+    host = FakeHost()
+    backend = TwoGates(pending=3)
+    controller = make(window, prefs, host, backend)
+    controller.check()
+    controller.install()  # the install starts while the check is still running
+    backend.check_gate.set()
+    wait_until(qtbot, lambda: controller._check_job is None)
+    assert controller.button.isHidden()  # the result came in during the install
+    backend.install_gate.set()
+    wait_until(qtbot, lambda: controller._install_job is None)
+
+
+def _exited_process() -> subprocess.Popen[bytes]:
+    process = subprocess.Popen([sys.executable, "-c", "pass"])
+    process.wait()
+    return process
+
+
+def test_others_are_read_from_lock_files_without_taking_any_lock(
+    tmp_path,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    from PySide6.QtCore import QLockFile, QSysInfo
+
+    from pdfeditor.ui.single_instance import InstanceSlot
+
+    root = tmp_path / "instances"
+    slot = InstanceSlot(root=root)  # our own slot, 0
+    live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    gone = _exited_process()
+    host = QSysInfo.machineHostName()
+    try:
+        (root / "1.lock").write_text(f"{live.pid}\n{host}\npdfeditor\n", encoding="utf-8")
+        (root / "2.lock").write_text(f"{gone.pid}\n{host}\npdfeditor\n", encoding="utf-8")
+
+        def no_locking(self, *args):  # type: ignore[no-untyped-def]
+            raise AssertionError("others_running must not take a lock")
+
+        monkeypatch.setattr(QLockFile, "tryLock", no_locking)
+        assert slot.others_running() == 1  # the live copy only; the stale file doesn't count
+    finally:
+        live.kill()
+        live.wait()
+        slot.release()
+
+
+def test_pid_liveness() -> None:
+    from pdfeditor.ui.single_instance import _pid_alive
+
+    assert _pid_alive(os.getpid())
+    assert not _pid_alive(_exited_process().pid)
