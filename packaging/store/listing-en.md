@@ -115,10 +115,14 @@ Productivity (subcategory: none)
 
 ## Support and legal
 
+Each release sends the copyright and license terms. The Store API ignores the website, support
+contact and privacy policy URL, so those are set on Partner Center's Properties page.
+
 - Website: https://github.com/linguagraph/elanero-pdf-editor
 - Support contact: https://github.com/linguagraph/elanero-pdf-editor/issues
 - Privacy policy URL: https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md
 - Copyright and trademark info: Elanero is free software, licensed under AGPL-3.0-or-later.
+- Additional license terms: GNU AGPL-3.0-or-later: https://github.com/linguagraph/elanero-pdf-editor/blob/main/LICENSE
 
 ## System requirements
 
