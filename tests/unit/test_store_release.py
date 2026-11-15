@@ -174,6 +174,8 @@ def test_an_old_listing_missing_a_required_item_is_fine_when_whats_new_changed()
 
 def test_an_old_listing_missing_a_required_section_is_fine_when_whats_new_changed() -> None:
     old = GOOD.replace("## Product features [up to 20, each up to 200 characters]\n", "## Other\n")
+    with pytest.raises(ListingError):
+        parse(old)
     old = old.replace("• Something new.", "• Older change.")
     store_listing.check_notes_changed(parse(GOOD), old, "Elanero 0.4.0")
 
