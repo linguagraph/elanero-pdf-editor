@@ -57,7 +57,7 @@ Test notes.
 def test_the_real_listing_is_valid() -> None:
     """What the next release will send: this fails the PR that breaks it."""
     listing = store_listing.load()
-    assert "Update from inside the app" in listing.release_notes
+    assert "Help opens the user guide at its new address" in listing.release_notes
     assert listing.features[0] == "Edit text and images directly in your PDF"
     assert "PDF editor" in listing.keywords
     assert "runFullTrust" in listing.notes_for_certification
@@ -74,7 +74,7 @@ def test_the_real_listing_reads_right_once_unwrapped() -> None:
     assert "\nPrivate by design\nElanero works offline." in listing.description
     assert "\nEdit the document itself\n• Change text" in listing.description
     assert (
-        '• Update from inside the app: when a new version is in the Microsoft Store, an "Update'
+        "• Help opens the user guide at its new address: F1, Help ▸ Elanero Help, the ribbon's"
         in (listing.release_notes)
     )
     assert all(line.startswith("•") for line in listing.release_notes.splitlines())
