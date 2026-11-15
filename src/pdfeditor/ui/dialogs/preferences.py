@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pdfeditor import bundle
 from pdfeditor.core.secrets import SecretError
 from pdfeditor.services import file_association
 from pdfeditor.services.translation import (
@@ -102,6 +103,31 @@ class PreferencesDialog(FormDialog):
             "Off: every file you open from Explorer gets its own window. Applies to windows "
             "opened after the change.",
         )
+        self.show_splash = QCheckBox(self.tr("Show the splash screen at startup"))
+        self.show_splash.setChecked(settings.show_splash)
+        add_row(
+            form,
+            "",
+            self.show_splash,
+            self.tr("Off: Elanero opens straight into its window. Applies from the next start."),
+        )
+        # Store build only (the other channels never contact the Store)
+        self.store_check = QCheckBox(self.tr("Check the Microsoft Store for updates"))
+        self.store_check.setChecked(settings.check_store_updates)
+        store_help = add_row(
+            form,
+            "",
+            self.store_check,
+            self.tr(
+                "Once a day, Elanero asks the Microsoft Store whether a new version is out, and "
+                "shows a button when one is. Nothing else is sent. Help ▸ Check for Updates asks "
+                "at any time."
+            ),
+        )
+        packaged = bundle.is_packaged()
+        form.setRowVisible(self.store_check, packaged)
+        if store_help is not None:
+            form.setRowVisible(store_help, packaged)
 
         # PDF file association (Windows): applied at once, like the shortcut editor
         self.pdf_status = caption("")
@@ -658,6 +684,8 @@ class PreferencesDialog(FormDialog):
         s.accent = accent if isinstance(accent, str) and accent != CUSTOM else ""
         s.autosave_minutes = self.autosave.value()
         s.single_window = self.single_window.isChecked()
+        s.show_splash = self.show_splash.isChecked()
+        s.check_store_updates = self.store_check.isChecked()
         s.undo_disk_mb = self.undo_disk.value()
         s.cache_mb = self.cache.value()
         # The translation settings that are valid are saved; the switch only goes on when the

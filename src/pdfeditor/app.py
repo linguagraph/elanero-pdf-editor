@@ -114,7 +114,7 @@ def run(argv: list[str]) -> int:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_NAME)
     app.setApplicationVersion(__version__)
-    from pdfeditor.ui.branding import app_icon, show_splash
+    from pdfeditor.ui.branding import app_icon, startup_splash
 
     app.setWindowIcon(app_icon())
     from pdfeditor.ui.i18n import install_translators
@@ -134,7 +134,7 @@ def run(argv: list[str]) -> int:
     # The splash covers the real startup work (loading the engine, importing the UI, building
     # the main window), its bar advancing after each stage, and no longer: the window takes
     # over as soon as it's ready.
-    splash = show_splash(settings.theme)
+    splash = startup_splash(settings.theme, settings.show_splash)
     try:
         import pdfeditor.core.session  # noqa: F401 - preloaded, so the bar tracks it
         from pdfeditor.engine.registry import get_engine

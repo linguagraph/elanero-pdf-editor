@@ -182,6 +182,25 @@ class AppSettings:
         self.qs.setValue("prefs/show_menu_bar", "true" if value else "false")
 
     @property
+    def show_splash(self) -> bool:
+        """The startup splash screen (off: the window simply appears, and no splash art loads)."""
+        return self._bool("prefs/show_splash", True)
+
+    @show_splash.setter
+    def show_splash(self, value: bool) -> None:
+        self.qs.setValue("prefs/show_splash", "true" if value else "false")
+
+    @property
+    def check_store_updates(self) -> bool:
+        """Store build only: ask the Microsoft Store every day whether an update is out (off:
+        never, and the update indicator stays hidden; Help > Check for Updates still works)."""
+        return self._bool("prefs/check_store_updates", True)
+
+    @check_store_updates.setter
+    def check_store_updates(self, value: bool) -> None:
+        self.qs.setValue("prefs/check_store_updates", "true" if value else "false")
+
+    @property
     def ribbon_compact(self) -> bool:
         return self._bool("ribbon/compact", False)
 

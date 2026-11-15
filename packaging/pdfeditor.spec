@@ -94,6 +94,16 @@ a = Analysis(
         "pkcs11.util.ec",
         "pkcs11.util.dsa",
         "pyhanko.sign.pkcs11",
+        # Microsoft Store updates (pywinrt, Windows): imported inside functions only, by the
+        # Store build. pywinrt's own PyInstaller hook (winrt/__pyinstaller) already collects
+        # its projection tables; these names make the native core and the Store projection
+        # explicit. Checked by the self-test ("Microsoft Store updates").
+        "winrt._winrt",
+        "winrt.runtime._internals",
+        "winrt.system",
+        "winrt.windows.services.store",
+        "winrt.windows.foundation",
+        "winrt.windows.foundation.collections",
     ],
     excludes=QT_EXCLUDES + DEV_EXCLUDES,
     noarchive=False,

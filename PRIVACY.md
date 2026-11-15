@@ -23,8 +23,14 @@ version, it stays in `%LOCALAPPDATA%\pdfeditor` until you delete that folder.
 
 ## When Elanero uses the internet
 
-Elanero works offline. It connects to the internet only when you ask it to:
+Elanero works offline. It connects to the internet only when you ask it to, with one exception: the
+Microsoft Store version checks for updates by itself (see below).
 
+- **Checking for updates in the Microsoft Store (Store version only).** Once a day, and when you
+  choose Help > Check for Updates, Elanero asks the Microsoft Store (Microsoft) whether a newer
+  version is out. Nothing else is sent: no document, no text and no file name. Microsoft sees your
+  IP address, as with any Store request. You can turn the daily check off in Preferences > General;
+  the Help command still works. The installer and the portable version never check.
 - **Downloading an OCR language.** Elanero downloads the language file from GitHub
   (`github.com/tesseract-ocr/tessdata_fast`). GitHub sees your IP address, as with any
   download; see [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).

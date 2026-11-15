@@ -210,3 +210,25 @@ def wordmark(height: int, ratio: float = 1.0) -> QPixmap:
     pixmap = source.scaledToHeight(round(height * ratio), smooth)
     pixmap.setDevicePixelRatio(ratio)
     return pixmap
+
+
+class NullSplash:
+    """Stands in for :class:`LoadingSplash` when the user turned the splash off: the same
+    calls, none of them showing anything, and no splash art is decoded."""
+
+    def set_progress(self, fraction: float) -> None:
+        pass
+
+    def finish(self, window: QWidget) -> None:
+        pass
+
+    def close(self) -> bool:
+        return True
+
+
+def startup_splash(theme: str, enabled: bool) -> LoadingSplash | NullSplash:
+    """The startup splash when ``enabled``, otherwise a :class:`NullSplash`. The caller uses
+    the same calls either way (``set_progress``, ``finish`` and ``close``)."""
+    if not enabled:
+        return NullSplash()
+    return show_splash(theme)
