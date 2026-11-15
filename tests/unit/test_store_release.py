@@ -159,6 +159,40 @@ def test_stale_whats_new_stops_the_release() -> None:
     store_listing.check_notes_changed(listing, GOOD, "Elanero 0.3.0 [same-whats-new]")
 
 
+# The last tag's listing may predate a required section (v0.3.1 has no license-terms bullet).
+OLD_WITHOUT_LICENSE_BULLET = GOOD.replace(
+    "- Additional license terms: GNU AGPL-3.0-or-later: https://example.org/LICENSE\n", ""
+)
+
+
+def test_an_old_listing_missing_a_required_item_is_fine_when_whats_new_changed() -> None:
+    with pytest.raises(ListingError, match="Additional license terms"):
+        parse(OLD_WITHOUT_LICENSE_BULLET)
+    old = OLD_WITHOUT_LICENSE_BULLET.replace("• Something new.", "• Older change.")
+    store_listing.check_notes_changed(parse(GOOD), old, "Elanero 0.4.0")
+
+
+def test_an_old_listing_missing_a_required_section_is_fine_when_whats_new_changed() -> None:
+    old = GOOD.replace("## Product features [up to 20, each up to 200 characters]\n", "## Other\n")
+    with pytest.raises(ListingError):
+        parse(old)
+    old = old.replace("• Something new.", "• Older change.")
+    store_listing.check_notes_changed(parse(GOOD), old, "Elanero 0.4.0")
+
+
+def test_an_old_listing_with_the_same_whats_new_still_stops_the_release() -> None:
+    with pytest.raises(ListingError, match="same as in the last release"):
+        store_listing.check_notes_changed(parse(GOOD), OLD_WITHOUT_LICENSE_BULLET, "Elanero 0.4.0")
+
+
+def test_an_old_listing_without_whats_new_counts_as_changed() -> None:
+    old = GOOD.replace(
+        "## What's new in this version [up to 1,500 characters]\n\n• Something new.\n", ""
+    )
+    assert "What's new" not in old
+    store_listing.check_notes_changed(parse(GOOD), old, "Elanero 0.4.0")
+
+
 def test_a_listing_change_is_checked_but_needs_no_install_tests() -> None:
     assert ci_changes.classify(["packaging/store/listing-en.md"]) == {
         "app": True,
