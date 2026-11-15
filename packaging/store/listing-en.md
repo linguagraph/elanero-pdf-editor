@@ -77,10 +77,10 @@ https://github.com/linguagraph/elanero-pdf-editor.
 
 ## What's new in this version [up to 1,500 characters]
 
-• Update from inside the app: when a new version is in the Microsoft Store, an "Update
-  available" button appears on the toolbar. Click it to save your work and install the update.
-  Help ▸ Check for Updates checks on demand, and Preferences can turn the check off.
-• Start faster: Preferences can now turn off the splash screen.
+• Help opens the user guide at its new address: F1, Help ▸ Elanero Help, the ribbon's "?"
+  button and the About box now go straight to the guide.
+• Elanero has a website with an overview of every feature and the download links:
+  https://linguagraph.github.io/elanero-pdf-editor/
 
 ## Product features [up to 20, each up to 200 characters]
 
