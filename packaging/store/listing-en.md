@@ -77,12 +77,10 @@ https://github.com/linguagraph/elanero-pdf-editor.
 
 ## What's new in this version [up to 1,500 characters]
 
-• Translate selected text: choose Translate on the text toolbar or the right-click menu to see
-  a translation in a bubble beside the selection, then copy it or add it as a note.
-• Works with MyMemory (no account needed), DeepL API Free, Azure AI Translator or your own
-  LibreTranslate server. Set it up in Preferences ▸ Translation.
-• Private by default: translation is off until you agree once, and only the selected text is
-  sent to the service you pick. API keys are stored encrypted.
+• Update from inside the app: when a new version is in the Microsoft Store, an "Update
+  available" button appears on the toolbar. Click it to save your work and install the update.
+  Help ▸ Check for Updates checks on demand, and Preferences can turn the check off.
+• Start faster: Preferences can now turn off the splash screen.
 
 ## Product features [up to 20, each up to 200 characters]
 
@@ -145,7 +143,9 @@ Digital signing needs a certificate of the tester's own; any .pfx file works. A 
 prompt comes from Windows or the token's software. A timestamp connects only to a server the
 user enters, and that option is off by default. Translation (select text, then Translate) is
 off until the user agrees to a one-time notice; it then sends only the selected text to the
-chosen service. MyMemory needs no key, so it can be tested without an account.
+chosen service. MyMemory needs no key, so it can be tested without an account. The app asks
+the Microsoft Store (StoreContext) whether an update exists shortly after startup and once a
+day; this can be turned off in Preferences.
 
 ## Images
 
