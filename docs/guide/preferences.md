@@ -15,6 +15,12 @@ the settings for the chosen category on the right: **General**, **Appearance**, 
 - **Open files in the window that's already running**: off by default, so each file you open from
   File Explorer gets its own window. When on, the file opens as a new tab in the window that is
   already running. This applies to windows opened after the change.
+- **Show the splash screen at startup**: on by default. Turn it off to open straight into the
+  window; the change applies from the next start.
+- **Check the Microsoft Store for updates**: only in the Microsoft Store version of Elanero, where
+  it is on by default. Once a day Elanero asks the Store whether a new version is out, and shows an
+  **Update available** button when one is. Turn it off and the button stays hidden; **Help ▸ Check
+  for Updates** still asks on demand. See [Interface](interface.md#updates).
 - **PDF files**: **Register as PDF Editor** adds Elanero to the apps that can open PDFs. When it is
   registered, the button becomes **Remove PDF Registration**. **Choose Default App…** opens Windows
   Settings at **Default apps**. See [Getting started](getting-started.md#make-elanero-the-default-pdf-app).

@@ -213,6 +213,11 @@ class Ribbon(QWidget):
                 button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         _keyboard_reachable(self.quick)
 
+    def set_update_button(self, button: QToolButton) -> None:
+        """The Store update indicator at the right end of the bar, before the "?" button. It
+        stays hidden until the controller shows it."""
+        self._top.insertWidget(self._top.indexOf(self.help_button), button)
+
     def set_help_action(self, action: QAction) -> None:
         """The "?" button at the right of the tab row runs ``action`` (Help, F1)."""
         self._help_action = action

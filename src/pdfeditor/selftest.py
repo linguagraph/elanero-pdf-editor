@@ -608,6 +608,17 @@ def _checks(workdir: Path) -> list[tuple[str, Check]]:
             raise AssertionError("elanero.ico isn't an icon file")
         return f"{len(brand.ICON_SIZES)} icon sizes, light and dark splash, wordmark"
 
+    def store_updates() -> str:
+        """pywinrt's native core and the Store projection load in the frozen exe. Only the
+        class is imported: nothing asks the Store anything."""
+        if sys.platform != "win32":
+            return "skipped (Microsoft Store updates are Windows only)"
+        from winrt.windows.services.store import StoreContext
+
+        if not isinstance(StoreContext, type):
+            raise AssertionError("StoreContext isn't a class")
+        return "StoreContext imports (the Store isn't called)"
+
     def instances() -> str:
         """Another copy can be started (the exe itself, unpacking afresh) and numbered."""
         from pdfeditor.ui.single_instance import (
@@ -670,6 +681,7 @@ def _checks(workdir: Path) -> list[tuple[str, Check]]:
         ("PDF/A", pdfa),
         ("licenses", licenses),
         ("branding", branding),
+        ("Microsoft Store updates", store_updates),
         ("instances", instances),
         ("translation", translation),
     ]

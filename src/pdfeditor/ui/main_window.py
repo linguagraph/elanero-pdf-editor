@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor import APP_DISPLAY_NAME
+from pdfeditor import APP_DISPLAY_NAME, bundle
 from pdfeditor.core import engine_lock
 from pdfeditor.core.autosave import Autosaver, RecoveryStore
 from pdfeditor.core.commands import (
@@ -119,9 +119,10 @@ from pdfeditor.ui.sign_controller import (
     RequestSignaturesTool,
     SignController,
 )
-from pdfeditor.ui.single_instance import start_new_window
+from pdfeditor.ui.single_instance import InstanceSlot, start_new_window
 from pdfeditor.ui.stamp_menu import StampMenu
 from pdfeditor.ui.start_page import StartPage
+from pdfeditor.ui.store_updates import StoreUpdates
 from pdfeditor.ui.theme import Theme, apply_theme
 from pdfeditor.ui.toasts import Kind, Toast, ToastAction, ToastHost, folder_action
 from pdfeditor.ui.tools import annotate
@@ -237,6 +238,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(1280, 860)
         self.setAcceptDrops(True)
+        # The instance slot of this process (set by app.py): counts the other open windows
+        self.instance_slot: InstanceSlot | None = None
+        self._locked_actions: dict[QAction, bool] = {}  # action -> enabled before the lock
         self._cascade_index = 0
         self._cascaded_geometry = QRect()
         self._geometry_restored = False
@@ -347,6 +351,9 @@ class MainWindow(QMainWindow):
         self._busy_disabled: list[QAction] = []
         self.mode_banner = ModeBanner(self)
         self.mode_banner.done.connect(lambda: self.set_tool("select"))
+        # Microsoft Store updates (Store build only): the indicator at the bar's right end
+        self.store_updates = StoreUpdates(self, self.prefs, self)
+        self.ribbon.set_update_button(self.store_updates.button)
 
         self._create_actions()
         self.combine = CombineController(self)  # before Organize: its action opens the panel
@@ -586,6 +593,9 @@ class MainWindow(QMainWindow):
         self.act_help = a("Elanero &Help", self.show_help, "F1", None, False)
         self.act_help.setObjectName("help")
         self.act_about = a("&About Elanero", self.show_about, None, None, False)
+        # Store build only: asks the Microsoft Store now (the daily check is automatic)
+        self.act_check_updates = a("Check for &Updates…", self.check_for_updates, None, None, False)
+        self.act_check_updates.setVisible(bundle.is_packaged())
         # Home/End belong to the view (it handles them itself); keep them out of window shortcuts.
         self.act_first.setShortcut(QKeySequence())
         self.act_last.setShortcut(QKeySequence())
@@ -723,6 +733,7 @@ class MainWindow(QMainWindow):
         help_menu = mb.addMenu("&Help")
         help_menu.addAction(self.act_help)
         help_menu.addSeparator()
+        help_menu.addAction(self.act_check_updates)
         help_menu.addAction(self.act_about)
 
         # The ☰ button offers the same menus; with the bar hidden, Alt+letter still opens them.
@@ -1710,6 +1721,57 @@ class MainWindow(QMainWindow):
             engine_version = getattr(view.session.engine, "version", "")
         AboutDialog(engine_version or getattr(self.engine(), "version", ""), self).exec()
 
+    def check_for_updates(self) -> None:
+        self.store_updates.check(on_demand=True)
+
+    def confirm_close(self) -> bool:
+        """The window's close prompts (save or discard for each unsaved document). False if the
+        user cancelled any of them. Used by closing and by the Store update, so both ask alike."""
+        return all(self._confirm_discard(view) for view in self.views())
+
+    def close_after_update(self) -> bool:
+        """The Store has installed the update: close through the normal close flow, so any
+        document edited while the install ran is asked about. False if the user cancelled."""
+        return self.close()
+
+    def set_update_busy(self, busy: bool) -> None:
+        """While the Store installs, the document, ribbon, menus, side panels and every window
+        action are locked, so nothing can change under the install (a disabled action also
+        drops its keyboard shortcut). The window itself is not closed by this; closing is
+        refused until the install ends (see closeEvent). Unlocking restores each action's own
+        enabled state, so an action that was disabled stays disabled."""
+        for widget in (
+            self.centralWidget(),
+            self.ribbon,
+            self.menu_bar,
+            self.nav_dock,
+            self.inspector_dock,
+        ):
+            if widget is not None:
+                widget.setEnabled(not busy)
+        if busy:
+            self._locked_actions = {action: action.isEnabled() for action in self._window_actions()}
+            for action in self._locked_actions:
+                action.setEnabled(False)
+            self.setCursor(Qt.CursorShape.BusyCursor)
+        else:
+            for action, enabled in self._locked_actions.items():
+                action.setEnabled(enabled)
+            self._locked_actions = {}
+            self.unsetCursor()
+
+    def _window_actions(self) -> list[QAction]:
+        """Every action of the window: the ones in its menus and bars, and the ones only
+        added to the window (a shortcut works through either)."""
+        found: dict[int, QAction] = {id(a): a for a in self.findChildren(QAction)}
+        for action in self.actions():
+            found[id(action)] = action
+        return list(found.values())
+
+    def other_windows(self) -> int:
+        """Other Elanero windows (other processes) that are open, from the instance slots."""
+        return self.instance_slot.others_running() if self.instance_slot is not None else 0
+
     # -- menu bar and ribbon --------------------------------------------------------------
     def _set_menu_bar_shown(self, shown: bool) -> None:
         self.prefs.show_menu_bar = shown
@@ -1852,6 +1914,7 @@ class MainWindow(QMainWindow):
             # panels keep their own width (the saved window state may hold a collapsed one).
             self._docks_sized = True
             fit_docks(self, [self.nav_dock, self.inspector_dock], force=True)
+        self.store_updates.schedule()  # the Store build's first update check, once
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if self.combine.active:
@@ -1888,10 +1951,16 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        for view in self.views():
-            if not self._confirm_discard(view):
-                event.ignore()
-                return
+        if self.store_updates.busy:
+            # The Store is installing: closing now would leave the install running with no
+            # window. Refused before any prompt; the install's own close follows it.
+            self.notify("Elanero is installing an update. Wait for the Microsoft Store to finish.")
+            event.ignore()
+            return
+        if not self.confirm_close():
+            event.ignore()
+            return
+        self.store_updates.shutdown()  # no Store job reports back to a closing window
         self.jobs.cancel_all()  # and wait, before the documents they read are closed
         self.combine.shutdown()  # restores the docks before their layout is saved
         self.toasts.clear()

@@ -71,11 +71,12 @@ def test_f1_opens_the_guide_with_no_document(window: MainWindow, opened: list[st
 
 def test_help_menu_lists_the_guide_above_about(window: MainWindow) -> None:
     actions = _help_menu(window).actions()
-    texts = [a.text() for a in actions if not a.isSeparator()]
+    # Check for Updates is hidden outside the Store build, so only the visible items count.
+    texts = [a.text() for a in actions if not a.isSeparator() and a.isVisible()]
     assert texts == ["Elanero &Help", "&About Elanero"]
     help_index = actions.index(window.act_help)
     assert actions[help_index + 1].isSeparator()
-    assert actions[help_index + 2] is window.act_about
+    assert actions.index(window.act_about) > help_index + 1
 
 
 def test_help_menu_item_opens_the_guide(window: MainWindow, opened: list[str]) -> None:

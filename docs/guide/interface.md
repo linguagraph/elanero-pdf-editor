@@ -52,6 +52,25 @@ window the box shrinks to a button.
 
 The **?** button, between the search box and the chevron, opens this user guide (**F1**).
 
+### Updates
+
+Only in the Microsoft Store version of Elanero. When a newer version is in the Store, an **Update
+available** button appears at the right end of the ribbon, next to the **?** button. Click it, and
+Elanero asks you to confirm, because installing closes **every open Elanero window**, not only this
+one. If other Elanero windows are open, the question says how many. Unsaved changes in the other
+windows are not asked about; they rely on their recovery copies (see
+[Preferences](preferences.md#general)). This window then asks about its own unsaved changes, as when
+you close it; if you cancel any of those questions, nothing is installed.
+
+While the Store works, the document and the bars are locked and the pointer shows a busy cursor. If
+the update is in, the window closes, asking about any unsaved changes first. If the update can't be installed from
+Elanero, the Store page for Elanero opens instead.
+
+**Help ▸ Check for Updates…** asks the Store right away and tells you when Elanero is up to date.
+The daily check can be turned off in [Preferences](preferences.md#general). The installer and the
+portable `Elanero.exe` don't check for updates. See
+[Privacy](privacy.md#when-elanero-uses-the-internet).
+
 ## Side panels
 
 Two columns of panel buttons sit beside the page.

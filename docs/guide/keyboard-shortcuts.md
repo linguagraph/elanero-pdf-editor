@@ -32,6 +32,7 @@ Commands with no shortcut can still be run from the menus, the ribbon, the comma
 | Batch OCR | None |
 | Bates Numbering | None |
 | Callout | None |
+| Check for Updates | None |
 | Close | Ctrl+W, Ctrl+F4 |
 | Collapse Ribbon | Ctrl+F1 |
 | Combine Files into PDF | None |

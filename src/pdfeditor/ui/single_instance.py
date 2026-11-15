@@ -10,9 +10,17 @@ from __future__ import annotations
 
 import getpass
 import logging
+import os
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile, QObject, QProcess, QProcessEnvironment, Signal
+from PySide6.QtCore import (
+    QLockFile,
+    QObject,
+    QProcess,
+    QProcessEnvironment,
+    Signal,
+)
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from pdfeditor.bundle import app_command, is_frozen
@@ -135,12 +143,14 @@ class InstanceSlot:
     def __init__(self, root: Path | None = None) -> None:
         self.index = 0
         self._lock: QLockFile | None = None
+        self._root: Path | None = None
         try:
             root = root or data_dir() / "instances"
             root.mkdir(parents=True, exist_ok=True)
         except OSError as exc:  # only the window offset depends on it: never block startup
             log.warning("no instance slot (%s); opening at the saved position", exc)
             return
+        self._root = root
         self.index = MAX_SLOTS - 1
         for index in range(MAX_SLOTS):
             lock = QLockFile(str(root / f"{index}.lock"))
@@ -150,7 +160,65 @@ class InstanceSlot:
                 return
         log.warning("all %d instance slots are taken", MAX_SLOTS)
 
+    def others_running(self) -> int:
+        """How many other copies are running, read from the slot lock files without taking
+        any lock (a read-only check: it never claims, releases or removes a slot). Each lock
+        file records the pid of the copy that holds it; a pid that is still alive counts. A
+        stale file (its process is gone) doesn't."""
+        if self._root is None:
+            return 0
+        own_pid = os.getpid()
+        count = 0
+        for index in range(MAX_SLOTS):
+            if self._lock is not None and index == self.index:
+                continue  # our own slot
+            path = self._root / f"{index}.lock"
+            if not path.exists():
+                continue
+            # The folder is per user and on this PC, so every pid in it is a local process.
+            pid = QLockFile(str(path)).getLockInfo()[0]
+            if pid <= 0 or pid == own_pid:
+                continue
+            if _pid_alive(pid):
+                count += 1
+        return count
+
     def release(self) -> None:
         if self._lock is not None:
             self._lock.unlock()
             self._lock = None
+
+
+def _pid_alive(pid: int) -> bool:
+    """Whether a process with ``pid`` runs on this machine. On Windows a process that exists
+    but can't be opened (another user's) counts as alive, and an exited process reports the
+    exit code, not STILL_ACTIVE. A reused pid can look alive, which only makes the count one too
+    high."""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+        error_access_denied = 5
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        open_process.restype = wintypes.HANDLE
+        handle = open_process(process_query_limited_information, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == error_access_denied
+        try:
+            code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True  # can't tell: count it rather than miss a live copy
+            return code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # it exists, owned by someone else
+    return True

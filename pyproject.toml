@@ -21,6 +21,12 @@ dependencies = [
     "pyhanko>=0.38,<0.39",
     # USB tokens through a PKCS#11 module (MIT); the range is the one pyHanko supports.
     "python-pkcs11~=0.9.3",
+    # Microsoft Store updates (MIT, pywinrt), Windows only. Imported lazily, and only by the
+    # Store build (services/store_updates.py). Foundation is what the Store projection returns.
+    "winrt-runtime>=4.0; sys_platform == 'win32'",
+    "winrt-Windows.Services.Store>=4.0; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=4.0; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections>=4.0; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

@@ -20,8 +20,16 @@ Where these are kept is described in [Troubleshooting](troubleshooting.md#where-
 
 ## When Elanero uses the internet
 
-Elanero works offline. It connects to the internet only when you ask it to:
+Elanero works offline. It connects to the internet only when you ask it to, with one exception: the
+Microsoft Store version checks for updates by itself (see below).
 
+- **Checking for Store updates** (Microsoft Store version only). Once a day, and when you choose
+  **Help ▸ Check for Updates**, Elanero asks the Microsoft Store (Microsoft) whether a newer version
+  of Elanero is out. Elanero sends no document, text or file name; the request goes through Windows'
+  Microsoft Store service and is handled under Microsoft's privacy statement. That service sees your
+  IP address, as with any Store request. Turn the daily check off in
+  [Preferences](preferences.md#general); the Help command still works then. The installer and the
+  portable version never check.
 - **Downloading an OCR language**, from GitHub. GitHub sees your IP address, as it does for any
   download.
 - **Translating selected text**, once you have turned translation on. Only the text you selected is
@@ -33,4 +41,5 @@ Elanero works offline. It connects to the internet only when you ask it to:
 - **Checking signatures** does not use the internet. Elanero reads the certificates your PC already
   trusts and never fetches certificates, revocation lists or timestamps to do this.
 
-Nothing is sent in the background. When you open the **Help** guide, your browser opens this website.
+Apart from the daily Store check described above, nothing is sent in the background. When you open
+the **Help** guide, your browser opens this website.
