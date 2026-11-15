@@ -72,8 +72,8 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     assert workflow["permissions"] == {"contents": "read"}
     jobs = workflow["jobs"]
     assert jobs["deploy"]["permissions"] == {"pages": "write", "id-token": "write"}
-    assert "permissions" not in jobs["build"]
-    build_steps = jobs["build"]["steps"]
+    assert "permissions" not in jobs["site"]
+    build_steps = jobs["site"]["steps"]
     assert any("mkdocs build --strict" in str(s.get("run", "")) for s in build_steps)
     build_uses = [str(s.get("uses", "")) for s in build_steps]
     assert any(u.startswith("actions/configure-pages@v5") for u in build_uses)
@@ -81,3 +81,10 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     deploy_uses = [str(s.get("uses", "")) for s in jobs["deploy"]["steps"]]
     assert any(u.startswith("actions/deploy-pages@v4") for u in deploy_uses)
     assert "refs/heads/main" in str(jobs["deploy"]["if"])
+
+
+def test_no_view_source_button() -> None:
+    """Material's "View source" link replaces every "edit" in the edit URL with "raw", so with
+    this repo's name it pointed to linguagraph/elanero-pdf-rawor."""
+    config = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+    assert "- content.action.view" not in config

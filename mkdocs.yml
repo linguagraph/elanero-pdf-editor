@@ -36,7 +36,8 @@ theme:
     - search.suggest
     - search.highlight
     - content.action.edit
-    - content.action.view
+    # No content.action.view: Material builds that link by replacing every "edit" in the
+    # edit URL with "raw", which also breaks the repo name (elanero-pdf-editor).
 # Anchors (#headings) are checked too: strict builds fail on a link to a missing heading.
 validation:
   nav:
