@@ -41,7 +41,7 @@ There is no account, no subscription, no advertising and no telemetry.
 
 Press **F1** or choose **Help ▸ Elanero Help** to open this guide. The **?** button at the right of
 the ribbon, the link on the start page and the **Documentation** link in **Help ▸ About Elanero** open it
-too. The guide opens in your web browser at <https://linguagraph.github.io/pdf-editor/>.
+too. The guide opens in your web browser at <https://linguagraph.github.io/elanero-pdf-editor/>.
 
 !!! note "Which version this guide describes"
     The guide describes the latest release and any changes merged since. Where a feature is

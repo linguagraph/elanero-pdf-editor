@@ -73,7 +73,7 @@ a timestamp server you choose.
 
 Open source
 Elanero is free software under the GNU AGPL-3.0-or-later. Its source code is at
-https://github.com/linguagraph/pdf-editor.
+https://github.com/linguagraph/elanero-pdf-editor.
 
 ## What's new in this version [up to 1,500 characters]
 
@@ -115,10 +115,14 @@ Productivity (subcategory: none)
 
 ## Support and legal
 
-- Website: https://github.com/linguagraph/pdf-editor
-- Support contact: https://github.com/linguagraph/pdf-editor/issues
-- Privacy policy URL: https://github.com/linguagraph/pdf-editor/blob/main/PRIVACY.md
+Each release sends the copyright and license terms. The Store API ignores the website, support
+contact and privacy policy URL, so those are set on Partner Center's Properties page.
+
+- Website: https://github.com/linguagraph/elanero-pdf-editor
+- Support contact: https://github.com/linguagraph/elanero-pdf-editor/issues
+- Privacy policy URL: https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md
 - Copyright and trademark info: Elanero is free software, licensed under AGPL-3.0-or-later.
+- Additional license terms: GNU AGPL-3.0-or-later: https://github.com/linguagraph/elanero-pdf-editor/blob/main/LICENSE
 
 ## System requirements
 

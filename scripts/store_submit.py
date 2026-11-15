@@ -127,6 +127,8 @@ def apply_listing(submission: dict[str, Any], listing: Listing) -> None:
     base["releaseNotes"] = listing.release_notes
     base["features"] = list(listing.features)
     base["keywords"] = list(listing.keywords)
+    base["copyrightAndTrademarkInfo"] = listing.copyright
+    base["licenseTerms"] = listing.license_terms
     submission["notesForCertification"] = listing.notes_for_certification
 
 

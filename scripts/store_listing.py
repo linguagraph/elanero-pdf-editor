@@ -26,6 +26,11 @@ MAX_RELEASE_NOTES = 1500
 MAX_FEATURES = 20
 MAX_FEATURE = 200
 MAX_KEYWORDS = 7
+MAX_COPYRIGHT = 200
+MAX_LICENSE_TERMS = 10000
+SUPPORT_AND_LEGAL = "Support and legal"
+COPYRIGHT = "Copyright and trademark info"
+LICENSE_TERMS = "Additional license terms"
 
 
 class ListingError(Exception):
@@ -40,6 +45,8 @@ class Listing:
     features: tuple[str, ...]
     keywords: tuple[str, ...]
     notes_for_certification: str
+    copyright: str
+    license_terms: str
 
 
 def sections(text: str) -> dict[str, str]:
@@ -76,6 +83,23 @@ def _required(found: dict[str, str], heading: str) -> str:
     return body
 
 
+def _items(found: dict[str, str], heading: str) -> dict[str, str]:
+    """A section's ``- Name: value`` lines, by name (the value may contain colons)."""
+    items: dict[str, str] = {}
+    for line in _required(found, heading).splitlines():
+        name, colon, value = line.strip().removeprefix("- ").partition(": ")
+        if line.lstrip().startswith("- ") and colon:
+            items[name.strip()] = value.strip()
+    return items
+
+
+def _item(items: dict[str, str], heading: str, name: str) -> str:
+    value = items.get(name, "")
+    if not value:
+        raise ListingError(f"the listing has no “{name}” under “{heading}”")
+    return value
+
+
 def _limit(name: str, value: str, maximum: int) -> None:
     if len(value) > maximum:
         raise ListingError(
@@ -94,6 +118,9 @@ def parse(text: str) -> Listing:
     keywords = tuple(
         word.strip() for word in _required(found, "Search terms").split("·") if word.strip()
     )
+    # Only these two are sent: the Store API ignores the website, support contact and privacy
+    # policy URL, which are set on Partner Center's Properties page.
+    legal = _items(found, SUPPORT_AND_LEGAL)
     listing = Listing(
         short_description=unwrap(_required(found, "Short description")),
         description=unwrap(_required(found, "Description")),
@@ -101,7 +128,11 @@ def parse(text: str) -> Listing:
         features=features,
         keywords=keywords,
         notes_for_certification=unwrap(_required(found, "Notes for certification")),
+        copyright=_item(legal, SUPPORT_AND_LEGAL, COPYRIGHT),
+        license_terms=_item(legal, SUPPORT_AND_LEGAL, LICENSE_TERMS),
     )
+    _limit("the copyright and trademark info", listing.copyright, MAX_COPYRIGHT)
+    _limit("the license terms", listing.license_terms, MAX_LICENSE_TERMS)
     _limit("the short description", listing.short_description, MAX_SHORT_DESCRIPTION)
     _limit("the description", listing.description, MAX_DESCRIPTION)
     _limit("What's New", listing.release_notes, MAX_RELEASE_NOTES)

@@ -52,7 +52,7 @@ Elanero works offline. It connects to the internet only when you ask it to:
 ## Contact
 
 Questions about this policy: open an issue at
-<https://github.com/linguagraph/pdf-editor/issues>.
+<https://github.com/linguagraph/elanero-pdf-editor/issues>.
 
 Elanero is open source (AGPL-3.0-or-later). Its full source code, including everything above,
-is at <https://github.com/linguagraph/pdf-editor>.
+is at <https://github.com/linguagraph/elanero-pdf-editor>.

@@ -40,6 +40,14 @@ Long text.
 
 PDF editor · edit PDF
 
+## Support and legal
+
+Only some of these are sent.
+
+- Website: https://example.org
+- Copyright and trademark info: Free software.
+- Additional license terms: GNU AGPL-3.0-or-later: https://example.org/LICENSE
+
 ## Notes for certification [Submission options ▸ Notes for certification]
 
 Test notes.
@@ -53,6 +61,8 @@ def test_the_real_listing_is_valid() -> None:
     assert listing.features[0] == "Edit text and images directly in your PDF"
     assert "PDF editor" in listing.keywords
     assert "runFullTrust" in listing.notes_for_certification
+    assert listing.license_terms.endswith("/linguagraph/elanero-pdf-editor/blob/main/LICENSE")
+    assert "AGPL-3.0-or-later" in listing.copyright
 
 
 def test_the_real_listing_reads_right_once_unwrapped() -> None:
@@ -85,7 +95,15 @@ def test_unwrap_keeps_paragraphs() -> None:
 
 @pytest.mark.parametrize(
     "heading",
-    ["Short description", "Description", "What's new", "Product features", "Search terms", "Notes"],
+    [
+        "Short description",
+        "Description",
+        "What's new",
+        "Product features",
+        "Search terms",
+        "Support and legal",
+        "Notes",
+    ],
 )
 def test_a_missing_section_stops_the_release(heading: str) -> None:
     text = GOOD
@@ -94,6 +112,19 @@ def test_a_missing_section_stops_the_release(heading: str) -> None:
     text = text[:start] + (text[end:] if end != -1 else "")
     with pytest.raises(ListingError, match="no text under"):
         parse(text)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- Copyright and trademark info: Free software.",
+        "- Additional license terms: GNU AGPL-3.0-or-later: https://example.org/LICENSE",
+    ],
+)
+def test_missing_legal_text_stops_the_release(line: str) -> None:
+    name = line[2:].partition(":")[0]
+    with pytest.raises(ListingError, match=f"no “{name}”"):
+        parse(GOOD.replace(line + "\n", ""))
 
 
 def test_an_empty_section_stops_the_release() -> None:
@@ -110,6 +141,8 @@ def test_an_empty_section_stops_the_release() -> None:
         ("1. First", "1. " + "f" * 201, "the feature"),
         ("1. First", "\n".join(f"{i}. f" for i in range(1, 22)), "product features"),
         ("PDF editor · edit PDF", " · ".join("abcdefgh"), "search terms"),
+        ("Free software.", "c" * 201, "copyright"),
+        ("https://example.org/LICENSE", "l" * 10001, "license terms"),
     ],
 )
 def test_store_limits_are_checked(old: str, new: str, message: str) -> None:
@@ -193,6 +226,11 @@ def test_the_listing_goes_on_the_draft_and_the_rest_stays() -> None:
     assert base["features"] == ["First", "Second"]
     assert base["keywords"] == ["PDF editor", "edit PDF"]
     assert api.put["notesForCertification"] == "Test notes."
+    assert base["copyrightAndTrademarkInfo"] == "Free software."
+    # The value keeps its own colon; only the first one separates it from the name.
+    assert base["licenseTerms"] == "GNU AGPL-3.0-or-later: https://example.org/LICENSE"
+    # The Store API ignores these (Partner Center's Properties page sets them), so they're not sent.
+    assert not {"websiteUrl", "supportContact", "privacyPolicy"} & base.keys()
     # Not ours to change: the package msstore uploaded, images, the title.
     assert api.put["applicationPackages"] == api.submission["applicationPackages"]
     assert base["images"] == [{"fileName": "shot.png"}]
