@@ -21,7 +21,7 @@ See [Privacy](#privacy) for the optional network connections.
 Allow about 250 MB of free disk space. A keyboard and mouse or touchpad are recommended.
 The project currently ships Windows builds; macOS and Linux packages are not provided.
 
-- **Microsoft Store:** search for **Elanero - PDF Editor**, published by **SGN Solutions**.
+- **Microsoft Store:** [Elanero - PDF Editor](https://apps.microsoft.com/detail/9pldq042g3th), published by **SGN Solutions**.
 - **GitHub Releases:** open the [releases page](https://github.com/linguagraph/elanero-pdf-editor/releases)
   and choose a release's `Elanero.exe` (portable) or `pdfeditor-<version>-setup.exe` (installer).
 - **Development builds:** pull-request and `main` builds publish executable artifacts in

@@ -14,8 +14,8 @@ already have (see [Export and conversion](export.md#create-a-pdf-from-an-office-
 
 There are three ways to get it:
 
-- **Microsoft Store.** Search for **Elanero - PDF Editor** (published by SGN Solutions) and
-  choose **Get**. Store updates are installed for you.
+- **Microsoft Store.** Open [Elanero - PDF Editor](https://apps.microsoft.com/detail/9pldq042g3th) in the Store (published by
+  SGN Solutions) and choose **Get**. Store updates are installed for you.
 - **Installer.** On the project's
   [releases page](https://github.com/linguagraph/elanero-pdf-editor/releases), download
   `pdfeditor-<version>-setup.exe` and run it.

@@ -190,7 +190,8 @@ def test_the_page_links_to_the_repo_downloads_store_guide_privacy_and_issues() -
         SOURCE_URL + "/issues",
     }
     assert required <= links
-    assert any(link.startswith("https://apps.microsoft.com/") for link in links)
+    # The product page, not a search: a search can list other apps first.
+    assert "https://apps.microsoft.com/detail/9pldq042g3th" in links
 
 
 def test_every_image_has_alt_text_and_a_size() -> None:
