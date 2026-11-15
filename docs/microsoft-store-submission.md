@@ -194,9 +194,9 @@ Editor** ▸ **Start your submission**. The submission page lists sections; each
 ### 2.2 Properties
 
 1. **Category:** **Productivity**; no subcategory.
-2. **Privacy policy URL:** `https://github.com/linguagraph/pdf-editor/blob/main/PRIVACY.md`
-3. **Website:** `https://github.com/linguagraph/pdf-editor`
-4. **Support contact info:** `https://github.com/linguagraph/pdf-editor/issues` (or a
+2. **Privacy policy URL:** `https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md`
+3. **Website:** `https://github.com/linguagraph/elanero-pdf-editor`
+4. **Support contact info:** `https://github.com/linguagraph/elanero-pdf-editor/issues` (or a
    support email address you want to publish).
 5. **Product declarations:**
    - Leave **"This app has been tested to meet accessibility guidelines"** unticked for now
@@ -251,7 +251,7 @@ Editor** ▸ **Start your submission**. The submission page lists sections; each
    | Search terms | "Search terms" (up to 7) |
    | Copyright and trademark info | "Support and legal" ▸ Copyright |
    | Additional system requirements | "System requirements" |
-   | Additional license terms | `GNU AGPL-3.0-or-later: https://github.com/linguagraph/pdf-editor/blob/main/LICENSE` |
+   | Additional license terms | `GNU AGPL-3.0-or-later: https://github.com/linguagraph/elanero-pdf-editor/blob/main/LICENSE` |
    | Developed by | your display name (`SGN Solutions`) |
 
 3. **Screenshots ▸ Desktop:** upload the screenshots from 1.6 and add a one-line caption to

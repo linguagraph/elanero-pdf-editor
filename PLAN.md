@@ -503,7 +503,7 @@ The guide is Markdown in `docs/guide/` (English), built with MkDocs and Material
 - [x] **G3 Site and publishing.** `mkdocs.yml` (nav, search, light and dark palettes, anchors checked), the pinned `docs` extra, `.github/workflows/docs.yml` (strict build on docs changes; deploy to Pages from `main`), and `mkdocs.yml` counted as docs by `scripts/ci_changes.py`.
 - [x] **G4 In-app entry points.** `DOCS_URL`, `ui/help.py` (`open_docs`, which shows the address when no browser opens), F1 "Elanero Help" in the Help menu, the ribbon "?" button, the start page link and the About link.
 - [x] **G5 Tests.** GUI tests for each entry point and for the failed-open message; unit tests that `DOCS_URL` is the site URL, that the nav and the files agree, and that the docs workflow and extra are as specified.
-- [ ] **G6 Publish.** The site at https://linguagraph.github.io/pdf-editor/ is live: needs this PR merged and Pages set to "GitHub Actions" (maintainer step). _(partial: the build passes locally with `mkdocs build --strict`; the deploy has not run yet.)_
+- [x] **G6 Publish.** The site at https://linguagraph.github.io/elanero-pdf-editor/ is live. Pages uses "GitHub Actions" as its source, and the docs workflow deploys every guide change merged to `main`. The repo was renamed from `pdf-editor`; GitHub redirects the old repo URLs, but not the old Pages URL.
 
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.

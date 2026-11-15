@@ -64,7 +64,7 @@ dismiss it. Closing Elanero does not close that prompt. See [Digital signatures]
 ## Known limits
 
 This version has known limits, listed in full in the
-[project's README](https://github.com/linguagraph/pdf-editor/blob/main/README.md#limitations-and-feature-status):
+[project's README](https://github.com/linguagraph/elanero-pdf-editor/blob/main/README.md#limitations-and-feature-status):
 
 - General form creation and editing are not supported. Existing forms display and are kept on save.
 - Text editing depends on the source document's content and fonts, and exact font reuse is not always
@@ -77,7 +77,7 @@ This version has known limits, listed in full in the
 ## Report a problem
 
 Report bugs and request features on the project's
-[issue tracker](https://github.com/linguagraph/pdf-editor/issues). Include:
+[issue tracker](https://github.com/linguagraph/elanero-pdf-editor/issues). Include:
 
 - the Elanero version and channel (**Help ▸ About Elanero** shows them),
 - your Windows version,

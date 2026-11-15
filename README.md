@@ -7,7 +7,7 @@ sensitive content, convert files, and sign documents digitally—all on your own
 No account, subscription, advertising, or telemetry. Document processing happens locally.
 See [Privacy](#privacy) for the optional network connections.
 
-📖 **[User guide](https://linguagraph.github.io/pdf-editor/)**: step-by-step help for every feature (also F1 in the app).
+📖 **[User guide](https://linguagraph.github.io/elanero-pdf-editor/)**: step-by-step help for every feature (also F1 in the app).
 
 [Download](#download-and-install) · [Features](#features) · [Digital signing](#digital-signing)
 · [Screenshots](#screenshots) · [Limitations](#limitations-and-feature-status)
@@ -20,10 +20,10 @@ Allow about 250 MB of free disk space. A keyboard and mouse or touchpad are reco
 The project currently ships Windows builds; macOS and Linux packages are not provided.
 
 - **Microsoft Store:** search for **Elanero - PDF Editor**, published by **SGN Solutions**.
-- **GitHub Releases:** open the [releases page](https://github.com/linguagraph/pdf-editor/releases)
+- **GitHub Releases:** open the [releases page](https://github.com/linguagraph/elanero-pdf-editor/releases)
   and choose a release's `Elanero.exe` (portable) or `pdfeditor-<version>-setup.exe` (installer).
 - **Development builds:** pull-request and `main` builds publish executable artifacts in
-  [GitHub Actions](https://github.com/linguagraph/pdf-editor/actions). These are development
+  [GitHub Actions](https://github.com/linguagraph/elanero-pdf-editor/actions). These are development
   snapshots rather than tagged releases.
 
 The packaged app includes its Python runtime and core PDF, OCR, export, and signing
@@ -308,7 +308,7 @@ To diagnose an installed portable executable:
 
 ## Contributing
 
-[Bug reports and feature requests](https://github.com/linguagraph/pdf-editor/issues) are
+[Bug reports and feature requests](https://github.com/linguagraph/elanero-pdf-editor/issues) are
 welcome, as are pull requests. For a bug, include the app version/channel, Windows version,
 steps to reproduce, expected/actual behavior, and a non-sensitive sample PDF if you can share
 one. Review logs and reports before sharing them.

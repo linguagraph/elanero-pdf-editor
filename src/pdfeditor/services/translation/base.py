@@ -12,9 +12,7 @@ from typing import Protocol
 from pdfeditor.core.jobs import CancelToken
 
 # The part of PRIVACY.md that says what translation sends and to whom.
-PRIVACY_NOTICE_URL = (
-    "https://github.com/linguagraph/pdf-editor/blob/main/PRIVACY.md#when-elanero-uses-the-internet"
-)
+PRIVACY_NOTICE_URL = "https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md#when-elanero-uses-the-internet"
 # Languages offered in the pickers: the codes every service here accepts (ISO 639-1, with a
 # region where it matters). Services map them to their own codes when they make a request.
 COMMON_LANGUAGES: dict[str, str] = {

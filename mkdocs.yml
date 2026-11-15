@@ -4,10 +4,10 @@
 site_name: Elanero User Guide
 site_description: How to read, edit, review, organize, redact, recognize, convert, optimize,
   sign and translate PDFs with Elanero - PDF Editor.
-site_url: https://linguagraph.github.io/pdf-editor/
+site_url: https://linguagraph.github.io/elanero-pdf-editor/
 # Must match pdfeditor.DOCS_URL (a unit test checks it).
-repo_url: https://github.com/linguagraph/pdf-editor
-repo_name: linguagraph/pdf-editor
+repo_url: https://github.com/linguagraph/elanero-pdf-editor
+repo_name: linguagraph/elanero-pdf-editor
 edit_uri: edit/main/docs/guide/
 docs_dir: docs/guide
 copyright: Elanero is free software under AGPL-3.0-or-later.

@@ -4,7 +4,7 @@ Elanero has no accounts, no telemetry, no analytics, no advertising and no autom
 uploads. Your documents stay on your computer.
 
 The full policy is in the project's
-[privacy policy](https://github.com/linguagraph/pdf-editor/blob/main/PRIVACY.md). This page is a
+[privacy policy](https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md). This page is a
 summary of it.
 
 ## What stays on your computer

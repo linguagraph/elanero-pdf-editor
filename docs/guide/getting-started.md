@@ -17,7 +17,7 @@ There are three ways to get it:
 - **Microsoft Store.** Search for **Elanero - PDF Editor** (published by SGN Solutions) and
   choose **Get**. Store updates are installed for you.
 - **Installer.** On the project's
-  [releases page](https://github.com/linguagraph/pdf-editor/releases), download
+  [releases page](https://github.com/linguagraph/elanero-pdf-editor/releases), download
   `pdfeditor-<version>-setup.exe` and run it.
 - **Portable.** From the same releases page, download `Elanero.exe` and run it from any folder.
   Nothing is installed; the program keeps its settings in your user profile.
