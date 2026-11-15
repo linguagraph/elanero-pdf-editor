@@ -1,0 +1,86 @@
+# Editing text and images
+
+Elanero edits the content of the page itself: the words, pictures and shapes that are part of the
+document. Comments and markup, which sit on top of the page, are covered in
+[Comments and review](comments.md).
+
+Editing works best on PDFs made by a word processor or design tool. A PDF that was printed from a
+scanner has no editable text; run [OCR](ocr.md) on it first, or edit only its images.
+
+## Edit existing text and images
+
+1. Open the **Edit** ribbon tab and click **Edit** (**Edit ▸ Edit Text & Images**, **Ctrl+Shift+E**).
+   The mode banner appears above the page: "Editing text & images".
+2. Double-click a paragraph to edit it, then type to change the text. Elanero uses the font of the
+   original where it can.
+3. Click a picture to select it, then drag it to move it, or drag its handles to resize it.
+4. Press **Esc**, or click **Done** in the banner, to finish. Changes are undoable with **Ctrl+Z**.
+
+Some text can't be edited, for example text whose font is not in the file and can't be replaced.
+Elanero then says why in a message rather than changing the text.
+
+!!! note
+    Text is edited a paragraph at a time. To fix one word, double-click its paragraph and change the
+    word in place.
+
+### Fonts
+
+When you edit text, the font picker lists the document's own fonts first, then recent fonts,
+standard fonts and the fonts installed on your PC. It takes into account whether a font may be
+embedded and whether it has the characters you type. Where the original font can't be used, Elanero
+uses a substitute and tells you so. Exact font reuse is not always possible.
+
+To see the fonts a document uses, open **File ▸ Document Properties…** or use the **Space Usage**
+report in [Optimize and compare](optimize-compare.md#see-what-takes-up-space).
+
+## Add new text
+
+1. Click **Add ▸ Text** on the **Edit** tab (**Edit ▸ Add Text**).
+2. Click the page where the line should start, and type.
+3. Set the font, size, color, alignment and line spacing for the new text, as offered while you
+   work on it.
+4. Press **Esc** to finish.
+
+New text becomes part of the page content, like the text around it. (To add a note that sits on
+top of the page, use the **Comment** tab instead.)
+
+## Add images
+
+1. Click **Add ▸ Image** (**Edit ▸ Add Image**).
+2. Choose a PNG or JPEG file.
+3. Click the page to place it, then drag to move or resize it.
+
+To swap an existing picture for another, select it and click **Objects ▸ Replace** (**Replace
+Image**). To save a picture to a file, select it and click **Objects ▸ Export** (**Export Image**).
+
+## Add shapes
+
+**Shapes ▸ Rectangle**, **Ellipse** and **Line** draw shapes into the page content. Drag on the page
+to draw; a shape stays in the page content, so it prints and displays like the rest of the page.
+
+Do not confuse these with the **Drawing** comments on the **Comment** tab, which are review marks
+that sit on top of the page. See [Comments and review](comments.md).
+
+## Select, move and delete objects
+
+- Click an object to select it, or drag a box around several objects to select them together.
+- Drag a selected object to move it.
+- Press **Delete**, or click **Objects ▸ Delete**, to remove the selected text or images.
+
+Every edit is one undo step. Use **Ctrl+Z** to undo and **Ctrl+Y** or **Ctrl+Shift+Z** to redo.
+
+## Scanned pages
+
+A scanned page has no text to edit. By default, **Edit Text & Images** runs OCR on a scanned page first,
+so its text can be changed. To turn this off, clear **Recognize text when editing scanned pages** under
+**Tools** in [Preferences](preferences.md#tools). You can also run **Tools ▸ Recognize Text (OCR)** yourself
+(see [OCR](ocr.md)).
+
+## Limits
+
+- Results depend on the source document. Text in unusual fonts, text inside pictures and text in
+  complex layouts can't always be edited cleanly.
+- Existing images have no rotation handle in the interface.
+- Text added as a comment (a FreeText annotation) uses standard fonts.
+- Elanero does not create or edit interactive form fields. Existing forms still display and are
+  kept when you save.

@@ -10,3 +10,6 @@ APP_DISPLAY_NAME = "Elanero - PDF Editor"
 SOURCE_URL = "https://github.com/linguagraph/pdf-editor"
 # The privacy policy (PRIVACY.md), linked from Help > About and the Store listing.
 PRIVACY_URL = SOURCE_URL + "/blob/main/PRIVACY.md"
+# The user guide (docs/guide, built by MkDocs and published to GitHub Pages). Every in-app link
+# to it goes through ui/help.py, and mkdocs.yml's site_url must match (a unit test checks it).
+DOCS_URL = "https://linguagraph.github.io/pdf-editor/"

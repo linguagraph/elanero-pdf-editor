@@ -25,6 +25,9 @@ dependencies = [
 
 [project.optional-dependencies]
 build = ["pyinstaller>=6.10"]
+# The user guide site (docs/guide, mkdocs.yml). Docs tooling only: never a runtime dependency.
+# Pinned: the docs workflow installs exactly these. Both are MIT.
+docs = ["mkdocs==1.6.1", "mkdocs-material==9.8.0"]
 dev = [
     "pytest>=8.0,<9.2",  # 9.2 breaks pytest-benchmark 5.3 (Function._nodeid)
     "pytest-qt>=4.3",
@@ -35,6 +38,7 @@ dev = [
     "mypy>=1.8",
     "import-linter>=2.0",
     "pre-commit>=3.6",
+    "pyyaml>=6.0",  # the guide tests read mkdocs.yml and the docs workflow
     "numpy>=1.26",  # pixel comparisons in tests only (the app itself uses Pillow)
 ]
 

@@ -1,0 +1,89 @@
+# Redaction and security
+
+This page covers three jobs: **redacting** (permanently removing content), **sanitizing** (removing
+hidden data), and **protecting** the file with passwords and permissions. They are on the
+**Protect** ribbon tab.
+
+![Elanero with a PDF open, showing the Protect tools](images/elanero-opened-pdf-signing.png)
+
+## Redact: remove content for good
+
+Redaction is permanent. It is not the same as covering text with a white box: a box can be moved
+or removed, and the text stays in the file. Redaction removes the text and images under the marks
+from the file.
+
+1. **Mark** the content. Use one of these on the **Redact** group:
+   - **Redact** (the first button): drag over the text or picture to mark it.
+   - **Mark Pages**: mark whole pages.
+   - **Find Text**: find words or patterns across the document and mark all of them. Choose a
+     preset: email addresses, phone numbers, IBAN numbers, credit-card numbers (checked with the
+     Luhn test), US Social Security numbers, dates, or your own regular expression or words. Select
+     the matches you want, then choose **Mark Selected**.
+2. **Review** the marks in the **Redactions** panel (left side) before you apply them.
+3. Choose **Properties** to set the box color and the overlay text printed on each box (for example
+   an exemption code).
+4. Click **Apply** (**Apply Redactions…**) to remove everything under the marks. Choose all marks, or
+   only the selected ones.
+
+Elanero checks the result after applying, looking for leftover text and image data under the marks.
+When you save, the file is written in full, so the removed content is not kept in earlier saved
+versions of the file.
+
+!!! warning "Check the saved file"
+    To confirm a redaction worked, open the saved file in Elanero and search for a word you removed.
+    Nothing should be found. Redaction removes content that Elanero can find; a scanned page needs
+    [OCR](ocr.md) before a search can check it.
+
+### Image and vector options
+
+When you apply redactions, the **Apply Redactions** dialog asks what to do with pictures and drawings
+under or touching a mark: remove an image that touches a mark, or blank only the covered pixels, and
+remove or keep vector graphics. Choose the option that matches what the page shows.
+
+## Sanitize: remove hidden data
+
+**Sanitize Document…**, in the **Clean Up** group, removes data that people don't see but that can
+travel with a file. Choose the categories to remove:
+
+- Document properties (title, author and similar) and XMP metadata
+- Comments and markups
+- Embedded page thumbnails
+- JavaScript and automatic actions
+- Attached files
+- Form field values
+- Links
+- Content on hidden layers
+- Hidden (invisible) text and text outside the visible page area
+
+Sanitizing changes the file, so save a copy first, with **Save As…**.
+
+## Encrypt with a password
+
+**Encrypt with Password…** (in the **Security** group) protects the file. You can require a password to
+open it, set a separate permissions password, or both.
+
+- **Require a password to open the document**: needed to open the document at all. Enter it twice.
+- **Restrict printing, editing and copying**: sets a permissions password, needed to change the
+  restrictions later or to remove them. Without an open password, anyone can open the file, but the
+  restrictions still apply.
+- **Encryption**: **AES 256-bit** (Acrobat X and later) or **AES 128-bit** (Acrobat 7 and later).
+  Choose AES 256-bit unless you must open the file in an older reader.
+- **Allowed**: under **Permissions**, tick what readers may do: printing; copying text and images;
+  changing the document; inserting, deleting and rotating pages; filling in forms; commenting.
+
+The password is applied when you save. Elanero doesn't remember passwords, so keep them somewhere
+safe: a file whose open password you lose can't be opened.
+
+## Remove security
+
+**Remove Security…** removes the passwords and restrictions from a file. For a file with a permissions
+password, enter that password. Use it only on files you are allowed to change.
+
+To check what protection a file has, open **File ▸ Document Properties…**, which also shows the
+security information of the file.
+
+## Limits
+
+- Redaction and sanitizing work on the content Elanero can read. Scanned pages need OCR first.
+- Passwords protect a file from being opened or changed in a reader that respects them; they are not
+  a substitute for keeping the file somewhere safe.

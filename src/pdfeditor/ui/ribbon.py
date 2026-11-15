@@ -9,7 +9,8 @@ The ribbon can be collapsed to just its tab row (double-click a tab, or the chev
 show icons only ("compact"), for small screens.
 
 Keyboard: F6 lands on the tab row (Left/Right switch tabs); Tab then walks through the current
-tab's buttons, the "»" overflow button and the Search tools box. Tab names and group captions
+tab's buttons, the "»" overflow button, the Search tools box, the "?" help button and the
+collapse chevron. Tab names and group captions
 are shown translated (context "Ribbon"); code keeps addressing tabs by their English name.
 """
 
@@ -19,7 +20,7 @@ from itertools import pairwise
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QSize, Qt, Signal
-from PySide6.QtGui import QAction, QResizeEvent
+from PySide6.QtGui import QAction, QKeySequence, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -173,6 +174,13 @@ class Ribbon(QWidget):
         self.collapse_button.setAutoRaise(True)
         self.collapse_button.setAccessibleName(self.tr("Collapse ribbon"))
         self.collapse_button.clicked.connect(lambda: self.set_collapsed(not self.collapsed))
+        self.help_button = QToolButton(self)
+        self.help_button.setAutoRaise(True)
+        self.help_button.setIcon(icon("circle-help"))
+        self.help_button.setToolTip(self.tr("Help (F1)"))
+        self.help_button.setAccessibleName(self.tr("Help"))
+        self.help_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self._help_action: QAction | None = None
         self.search: CommandSearch | None = None
         top = QHBoxLayout()
         top.setContentsMargins(0, 0, 0, 0)
@@ -180,6 +188,7 @@ class Ribbon(QWidget):
         top.addWidget(self.menu_button)
         top.addWidget(self.quick)
         top.addWidget(self.bar, 1)
+        top.addWidget(self.help_button)
         top.addWidget(self.collapse_button)
         self._top = top
         layout = QVBoxLayout(self)
@@ -204,16 +213,31 @@ class Ribbon(QWidget):
                 button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         _keyboard_reachable(self.quick)
 
+    def set_help_action(self, action: QAction) -> None:
+        """The "?" button at the right of the tab row runs ``action`` (Help, F1)."""
+        self._help_action = action
+        self.help_button.clicked.connect(lambda _=False: action.trigger())
+        self.refresh_help_tooltip()
+
+    def refresh_help_tooltip(self) -> None:
+        """Show the help command's current shortcut (it can be rebound)."""
+        action = self._help_action
+        if action is None:
+            return
+        keys = action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        text = self.tr("Help ({keys})").format(keys=keys) if keys else self.tr("Help")
+        self.help_button.setToolTip(text)
+
     def set_search(self, search: CommandSearch) -> None:
-        """Put the "Search tools" box at the right of the tab row, before the chevron."""
+        """Put the "Search tools" box at the right of the tab row, before the help button."""
         self.search = search
         search.setParent(self)
-        self._top.insertWidget(self._top.indexOf(self.collapse_button), search)
+        self._top.insertWidget(self._top.indexOf(self.help_button), search)
         self._update_search()
         self.chain_focus()
 
     def chain_focus(self) -> None:
-        """Tab order: menu, quick actions, tab row, the tab's buttons, "»", search, chevron.
+        """Tab order: menu, quick actions, tab row, the tab's buttons, "»", search, "?", chevron.
 
         Buttons are created long after the tab row (by each controller), so without this Tab
         would reach them only after the docks and the page. Hidden ones (other tabs, groups
@@ -229,7 +253,7 @@ class Ribbon(QWidget):
                 chain.append(more)
         if self.search is not None:
             chain += [self.search.edit, self.search.button]
-        chain.append(self.collapse_button)
+        chain += [self.help_button, self.collapse_button]
         for first, second in pairwise(chain):
             QWidget.setTabOrder(first, second)
 

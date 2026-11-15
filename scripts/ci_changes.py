@@ -13,7 +13,16 @@ from collections.abc import Iterable
 from fnmatch import fnmatch
 
 # Nothing in the app, its tests or its packages reads these.
-DOCS = ("*.md", "docs/*", "LICENSE", ".gitignore", ".gitattributes", ".github/CODEOWNERS")
+# mkdocs.yml configures the user guide site only (its build is docs.yml).
+DOCS = (
+    "*.md",
+    "docs/*",
+    "mkdocs.yml",
+    "LICENSE",
+    ".gitignore",
+    ".gitattributes",
+    ".github/CODEOWNERS",
+)
 # Not documentation, whatever it looks like: a release sends it to the Store, and a test checks it.
 STORE_LISTING = "packaging/store/*"
 # These can break the installer or the MSIX package without any test noticing, so changing them

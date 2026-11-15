@@ -494,6 +494,17 @@ Translate the selected text with a free online service and show the translation 
 - [x] **TR7 Open points from review.** Preferences saves the other settings when translation can't be switched on (invalid URL, a key that can't be encrypted), keeps translation off and says why. LibreTranslate's Test connection stores the server's `/languages` list, and the pickers offer only those. An opt-in live smoke test (`network` marker, skipped by default).
 - [x] **TR5 Docs.** `PRIVACY.md` (what's sent, to whom, when) and a line in the Store listing.
 
+### User guide and documentation site, issue #119
+
+The guide is Markdown in `docs/guide/` (English), built with MkDocs and Material into a GitHub Pages site. The app opens it from F1, Help ▸ Elanero Help, the ribbon's "?" button, the start page and the About dialog. The exe doesn't bundle it.
+
+- [x] **G1 Guide pages.** `docs/guide/`: one task-oriented page per topic of the issue's table (getting started, interface, reading, editing, comments, pages, security, OCR, export, optimize and compare, PDF/A and accessibility, signing, translation, preferences, troubleshooting, privacy), with the ribbon tabs, menu names and shortcuts checked against the code. Screenshots moved to `docs/guide/images/`; the README links to the site.
+- [x] **G2 Shortcut page.** `scripts/make_shortcut_docs.py` writes `docs/guide/keyboard-shortcuts.md` from the main window's commands; a test fails when the committed page is out of date.
+- [x] **G3 Site and publishing.** `mkdocs.yml` (nav, search, light and dark palettes, anchors checked), the pinned `docs` extra, `.github/workflows/docs.yml` (strict build on docs changes; deploy to Pages from `main`), and `mkdocs.yml` counted as docs by `scripts/ci_changes.py`.
+- [x] **G4 In-app entry points.** `DOCS_URL`, `ui/help.py` (`open_docs`, which shows the address when no browser opens), F1 "Elanero Help" in the Help menu, the ribbon "?" button, the start page link and the About link.
+- [x] **G5 Tests.** GUI tests for each entry point and for the failed-open message; unit tests that `DOCS_URL` is the site URL, that the nav and the files agree, and that the docs workflow and extra are as specified.
+- [ ] **G6 Publish.** The site at https://linguagraph.github.io/pdf-editor/ is live: needs this PR merged and Pages set to "GitHub Actions" (maintainer step). _(partial: the build passes locally with `mkdocs build --strict`; the deploy has not run yet.)_
+
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.
 - A permissive engine backend (pypdfium2 + pikepdf) implementing `engine/base.py`. The contract tests from Phase 1 are its acceptance suite.
