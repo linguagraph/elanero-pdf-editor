@@ -67,14 +67,18 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     # PyYAML reads the bare key ``on`` as True.
     triggers = workflow[True]
     for event in ("pull_request", "push"):
-        assert {"docs/**", "mkdocs.yml"} <= set(triggers[event]["paths"])
+        paths = set(triggers[event]["paths"])
+        assert {"docs/**", "mkdocs.yml"} <= paths
+        # The site assembler and the brand icons it copies (issue #129).
+        assert {"scripts/build_site.py", "src/pdfeditor/data/branding/**"} <= paths
     # Read-only by default; the Pages rights belong to the deploy job alone.
     assert workflow["permissions"] == {"contents": "read"}
     jobs = workflow["jobs"]
     assert jobs["deploy"]["permissions"] == {"pages": "write", "id-token": "write"}
     assert "permissions" not in jobs["site"]
     build_steps = jobs["site"]["steps"]
-    assert any("mkdocs build --strict" in str(s.get("run", "")) for s in build_steps)
+    # The site (guide strictly, landing page, redirect stubs) is assembled by the script.
+    assert any("scripts/build_site.py" in str(s.get("run", "")) for s in build_steps)
     build_uses = [str(s.get("uses", "")) for s in build_steps]
     assert any(u.startswith("actions/configure-pages@v5") for u in build_uses)
     assert any(u.startswith("actions/upload-pages-artifact@v3") for u in build_uses)

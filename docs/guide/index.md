@@ -2,7 +2,8 @@
 
 Elanero - PDF Editor is a free, open-source desktop app for Windows. It reads, searches, edits,
 reviews, organizes, redacts, recognizes, converts and signs PDF files, all on your own computer.
-There is no account, no subscription, no advertising and no telemetry.
+There is no account, no subscription, no advertising and no telemetry. Downloads and an overview
+are on the [Elanero website](https://linguagraph.github.io/elanero-pdf-editor/).
 
 ![Elanero with a PDF open, showing the signing tools](images/elanero-opened-pdf-signing.png)
 
@@ -41,7 +42,7 @@ There is no account, no subscription, no advertising and no telemetry.
 
 Press **F1** or choose **Help ▸ Elanero Help** to open this guide. The **?** button at the right of
 the ribbon, the link on the start page and the **Documentation** link in **Help ▸ About Elanero** open it
-too. The guide opens in your web browser at <https://linguagraph.github.io/elanero-pdf-editor/>.
+too. The guide opens in your web browser at <https://linguagraph.github.io/elanero-pdf-editor/guide/>.
 
 !!! note "Which version this guide describes"
     The guide describes the latest release and any changes merged since. Where a feature is

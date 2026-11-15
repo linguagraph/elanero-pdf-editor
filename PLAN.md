@@ -506,7 +506,16 @@ The guide is Markdown in `docs/guide/` (English), built with MkDocs and Material
 - [x] **G3 Site and publishing.** `mkdocs.yml` (nav, search, light and dark palettes, anchors checked), the pinned `docs` extra, `.github/workflows/docs.yml` (strict build on docs changes; deploy to Pages from `main`), and `mkdocs.yml` counted as docs by `scripts/ci_changes.py`.
 - [x] **G4 In-app entry points.** `DOCS_URL`, `ui/help.py` (`open_docs`, which shows the address when no browser opens), F1 "Elanero Help" in the Help menu, the ribbon "?" button, the start page link and the About link.
 - [x] **G5 Tests.** GUI tests for each entry point and for the failed-open message; unit tests that `DOCS_URL` is the site URL, that the nav and the files agree, and that the docs workflow and extra are as specified.
-- [x] **G6 Publish.** The site at https://linguagraph.github.io/elanero-pdf-editor/ is live. Pages uses "GitHub Actions" as its source, and the docs workflow deploys every guide change merged to `main`. The repo was renamed from `pdf-editor`; GitHub redirects the old repo URLs, but not the old Pages URL.
+- [x] **G6 Publish.** The site at https://linguagraph.github.io/elanero-pdf-editor/ is live. Pages uses "GitHub Actions" as its source, and the docs workflow deploys every guide change merged to `main`. The repo was renamed from `pdf-editor`; GitHub redirects the old repo URLs, but not the old Pages URL. Since issue #129 the guide is at https://linguagraph.github.io/elanero-pdf-editor/guide/, and the old guide addresses redirect there.
+
+### Landing page, issue #129
+
+The website's root is a landing page (`docs/landing/`: what Elanero does, screenshots, privacy, download and links) with the user guide under `/guide/`. `scripts/build_site.py` assembles the site: it builds the guide strictly with MkDocs, copies the landing page and the brand icons to the root, and writes a redirect stub at each old guide address (`/signing/`, ...) so deep links from released apps keep working. `DOCS_URL` is `WEBSITE_URL + "guide/"`.
+
+- [x] **L1 The page.** `docs/landing/`: hero, capabilities, screenshots, privacy, download and links; no third-party requests; light and dark themes; a 404 page.
+- [x] **L2 Site assembly.** `scripts/build_site.py` (guide under `/guide/`, the landing page at the root, redirect stubs for the old guide addresses), run by the docs workflow.
+- [x] **L3 Guide moved.** `/guide/` is the guide: `WEBSITE_URL` and `DOCS_URL` in `pdfeditor/__init__.py`, `mkdocs.yml` `site_url`, the docs workflow and its paths, and the README and guide links.
+- [x] **L4 Tests.** `tests/unit/test_landing_page.py` (the page's contract, the stubs, the site assembly and its collision check), the workflow test, and the CI classification of the landing page as docs.
 
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.

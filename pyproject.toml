@@ -93,6 +93,13 @@ strict_equality = true
 module = ["pymupdf", "pymupdf.*", "fitz"]
 follow_imports = "skip"
 
+[[tool.mypy.overrides]]
+# pywinrt's stubs use Python 3.12 syntax (class IIterable[T]), which mypy rejects for 3.11.
+# They are installed on Windows only, so without this mypy fails there and passes on Linux.
+module = ["winrt", "winrt.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true  # the syntax error is in a .pyi, which "skip" alone still reads
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --benchmark-disable"

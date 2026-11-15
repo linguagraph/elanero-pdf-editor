@@ -1,10 +1,12 @@
-# The Elanero user guide: Markdown in docs/guide, published to GitHub Pages by
-# .github/workflows/docs.yml. Build locally with: uv run mkdocs build --strict
-# (the docs extra in pyproject.toml pins MkDocs and the Material theme).
+# The Elanero user guide: Markdown in docs/guide. The website is built by
+# scripts/build_site.py (run by .github/workflows/docs.yml, published to GitHub Pages): the
+# guide goes under /guide/, and the landing page from docs/landing is served at the root, with
+# redirect stubs for the guide's old addresses. Build the guide alone with:
+# uv run mkdocs build --strict (the docs extra in pyproject.toml pins MkDocs and the theme).
 site_name: Elanero User Guide
 site_description: How to read, edit, review, organize, redact, recognize, convert, optimize,
   sign and translate PDFs with Elanero - PDF Editor.
-site_url: https://linguagraph.github.io/elanero-pdf-editor/
+site_url: https://linguagraph.github.io/elanero-pdf-editor/guide/
 # Must match pdfeditor.DOCS_URL (a unit test checks it).
 repo_url: https://github.com/linguagraph/elanero-pdf-editor
 repo_name: linguagraph/elanero-pdf-editor

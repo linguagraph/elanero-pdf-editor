@@ -20,6 +20,7 @@ import ci_changes
         [".github/CODEOWNERS"],
         ["mkdocs.yml"],
         ["docs/guide/signing.md", "docs/guide/images/elanero-02-organize.png"],
+        ["docs/landing/index.html", "docs/landing/landing.css"],
     ],
 )
 def test_docs_alone_skip_everything(paths: list[str]) -> None:
@@ -34,6 +35,7 @@ def test_docs_alone_skip_everything(paths: list[str]) -> None:
         ["scripts/make_fixtures.py"],
         ["PLAN.md", "src/pdfeditor/app.py"],
         ["something/new.txt"],
+        ["scripts/build_site.py"],
     ],
 )
 def test_code_runs_the_tests_but_not_the_install_tests(paths: list[str]) -> None:
