@@ -361,7 +361,7 @@ With no certificate, **MSIX is the only way into the Store**, so it's the primar
 
 Done when the app is listed publicly in the Store, installs and updates through it, passes the self-test through its execution alias, opens PDFs from Explorer, and every Store release matches a public source tag.
 
-_Issue #88 closed 2026-11-15: the Store channel ships through `release.yml`; the unticked items above are follow-ups._
+_Issue #88 closed 2026-11-15: the Store channel ships through `release.yml` (v0.3.1 was submitted to Microsoft). The unticked items above are tracked here, not in #88; the phase is done only when the listing is public._
 
 ### Phase F: Font management (M–L)
 Goal: when editing or adding text, offer the fonts installed on the computer as well as the document's own fonts, the way Acrobat does. The chosen font must be embedded correctly and kept small, and a font's license must be respected.
@@ -450,7 +450,7 @@ Nothing can embed a font from the system.
 ### CI and release speed, issue #109
 
 - [x] One CI run per PR, nothing repeated after the merge. Fast checks first, then the Windows tests and one build. Docs-only PRs run nothing (`scripts/ci_changes.py`); the install tests run only when packaging changed. The nightly run and releases run everything, including Linux and the performance budgets.
-- [x] One build of the app per pipeline. `build_exe.py --all` writes the portable exe and the app folder in one PyInstaller run, and the installer and MSIX are made from that build. A release used to build the app three times, and each CI run four times. _(Tested for real on v0.3.1: the pushed tag built the app once and the release was published.)_
+- [x] One build of the app per pipeline. `build_exe.py --all` writes the portable exe and the app folder in one PyInstaller run, and the installer and MSIX are made from that build. A release used to build the app three times, and each CI run four times. _(Tested for real on v0.3.1: the pushed tag's run built the app in CI and published the release.)_
 - [x] The Store release needs no Partner Center visit (#110). After the owner approves the `microsoft-store` deployment, the workflow uploads the package, sends the listing from `packaging/store/listing-en.md` (`scripts/store_submit.py`) and commits. A missing section, a text over a Store limit or an old What's New stops the release before anything is built. _(Tested for real on v0.3.1: the upload and listing submission ran in `release.yml`. `STORE_SUBMIT=false` stops at the draft.)_
 
 ### Phase S: Digital signing (M–L), issue #94
