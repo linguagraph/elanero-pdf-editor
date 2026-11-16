@@ -1,15 +1,20 @@
 """Spike-only pytest plugin for the Pyodide run of tests/engine (W0.1). Never imported by the app.
 
-Loaded with ``-p pyodide_conftest``, so it runs before the repo's conftest files. It does three
-things and nothing else:
+Loaded with ``-p pyodide_conftest``, so it runs before the repo's conftest files. It does four
+things:
 
-1. Modules that import ``pikepdf`` or ``pypdfium2`` (C extensions with no Pyodide build) are
-   skipped at import time, with the reason "host-verified". They are verified on the host, not
-   failures, and the summary counts them apart from real skips.
-2. ``tests/conftest.py`` imports ``pdfeditor.ui.settings`` (PySide6) in an autouse fixture. Qt
+1. ``pikepdf`` and ``pypdfium2`` (C/C++ extensions with no Pyodide build) are replaced by lazy
+   stub modules, registered in ``sys.modules`` before collection. Importing them, ``from x import
+   Y`` and using their names in annotations all work. Calling a stub, indexing it, iterating it,
+   comparing it or testing it for truth raises ``pytest.skip`` with the reason
+   "needs host-side verification: <name>". So a test skips at the first host-only operation, and
+   the engine calls before it still run.
+2. Counts, per test, how many engine functions returned during the call phase (a profile hook on
+   ``src/pdfeditor/engine``). A host skip after engine work is "engine passed, host check pending";
+   a host skip before any engine work is "host check not reached". Other skips are "skipped".
+3. ``tests/conftest.py`` imports ``pdfeditor.ui.settings`` (PySide6) in an autouse fixture. Qt
    does not exist in Pyodide, so a stub provides the one name it reads (``_SESSION_KEYS``).
-3. Writes a summary JSON (counts by outcome, skip reasons, failure list) to the path in
-   ``SPIKE_ENGINE_SUMMARY``. The JUnit XML is written by pytest itself.
+4. Writes a summary JSON to the path in ``SPIKE_ENGINE_SUMMARY``. The JUnit XML is pytest's own.
 """
 
 from __future__ import annotations
@@ -21,24 +26,85 @@ import os
 import sys
 import types
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 HOST_ONLY_TOP_LEVEL = ("pikepdf", "pypdfium2")
-HOST_REASON = "needs host-side verification (pikepdf/pypdfium2 have no Pyodide build)"
+HOST_PREFIX = "needs host-side verification"
+# web/spike/pyodide_conftest.py -> repo root is two levels up.
+ENGINE_DIR = str(Path(__file__).resolve().parents[2] / "src" / "pdfeditor" / "engine") + os.sep
 
 
-class _HostOnlyLoader(importlib.abc.Loader):
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> None:
-        return None
-
-    def exec_module(self, module: types.ModuleType) -> None:
-        # allow_module_level: the whole test module is reported as one skip.
-        pytest.skip(HOST_REASON, allow_module_level=True)
+def _host_skip(name: str) -> None:
+    # allow_module_level: a host call made while a test module is imported skips the module.
+    pytest.skip(f"{HOST_PREFIX}: {name}", allow_module_level=True)
 
 
-class _HostOnlyFinder(importlib.abc.MetaPathFinder):
+class _HostMeta(type):
+    """Metaclass of a stand-in class. Attribute access gives another stand-in (lazy); any use
+    other than a plain attribute read or an identity check raises the host skip."""
+
+    def __getattr__(cls, attr: str) -> Any:
+        # Private names (``_pytestfixturefunction``, ``__wrapped__``) are probed by pytest and
+        # tooling on every module attribute; a stand-in must not look like a fixture or a test.
+        if attr.startswith("_"):
+            raise AttributeError(attr)
+        return _host_class(f"{cls._host_name}.{attr}")
+
+    def __call__(cls, *args: object, **kwargs: object) -> Any:
+        _host_skip(cls._host_name)
+
+    def __getitem__(cls, key: object) -> Any:
+        _host_skip(cls._host_name)
+
+    def __iter__(cls) -> Any:
+        _host_skip(cls._host_name)
+
+    def __len__(cls) -> int:
+        _host_skip(cls._host_name)
+        return 0
+
+    def __bool__(cls) -> bool:
+        _host_skip(cls._host_name)
+        return True
+
+    def __eq__(cls, other: object) -> bool:
+        _host_skip(cls._host_name)
+        return False
+
+    __hash__ = type.__hash__
+
+
+_CLASSES: dict[str, type] = {}
+
+
+def _host_class(name: str) -> type:
+    cls = _CLASSES.get(name)
+    if cls is None:
+        module, _, short = name.rpartition(".")
+        cls = _HostMeta(short, (), {"_host_name": name, "__module__": module or name})
+        _CLASSES[name] = cls
+    return cls
+
+
+class _HostModule(types.ModuleType):
+    def __getattr__(self, attr: str) -> Any:
+        if attr.startswith("_"):
+            raise AttributeError(attr)
+        return _host_class(f"{self.__name__}.{attr}")
+
+
+def _make_host_module(name: str) -> _HostModule:
+    module = _HostModule(name)
+    module.__path__ = []  # type: ignore[attr-defined]  # so submodule imports reach the finder
+    return module
+
+
+class _HostFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    """Stub submodules (``import pikepdf.foo``) the same way as the top-level modules."""
+
     def find_spec(
         self,
         fullname: str,
@@ -46,8 +112,20 @@ class _HostOnlyFinder(importlib.abc.MetaPathFinder):
         target: types.ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
         if fullname.partition(".")[0] in HOST_ONLY_TOP_LEVEL:
-            return importlib.machinery.ModuleSpec(fullname, _HostOnlyLoader())
+            return importlib.machinery.ModuleSpec(fullname, self, is_package=True)
         return None
+
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> _HostModule:
+        return _make_host_module(spec.name)
+
+    def exec_module(self, module: types.ModuleType) -> None:
+        return None
+
+
+def _install_host_stubs() -> None:
+    for name in HOST_ONLY_TOP_LEVEL:
+        sys.modules.setdefault(name, _make_host_module(name))
+    sys.meta_path.insert(0, _HostFinder())
 
 
 def _install_ui_stub() -> None:
@@ -63,13 +141,34 @@ def _install_ui_stub() -> None:
     sys.modules["pdfeditor.ui.settings"] = settings
 
 
-sys.meta_path.insert(0, _HostOnlyFinder())
+_install_host_stubs()
 _install_ui_stub()
 
-_outcomes: Counter[str] = Counter()
-_skip_reasons: Counter[str] = Counter()
-_skipped_modules: list[dict[str, str]] = []
-_failures: list[dict[str, str]] = []
+# nodeid -> engine functions that returned during the test's call phase
+_engine_returns: dict[str, int] = {}
+_current_engine = 0
+# nodeid -> final record (the call phase wins; a setup or teardown error or skip overrides)
+_records: dict[str, dict[str, Any]] = {}
+_collect_skips: list[dict[str, str]] = []
+_collect_errors: list[dict[str, str]] = []
+
+
+def _profile(frame: types.FrameType, event: str, arg: object) -> None:
+    global _current_engine
+    if event == "return" and frame.f_code.co_filename.startswith(ENGINE_DIR):
+        _current_engine += 1
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_call(item: pytest.Item) -> Any:
+    global _current_engine
+    _current_engine = 0
+    sys.setprofile(_profile)
+    try:
+        return (yield)
+    finally:
+        sys.setprofile(None)
+        _engine_returns[item.nodeid] = _current_engine
 
 
 def _skip_reason(report: Any) -> str:
@@ -86,47 +185,92 @@ def _first_line(report: Any) -> str:
     return chosen[:300]
 
 
+def _set(nodeid: str, when: str, category: str, reason: str = "", message: str = "") -> None:
+    # Only failing or skipping phases get here (a passing setup or teardown is not recorded), so
+    # the last one logged is the one that decides the outcome.
+    _records[nodeid] = {
+        "when": when,
+        "category": category,
+        "reason": reason,
+        "message": message,
+    }
+
+
 def pytest_collectreport(report: Any) -> None:
     if report.outcome == "skipped":
-        reason = _skip_reason(report)
-        _skipped_modules.append({"module": report.nodeid, "reason": reason})
-        _skip_reasons[reason] += 1
+        _collect_skips.append({"module": report.nodeid, "reason": _skip_reason(report)})
     elif report.outcome == "failed":
-        _outcomes["collect_error"] += 1
-        _failures.append(
-            {"nodeid": report.nodeid, "when": "collect", "message": _first_line(report)}
-        )
+        _collect_errors.append({"module": report.nodeid, "message": _first_line(report)})
 
 
 def pytest_runtest_logreport(report: Any) -> None:
-    if report.when == "call" and report.passed:
-        _outcomes["passed"] += 1
+    if report.passed and report.when == "call":
+        _set(report.nodeid, "call", "passed")
     elif report.skipped:
         reason = _skip_reason(report)
-        _outcomes["skipped"] += 1
-        _skip_reasons[reason] += 1
+        if reason.startswith(HOST_PREFIX):
+            engine_done = report.when == "call" and _engine_returns.get(report.nodeid, 0) > 0
+            category = "host_pending_engine_passed" if engine_done else "host_not_reached"
+        else:
+            category = "skipped"
+        _set(report.nodeid, report.when, category, reason=reason)
     elif report.failed:
         # A failure in setup or teardown is an error, as pytest reports it.
-        outcome = "failed" if report.when == "call" else "errored"
-        _outcomes[outcome] += 1
-        _failures.append(
-            {"nodeid": report.nodeid, "when": report.when, "message": _first_line(report)}
-        )
+        category = "failed" if report.when == "call" else "errored"
+        _set(report.nodeid, report.when, category, message=_first_line(report))
 
 
 def pytest_sessionfinish(session: pytest.Session) -> None:
     path = os.environ.get("SPIKE_ENGINE_SUMMARY")
     if not path:
         return
+    categories: Counter[str] = Counter()
+    engine_ran: Counter[str] = Counter()
+    reasons: Counter[str] = Counter()
+    failures: list[dict[str, Any]] = []
+    for nodeid, rec in _records.items():
+        category = rec["category"]
+        categories[category] += 1
+        engine = _engine_returns.get(nodeid, 0)
+        if engine > 0:
+            engine_ran[category] += 1
+        if rec["reason"]:
+            reasons[rec["reason"]] += 1
+        if category in ("failed", "errored"):
+            failures.append(
+                {
+                    "nodeid": nodeid,
+                    "when": rec["when"],
+                    "engineReturns": engine,
+                    "message": rec["message"],
+                }
+            )
+    for item in _collect_errors:
+        failures.append({"nodeid": item["module"], "when": "collect", "message": item["message"]})
+    criterion3 = {
+        "numerator": engine_ran["passed"]
+        + engine_ran["failed"]
+        + engine_ran["errored"]
+        + engine_ran["host_pending_engine_passed"],
+        "passed": engine_ran["passed"],
+        "failed": engine_ran["failed"],
+        "errored": engine_ran["errored"],
+        "enginePassedHostPending": engine_ran["host_pending_engine_passed"],
+    }
     summary = {
-        "passed": _outcomes["passed"],
-        "failed": _outcomes["failed"],
-        "errored": _outcomes["errored"] + _outcomes["collect_error"],
-        "skipped": _outcomes["skipped"],
-        "hostVerifiedModules": len(_skipped_modules),
-        "skipReasons": dict(_skip_reasons),
-        "skippedModules": _skipped_modules,
-        "failures": _failures,
+        "tests": {
+            "passed": categories["passed"],
+            "failed": categories["failed"],
+            "errored": categories["errored"] + len(_collect_errors),
+            "skipped": categories["skipped"],
+            "enginePassedHostPending": categories["host_pending_engine_passed"],
+            "hostNotReached": categories["host_not_reached"],
+        },
+        "ranEngineCode": dict(engine_ran),
+        "criterion3": criterion3,
+        "skipReasons": dict(reasons),
+        "moduleSkips": _collect_skips,
+        "failures": failures,
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(summary, fh, indent=2)
