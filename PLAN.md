@@ -526,8 +526,8 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W0.0** Tracking
 - [x] **W0.1** PyMuPDF on Pyodide (go/no-go gate)
 - [ ] **W0.2** Load size and speed
-- [ ] **W0.3** Translation CORS check
-- [ ] **W0.4** Import audit
+- [x] **W0.3** Translation CORS check
+- [x] **W0.4** Import audit
 
 **W1 Design, #134**
 
