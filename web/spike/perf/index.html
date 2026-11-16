@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elanero Web W0.2 perf</title>
+</head>
+<body>
+  <!-- W0.2 measurement page (spike only, never shipped). The Playwright driver (perf.spec.ts) reads
+       window.__perf after one scenario: cold start, a job worker, renders, operations and memory. -->
+  <pre id="status">starting</pre>
+  <canvas id="page" width="1" height="1"></canvas>
+  <script type="module">
+    const scriptStart = performance.timeOrigin + performance.now();
+    const ROOT = new URL("../", location.href); // web/spike/ (this page is at /perf/)
+    const abs = () => performance.timeOrigin + performance.now();
+    const status = document.getElementById("status");
+    const params = new URLSearchParams(location.search);
+    const FIXTURE = params.get("fixture") || "perf_mixed_10.pdf";
+    const JOB_FIXTURE = "perf_mixed_200.pdf"; // M4 always opens this one
+    const SCALES = [1.0, 2.0];
+    const perf = (window.__perf = { done: false, phase: "running", steps: [], errors: [] });
+    const step = (name) => {
+      perf.steps.push(name);
+      status.textContent = perf.steps.slice(-4).join("\n");
+    };
+
+    // Long tasks on this (main) thread, for M8. Chromium only; other browsers report none.
+    const longtasks = [];
+    let observer = null;
+    if (typeof PerformanceObserver !== "undefined" && PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+      observer = new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          longtasks.push({ start: performance.timeOrigin + e.startTime, duration: e.duration });
+        }
+      });
+      observer.observe({ type: "longtask", buffered: true });
+    }
+
+    // One Worker plus a request/response channel to it. Replies carry the worker clock (`t`).
+    function spawn(name) {
+      const created = abs();
+      const worker = new Worker("perf-worker.js", { type: "module", name });
+      const pending = new Map();
+      const marks = {};
+      let nextId = 1;
+      let fatal = null;
+      worker.onmessage = (event) => {
+        const msg = event.data;
+        if (msg.type === "mark") {
+          marks[msg.name] = msg.t;
+          return;
+        }
+        if (msg.type === "fatal") {
+          fatal = msg;
+          perf.fatals = [...(perf.fatals || []), { worker: name, ...msg }];
+          for (const p of pending.values()) p.reject(new Error(msg.message));
+          pending.clear();
+          return;
+        }
+        const waiter = pending.get(msg.id);
+        if (!waiter) return;
+        pending.delete(msg.id);
+        const received = abs();
+        if (msg.ok) waiter.resolve({ ...msg, received });
+        else waiter.reject(new Error(msg.error));
+      };
+      worker.onerror = (event) => {
+        const err = new Error(`worker ${name}: ${event.message}`);
+        for (const p of pending.values()) p.reject(err);
+        pending.clear();
+      };
+      const call = (op, args = {}, transfer = []) =>
+        new Promise((resolve, reject) => {
+          const id = nextId++;
+          pending.set(id, { resolve, reject, sent: abs() });
+          worker.postMessage({ id, op, args }, transfer);
+        });
+      return { name, worker, call, marks, created, fatal: () => fatal };
+    }
+
+    async function fetchBytes(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`GET ${url}: HTTP ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
+    }
+
+    // The main-thread canvas: draws each received bitmap, so the main thread does real work too.
+    const canvas = document.getElementById("page");
+    const ctx = canvas.getContext("2d");
+    const draw = (bitmap) => {
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+    };
+
+    const median = (xs) => {
+      const s = [...xs].sort((a, b) => a - b);
+      const mid = Math.floor(s.length / 2);
+      return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    };
+
+    async function scenario() {
+      const scenarioStart = abs();
+      perf.env = { navigationStart: performance.timeOrigin, scriptStart, scenarioStart };
+      perf.fixture = FIXTURE;
+      perf.userAgent = navigator.userAgent;
+      perf.crossOriginIsolated = self.crossOriginIsolated === true;
+      perf.heap = {};
+
+      // M2 starts here: the fixture comes over the network, then the worker is created.
+      const fixture = await fetchBytes(new URL(`dist/perf/fixtures/${FIXTURE}`, ROOT));
+      perf.marks = { fixtureFetched: abs() };
+      step("engine worker");
+      const engine = spawn("engine");
+      perf.marks["worker-created"] = engine.created;
+      const ready = await engine.call("ready");
+      Object.assign(perf.marks, engine.marks);
+      perf.marks["engine-ready-reply"] = ready.received;
+      perf.heap.afterReady = ready.data.heapBytes;
+      perf.pyodide = ready.data.pyodide;
+      perf.python = ready.data.python;
+      perf.resourcesCold = ready.data.resources;
+
+      step("open");
+      // Transferred, not cloned: a 22 MB clone on this thread would itself block it (M8).
+      const fixtureCopy = fixture.slice();
+      const opened = await engine.call("open", { bytes: fixtureCopy }, [fixtureCopy.buffer]);
+      perf.open = opened.data;
+      perf.heap.afterOpen = opened.data.heapBytes;
+      perf.marks["document-opened"] = opened.t;
+      const pages = opened.data.pages;
+
+      step("first page");
+      const first = await engine.call("render", { index: 0, scale: 1.0 });
+      draw(first.data.bitmap);
+      perf.marks["page1-rendered-python"] = first.data.pyDone;
+      perf.marks["bitmap-received"] = first.received;
+      perf.firstPage = { pythonMs: first.data.ms, bitmapBytes: first.data.bitmapBytes };
+
+      // M4: a second, disposable worker opens perf_mixed_200 with the same bootstrap (warm).
+      step("job worker (M4)");
+      const job200 = await fetchBytes(new URL(`dist/perf/fixtures/${JOB_FIXTURE}`, ROOT));
+      const jobSpawn = abs();
+      const job = spawn("job");
+      const jobReady = await job.call("ready");
+      const job200Copy = job200.slice();
+      const jobOpen = await job.call("open", { bytes: job200Copy }, [job200Copy.buffer]);
+      perf.m4 = {
+        totalMs: jobOpen.received - jobSpawn,
+        bootMs: jobReady.received - jobSpawn,
+        openMs: jobOpen.data.ms,
+        pages: jobOpen.data.pages,
+        jobHeapBytes: jobOpen.data.heapBytes,
+        jobMarks: { ...job.marks },
+      };
+      job.worker.terminate();
+
+      // M5: pages 1-10 in order, then 20 random pages, at scale 1.0 and 2.0 (HiDPI).
+      step("renders (M5)");
+      const plan = (await engine.call("plan", { count: pages })).data;
+      const sequence = [...plan.first.map((index) => ({ kind: "first", index })),
+        ...plan.random.map((index) => ({ kind: "random", index }))];
+      perf.m5 = [];
+      for (const scale of SCALES) {
+        for (const { kind, index } of sequence) {
+          const sent = abs();
+          const r = await engine.call("render", { index, scale });
+          draw(r.data.bitmap);
+          perf.m5.push({
+            scale,
+            kind,
+            index,
+            pythonMs: r.data.ms,
+            endToEndMs: r.received - sent,
+            bitmapBytes: r.data.bitmapBytes,
+          });
+        }
+      }
+      perf.heap.afterRenders = (await engine.call("heap")).data.heapBytes;
+
+      // M6: text per page (median over pages 1-10), one search over the whole document, a save.
+      step("operations (M6)");
+      const textMs = [];
+      for (let i = 0; i < Math.min(10, pages); i++) {
+        textMs.push((await engine.call("text", { index: i })).data.ms);
+      }
+      perf.m6 = {
+        openMs: perf.open.ms,
+        textPageMedianMs: median(textMs),
+        textPageMs: textMs,
+      };
+      perf.m6.search = (await engine.call("search", { needle: "consequat" })).data;
+      const saved = (await engine.call("save")).data;
+      perf.m6.save = saved;
+      perf.heap.afterSave = saved.heapBytes;
+
+      // M7: close the document, collect, read the heap again.
+      step("close (M7)");
+      const closed = (await engine.call("close")).data;
+      perf.heap.afterClose = closed.heapBytes;
+      perf.m6.close = closed;
+      engine.worker.terminate();
+
+      // M8: long tasks during the scenario, separated from the startup tasks before it.
+      if (observer) {
+        observer.disconnect();
+        longtasks.push(...observer.takeRecords().map((e) => ({ start: performance.timeOrigin + e.startTime, duration: e.duration })));
+      }
+      perf.m8 = {
+        supported: observer !== null,
+        startup: longtasks.filter((t) => t.start < scenarioStart).map((t) => t.duration),
+        scenario: longtasks.filter((t) => t.start >= scenarioStart).map((t) => t.duration),
+      };
+      perf.resourcesAll = performance.getEntriesByType("resource").map((e) => ({
+        name: e.name.split("/").pop(),
+        transferSize: e.transferSize,
+        encodedBodySize: e.encodedBodySize,
+      }));
+      perf.mainHeap = performance.memory
+        ? { usedJSHeapSize: performance.memory.usedJSHeapSize, jsHeapSizeLimit: performance.memory.jsHeapSizeLimit }
+        : null;
+      perf.marksAbs = { ...perf.marks };
+      perf.phase = "done";
+    }
+
+    scenario()
+      .catch((err) => {
+        perf.errors.push(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+        perf.phase = "error";
+      })
+      .finally(() => {
+        perf.done = true;
+        step(perf.phase);
+      });
+  </script>
+</body>
+</html>
