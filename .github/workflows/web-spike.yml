@@ -91,8 +91,9 @@ jobs:
           test "$(git -C "$work/PyMuPDF" rev-parse HEAD)" = "$PM_COMMIT"
           cd "$work/PyMuPDF"
           # The flags scripts/test.py sets for its Pyodide build (PyMuPDF 1.28.2). Tesseract is
-          # off there, which is why the web build has no OCR.
-          export HAVE_LIBCRYPTO=no OS=pyodide PYMUPDF_SETUP_FLAVOUR=pb PYMUPDF_SETUP_MUPDF_TESSERACT=0
+          # off there, which is why the web build has no OCR. The limited C API is off too: with
+          # Python 3.14 the SWIG bindings call PyString_FromString (Python 2 only) and fail to compile.
+          export HAVE_LIBCRYPTO=no OS=pyodide PYMUPDF_SETUP_FLAVOUR=pb PYMUPDF_SETUP_MUPDF_TESSERACT=0 PYMUPDF_SETUP_PY_LIMITED_API=0
           pyodide build --exports whole_archive
           out="$GITHUB_WORKSPACE/web/spike/dist/wheel-build"
           mkdir -p "$out" "$GITHUB_WORKSPACE/web/spike/out"
