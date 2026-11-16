@@ -524,7 +524,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W0 Tracking and feasibility spikes, #133**
 
 - [x] **W0.0** Tracking
-- [ ] **W0.1** PyMuPDF on Pyodide (go/no-go gate)
+- [x] **W0.1** PyMuPDF on Pyodide (go/no-go gate)
 - [ ] **W0.2** Load size and speed
 - [ ] **W0.3** Translation CORS check
 - [ ] **W0.4** Import audit
