@@ -1,8 +1,27 @@
-# web/spike: PyMuPDF on Pyodide (W0.1)
+# web/spike: PyMuPDF on Pyodide (W0.1) and translation CORS (W0.3)
 
 Spike code for the go/no-go decision in `docs/web/design/W0.1.md`. Nothing here is imported by the
 app, and nothing under `src/` or `tests/` is changed for it. The results are in
 `docs/web/spikes/W0.1-results.md`.
+
+## Translation CORS (W0.3)
+
+`docs/web/design/W0.3.md` asks which translation services a page on `https://linguagraph.github.io`
+can call with `fetch`. `cors/services.mjs` mirrors what the desktop clients send. Run it with:
+
+```sh
+cd web/spike
+npm ci
+npx playwright install chromium firefox webkit
+npm run cors-probe     # out/cors-raw.json, out/cors-browser-*.json, out/cors-report.md
+```
+
+It sends the word "Hello", one request per service, endpoint and origin, with fake keys. The
+optional real-key path is for the maintainer only: set `ELANERO_PROBE_REAL_SERVICES` to the services
+to test (`deepl`, `azure`, `libretranslate`) and their variables (`ELANERO_PROBE_DEEPL_KEY`,
+`ELANERO_PROBE_AZURE_KEY`, `ELANERO_PROBE_AZURE_REGION`, `ELANERO_PROBE_LIBRE_KEY`). It is disabled
+when `CI` or `GITHUB_ACTIONS` is set. Every output is redacted (`cors/redact.mjs`). CI runs it from
+`.github/workflows/web-cors.yml` (manual dispatch only).
 
 ## Pins
 

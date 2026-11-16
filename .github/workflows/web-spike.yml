@@ -222,6 +222,27 @@ jobs:
         working-directory: web/spike
         run: python verify_host.py out/smoke.pdf out/host-verify.json
 
+      - name: "Import audit (W0.4): static scan, then every web module under Pyodide"
+        working-directory: web/spike
+        run: |
+          set -euo pipefail
+          python audit/scan.py
+          node audit/run_audit.mjs
+          node -e '
+          const fs = require("node:fs");
+          const r = JSON.parse(fs.readFileSync("out/audit-runtime.json", "utf8"));
+          const lines = ["## W0.4 import audit"];
+          for (const [label, p] of Object.entries(r.passes)) {
+            const ok = p.modules.filter((m) => m.status === "ok").length;
+            lines.push(`- ${label}: ${ok}/${p.modules.length} web modules import, ${p.checksPassed}/${p.checks.length} checks pass`);
+          }
+          for (const t of r.tiffProbes) {
+            const steps = (t.steps ?? []).map((s) => `${s.compression} ${s.result === "ok" ? "ok" : "error"}`);
+            lines.push(`- TIFF probe ${t.sequence}: ${t.status}${steps.length ? ` (${steps.join(", ")})` : ""}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
+
       - name: Summary
         if: always()
         working-directory: web/spike
@@ -248,7 +269,10 @@ jobs:
           path: |
             web/spike/dist/wheel-build/*.whl
             web/spike/out/
+            web/spike/dist/audit/pdfeditor-web.zip
+            web/spike/dist/audit/audit-input.json
             docs/web/spikes/W0.1-results.md
+            docs/web/spikes/W0.4-results.md
 
   # W0.2 (docs/web/design/W0.2.md): the load, render and memory measurements in Chromium on the
   # CI runner, for trends only. Not a required check, and it never fails on a missed budget: the
