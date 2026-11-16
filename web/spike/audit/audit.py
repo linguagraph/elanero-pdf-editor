@@ -674,5 +674,56 @@ def run_tiff_probe(sequence):
     return {"sequence": sequence, "steps": steps}
 
 
+def run_tiff_multipage(compression):
+    """Three pages rendered by the engine at 150 dpi (1240 x 1754 for A4), written as one
+    multi-page TIFF with ``save_all``. The export path (services/export/images.py) hardcodes
+    tiff_deflate, so this writes with the same Pillow call but the compression it would use
+    on the web."""
+    from PIL import Image
+
+    from pdfeditor.engine.base import ColorMode, RenderRequest
+    from pdfeditor.model.geometry import Matrix
+
+    doc = _open_doc()
+    frames = []
+    for index in range(3):
+        shot = doc.page(index).render(
+            RenderRequest(matrix=Matrix.scale(150 / 72), color=ColorMode.RGB)
+        )
+        frames.append(
+            Image.frombytes(
+                "RGB", (shot.width, shot.height), shot.samples, "raw", "RGB", shot.stride
+            )
+        )
+    buf = io.BytesIO()
+    frames[0].save(
+        buf,
+        format="TIFF",
+        save_all=True,
+        append_images=frames[1:],
+        compression=compression,
+        dpi=(150, 150),
+    )
+    return {
+        "sequence": f"multipage:{compression}",
+        "steps": [
+            {
+                "compression": compression,
+                "result": "ok",
+                "bytes": len(buf.getvalue()),
+                "pages": len(frames),
+                "size": [frames[0].width, frames[0].height],
+            }
+        ],
+    }
+
+
 TIFF_PROBE = globals().get("TIFF_PROBE")
-json.dumps(run_tiff_probe(TIFF_PROBE) if TIFF_PROBE else run_all())
+# The last expression is what runPythonAsync returns, so the choice is made in one expression.
+json.dumps(
+    run_tiff_multipage(TIFF_PROBE.split(":", 1)[1])
+    if TIFF_PROBE and TIFF_PROBE.startswith("multipage:")
+    else run_tiff_probe(TIFF_PROBE)
+    if TIFF_PROBE
+    else run_all()
+)

@@ -128,13 +128,16 @@ function runTiffProbe(sequence) {
     const written = result.steps.every((step) => step.result === "ok");
     return { ...result, status: written ? "ok" : "error" };
   }
-  const lines = `${child.stderr ?? ""}`.trim().split("\n").filter((line) => line.trim());
-  const fatal = /fatal error|out of bounds|abort/i.test(child.stderr ?? "");
+  const lines = `${child.stderr ?? ""}`.split("\n").filter((line) => line.trim());
+  const fatalLines = lines.filter((line) => /fatal|out of bounds|stack \(most recent/i.test(line));
   return {
     sequence,
-    status: fatal ? "fatal" : "error",
+    status: fatalLines.length > 0 ? "fatal" : "error",
     exitStatus: child.status,
     message: (lines.at(-1) ?? "no output").trim().slice(0, 300),
+    // The fatal text is what the claim rests on, so keep it, with the trailer.
+    fatalLines: fatalLines.slice(0, 10).map((line) => line.trim().slice(0, 300)),
+    stderrTail: lines.slice(-10).map((line) => line.trim().slice(0, 300)),
   };
 }
 
@@ -143,7 +146,7 @@ async function main() {
   const [flag, sequence] = process.argv.slice(2);
   if (flag === "--tiff-probe") {
     const { shared } = sharedInputs();
-    const result = await runPass({ tiff: sequence }, shared);
+    const result = await runPass({ patch: true, tiff: sequence }, shared);
     process.stdout.write(JSON.stringify(result));
     return;
   }
@@ -154,9 +157,19 @@ async function main() {
   const asIs = await runPass({ patch: false }, shared);
   const patched = await runPass({ patch: true }, shared);
 
-  // Single compressions, then a failed write followed by a good one in the same runtime.
+  // Single compressions; (a) a failed deflate write, then LZW in the same runtime; (b) a
+  // three-page LZW file rendered by the engine. Deflate must never be tried on the web.
   const probes = [];
-  for (const sequence of ["raw", "tiff_lzw", "tiff_adobe_deflate", "tiff_deflate", "tiff_deflate+raw"]) {
+  const sequences = [
+    "raw",
+    "tiff_lzw",
+    "tiff_adobe_deflate",
+    "tiff_deflate",
+    "tiff_deflate+raw",
+    "tiff_deflate+tiff_lzw",
+    "multipage:tiff_lzw",
+  ];
+  for (const sequence of sequences) {
     probes.push(runTiffProbe(sequence));
   }
   fs.writeFileSync(path.join(OUT, "audit-stdout.log"), shared.log.join("\n") + "\n");
