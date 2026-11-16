@@ -1,0 +1,35 @@
+{
+  "pyodide": "314.0.8",
+  "pythonLine": "3.14",
+  "pyodideBuild": "0.39.3",
+  "pymupdf": "1.28.2",
+  "pymupdfTag": "1.28.2",
+  "pymupdfTagCommit": "12786d12b2962a1d77fd13b103162eddf749644c",
+  "mupdf": "1.28.2",
+  "mupdfSourceUrl": "https://mupdf.com/downloads/archive/mupdf-1.28.2-source.tar.gz",
+  "mupdfSourceDir": "mupdf-1.28.2-source",
+  "mupdfSourceSha256": "44075a84e329db55b9bef5f342a70fd26d69e48ad1d33cb89d9664581c641156",
+  "node": "22.23.5",
+  "wheelRoute": "build",
+  "pypiWheel": {
+    "pyodide": "0.29.5",
+    "file": "pymupdf-1.28.2-cp313-abi3-pyemscripten_2025_0_wasm32.whl",
+    "url": "https://files.pythonhosted.org/packages/58/8c/d897dcd32a25b58186c968b15ce4324ca029e9d96460de12325314e390be/pymupdf-1.28.2-cp313-abi3-pyemscripten_2025_0_wasm32.whl",
+    "sha256": "2e1b574c0fd2cb238021033fd3c0f9c4388816638df064e4bfb56d9d81736dc8"
+  },
+  "packageRoots": [
+    "fonttools",
+    "pillow",
+    "numpy",
+    "pytest"
+  ],
+  "hostPython": "3.13",
+  "hostPins": [
+    "pymupdf==1.28.2",
+    "pikepdf==10.18.2",
+    "pypdfium2==5.15.2",
+    "pillow==13.0.0",
+    "fonttools==4.68.0"
+  ],
+  "mupdfSourcePatchNote": "Two one-line patches in the workflow (SWIG generator, PyMuPDF src/extra.i): PyString_FromString -> PyUnicode_FromString. Each target must hold exactly one match before patching, and none after."
+}
