@@ -58,6 +58,36 @@ def test_packaging_changes_run_the_install_tests(path: str) -> None:
     assert ci_changes.classify([path]) == {"app": True, "packaging": True}
 
 
+@pytest.mark.parametrize(
+    "paths",
+    [
+        ["web/spike/README.md"],
+        ["web/spike/smoke/worker.js"],
+        ["web/spike/pyodide_conftest.py"],
+        [".github/workflows/web-spike.yml"],
+        ["docs/web/plan.md", "web/spike/x.mjs"],
+    ],
+)
+def test_web_alone_skips_the_desktop_ci(paths: list[str]) -> None:
+    assert ci_changes.classify(paths) == {"app": False, "packaging": False}
+
+
+def test_web_with_app_code_runs_the_desktop_ci() -> None:
+    assert ci_changes.classify(["web/spike/README.md", "src/pdfeditor/app.py"]) == {
+        "app": True,
+        "packaging": False,
+    }
+
+
+@pytest.mark.parametrize("path", ["webapp/x.py", "src/pdfeditor/web/x.py"])
+def test_only_the_top_level_web_folder_is_web(path: str) -> None:
+    assert ci_changes.classify([path]) == {"app": True, "packaging": False}
+
+
+def test_other_workflows_still_count_as_packaging() -> None:
+    assert ci_changes.classify([".github/workflows/ci.yml"]) == {"app": True, "packaging": True}
+
+
 def test_no_changes_found_runs_everything() -> None:
     """If the diff came back empty, something's wrong: never take that as nothing to test."""
     assert ci_changes.classify([]) == {"app": True, "packaging": True}
