@@ -1,0 +1,21 @@
+{
+  "pyodide": "314.0.8",
+  "pythonLine": "3.14",
+  "pyodideBuild": "0.39.3",
+  "pymupdf": "1.28.2",
+  "pymupdfTag": "1.28.2",
+  "pymupdfTagCommit": "12786d12b2962a1d77fd13b103162eddf749644c",
+  "mupdf": "1.28.2",
+  "node": "22.23.5",
+  "wheelRoute": "build",
+  "pypiWheel": null,
+  "packageRoots": ["fonttools", "pillow", "numpy", "pytest"],
+  "hostPython": "3.13",
+  "hostPins": [
+    "pymupdf==1.28.2",
+    "pikepdf==10.18.2",
+    "pypdfium2==5.15.2",
+    "pillow==13.0.0",
+    "fonttools==4.68.0"
+  ]
+}
