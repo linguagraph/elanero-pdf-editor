@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Elanero CORS probe (W0.3, spike-only)</title>
+<!-- Served by page.route from the spec, never deployed. Runs one fetch the way the web transport
+     would: CORS mode, no credentials, a JSON body where the desktop sends one. -->
+<script>
+  window.runOne = async (req) => {
+    try {
+      const res = await fetch(req.url, {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+        mode: "cors",
+        credentials: "omit",
+      });
+      let text = "";
+      try {
+        text = await res.text();
+      } catch (err) {
+        return { result: "status-only", status: res.status, bodyError: String(err) };
+      }
+      return { result: "resolved", status: res.status, bodyStart: text.slice(0, 200) };
+    } catch (err) {
+      // CORS failures and network failures both surface as TypeError with no status.
+      return { result: "rejected", errorName: err.name, errorMessage: String(err.message) };
+    }
+  };
+</script>

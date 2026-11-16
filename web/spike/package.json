@@ -6,7 +6,8 @@
   "scripts": {
     "prepare-spike": "node run_engine_tests.mjs prepare",
     "engine-tests": "node run_engine_tests.mjs run",
-    "smoke": "playwright test"
+    "smoke": "playwright test",
+    "cors-probe": "node cors/raw_probe.mjs && playwright test -c playwright.cors.config.ts && node cors/report.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
