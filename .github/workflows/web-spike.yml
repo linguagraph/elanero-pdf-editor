@@ -1,0 +1,251 @@
+name: Web spike (W0.1)
+
+# PyMuPDF on Pyodide: the go/no-go spike in docs/web/design/W0.1.md. Spike only: it ships nothing,
+# and no other workflow depends on it. Pyodide wheels are built on Linux, so this runs here.
+# Pinned versions live in web/spike/versions.json (the single source) and web/spike/package-lock.json.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "web/spike/**"
+      - ".github/workflows/web-spike.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-spike-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pyodide-spike:
+    name: pyodide-spike
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned versions
+        id: versions
+        run: |
+          v=web/spike/versions.json
+          {
+            echo "pyodide=$(jq -r .pyodide $v)"
+            echo "python_line=$(jq -r .pythonLine $v)"
+            echo "pyodide_build=$(jq -r .pyodideBuild $v)"
+            echo "pymupdf=$(jq -r .pymupdf $v)"
+            echo "pymupdf_tag=$(jq -r .pymupdfTag $v)"
+            echo "pymupdf_commit=$(jq -r .pymupdfTagCommit $v)"
+            echo "node=$(jq -r .node $v)"
+            echo "mupdf_url=$(jq -r .mupdfSourceUrl $v)"
+            echo "mupdf_sha=$(jq -r .mupdfSourceSha256 $v)"
+            echo "route=$(jq -r .wheelRoute $v)"
+            echo "host_python=$(jq -r .hostPython $v)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+
+      - name: Install the npm packages (exact, from the lockfile)
+        working-directory: web/spike
+        run: npm ci
+
+      - name: Install Chromium for the smoke test
+        working-directory: web/spike
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore the PyMuPDF wheel from the cache
+        id: wheel-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: web/spike/dist/wheel-build
+          key: pymupdf-${{ steps.versions.outputs.pymupdf }}-pyodide-${{ steps.versions.outputs.pyodide }}-${{ hashFiles('.github/workflows/web-spike.yml', 'web/spike/versions.json') }}
+
+      # Route 3 (the one that matters for Pyodide 314): build the wheel with PyMuPDF's own
+      # Pyodide route, at the tag. The MuPDF it bundles is used as is.
+      - name: Set up Python for the Pyodide build
+        if: steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.versions.outputs.python_line }}
+
+      - name: Build the PyMuPDF wasm wheel (route 3)
+        if: steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build'
+        env:
+          PB: ${{ steps.versions.outputs.pyodide_build }}
+          PYODIDE: ${{ steps.versions.outputs.pyodide }}
+          PM_TAG: ${{ steps.versions.outputs.pymupdf_tag }}
+          PM_COMMIT: ${{ steps.versions.outputs.pymupdf_commit }}
+          MU_URL: ${{ steps.versions.outputs.mupdf_url }}
+          MU_SHA: ${{ steps.versions.outputs.mupdf_sha }}
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          work="$RUNNER_TEMP/pymupdf-build"
+          mkdir -p "$work"
+          python -m venv "$work/venv"
+          . "$work/venv/bin/activate"
+          python -m pip install --quiet "pyodide-build==$PB"
+          pyodide xbuildenv install "$PYODIDE"
+          git clone --quiet --depth 1 --branch "$PM_TAG" https://github.com/pymupdf/PyMuPDF.git "$work/PyMuPDF"
+          # MuPDF 1.28.2, the version the tag bundles, from its release tarball (checked by sha256).
+          # One line of its SWIG generator is patched: a dead-code call to a Python 2 name that the
+          # 1.28.x branch has already changed to PyUnicode_FromString. The version is unchanged.
+          curl -fsSL -o "$work/mupdf.tar.gz" "$MU_URL"
+          echo "$MU_SHA  $work/mupdf.tar.gz" | sha256sum -c -
+          tar -xzf "$work/mupdf.tar.gz" -C "$work"
+          mu_dir="$work/$(jq -r .mupdfSourceDir web/spike/versions.json)"
+          # Two Python 2 names, each patched to its Python 3 name. A target must hold exactly one
+          # PyString_FromString before the patch (so a new upstream layout fails here, loudly),
+          # and none after it.
+          patch_once() {
+            local n
+            n=$(grep -c 'PyString_FromString' "$1" || true)
+            if [ "$n" -ne 1 ]; then
+              echo "::error::expected exactly one PyString_FromString in $1, found $n"
+              exit 1
+            fi
+            sed -i 's/PyString_FromString/PyUnicode_FromString/' "$1"
+          }
+          sw="$mu_dir/scripts/wrap/swig.py"
+          extra="$work/PyMuPDF/src/extra.i"
+          patch_once "$sw"
+          patch_once "$extra"
+          if grep -n 'PyString_' "$sw" "$extra"; then
+            echo "::error::PyString_ still present after the patch"
+            exit 1
+          fi
+          export PYMUPDF_SETUP_MUPDF_BUILD="$mu_dir"
+          test "$(git -C "$work/PyMuPDF" rev-parse HEAD)" = "$PM_COMMIT"
+          cd "$work/PyMuPDF"
+          # The flags scripts/test.py sets for its Pyodide build (PyMuPDF 1.28.2). Tesseract is
+          # off there, which is why the web build has no OCR. The limited C API is off too: with
+          # Python 3.14 the SWIG bindings call PyString_FromString (Python 2 only) and fail to compile.
+          export HAVE_LIBCRYPTO=no OS=pyodide PYMUPDF_SETUP_FLAVOUR=pb PYMUPDF_SETUP_MUPDF_TESSERACT=0 PYMUPDF_SETUP_PY_LIMITED_API=0
+          pyodide build --exports whole_archive
+          out="$GITHUB_WORKSPACE/web/spike/dist/wheel-build"
+          mkdir -p "$out" "$GITHUB_WORKSPACE/web/spike/out"
+          cp dist/*.whl "$out/"
+          end=$(date +%s)
+          # wheel.sha256 is saved in the cache with the wheel; the verify step re-hashes it.
+          (cd "$out" && sha256sum ./*.whl > wheel.sha256)
+          wheel_name=$(basename "$out"/*.whl)
+          wheel_sha=$(cut -d' ' -f1 "$out/wheel.sha256")
+          jq -n \
+            --arg route build \
+            --arg pyodide "$PYODIDE" \
+            --arg pyodide_build "$PB" \
+            --arg pymupdf_tag "$PM_TAG" \
+            --arg commit "$PM_COMMIT" \
+            --arg python "$(python -c 'import platform; print(platform.python_version())')" \
+            --arg emscripten "$(pyodide config get emscripten_version 2>/dev/null || echo unknown)" \
+            --arg wheel "$wheel_name" \
+            --arg wheel_sha "$wheel_sha" \
+            --argjson seconds "$((end - start))" \
+            '{route: $route, pyodide: $pyodide, pyodideBuild: $pyodide_build, pymupdfTag: $pymupdf_tag,
+              pymupdfCommit: $commit, hostPython: $python, emscripten: $emscripten, wheel: $wheel,
+              wheelSha256: $wheel_sha, coldBuildSeconds: $seconds}' > "$GITHUB_WORKSPACE/web/spike/out/build-info.json"
+
+      # Route 2: a ready-made wheel from PyPI, pinned by URL and sha256 in versions.json.
+      - name: Download the PyPI wheel (route 2)
+        if: steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'pypi'
+        run: |
+          set -euo pipefail
+          v=web/spike/versions.json
+          out=web/spike/dist/wheel-build
+          mkdir -p "$out" web/spike/out
+          for field in file url sha256; do
+            if [ "$(jq -r ".pypiWheel.$field // empty" $v)" = "" ]; then
+              echo "::error::wheelRoute is pypi but versions.json pypiWheel.$field is empty. Fill pypiWheel (file, url, sha256, and the Pyodide version it was built for: see web/spike/README.md)."
+              exit 1
+            fi
+          done
+          if [ "$(jq -r .pypiWheel.pyodide $v)" != "$(jq -r .pyodide $v)" ]; then
+            echo "::error::pypiWheel is for Pyodide $(jq -r .pypiWheel.pyodide $v) but pyodide is $(jq -r .pyodide $v): bump them together"
+            exit 1
+          fi
+          file=$(jq -r .pypiWheel.file $v)
+          curl -fsSL -o "$out/$file" "$(jq -r .pypiWheel.url $v)"
+          echo "$(jq -r .pypiWheel.sha256 $v)  $out/$file" | sha256sum -c -
+          (cd "$out" && sha256sum "$file" > wheel.sha256)
+          wheel_sha=$(cut -d' ' -f1 "$out/wheel.sha256")
+          jq -n --arg route pypi --arg file "$file" --arg wheel_sha "$wheel_sha" \
+            '{route: $route, wheel: $file, wheelSha256: $wheel_sha, coldBuildSeconds: 0}' \
+            > web/spike/out/build-info.json
+
+      - name: Check that exactly one wheel is present
+        run: |
+          set -euo pipefail
+          n=$(ls web/spike/dist/wheel-build/*.whl 2>/dev/null | wc -l)
+          test "$n" -eq 1 || { echo "expected one wheel, found $n"; exit 1; }
+          ls -l web/spike/dist/wheel-build/
+
+      # Runs on a cache hit too: the wheel and wheel.sha256 come back from the cache together, and
+      # the wheel is hashed again here, so a damaged or swapped cache entry fails the run.
+      - name: Verify the wheel against wheel.sha256
+        run: |
+          set -euo pipefail
+          cd web/spike/dist/wheel-build
+          test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
+          sha256sum -c wheel.sha256
+
+      - name: Set up the host Python (fixtures and the host check)
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.versions.outputs.host_python }}
+
+      - name: Install the host packages and generate the fixtures
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
+          python scripts/make_fixtures.py
+
+      - name: Stage the wheel, the Pyodide packages and the fixture
+        working-directory: web/spike
+        run: |
+          set -euo pipefail
+          node run_engine_tests.mjs prepare --wheel "$(ls dist/wheel-build/*.whl)"
+
+      - name: Run tests/engine under Pyodide (Node)
+        working-directory: web/spike
+        run: node run_engine_tests.mjs run
+
+      - name: Browser smoke test (Chromium, Pyodide in a Web Worker)
+        working-directory: web/spike
+        run: npx playwright test
+
+      - name: Check the saved PDF on the host (pikepdf, pypdfium2)
+        working-directory: web/spike
+        run: python verify_host.py out/smoke.pdf out/host-verify.json
+
+      - name: Summary
+        if: always()
+        working-directory: web/spike
+        run: |
+          {
+            echo "## W0.1 Pyodide spike"
+            for f in build-info.json run.json engine-summary.json smoke-summary.json host-verify.json; do
+              if [ -f "out/$f" ]; then
+                echo "### $f"
+                echo '```json'
+                head -c 6000 "out/$f"
+                echo
+                echo '```'
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: w0.1-pyodide-spike
+          if-no-files-found: warn
+          path: |
+            web/spike/dist/wheel-build/*.whl
+            web/spike/out/
+            docs/web/spikes/W0.1-results.md

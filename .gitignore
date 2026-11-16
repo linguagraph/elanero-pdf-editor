@@ -28,3 +28,8 @@ packaging/msix/identity.json
 
 # The user guide build output (mkdocs build)
 site/
+
+# The W0.1 Pyodide spike (web/spike): installed packages, staged inputs and run outputs
+web/spike/node_modules/
+web/spike/out/
+web/spike/dist/

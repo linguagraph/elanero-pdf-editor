@@ -5,6 +5,7 @@ against the real main window in tests/ui/test_user_guide.py."""
 from __future__ import annotations
 
 import re
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,11 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     triggers = workflow[True]
     for event in ("pull_request", "push"):
         paths = set(triggers[event]["paths"])
-        assert {"docs/**", "mkdocs.yml"} <= paths
+        assert {"docs/guide/**", "docs/landing/**", "mkdocs.yml"} <= paths
+        # The web version's docs (docs/web) are not part of the site build, so a change there
+        # must not run it. Glob semantics: "docs/**" would match docs/web/plan.md.
+        assert not any(fnmatch("docs/web/plan.md", pattern) for pattern in paths)
+        assert "docs/**" not in paths
         # The site assembler and the brand icons it copies (issue #129).
         assert {"scripts/build_site.py", "src/pdfeditor/data/branding/**"} <= paths
     # Read-only by default; the Pages rights belong to the deploy job alone.
