@@ -162,10 +162,14 @@ _MON_TOOL = _MON.PROFILER_ID
 _MON.use_tool_id(_MON_TOOL, "pdfeditor-spike-engine")
 
 
-def _on_py_return(code: types.CodeType, offset: int, retval: object) -> None:
+def _on_py_return(code: types.CodeType, offset: int, retval: object) -> object:
     global _current_engine
     if code.co_filename.startswith(ENGINE_DIR):
         _current_engine += 1
+        return None
+    # Not engine code: switch this code object off for good. DISABLE is kept until
+    # restart_events(), which is fine: test and stdlib code never becomes engine code.
+    return _MON.DISABLE
 
 
 _MON.register_callback(_MON_TOOL, _MON.events.PY_RETURN, _on_py_return)
@@ -236,6 +240,8 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     path = os.environ.get("SPIKE_ENGINE_SUMMARY")
     if not path:
         return
+    _MON.register_callback(_MON_TOOL, _MON.events.PY_RETURN, None)
+    _MON.free_tool_id(_MON_TOOL)
     categories: Counter[str] = Counter()
     engine_ran: Counter[str] = Counter()
     reasons: Counter[str] = Counter()
