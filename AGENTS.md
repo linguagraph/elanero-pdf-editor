@@ -135,6 +135,7 @@ dependencies with licenses that conflict with AGPL, and record every new runtime
 ## Git workflow
 
 - One branch per plan phase (`phase-N-short-name`), branched from an up-to-date `main`.
+- Phase W (the web version, [docs/web/plan.md](docs/web/plan.md)) is too big for one branch: it uses one branch per task, `phase-w-<task-id>-<short-name>` (e.g. `phase-w-w2.1-actions-layer`), and each PR ticks its task in `PLAN.md` (and in the stage's sub-issue).
 - When the phase's checks pass: commit, push, open a PR against `main`, review it, and turn on
   auto-merge (squash). It merges once the owner approves and the required CI checks pass, and
   GitHub deletes the branch. Only a code owner's approval counts (ruleset on `main`). Commit
