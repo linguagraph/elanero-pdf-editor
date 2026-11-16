@@ -517,6 +517,113 @@ The website's root is a landing page (`docs/landing/`: what Elanero does, screen
 - [x] **L3 Guide moved.** `/guide/` is the guide: `WEBSITE_URL` and `DOCS_URL` in `pdfeditor/__init__.py`, `mkdocs.yml` `site_url`, the docs workflow and its paths, and the README and guide links.
 - [x] **L4 Tests.** `tests/unit/test_landing_page.py` (the page's contract, the stubs, the site assembly and its collision check), the workflow test, and the CI classification of the landing page as docs.
 
+### Phase W: Elanero Web, a WebAssembly version in the browser (XL), issue #132
+
+The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide inside a Web Worker behind a new TypeScript front end, hosted statically on GitHub Pages under `/app/`; documents never leave the device. Orchestration that lives in the desktop UI today moves into a shared, Qt-free `pdfeditor.actions` layer that both front ends call. The full plan, decisions and per-task details are in [docs/web/plan.md](docs/web/plan.md); each stage has a sub-issue. W0.1 is the go/no-go gate.
+
+**W0 Tracking and feasibility spikes, #133**
+
+- [x] **W0.0** Tracking
+- [ ] **W0.1** PyMuPDF on Pyodide (go/no-go gate)
+- [ ] **W0.2** Load size and speed
+- [ ] **W0.3** Translation CORS check
+- [ ] **W0.4** Import audit
+
+**W1 Design, #134**
+
+- [ ] **W1.1** Overall web architecture
+- [ ] **W1.2** RPC protocol spec
+- [ ] **W1.3** Actions layer
+- [ ] **W1.4** Rendering and viewport design
+- [ ] **W1.5** Editing tools design
+- [ ] **W1.6** UI/UX design
+- [ ] **W1.7** Test strategy
+
+**W2 Shared code made web-ready, #135**
+
+- [ ] **W2.1** `pdfeditor.actions` layer
+- [ ] **W2.2** Platform capabilities
+- [ ] **W2.3** Bytes and storage
+- [ ] **W2.4** Injectable HTTP transport for translation
+- [ ] **W2.5** `core/jobs.py`: synchronous runner
+- [ ] **W2.6** Web package build
+- [ ] **W2.7** CI job running engine, core, actions and services tests under Pyodide
+
+**W3 Engine worker and RPC, #136**
+
+- [ ] **W3.1** Worker bootstrap: load pinned Pyodide and wheels
+- [ ] **W3.2** `webapi.session`: open from bytes, close, info
+- [ ] **W3.3** `webapi.render`: render tiles to RGBA
+- [ ] **W3.4** `webapi.text`: text layer and search
+- [ ] **W3.5** `webapi.actions`: named actions, undo, redo
+- [ ] **W3.6** `webapi.save`: save_bytes, full or incremental
+- [ ] **W3.7** `webapi.jobs` and job worker protocol
+- [ ] **W3.8** TypeScript RPC client with generated types
+- [ ] **W3.9** Resource limits and guarded errors
+
+**W4 Front-end shell, #137**
+
+- [ ] **W4.1** Project scaffold in `web/`
+- [ ] **W4.2** App shell: start page, tabs, recent files
+- [ ] **W4.3** Ribbon, command registry and command palette
+- [ ] **W4.4** Theme (light/dark, CSS variables)
+- [ ] **W4.5** Preferences dialog
+- [ ] **W4.6** PWA: manifest and service worker
+- [ ] **W4.7** Message catalogue (i18n) and RPC error mapping
+
+**W5 Viewer and navigation, #138**
+
+- [ ] **W5.1a** Document view: virtualised page list
+- [ ] **W5.1b** HiDPI tiles, render cache and prefetch
+- [ ] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
+- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers
+- [ ] **W5.3** Links, navigation history, page jump, page labels
+- [ ] **W5.4** Text selection and copy; search panel
+
+**W6 Required features, #139**
+
+- [ ] **W6.1** R2 Page organizer
+- [ ] **W6.2** R3 Split dialog
+- [ ] **W6.3** R6 Combine dialog
+- [ ] **W6.4** R5 Compress dialog
+- [ ] **W6.5** R7 Print
+- [ ] **W6.6** R4 Translate
+- [ ] **W6.7a** R1a select, move and delete page objects
+- [ ] **W6.7b** R1a add text box and shapes; add and replace images
+- [ ] **W6.8a** R1b in-place paragraph editor
+- [ ] **W6.8b** R1b font picker
+- [ ] **W6.9** R1c Font upload
+
+**W7 Added features, #140**
+
+- [ ] **W7.1** A4 Comment tools and comments panel
+- [ ] **W7.2** A5 Comment summary export and XFDF import/export
+- [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds
+- [ ] **W7.4** A7 Redaction and sanitize
+- [ ] **W7.5** A8 Password protection and permissions
+- [ ] **W7.6** A9 Document properties and metadata editing
+- [ ] **W7.7** A10 Export pages as images and text
+- [ ] **W7.8** A11 Compare documents
+- [ ] **W7.9** A12–A13 Flatten annotations; attachments and layers
+
+**W8 Quality, #141**
+
+- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers
+- [ ] **W8.2** Visual golden tests for rendering
+- [ ] **W8.3** Performance tests in CI
+- [ ] **W8.4** Fuzz and robustness tests
+- [ ] **W8.5** Accessibility checks
+- [ ] **W8.6** Security review
+
+**W9 Build, release and docs, #142**
+
+- [ ] **W9.1** CI: build wheels and front end
+- [ ] **W9.2** Deploy to GitHub Pages under `/app/`
+- [ ] **W9.3** User guide: "Web version" page
+- [ ] **W9.4** `PRIVACY.md` and landing page
+- [ ] **W9.5** `AGENTS.md`: web commands and rules
+- [ ] **W9.6** Release checklist in `RELEASING.md`
+
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.
 - A permissive engine backend (pypdfium2 + pikepdf) implementing `engine/base.py`. The contract tests from Phase 1 are its acceptance suite.
