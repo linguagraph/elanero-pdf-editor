@@ -28,14 +28,24 @@ const FIXTURE = "text_multipage.pdf";
 
 const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 
+// versions.json is the single source. package.json pins the same Pyodide version (the npm
+// package supplies the runtime and the lockfile), so both must be bumped together: this check
+// fails when they drift, and when the installed package is not the pinned one.
 function checkPyodideVersion() {
-  const pkg = JSON.parse(
+  const declared = JSON.parse(fs.readFileSync(path.join(HERE, "package.json"), "utf8"));
+  const installed = JSON.parse(
     fs.readFileSync(path.join(HERE, "node_modules", "pyodide", "package.json"), "utf8"),
   );
-  if (pkg.version !== VERSIONS.pyodide) {
-    throw new Error(
-      `pyodide npm ${pkg.version} != versions.json ${VERSIONS.pyodide}; run npm ci`,
-    );
+  const pins = [
+    ["package.json devDependencies.pyodide", declared.devDependencies?.pyodide],
+    ["node_modules/pyodide", installed.version],
+  ];
+  for (const [where, version] of pins) {
+    if (version !== VERSIONS.pyodide) {
+      throw new Error(
+        `${where} is ${version}, versions.json says ${VERSIONS.pyodide}: bump both together, then npm ci`,
+      );
+    }
   }
 }
 

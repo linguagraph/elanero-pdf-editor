@@ -98,15 +98,28 @@ jobs:
           curl -fsSL -o "$work/mupdf.tar.gz" "$MU_URL"
           echo "$MU_SHA  $work/mupdf.tar.gz" | sha256sum -c -
           tar -xzf "$work/mupdf.tar.gz" -C "$work"
-          sw="$work/mupdf-1.28.2-source/scripts/wrap/swig.py"
-          sed -i 's/PyString_FromString("format_tb")/PyUnicode_FromString("format_tb")/' "$sw"
-          grep -q 'PyUnicode_FromString("format_tb")' "$sw"
-          export PYMUPDF_SETUP_MUPDF_BUILD="$work/mupdf-1.28.2-source"
-          # PyMuPDF's own C code has one live Python 2 call (messagev in src/extra.i, which passes
-          # warnings to pymupdf.message). The Python 3 name is the same call; patch it in the
-          # clone before the build, as the MuPDF generator line above.
-          sed -i 's/PyString_FromString(text)/PyUnicode_FromString(text)/' "$work/PyMuPDF/src/extra.i"
-          grep -q 'PyUnicode_FromString(text)' "$work/PyMuPDF/src/extra.i"
+          mu_dir="$work/$(jq -r .mupdfSourceDir web/spike/versions.json)"
+          # Two Python 2 names, each patched to its Python 3 name. A target must hold exactly one
+          # PyString_FromString before the patch (so a new upstream layout fails here, loudly),
+          # and none after it.
+          patch_once() {
+            local n
+            n=$(grep -c 'PyString_FromString' "$1" || true)
+            if [ "$n" -ne 1 ]; then
+              echo "::error::expected exactly one PyString_FromString in $1, found $n"
+              exit 1
+            fi
+            sed -i 's/PyString_FromString/PyUnicode_FromString/' "$1"
+          }
+          sw="$mu_dir/scripts/wrap/swig.py"
+          extra="$work/PyMuPDF/src/extra.i"
+          patch_once "$sw"
+          patch_once "$extra"
+          if grep -n 'PyString_' "$sw" "$extra"; then
+            echo "::error::PyString_ still present after the patch"
+            exit 1
+          fi
+          export PYMUPDF_SETUP_MUPDF_BUILD="$mu_dir"
           test "$(git -C "$work/PyMuPDF" rev-parse HEAD)" = "$PM_COMMIT"
           cd "$work/PyMuPDF"
           # The flags scripts/test.py sets for its Pyodide build (PyMuPDF 1.28.2). Tesseract is
@@ -118,6 +131,10 @@ jobs:
           mkdir -p "$out" "$GITHUB_WORKSPACE/web/spike/out"
           cp dist/*.whl "$out/"
           end=$(date +%s)
+          # wheel.sha256 is saved in the cache with the wheel; the verify step re-hashes it.
+          (cd "$out" && sha256sum ./*.whl > wheel.sha256)
+          wheel_name=$(basename "$out"/*.whl)
+          wheel_sha=$(cut -d' ' -f1 "$out/wheel.sha256")
           jq -n \
             --arg route build \
             --arg pyodide "$PYODIDE" \
@@ -126,11 +143,12 @@ jobs:
             --arg commit "$PM_COMMIT" \
             --arg python "$(python -c 'import platform; print(platform.python_version())')" \
             --arg emscripten "$(pyodide config get emscripten_version 2>/dev/null || echo unknown)" \
-            --arg wheel "$(basename "$out"/*.whl)" \
+            --arg wheel "$wheel_name" \
+            --arg wheel_sha "$wheel_sha" \
             --argjson seconds "$((end - start))" \
             '{route: $route, pyodide: $pyodide, pyodideBuild: $pyodide_build, pymupdfTag: $pymupdf_tag,
               pymupdfCommit: $commit, hostPython: $python, emscripten: $emscripten, wheel: $wheel,
-              coldBuildSeconds: $seconds}' > "$GITHUB_WORKSPACE/web/spike/out/build-info.json"
+              wheelSha256: $wheel_sha, coldBuildSeconds: $seconds}' > "$GITHUB_WORKSPACE/web/spike/out/build-info.json"
 
       # Route 2: a ready-made wheel from PyPI, pinned by URL and sha256 in versions.json.
       - name: Download the PyPI wheel (route 2)
@@ -140,10 +158,23 @@ jobs:
           v=web/spike/versions.json
           out=web/spike/dist/wheel-build
           mkdir -p "$out" web/spike/out
+          for field in file url sha256; do
+            if [ "$(jq -r ".pypiWheel.$field // empty" $v)" = "" ]; then
+              echo "::error::wheelRoute is pypi but versions.json pypiWheel.$field is empty. Fill pypiWheel (file, url, sha256, and the Pyodide version it was built for: see web/spike/README.md)."
+              exit 1
+            fi
+          done
+          if [ "$(jq -r .pypiWheel.pyodide $v)" != "$(jq -r .pyodide $v)" ]; then
+            echo "::error::pypiWheel is for Pyodide $(jq -r .pypiWheel.pyodide $v) but pyodide is $(jq -r .pyodide $v): bump them together"
+            exit 1
+          fi
           file=$(jq -r .pypiWheel.file $v)
           curl -fsSL -o "$out/$file" "$(jq -r .pypiWheel.url $v)"
           echo "$(jq -r .pypiWheel.sha256 $v)  $out/$file" | sha256sum -c -
-          jq -n --arg route pypi --arg file "$file" '{route: $route, wheel: $file, coldBuildSeconds: 0}' \
+          (cd "$out" && sha256sum "$file" > wheel.sha256)
+          wheel_sha=$(cut -d' ' -f1 "$out/wheel.sha256")
+          jq -n --arg route pypi --arg file "$file" --arg wheel_sha "$wheel_sha" \
+            '{route: $route, wheel: $file, wheelSha256: $wheel_sha, coldBuildSeconds: 0}' \
             > web/spike/out/build-info.json
 
       - name: Check that exactly one wheel is present
@@ -152,6 +183,15 @@ jobs:
           n=$(ls web/spike/dist/wheel-build/*.whl 2>/dev/null | wc -l)
           test "$n" -eq 1 || { echo "expected one wheel, found $n"; exit 1; }
           ls -l web/spike/dist/wheel-build/
+
+      # Runs on a cache hit too: the wheel and wheel.sha256 come back from the cache together, and
+      # the wheel is hashed again here, so a damaged or swapped cache entry fails the run.
+      - name: Verify the wheel against wheel.sha256
+        run: |
+          set -euo pipefail
+          cd web/spike/dist/wheel-build
+          test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
+          sha256sum -c wheel.sha256
 
       - name: Set up the host Python (fixtures and the host check)
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

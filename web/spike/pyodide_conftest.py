@@ -153,21 +153,33 @@ _collect_skips: list[dict[str, str]] = []
 _collect_errors: list[dict[str, str]] = []
 
 
-def _profile(frame: types.FrameType, event: str, arg: object) -> None:
+# Engine returns are counted with sys.monitoring's PY_RETURN event. That event fires only when a
+# frame returns normally: a frame unwinding with an exception fires PY_UNWIND instead, and it is
+# not counted. (A sys.setprofile "return" event can't tell the two apart: its arg is None for an
+# exception and for a legitimate None return.) PY_RETURN is off except during a test's call phase.
+_MON = sys.monitoring
+_MON_TOOL = _MON.PROFILER_ID
+_MON.use_tool_id(_MON_TOOL, "pdfeditor-spike-engine")
+
+
+def _on_py_return(code: types.CodeType, offset: int, retval: object) -> None:
     global _current_engine
-    if event == "return" and frame.f_code.co_filename.startswith(ENGINE_DIR):
+    if code.co_filename.startswith(ENGINE_DIR):
         _current_engine += 1
+
+
+_MON.register_callback(_MON_TOOL, _MON.events.PY_RETURN, _on_py_return)
 
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_call(item: pytest.Item) -> Any:
     global _current_engine
     _current_engine = 0
-    sys.setprofile(_profile)
+    _MON.set_events(_MON_TOOL, _MON.events.PY_RETURN)
     try:
         return (yield)
     finally:
-        sys.setprofile(None)
+        _MON.set_events(_MON_TOOL, 0)
         _engine_returns[item.nodeid] = _current_engine
 
 
