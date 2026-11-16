@@ -1,0 +1,16 @@
+{
+  "name": "elanero-web-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "W0.1 spike: PyMuPDF on Pyodide. Spike code only; never imported by the app.",
+  "scripts": {
+    "prepare-spike": "node run_engine_tests.mjs prepare",
+    "engine-tests": "node run_engine_tests.mjs run",
+    "smoke": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "http-server": "14.1.1",
+    "pyodide": "314.0.8"
+  }
+}
