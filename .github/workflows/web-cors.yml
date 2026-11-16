@@ -58,6 +58,21 @@ jobs:
         working-directory: web/spike
         run: |
           set -euo pipefail
+          # The probes crashed before writing their JSON: there is nothing to report. Say so and
+          # exit 0, so the failed probe step stays the visible root cause. A report.mjs crash on
+          # present inputs is not hidden: that run fails.
+          missing=""
+          for f in out/cors-raw.json out/cors-browser-chromium.json out/cors-browser-firefox.json out/cors-browser-webkit.json; do
+            [ -f "$f" ] || missing="$missing $f"
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice::No report: the probe output is missing ($missing). See the probe steps above."
+            {
+              echo "## W0.3 translation CORS"
+              echo "No report: the probe output is missing ($missing). The probe step failed; see its log."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           node cors/report.mjs > /dev/null
           {
             echo "## W0.3 translation CORS"

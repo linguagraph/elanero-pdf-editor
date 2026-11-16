@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ENDPOINTS, ORIGINS } from "./services.mjs";
+import { ENDPOINTS, ORIGINS, secretsInUse } from "./services.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(here, "..", "out");
@@ -136,9 +136,7 @@ line();
 for (const b of BROWSERS) line(`- ${b}: ${browsers[b].version}`);
 
 const markdown = lines.join("\n") + "\n";
-fs.writeFileSync(path.join(outDir, "cors-report.md"), markdown);
-fs.writeFileSync(
-  path.join(outDir, "cors-verdicts.json"),
+const verdictsJson =
   JSON.stringify(
     verdicts.map(({ endpoint, perOrigin }) => ({
       endpoint: endpoint.id,
@@ -149,6 +147,17 @@ fs.writeFileSync(
     })),
     null,
     2,
-  ) + "\n",
-);
+  ) + "\n";
+
+// Refuse to write a file that still holds a secret value (the same guard as raw_probe.mjs).
+for (const [name, text] of [["cors-report.md", markdown], ["cors-verdicts.json", verdictsJson]]) {
+  for (const secret of secretsInUse()) {
+    if (secret && text.includes(secret)) {
+      console.error(`::error::a secret value reached ${name}; not written`);
+      process.exit(3);
+    }
+  }
+}
+fs.writeFileSync(path.join(outDir, "cors-report.md"), markdown);
+fs.writeFileSync(path.join(outDir, "cors-verdicts.json"), verdictsJson);
 process.stdout.write(markdown);
