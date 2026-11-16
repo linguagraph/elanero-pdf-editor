@@ -267,14 +267,30 @@ def section_m8(report: dict) -> list[str]:
 
 def env_block(report: dict) -> list[str]:
     m = report["machine"]
-    return [
+    lines = [
         f"### {report['env']}, {report['browser']} {report['browserVersion']}",
         "",
         f"- CPU: {m['cpu'].strip()} ({m['cores']} logical cores), "
         f"RAM {m['ramBytes'] / 1024**3:.0f} GiB, {m['platform']}",
         f"- Runs requested per fixture: {report['runsRequested']}",
-        "",
     ]
+    if report.get("cpuThrottle"):
+        # The throttle reaches the page's main thread (perf.spec.ts). The calibration loop shows the
+        # slowdown there, and whether a dedicated worker was slowed too.
+        throttles = [r["throttle"] for r in report["runs"] if r.get("throttle")]
+        refused = sorted({w for t in throttles for w in t["workers"]})
+        cal = [t["calibration"] for t in throttles if t.get("calibration")]
+        lines.append(
+            f"- CPU throttle: {report['cpuThrottle']}x on the page; dedicated workers: "
+            f"{', '.join(refused) or 'none started'}"
+        )
+        if cal:
+            lines.append(
+                f"- Calibration loop, median of {len(cal)} runs: main thread "
+                f"{fmt(median([c['mainMs'] for c in cal]), 1)} ms, dedicated worker "
+                f"{fmt(median([c['workerMs'] for c in cal]), 1)} ms"
+            )
+    return [*lines, ""]
 
 
 def main(out_dir: Path) -> int:

@@ -5,7 +5,8 @@
 // a finding, so the job fails only when the harness itself cannot run.
 //
 // Environment: PERF_ENV (ci | laptop), PERF_RUNS (default 5), PERF_FIXTURES (comma list; the
-// local-only scanned sample is skipped when it is not staged).
+// local-only scanned sample is skipped when it is not staged), PERF_CPU_THROTTLE (the mid-range
+// proxy, see throttle() below).
 import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import os from "node:os";
@@ -17,8 +18,83 @@ const FIXTURES = (
   process.env.PERF_FIXTURES ??
   "perf_mixed_10.pdf,perf_mixed_200.pdf,perf_mixed_1000.pdf,scanned_dryer.pdf"
 ).split(",");
+// PERF_CPU_THROTTLE=4 is the mid-range proxy: Chromium CPU throttling at 4x. It reaches the page's
+// main thread. Chromium refuses the same command for dedicated workers ("only supported for pages,
+// not workers"), so the engine worker runs at full speed; every refusal is recorded in the run.
+const THROTTLE = Number(process.env.PERF_CPU_THROTTLE ?? 0);
 const OUT = path.join(__dirname, "out");
 const STAGED = path.join(__dirname, "dist", "perf", "fixtures");
+
+type ThrottleState = { rate: number; page: string; workers: string[] };
+
+// Throttles the page and every dedicated worker it starts. Workers are found with
+// Target.setAutoAttach on the page's CDP session. flatten is false: Playwright's public
+// CDPSession.send cannot address a flattened child session, while a non-flattened child is driven
+// through Target.sendMessageToTarget on the page session, which it can.
+async function throttle(page: Page): Promise<ThrottleState | null> {
+  if (!THROTTLE) return null;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: THROTTLE });
+  const state: ThrottleState = { rate: THROTTLE, page: "applied", workers: [] };
+  let nextId = 1_000_000;
+  const replies = new Map<number, (msg: { error?: { message: string } }) => void>();
+  cdp.on("Target.receivedMessageFromTarget", (event: { message: string }) => {
+    const msg = JSON.parse(event.message) as { id: number; error?: { message: string } };
+    replies.get(msg.id)?.(msg);
+    replies.delete(msg.id);
+  });
+  cdp.on(
+    "Target.attachedToTarget",
+    async (event: { sessionId: string; targetInfo: { type: string } }) => {
+      if (event.targetInfo.type !== "worker") return;
+      const id = nextId++;
+      const reply = new Promise<{ error?: { message: string } }>((resolve) =>
+        replies.set(id, resolve),
+      );
+      await cdp.send("Target.sendMessageToTarget", {
+        sessionId: event.sessionId,
+        message: JSON.stringify({
+          id,
+          method: "Emulation.setCPUThrottlingRate",
+          params: { rate: THROTTLE },
+        }),
+      });
+      const msg = await reply;
+      state.workers.push(msg.error ? `refused: ${msg.error.message}` : "applied");
+    },
+  );
+  await cdp.send("Target.setAutoAttach", {
+    autoAttach: true,
+    waitForDebuggerOnStart: false,
+    flatten: false,
+  });
+  return state;
+}
+
+// The same fixed CPU loop on the main thread and in a fresh dedicated worker, after the scenario.
+// This is the check that the throttle reached each thread: a throttled thread is ~THROTTLE x slower.
+async function calibrate(page: Page): Promise<{ mainMs: number; workerMs: number }> {
+  return page.evaluate(async () => {
+    const work = () => {
+      const t = performance.now();
+      let x = 0;
+      for (let i = 0; i < 3e7; i++) x += i % 7;
+      return { ms: performance.now() - t, x };
+    };
+    const src = `self.onmessage = () => { const t = performance.now(); let x = 0; for (let i = 0; i < 3e7; i++) x += i % 7; self.postMessage(performance.now() - t); };`;
+    const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    const workerMs = await new Promise<number>((resolve) => {
+      const w = new Worker(url);
+      w.onmessage = (e) => {
+        resolve(e.data);
+        w.terminate();
+      };
+      w.postMessage(0);
+    });
+    URL.revokeObjectURL(url);
+    return { mainMs: work().ms, workerMs };
+  });
+}
 
 async function runScenario(page: Page, fixture: string) {
   await page.goto(`/perf/index.html?fixture=${encodeURIComponent(fixture)}`);
@@ -60,6 +136,7 @@ for (const fixture of FIXTURES) {
       },
       runsRequested: RUNS,
       fixtureBytes: fs.statSync(staged).size,
+      cpuThrottle: THROTTLE || null,
     };
 
     for (let run = 1; run <= RUNS; run++) {
@@ -71,13 +148,23 @@ for (const fixture of FIXTURES) {
       page.on("console", (msg) => {
         if (msg.type() === "error") consoleErrors.push(msg.text());
       });
+      const throttled = await throttle(page);
 
       const cold = await runScenario(page, fixture);
       await page.reload();
       const warm = await runScenario(page, fixture);
+      const calibration = throttled ? await calibrate(page) : null;
       await context.close();
 
-      appendRun(file, header, { fixture, run, cold, warm, pageErrors, consoleErrors });
+      appendRun(file, header, {
+        fixture,
+        run,
+        cold,
+        warm,
+        pageErrors,
+        consoleErrors,
+        throttle: throttled ? { ...throttled, calibration } : null,
+      });
     }
 
     const written = JSON.parse(fs.readFileSync(file, "utf8"));
