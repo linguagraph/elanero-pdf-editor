@@ -39,6 +39,8 @@ jobs:
             echo "pymupdf_tag=$(jq -r .pymupdfTag $v)"
             echo "pymupdf_commit=$(jq -r .pymupdfTagCommit $v)"
             echo "node=$(jq -r .node $v)"
+            echo "mupdf_url=$(jq -r .mupdfSourceUrl $v)"
+            echo "mupdf_sha=$(jq -r .mupdfSourceSha256 $v)"
             echo "route=$(jq -r .wheelRoute $v)"
             echo "host_python=$(jq -r .hostPython $v)"
           } >> "$GITHUB_OUTPUT"
@@ -78,6 +80,8 @@ jobs:
           PYODIDE: ${{ steps.versions.outputs.pyodide }}
           PM_TAG: ${{ steps.versions.outputs.pymupdf_tag }}
           PM_COMMIT: ${{ steps.versions.outputs.pymupdf_commit }}
+          MU_URL: ${{ steps.versions.outputs.mupdf_url }}
+          MU_SHA: ${{ steps.versions.outputs.mupdf_sha }}
         run: |
           set -euo pipefail
           start=$(date +%s)
@@ -88,6 +92,16 @@ jobs:
           python -m pip install --quiet "pyodide-build==$PB"
           pyodide xbuildenv install "$PYODIDE"
           git clone --quiet --depth 1 --branch "$PM_TAG" https://github.com/pymupdf/PyMuPDF.git "$work/PyMuPDF"
+          # MuPDF 1.28.2, the version the tag bundles, from its release tarball (checked by sha256).
+          # One line of its SWIG generator is patched: a dead-code call to a Python 2 name that the
+          # 1.28.x branch has already changed to PyUnicode_FromString. The version is unchanged.
+          curl -fsSL -o "$work/mupdf.tar.gz" "$MU_URL"
+          echo "$MU_SHA  $work/mupdf.tar.gz" | sha256sum -c -
+          tar -xzf "$work/mupdf.tar.gz" -C "$work"
+          sw="$work/mupdf-1.28.2-source/scripts/wrap/swig.py"
+          sed -i 's/PyString_FromString("format_tb")/PyUnicode_FromString("format_tb")/' "$sw"
+          grep -q 'PyUnicode_FromString("format_tb")' "$sw"
+          export PYMUPDF_SETUP_MUPDF_BUILD="$work/mupdf-1.28.2-source"
           test "$(git -C "$work/PyMuPDF" rev-parse HEAD)" = "$PM_COMMIT"
           cd "$work/PyMuPDF"
           # The flags scripts/test.py sets for its Pyodide build (PyMuPDF 1.28.2). Tesseract is
