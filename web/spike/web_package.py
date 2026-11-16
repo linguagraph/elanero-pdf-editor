@@ -28,6 +28,9 @@ EXCLUDED: tuple[str, ...] = (
     "app.py",
     "__main__.py",
     "data/tessdata/",
+    # A build-time check of the branding assets, run from a checkout. Not app code: the web
+    # set is the packages of decision 9 plus three top-level files (95 modules, W0.4).
+    "data/branding/elanero/VERIFY_ASSETS.py",
 )
 
 # Packages that don't exist or aren't wanted on the web. numpy exists in Pyodide, but the app
