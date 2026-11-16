@@ -64,6 +64,7 @@ def test_packaging_changes_run_the_install_tests(path: str) -> None:
         ["web/spike/README.md"],
         ["web/spike/smoke/worker.js"],
         ["web/spike/pyodide_conftest.py"],
+        ["web\\spike\\smoke\\worker.js"],
         [".github/workflows/web-spike.yml"],
         ["docs/web/plan.md", "web/spike/x.mjs"],
     ],
@@ -79,7 +80,9 @@ def test_web_with_app_code_runs_the_desktop_ci() -> None:
     }
 
 
-@pytest.mark.parametrize("path", ["webapp/x.py", "src/pdfeditor/web/x.py"])
+@pytest.mark.parametrize(
+    "path", ["webapp/x.py", "web-foo/x", "src/pdfeditor/web/x.py", "src/pdfeditor/webapi/x.py"]
+)
 def test_only_the_top_level_web_folder_is_web(path: str) -> None:
     assert ci_changes.classify([path]) == {"app": True, "packaging": False}
 

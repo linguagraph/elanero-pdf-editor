@@ -27,7 +27,8 @@ DOCS = (
 STORE_LISTING = "packaging/store/*"
 # The web version (Phase W, docs/web/plan.md) has its own workflows (web-*.yml). Nothing in the
 # desktop app, its tests or its packages reads these, so a web-only pull request skips the
-# desktop CI, and a web workflow file doesn't count as packaging.
+# desktop CI, and a web workflow file doesn't count as packaging. So never give a desktop
+# workflow a name starting with "web-".
 WEB = (
     "web/*",
     ".github/workflows/web-*.yml",
