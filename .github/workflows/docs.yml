@@ -8,7 +8,8 @@ name: Docs
 on:
   pull_request:
     paths:
-      - "docs/**"
+      - "docs/guide/**"
+      - "docs/landing/**"
       - "mkdocs.yml"
       - "scripts/build_site.py"
       - "src/pdfeditor/data/branding/**"
@@ -16,7 +17,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "docs/**"
+      - "docs/guide/**"
+      - "docs/landing/**"
       - "mkdocs.yml"
       - "scripts/build_site.py"
       - "src/pdfeditor/data/branding/**"

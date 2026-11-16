@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elanero Web W0.1 smoke</title>
+</head>
+<body>
+  <!-- W0.1 spike page (never shipped). The Playwright test reads window.__smoke. -->
+  <pre id="status">starting</pre>
+  <script type="module">
+    const status = document.getElementById("status");
+    const smoke = (window.__smoke = {
+      done: false,
+      errors: [],
+      progress: [],
+    });
+    const show = (text) => {
+      smoke.progress.push(text);
+      status.textContent = smoke.progress.slice(-5).join("\n");
+    };
+
+    window.addEventListener("error", (event) => smoke.errors.push(`page: ${event.message}`));
+    window.addEventListener("unhandledrejection", (event) =>
+      smoke.errors.push(`page: unhandled rejection: ${event.reason}`),
+    );
+
+    const worker = new Worker("worker.js", { type: "module" });
+    worker.onerror = (event) => {
+      smoke.errors.push(`worker: ${event.message}`);
+      smoke.done = true;
+    };
+    worker.onmessageerror = () => smoke.errors.push("worker: message could not be decoded");
+    worker.onmessage = (event) => {
+      const msg = event.data;
+      if (msg.type === "progress") {
+        show(msg.text);
+        return;
+      }
+      if (msg.type === "error") {
+        smoke.errors.push(`worker: ${msg.message}`);
+        smoke.stack = msg.stack;
+        smoke.workerLog = msg.log;
+        smoke.done = true;
+        show(`error: ${msg.message}`);
+        return;
+      }
+      if (msg.type === "done") {
+        Object.assign(smoke, msg, {
+          type: undefined,
+          page: {
+            crossOriginIsolated: window.crossOriginIsolated === true,
+            jsHeapUsedBytes: performance.memory ? performance.memory.usedJSHeapSize : null,
+            jsHeapLimitBytes: performance.memory ? performance.memory.jsHeapSizeLimit : null,
+          },
+        });
+        smoke.done = true;
+        show("done");
+      }
+    };
+  </script>
+</body>
+</html>

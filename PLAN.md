@@ -524,7 +524,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W0 Tracking and feasibility spikes, #133**
 
 - [x] **W0.0** Tracking
-- [ ] **W0.1** PyMuPDF on Pyodide (go/no-go gate)
+- [x] **W0.1** PyMuPDF on Pyodide (go/no-go gate)
 - [ ] **W0.2** Load size and speed
 - [ ] **W0.3** Translation CORS check
 - [ ] **W0.4** Import audit
@@ -617,7 +617,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W9 Build, release and docs, #142**
 
-- [ ] **W9.1** CI: build wheels and front end
+- [ ] **W9.1** CI: build wheels and front end _(partial: ci_changes.py skips desktop CI for web-only PRs and the docs workflow ignores docs/web; web build jobs pending)_
 - [ ] **W9.2** Deploy to GitHub Pages under `/app/`
 - [ ] **W9.3** User guide: "Web version" page
 - [ ] **W9.4** `PRIVACY.md` and landing page
