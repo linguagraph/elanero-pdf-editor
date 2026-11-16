@@ -102,6 +102,11 @@ jobs:
           sed -i 's/PyString_FromString("format_tb")/PyUnicode_FromString("format_tb")/' "$sw"
           grep -q 'PyUnicode_FromString("format_tb")' "$sw"
           export PYMUPDF_SETUP_MUPDF_BUILD="$work/mupdf-1.28.2-source"
+          # PyMuPDF's own C code has one live Python 2 call (messagev in src/extra.i, which passes
+          # warnings to pymupdf.message). The Python 3 name is the same call; patch it in the
+          # clone before the build, as the MuPDF generator line above.
+          sed -i 's/PyString_FromString(text)/PyUnicode_FromString(text)/' "$work/PyMuPDF/src/extra.i"
+          grep -q 'PyUnicode_FromString(text)' "$work/PyMuPDF/src/extra.i"
           test "$(git -C "$work/PyMuPDF" rev-parse HEAD)" = "$PM_COMMIT"
           cd "$work/PyMuPDF"
           # The flags scripts/test.py sets for its Pyodide build (PyMuPDF 1.28.2). Tesseract is
