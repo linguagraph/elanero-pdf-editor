@@ -117,9 +117,11 @@ def test_delete_rotate_duplicate_with_undo(window: MainWindow, copy_pdf, monkeyp
 
 def test_duplicate_is_independent_and_undoable(window: MainWindow, copy_pdf) -> None:
     """Issue #49: stamping a duplicate leaves the original alone, through undo and redo."""
+    from pdfeditor.actions import pages as page_actions
+    from pdfeditor.actions.base import snapshot
+    from pdfeditor.actions.pages import DuplicatePages
     from pdfeditor.model.geometry import Point
     from pdfeditor.model.pages import TextStamp
-    from pdfeditor.ui import page_ops
 
     view = window.open_path(copy_pdf("text_multipage"))
     session = view.session
@@ -130,8 +132,8 @@ def test_duplicate_is_independent_and_undoable(window: MainWindow, copy_pdf) -> 
             return [doc.page(i).text_page(with_chars=False).text for i in range(doc.page_count)]
 
     original = texts()
-    page_ops.duplicate_pages(session, [0])
-    page_ops.run(
+    page_actions.duplicate(session, DuplicatePages((0,)))
+    snapshot(
         session, "Stamp", lambda doc: doc.page(1).stamp_text(TextStamp("COPY", Point(72, 800)))
     )
     after = texts()

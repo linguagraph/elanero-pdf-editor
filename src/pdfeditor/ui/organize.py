@@ -10,7 +10,20 @@ from typing import TYPE_CHECKING
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QMenu, QMessageBox, QToolButton
 
-from pdfeditor.core.commands import SetPageLabelsCommand
+from pdfeditor.actions import pages as page_actions
+from pdfeditor.actions.base import ActionError, Busy, Refused
+from pdfeditor.actions.pages import (
+    CropMargins,
+    DeletePages,
+    DuplicatePages,
+    InsertBlankPage,
+    InsertFile,
+    InsertImage,
+    ReplacePages,
+    RotatePages,
+    SetPageLabels,
+    TrimWhiteMargins,
+)
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Document, EngineError
 from pdfeditor.model.pages import MarkKind
@@ -146,7 +159,9 @@ class OrganizeController:
         """Report refused operations instead of letting them escape as crashes."""
         try:
             slot()
-        except (page_ops.PageOpError, EngineError, OSError, ValueError) as exc:
+        except Busy:
+            return  # the BLOCKED event has already shown the notice
+        except (ActionError, EngineError, OSError, ValueError) as exc:
             QMessageBox.warning(self.w, "Organize Pages", str(exc))
 
     def tab(self) -> DocumentTab | None:
@@ -210,7 +225,7 @@ class OrganizeController:
         tab, pages = got
         session = tab.view.session
         before = session.page_count
-        page_ops.delete_pages(session, pages)
+        page_actions.delete(session, DeletePages(tuple(pages)))
         self._after(tab, [min(pages)])
         deleted = before - session.page_count
         if deleted:  # undoable, so no confirmation: the toast offers Undo instead
@@ -221,14 +236,14 @@ class OrganizeController:
         got = self._pages()
         if got is not None:
             tab, pages = got
-            page_ops.rotate_pages(tab.view.session, pages, delta)
+            page_actions.rotate(tab.view.session, RotatePages(tuple(pages), delta))
             self._after(tab, pages)
 
     def duplicate(self) -> None:
         got = self._pages()
         if got is not None:
             tab, pages = got
-            page_ops.duplicate_pages(tab.view.session, pages)
+            page_actions.duplicate(tab.view.session, DuplicatePages(tuple(pages)))
             start = max(pages) + 1
             self._after(tab, list(range(start, start + len(set(pages)))))
 
@@ -243,13 +258,15 @@ class OrganizeController:
         at = dialog.position()
         session = view.session
         if dialog.blank.isChecked():
-            page_ops.insert_blank(session, at, like_page=min(at, view.page_count - 1))
+            page_actions.insert_blank(
+                session, InsertBlankPage(at, like_page=min(at, view.page_count - 1))
+            )
             inserted = 1
         elif dialog.clipboard.isChecked():
             data = page_ops.clipboard_image_png()
             if data is None:
-                raise page_ops.PageOpError("The clipboard doesn't contain an image.")
-            page_ops.insert_image_bytes(session, at, data, "Insert Image from Clipboard")
+                raise Refused("The clipboard doesn't contain an image.")
+            page_actions.insert_image(session, InsertImage(at, data, "Insert Image from Clipboard"))
             inserted = 1
         else:
             path = Path(dialog.path_edit.text())
@@ -260,9 +277,16 @@ class OrganizeController:
                     count = other.page_count
                     other.close()
                 pages = parse_page_ranges(dialog.range_edit.text(), count)
-            inserted = page_ops.insert_file(
-                session, path, at, pages, password_prompt(self.w, path.name)
-            )
+            inserted = page_actions.insert_file(
+                session,
+                InsertFile(
+                    path.read_bytes(),
+                    path.name,
+                    at,
+                    None if pages is None else tuple(pages),
+                ),
+                password_callback=password_prompt(self.w, path.name),
+            ).value
         self._after(tab, list(range(at, at + inserted)))
 
     def extract_pages(
@@ -302,7 +326,7 @@ class OrganizeController:
             new = self.w.add_document(part, f"{Path(session.display_name).stem} (extract).pdf")
             results = [new.session]
         if dialog.delete_after.isChecked():
-            page_ops.delete_pages(session, pages)
+            page_actions.delete(session, DeletePages(tuple(pages)))
         return results
 
     def replace_pages(self, path: Path | None = None, source_range: str = "") -> None:
@@ -323,8 +347,10 @@ class OrganizeController:
         other.close()
         wanted = source_range or f"1-{min(count, len(pages))}"
         source_pages = parse_page_ranges(wanted, count)
-        page_ops.replace_pages(
-            session, pages, path, source_pages, password_prompt(self.w, path.name)
+        page_actions.replace(
+            session,
+            ReplacePages(tuple(pages), path.read_bytes(), tuple(source_pages)),
+            password_callback=password_prompt(self.w, path.name),
         )
         self._after(tab, list(range(min(pages), min(pages) + len(source_pages))))
 
@@ -378,13 +404,18 @@ class OrganizeController:
         if not pages:
             return
         if dialog.trim.isChecked():
-            changed = page_ops.trim_white_margins(view.session, pages)
+            changed = page_actions.trim_white_margins(
+                view.session, TrimWhiteMargins(tuple(pages))
+            ).value
             self.w.notify(
                 f"Removed white margins on {changed} page(s).",
                 action=undo_action(view.session) if changed else None,
             )
         else:
-            page_ops.crop_pages(view.session, pages, dialog.margins())
+            left, top, right, bottom = dialog.margins()
+            page_actions.crop_margins(
+                view.session, CropMargins(tuple(pages), left, top, right, bottom)
+            )
         self._after(tab, pages)
 
     def page_labels(self, dialog: PageLabelsDialog | None = None) -> None:
@@ -397,9 +428,7 @@ class OrganizeController:
         dialog = dialog or PageLabelsDialog(rules, session.page_count, self.w)
         if not dialog.result() and not dialog.exec():
             return
-        new = dialog.rules()
-        if new != rules:
-            session.execute(SetPageLabelsCommand(new))
+        page_actions.set_labels(session, SetPageLabels(tuple(dialog.rules())))
 
     # -- marks: header & footer, Bates numbers, watermark, background ---------------------
     def find_marks(self, kind: MarkKind) -> MarkInfo | None:

@@ -165,6 +165,10 @@ class DocumentSession:
         self._emit(SessionEvent(EventKind.BLOCKED))
         return True
 
+    def refuse_while_busy(self) -> bool:
+        """True (and a BLOCKED event) when a background task makes the document read-only."""
+        return self._refuse_while_busy()
+
     # -- editing --------------------------------------------------------------------------
     def execute(self, command: Command) -> None:
         if self._refuse_while_busy():

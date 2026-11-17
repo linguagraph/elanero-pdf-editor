@@ -79,7 +79,13 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 # "strict" can't be set per module; these are its per-module equivalents.
-module = ["pdfeditor.model.*", "pdfeditor.engine.base", "pdfeditor.core.*"]
+module = [
+    "pdfeditor.model.*",
+    "pdfeditor.engine.base",
+    "pdfeditor.core.*",
+    "pdfeditor.actions",
+    "pdfeditor.actions.*",
+]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true
@@ -120,6 +126,7 @@ name = "Layered architecture"
 type = "layers"
 layers = [
     "pdfeditor.ui",
+    "pdfeditor.actions",
     "pdfeditor.services",
     "pdfeditor.core",
     "pdfeditor.engine",
@@ -133,6 +140,7 @@ source_modules = [
     "pdfeditor.model",
     "pdfeditor.core",
     "pdfeditor.services",
+    "pdfeditor.actions",
     "pdfeditor.ui",
     "pdfeditor.engine.base",
     "pdfeditor.engine.registry",
@@ -140,3 +148,10 @@ source_modules = [
     "pdfeditor.engine.deskew",
 ]
 forbidden_modules = ["fitz", "pymupdf"]
+
+[[tool.importlinter.contracts]]
+# The web (W3.2 adds "pdfeditor.webapi" here) runs without Qt, so do the shared layers below it.
+name = "Web and shared layers stay Qt-free"
+type = "forbidden"
+source_modules = ["pdfeditor.actions"]
+forbidden_modules = ["PySide6", "shiboken6"]

@@ -33,11 +33,13 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QAbstractItemView, QListView, QMessageBox, QVBoxLayout, QWidget
 
+from pdfeditor.actions import pages as page_actions
+from pdfeditor.actions.base import ActionError, Busy
+from pdfeditor.actions.pages import InsertFile, MovePages
 from pdfeditor.core.layout import rotated_size
 from pdfeditor.core.render_cache import THUMBNAIL_TILE, TileKey
 from pdfeditor.engine.base import EngineError
 from pdfeditor.services.assembly import IMAGE_SUFFIXES
-from pdfeditor.ui import page_ops
 from pdfeditor.ui.icons import page_icon
 from pdfeditor.ui.theme import current_colors
 from pdfeditor.ui.view import tiles
@@ -154,10 +156,14 @@ def drop_pages(view: DocumentView, data: QMimeData, before: int) -> list[int] | 
     session = view.session
     if data.hasFormat(MIME_PAGES):
         rows = _own_rows(view, data)
-        return None if rows is None else page_ops.move_pages(session, rows, before)
+        if rows is None:
+            return None
+        result = page_actions.move(session, MovePages(tuple(rows), before))
+        return list(result.value) if result.executed else sorted(set(rows))
     at = before
     for path in _droppable_files(data):
-        at += page_ops.insert_file(session, path, at)
+        inserted = page_actions.insert_file(session, InsertFile(path.read_bytes(), path.name, at))
+        at += inserted.value
     return list(range(before, at)) if at != before else None
 
 
@@ -394,7 +400,9 @@ class OrganizerWidget(QWidget):
     def _on_drop(self, data: QMimeData, before: int) -> list[int] | None:
         try:
             new = drop_pages(self.view, data, before)
-        except (page_ops.PageOpError, EngineError, OSError, ValueError) as exc:
+        except Busy:
+            return None  # the BLOCKED event has already shown the notice
+        except (ActionError, EngineError, OSError, ValueError) as exc:
             QMessageBox.warning(self, "Organize Pages", str(exc))
             return None
         if new is not None:
