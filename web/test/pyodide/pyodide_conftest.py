@@ -15,13 +15,15 @@ things:
 3. ``tests/conftest.py`` imports ``pdfeditor.ui.settings`` (PySide6) in an autouse fixture. Qt
    does not exist in Pyodide, so a stub provides the one name it reads (``_SESSION_KEYS``).
 4. Writes a summary JSON to the path in ``PYODIDE_SUMMARY``. The JUnit XML is pytest's own.
+5. Writes ``host-checks.json`` next to the summary: the host checks that tests recorded (see
+   ``tests/hostcheck.py``). ``scripts/web_host_verify.py`` replays it on host CPython.
+
+The stub modules themselves live in ``host_stubs.py`` (importable on CPython, for the unit tests).
 """
 
 from __future__ import annotations
 
 import ast
-import importlib.abc
-import importlib.machinery
 import json
 import os
 import sys
@@ -31,106 +33,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from host_stubs import HOST_PREFIX, install_host_stubs
 
-HOST_ONLY_TOP_LEVEL = ("pikepdf", "pypdfium2")
-HOST_PREFIX = "needs host-side verification"
 # web/test/pyodide/pyodide_conftest.py -> repo root is three levels up. The web run loads the
 # engine from the unpacked web wheel instead, so PYODIDE_ENGINE_DIR names that folder.
 ENGINE_DIR = (
     os.environ.get("PYODIDE_ENGINE_DIR")
     or str(Path(__file__).resolve().parents[3] / "src" / "pdfeditor" / "engine") + os.sep
 )
-
-
-def _host_skip(name: str) -> None:
-    # allow_module_level: a host call made while a test module is imported skips the module.
-    pytest.skip(f"{HOST_PREFIX}: {name}", allow_module_level=True)
-
-
-class _HostMeta(type):
-    """Metaclass of a stand-in class. Attribute access gives another stand-in (lazy); any use
-    other than a plain attribute read or an identity check raises the host skip."""
-
-    def __getattr__(cls, attr: str) -> Any:
-        # Private names (``_pytestfixturefunction``, ``__wrapped__``) are probed by pytest and
-        # tooling on every module attribute; a stand-in must not look like a fixture or a test.
-        if attr.startswith("_"):
-            raise AttributeError(attr)
-        return _host_class(f"{cls._host_name}.{attr}")
-
-    def __call__(cls, *args: object, **kwargs: object) -> Any:
-        _host_skip(cls._host_name)
-
-    def __getitem__(cls, key: object) -> Any:
-        _host_skip(cls._host_name)
-
-    def __iter__(cls) -> Any:
-        _host_skip(cls._host_name)
-
-    def __len__(cls) -> int:
-        _host_skip(cls._host_name)
-        return 0
-
-    def __bool__(cls) -> bool:
-        _host_skip(cls._host_name)
-        return True
-
-    def __eq__(cls, other: object) -> bool:
-        _host_skip(cls._host_name)
-        return False
-
-    __hash__ = type.__hash__
-
-
-_CLASSES: dict[str, type] = {}
-
-
-def _host_class(name: str) -> type:
-    cls = _CLASSES.get(name)
-    if cls is None:
-        module, _, short = name.rpartition(".")
-        cls = _HostMeta(short, (), {"_host_name": name, "__module__": module or name})
-        _CLASSES[name] = cls
-    return cls
-
-
-class _HostModule(types.ModuleType):
-    def __getattr__(self, attr: str) -> Any:
-        if attr.startswith("_"):
-            raise AttributeError(attr)
-        return _host_class(f"{self.__name__}.{attr}")
-
-
-def _make_host_module(name: str) -> _HostModule:
-    module = _HostModule(name)
-    module.__path__ = []  # type: ignore[attr-defined]  # so submodule imports reach the finder
-    return module
-
-
-class _HostFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Stub submodules (``import pikepdf.foo``) the same way as the top-level modules."""
-
-    def find_spec(
-        self,
-        fullname: str,
-        path: Any,
-        target: types.ModuleType | None = None,
-    ) -> importlib.machinery.ModuleSpec | None:
-        if fullname.partition(".")[0] in HOST_ONLY_TOP_LEVEL:
-            return importlib.machinery.ModuleSpec(fullname, self, is_package=True)
-        return None
-
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> _HostModule:
-        return _make_host_module(spec.name)
-
-    def exec_module(self, module: types.ModuleType) -> None:
-        return None
-
-
-def _install_host_stubs() -> None:
-    for name in HOST_ONLY_TOP_LEVEL:
-        sys.modules.setdefault(name, _make_host_module(name))
-    sys.meta_path.insert(0, _HostFinder())
 
 
 def _install_ui_stub() -> None:
@@ -146,7 +56,7 @@ def _install_ui_stub() -> None:
     sys.modules["pdfeditor.ui.settings"] = settings
 
 
-_install_host_stubs()
+install_host_stubs()
 _install_ui_stub()
 
 # nodeid -> engine functions that returned during the test's call phase
@@ -302,6 +212,15 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
             )
     for item in _collect_errors:
         failures.append({"nodeid": item["module"], "when": "collect", "message": item["message"]})
+    # Per module, the host-only skips (one per test that stopped at a host call, plus a module
+    # skipped at import). scripts/check_web_skips.py compares these with the budget file.
+    host_skips: Counter[str] = Counter()
+    for nodeid, rec in _records.items():
+        if rec["reason"].startswith(HOST_PREFIX):
+            host_skips[nodeid.split("::", 1)[0]] += 1
+    for item in _collect_skips:
+        if item["reason"].startswith(HOST_PREFIX):
+            host_skips[item["module"]] += 1
     criterion3 = {
         "numerator": engine_ran["passed"]
         + engine_ran["failed"]
@@ -325,7 +244,15 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
         "criterion3": criterion3,
         "skipReasons": dict(reasons),
         "moduleSkips": _collect_skips,
+        "hostSkipsByModule": dict(host_skips),
         "failures": failures,
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(summary, fh, indent=2)
+    # The host-check recorder (tests/hostcheck.py) lives in the test package, so read it from
+    # sys.modules: when no test imported it, nothing was recorded. Written even when tests failed.
+    hostcheck = sys.modules.get("tests.hostcheck")
+    checks = hostcheck.recorded() if hostcheck is not None else []
+    manifest = Path(path).with_name("host-checks.json")
+    with open(manifest, "w", encoding="utf-8") as fh:
+        json.dump({"version": 1, "checks": checks}, fh)

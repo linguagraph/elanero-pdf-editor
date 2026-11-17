@@ -6,8 +6,6 @@ import io
 import shutil
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -17,6 +15,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.model.objects import ObjectType, ShapeKind, ShapeSpec, TextStyle
 from pdfeditor.model.pages import ImageStamp
+from tests.hostcheck import record
 
 
 @pytest.fixture
@@ -83,10 +82,8 @@ def test_delete_and_move_objects(editable: Engine, fixture_pdf, tmp_path: Path) 
     assert _texts(page)[0] == "Mixed content heading"  # text untouched
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == 1
-    pd = pdfium.PdfDocument(path)
-    pd.close()
+    record("page_count_pikepdf", path, pages=1)
+    record("opens_pdfium", path)
 
 
 def test_resize_on_rotated_page(editable: Engine, fixture_pdf, tmp_path: Path) -> None:
@@ -141,9 +138,7 @@ def test_replace_text_keeps_everything_else(editable: Engine, fixture_pdf, tmp_p
     assert len(marks) == 1  # the user's own pending redaction mark survived
     doc.save()
     doc.close()
-    pd = pdfium.PdfDocument(path)
-    assert "Edited paragraph." in pd[0].get_textpage().get_text_range()
-    pd.close()
+    record("text_contains_pdfium", path, page=0, text="Edited paragraph.")
 
 
 def test_replace_in_subset_font_substitutes(editable: Engine, fixture_pdf, tmp_path: Path) -> None:
