@@ -69,13 +69,15 @@ def test_icons_are_tinted_with_the_palette(qtbot) -> None:
         app.setPalette(original)
 
 
-def test_hidpi_pixmap_is_sharp() -> None:
+def test_hidpi_pixmap_is_sharp(qapp) -> None:
+    # Pixmaps need a QGuiApplication: without one Qt aborts the process. Earlier GUI tests in the
+    # same xdist worker used to create it, so the test only crashed when it ran first there.
     pix = icon("hand").pixmap(QSize(24, 24), 2.0)
     assert pix.devicePixelRatio() == 2.0
     assert pix.width() == 48
 
 
-def test_bundled_icons_render_and_are_licensed() -> None:
+def test_bundled_icons_render_and_are_licensed(qapp) -> None:
     folder = data_path("icons")
     assert (folder / "LICENSE").read_text(encoding="utf-8").startswith("ISC License")
     svgs = sorted(folder.glob("*.svg"))
