@@ -25,7 +25,6 @@ from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.objects import ObjectType, ShapeKind, ShapeSpec, TextStyle
 from pdfeditor.model.pages import ImageStamp, MarkKind, TextStamp
 from pdfeditor.model.redaction import RedactOptions
-from pdfeditor.services.ocr import installed_languages, tessdata_for
 from pdfeditor.services.optimize import preset, reduce_size
 
 RED = Color(1, 0, 0)
@@ -166,9 +165,11 @@ def _change_annotations(doc: Document, page: Page, engine: Engine) -> None:
 
 
 def _ocr(doc: Document, page: Page, engine: Engine) -> None:
-    if "eng" not in installed_languages():
+    # OCR is not in the web package (services/ocr.py is excluded): the web run skips this case.
+    ocr = pytest.importorskip("pdfeditor.services.ocr")
+    if "eng" not in ocr.installed_languages():
         pytest.skip("English OCR data not installed (scripts/fetch_tessdata.py)")
-    layer = page.ocr_text_layer("eng", 150, tessdata_for(["eng"]))
+    layer = page.ocr_text_layer("eng", 150, ocr.tessdata_for(["eng"]))
     page.add_text_layer(layer)
 
 

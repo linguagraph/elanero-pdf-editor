@@ -12,9 +12,10 @@ from pdfeditor.model.objects import ObjectType
 from pdfeditor.model.scan import ScanCleanup
 from pdfeditor.services.ocr import OcrOptions, installed_languages, recognize
 
-pytestmark = pytest.mark.skipif(
-    "eng" not in installed_languages(), reason="English OCR data not installed"
-)
+pytestmark = [
+    pytest.mark.skipif("eng" not in installed_languages(), reason="English OCR data not installed"),
+    pytest.mark.desktop_only,
+]
 
 
 def _open(path: Path) -> MuDocument:
