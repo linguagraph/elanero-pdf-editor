@@ -9,14 +9,31 @@ from pdfeditor import bundle
 
 APP_NAME = "pdfeditor"
 
+# Set by a host that must choose the root itself (the web: its in-memory file system is not
+# persistent, so the host points this at a folder it manages). None means "not set".
+_data_root: Path | None = None
+
+
+def set_data_root(path: Path | None) -> None:
+    """Choose the folder :func:`data_dir` uses, or ``None`` to go back to the environment rules.
+
+    Takes precedence over ``PDFEDITOR_DATA_DIR``. Nothing is created here: :func:`data_dir`
+    creates the folder on first use.
+    """
+    global _data_root
+    _data_root = path
+
 
 def data_dir() -> Path:
     """Per-user writable directory, created on first use.
 
-    ``PDFEDITOR_DATA_DIR`` overrides it (tests, portable setups).
+    An injected root (:func:`set_data_root`) comes first, then ``PDFEDITOR_DATA_DIR`` overrides
+    the platform location (tests, portable setups).
     """
     override = os.environ.get("PDFEDITOR_DATA_DIR")
-    if override:
+    if _data_root is not None:
+        path = _data_root
+    elif override:
         path = Path(override)
     else:
         base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_STATE_HOME")

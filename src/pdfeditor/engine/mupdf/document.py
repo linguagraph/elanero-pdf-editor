@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 import uuid
 from collections.abc import Sequence
 from dataclasses import replace
@@ -162,13 +163,34 @@ def open_document(source: Path | bytes, password: str | PasswordCallback | None)
     path = source.resolve() if isinstance(source, Path) else None
     if fz.is_repaired:
         log.warning("document was repaired on open: %s", path or "<bytes>")
-    return MuDocument(fz, path, used)
+    # Only a signed document needs an original to append its in-place update to (see
+    # incremental_bytes). A document opened from bytes keeps those bytes for that, and only then.
+    signed = (fz.get_sigflags() or 0) > 0
+    kept = source if isinstance(source, bytes) and signed else None
+    return MuDocument(fz, path, used, source_bytes=kept, lineage=signed)
 
 
 class MuDocument:
-    def __init__(self, fz: pymupdf.Document, path: Path | None, password: str | None) -> None:
+    def __init__(
+        self,
+        fz: pymupdf.Document,
+        path: Path | None,
+        password: str | None,
+        source_bytes: bytes | None = None,
+        lineage: bool = False,
+    ) -> None:
         self._fz = fz
         self._path = path
+        # In-place incremental saves (see incremental_bytes). The lineage is the original file a
+        # signed document's single update is appended to: the bytes when opened from bytes, else
+        # the file at _path (read on use).
+        self._lineage_on = lineage
+        self._lineage_base: bytes | None = source_bytes
+        self._lineage_written = False  # the one update has been written (see incremental_bytes)
+        self._lineage_output: bytes | None = None
+        self._lineage_edit = -1
+        self._lineage_digest = b""
+        self._edits = 0  # bumped by every change (see incremental_bytes)
         # synthetic name -> the /NM it was replaced with (this session; names are unique per
         # document, so the page isn't part of the key)
         self.renamed: dict[str, str] = {}
@@ -202,9 +224,11 @@ class MuDocument:
 
     def note_file_font_embedded(self) -> None:
         """Record that a FILE font ref was just embedded, so the next full save subsets it."""
+        self._edits += 1  # any change; see incremental_bytes
         self._gained_file_fonts = True
 
     def mark_page_changed(self, index: int) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         self._revisions[index] = self._revisions.get(index, 0) + 1
         self._sharing.dirty(index)
         page = self._pages.get(index)
@@ -213,7 +237,12 @@ class MuDocument:
 
     def unshare_page(self, index: int) -> None:
         """Copy-on-write: call before changing page ``index`` in place, so the change can't
-        show on another page that shares its content, resources or annotations."""
+        show on another page that shares its content, resources or annotations.
+
+        Every in-place page change calls this first, shared or not, so it's where the edit
+        counter moves for page changes: a clean page changes no revision, and the save cache
+        must still notice (see incremental_bytes)."""
+        self._edits += 1
         result = ensure_page_unshared(self._fz, index, self._sharing)
         if result.structure:
             self.structure_changed()
@@ -225,6 +254,7 @@ class MuDocument:
         self._reset_pages()
 
     def _reset_pages(self) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         self._sharing.reset()
         self._generation += 1
         self._page_count = int(self._fz.page_count)
@@ -248,6 +278,11 @@ class MuDocument:
     @property
     def is_dirty(self) -> bool:
         return bool(self._fz.is_dirty) or self._force_dirty
+
+    @property
+    def is_repaired(self) -> bool:
+        """MuPDF had to repair the file when it was opened (the desktop's save check uses it)."""
+        return bool(self._fz.is_repaired)
 
     def page(self, index: int) -> MuPage:
         if not 0 <= index < self.page_count:
@@ -290,12 +325,14 @@ class MuDocument:
         return Metadata(**{ours: meta.get(theirs) or "" for ours, theirs in _META_KEYS.items()})
 
     def set_metadata(self, meta: Metadata) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         self._fz.set_metadata({theirs: getattr(meta, ours) for ours, theirs in _META_KEYS.items()})
 
     def xmp(self) -> str:
         return str(self._fz.get_xml_metadata())
 
     def set_xmp(self, xml: str) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         if xml:
             self._fz.set_xml_metadata(xml)
         else:
@@ -329,6 +366,7 @@ class MuDocument:
         return roots
 
     def set_outline(self, items: Sequence[OutlineItem]) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         toc: list[list[Any]] = []
         for level, item in flatten(list(items)):
             info: dict[str, Any] = {"collapse": not item.is_open}
@@ -386,6 +424,7 @@ class MuDocument:
         ]
 
     def set_layer_visible(self, layer_id: int, visible: bool) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         self._fz.set_layer_ui_config(layer_id, 0 if visible else 2)
         # Cached display lists bake in layer visibility.
         for index in range(self.page_count):
@@ -474,18 +513,22 @@ class MuDocument:
         return struct.structure_tree(self._fz)
 
     def set_struct_element(self, ref: int, type: str | None = None, alt: str | None = None) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         struct.set_struct_element(self._fz, ref, type, alt)
 
     def reorder_struct_children(self, parent: int | None, order: Sequence[int]) -> None:
+        self._edits += 1
         struct.reorder_children(self._fz, parent, order)
 
     def auto_tag(self) -> dict[str, int]:
+        self._edits += 1
         return autotag.auto_tag(self)
 
     def accessibility_settings(self) -> AccessibilitySettings:
         return struct.accessibility_settings(self._fz)
 
     def set_accessibility_settings(self, settings: AccessibilitySettings) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         struct.set_accessibility_settings(self._fz, settings)
 
     # -- security -------------------------------------------------------------------------------
@@ -493,6 +536,7 @@ class MuDocument:
         return self._security
 
     def set_pending_security(self, settings: SecuritySettings | None) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         if settings is not None and settings.method not in _ENCRYPT_METHODS:
             raise EngineError(f"can't encrypt with {settings.method.value}")
         self._security = settings
@@ -504,6 +548,7 @@ class MuDocument:
         return int(self._fz.authenticate(self._password or "")) in (1, 4, 6)
 
     def unlock_owner(self, password: str) -> bool:
+        self._edits += 1
         # A wrong password leaves an already-open MuPDF document unreadable, so try it on a
         # scratch copy first.
         probe = pymupdf.open("pdf", self._fz.tobytes(encryption=pymupdf.PDF_ENCRYPT_KEEP))
@@ -538,6 +583,12 @@ class MuDocument:
         self._fz = _open_fz(path)
         if self._fz.needs_pass:
             self._fz.authenticate(self._password or "")
+        # The saved file is the new original: a fresh lineage, starting from it.
+        self._lineage_on = (self._fz.get_sigflags() or 0) > 0
+        self._lineage_base = None
+        self._lineage_written = False
+        self._lineage_output = None
+        self._edits += 1
         self._loaded_xrefs = int(self._fz.xref_length())
         self._reset_pages()
 
@@ -566,6 +617,8 @@ class MuDocument:
                 fz.update_object(xref, source)
 
     def save(self, path: Path | None = None, options: SaveOptions | None = None) -> Path:
+        # A full save names unnamed annotations in the live document before writing (below).
+        self._edits += 1
         options = options or SaveOptions()
         base = path or self._path
         if base is None:
@@ -577,10 +630,14 @@ class MuDocument:
             self._name_unnamed_annotations()
             self._save_full(target, options)
         self._path = target
+        if options.incremental:
+            # MuPDF's writer has advanced past the original file, so a further update can't be
+            # appended to it: in-place bytes are not available after an incremental file save.
+            self._lineage_on = False
         self._force_dirty = False
         return target
 
-    def _name_unnamed_annotations(self) -> None:
+    def _name_unnamed_annotations(self) -> int:
         """Give every annotation without a /NM a unique name before a full save.
 
         Object numbers can change in a full rewrite, so a synthetic name would not survive the
@@ -600,6 +657,7 @@ class MuDocument:
             name = f"pdfeditor-{uuid.uuid4().hex}"
             self._fz.xref_set_key(xref, "NM", pymupdf.get_pdf_str(name))
             self.renamed[f"{SYNTHETIC_NAME_PREFIX}{xref}"] = name
+        return len(unnamed)
 
     def _save_incremental(self, target: Path) -> None:
         if self._path is None or target != self._path or self._backing_tmp is not None:
@@ -624,6 +682,24 @@ class MuDocument:
             with contextlib.suppress(OSError):
                 backup.unlink()
 
+    def _subset_gained_fonts(self, options: SaveOptions) -> bool:
+        """Subset the fonts this app embedded, for a full save (not for an incremental one).
+        Returns whether it ran."""
+        if self._gained_file_fonts and options.subset_fonts:
+            self._subset_new_fonts()
+            return True
+        return False
+
+    def prepare_full_save(self, options: SaveOptions) -> None:
+        """What a full save does to the open document before writing it, as :meth:`save`
+        does: names unnamed annotations and subsets the fonts this app embedded. Done in the
+        open document too. It counts as a change (bumps the edit counter) only when it changed
+        something: a repeat copy of an unchanged document must not spend the in-place lineage."""
+        changed = self._name_unnamed_annotations() > 0
+        changed = self._subset_gained_fonts(options) or changed
+        if changed:
+            self._edits += 1
+
     def _save_full(self, target: Path, options: SaveOptions) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(f".{target.name}.{uuid.uuid4().hex[:8]}.tmp")
@@ -637,8 +713,7 @@ class MuDocument:
                 else security.owner_password or security.user_password
             )
         try:
-            if self._gained_file_fonts and options.subset_fonts:
-                self._subset_new_fonts()
+            self._subset_gained_fonts(options)
             self._fz.save(tmp, **self._save_kwargs(options))
             self._verify(tmp, pages)
         except Exception as exc:
@@ -676,13 +751,108 @@ class MuDocument:
             and bool(self._fz.can_save_incrementally())
         )
 
+    def incremental_bytes(self, options: SaveOptions) -> bytes | None:
+        """See ``Document.incremental_bytes``. The caller holds the engine lock.
+
+        Writes ONE update against the original file (the lineage). pymupdf's ``save`` would
+        append only onto the file the document was opened from, which would change the user's
+        file, so MuPDF's own writer (the one ``save`` calls) writes the update onto a temporary
+        copy of the original, which is read back. Nothing on disk changes.
+
+        MuPDF's writer can't be run a second time on the same document: after a write it keeps
+        an advanced cross-reference state that a further update would not match. So the update
+        is written once per lineage. The same unchanged state returns the same bytes (cached);
+        a change after that write makes an in-place save impossible, and it raises SaveError.
+        """
+        if not self._lineage_on or self._security is not None or self._backing_tmp is not None:
+            return None
+        digest = self._state_digest()
+        if (
+            self._lineage_output is not None
+            and self._lineage_edit == self._edits
+            and self._lineage_digest == digest
+        ):
+            return self._lineage_output
+        if self._lineage_written:
+            raise SaveError(
+                "This signed document can only be saved in place once after it changes; "
+                "save as a new file to keep the signatures."
+            )
+        if not self._fz.can_save_incrementally():
+            return None
+        base = self._lineage_base
+        if base is None and self._path is not None:
+            try:
+                base = self._path.read_bytes()
+            except OSError as exc:
+                raise SaveError(f"cannot read {self._path}: {exc}") from exc
+        if base is None:
+            return None
+        # Same preparation as ``save``, so the update matches a file save. The writer options
+        # stay at MuPDF's defaults apart from the update itself: no garbage collection,
+        # compression or renumbering, which would rewrite the original's bytes. The /ID is kept
+        # as it is: MuPDF would otherwise give every write a new random second identifier, and
+        # the same state would then never produce the same bytes.
+        write_opts = pymupdf.mupdf.PdfWriteOptions()
+        write_opts.do_incremental = 1
+        write_opts.do_encrypt = pymupdf.mupdf.PDF_ENCRYPT_KEEP
+        write_opts.do_garbage = 0
+        write_opts.dont_regenerate_id = 1
+        try:
+            pdf = pymupdf._as_pdf_document(self._fz)
+            # The clean steps may change objects before the update is written. The update
+            # contains those changes, so the digest is taken after them: a repeat call on the
+            # same state then finds the cache.
+            pymupdf.JM_embedded_clean(pdf)
+            pymupdf.JM_ensure_identity(pdf)
+            with tempfile.TemporaryDirectory(prefix="pdfeditor-incr-") as tmp:
+                target = Path(tmp) / "incremental.pdf"
+                target.write_bytes(base)
+                # Failures before this point leave the lineage unspent: MuPDF's writer hasn't run.
+                # From here on it may have advanced its cross-reference state even if it fails,
+                # so the lineage stays spent.
+                self._lineage_written = True
+                pymupdf.mupdf.pdf_save_document(pdf, str(target), write_opts)
+                result = target.read_bytes()
+        except Exception as exc:
+            raise SaveError(f"incremental save failed: {exc}") from exc
+        self._lineage_output = result
+        self._lineage_edit = self._edits
+        self._lineage_digest = self._state_digest()
+        return result
+
+    def _state_digest(self) -> bytes:
+        """A digest of every object in the live document: the safety net under ``_edits``.
+
+        A change that bypasses the edit counter still changes an object, so the cached output
+        is never returned for a state it wasn't written from. The write itself leaves the
+        objects as they were (the digest is the same before and after it), so the cache
+        survives the write. Costs about 40 ms for a 1000-page file.
+        """
+        fz = self._fz
+        h = hashlib.sha256()
+        for xref in range(1, int(fz.xref_length())):
+            try:
+                h.update(fz.xref_object(xref, compressed=False).encode("utf-8", "surrogateescape"))
+            except RuntimeError:  # a free entry in the cross-reference table
+                h.update(b"free")
+                continue
+            if fz.xref_is_stream(xref):
+                h.update(bytes(fz.xref_stream(xref) or b""))
+        return h.digest()
+
     def load_state(self, data: bytes) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         new = _open_fz(data)
         if new.needs_pass and not new.authenticate(self._password or ""):
             new.close()
             raise OpenError("snapshot can't be decrypted with the document's password")
         self._fz.close()
         self._fz = new
+        # A snapshot is not the original file, so no update can be appended to it: a signed
+        # document may not be saved in place by bytes until it's saved to a file again.
+        self._lineage_output = None
+        self._lineage_written = self._lineage_written or self._lineage_on
         known = self._snapshot_fonts.get(hashlib.sha1(data).digest())
         if known is not None:
             self._loaded_xrefs, self._gained_file_fonts = known
@@ -691,26 +861,32 @@ class MuDocument:
         self._reset_pages()
 
     def select_pages(self, order: Sequence[int]) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         pages.select(self, order)
 
     def insert_blank_page(self, at: int, width: float, height: float) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         pages.insert_blank(self, at, width, height)
 
     def insert_pages(self, source: Document, pages_: Sequence[int], at: int) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         if not isinstance(source, MuDocument):
             raise EngineError("can only copy pages between documents of the same engine")
         pages.insert_document(self, source, pages_, at)
 
     def insert_image_page(self, at: int, image: bytes) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         pages.insert_image_page(self, at, image)
 
     def page_label_rules(self) -> list[PageLabelRule]:
         return pages.label_rules(self)
 
     def set_page_label_rules(self, rules: Sequence[PageLabelRule]) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         pages.set_label_rules(self, rules)
 
     def sanitize(self, options: SanitizeOptions) -> list[str]:
+        self._edits += 1  # any change; see incremental_bytes
         fz = self._fz
         report: list[str] = []
         before_meta = any(
@@ -810,16 +986,28 @@ class MuDocument:
         return opt.space_usage(self._fz)
 
     def optimize(self, options: OptimizeOptions) -> None:
+        self._edits += 1  # any change; see incremental_bytes
         opt.optimize(self._fz, options)
         self._reset_pages()
 
     def to_bytes(self, options: SaveOptions | None = None) -> bytes:
         options = options or SaveOptions()
-        data = bytes(self._fz.tobytes(**self._save_kwargs(options)))
+        # Garbage collection (garbage >= 2) compacts the open document's objects in place, which
+        # would change the state an in-place update of a signed document is built on. Such a
+        # write goes through a scratch copy instead.
+        source = self._scratch_copy() if options.garbage >= 2 and self._lineage_on else self
+        data = bytes(source._fz.tobytes(**source._save_kwargs(options)))
         if options.garbage == 0:  # keeps object numbers: a snapshot that may be loaded back
             key = hashlib.sha1(data).digest()
             self._snapshot_fonts[key] = (self._loaded_xrefs, self._gained_file_fonts)
         return data
+
+    def _scratch_copy(self) -> MuDocument:
+        """An independent copy of the current state, with the same pending security settings."""
+        data = bytes(self._fz.tobytes(garbage=0, encryption=pymupdf.PDF_ENCRYPT_KEEP))
+        scratch = open_document(data, self._password)
+        scratch._security = self._security
+        return scratch
 
     def close(self) -> None:
         self._reset_pages()

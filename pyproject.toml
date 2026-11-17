@@ -10,9 +10,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [
-    # Capped until the PyMuPDF 2.0 and PySide6 6.12 changes are adopted: both break tests
-    # (AcroForm page copy, table export, a native crash in the 1000-page scroll benchmark).
-    "pymupdf>=1.24,<2",
+    # PyMuPDF is capped to 1.28.x because the in-place save calls its internals (see
+    # engine/mupdf/document.py incremental_bytes), checked against 1.28.2 only. Re-check that code
+    # and tests/engine/test_mupdf_incremental.py before raising the cap.
+    "pymupdf>=1.28.2,<1.29",
+    # Capped until the PySide6 6.12 changes are adopted: they break tests (table export, a
+    # native crash in the 1000-page scroll benchmark).
     "PySide6>=6.6,<6.12",
     "pikepdf>=8.0",
     "fonttools>=4.47",

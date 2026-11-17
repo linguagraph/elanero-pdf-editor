@@ -11,7 +11,7 @@ import logging
 import os
 import platform
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
@@ -381,11 +381,25 @@ def _face_from_json(path: str, data: dict[str, object]) -> FontFace:
 
 
 class FontCatalog:
-    """An indexed view of the font files on disk, cached in ``data_dir()/fonts.json``."""
+    """An indexed view of the font files on disk, cached in ``data_dir()/fonts.json``.
 
-    def __init__(self) -> None:
+    ``folders`` replaces the system font folders as the default for :meth:`scan`, for hosts
+    with no system fonts (the web scans the fonts the user uploaded). ``cache_path`` replaces
+    the cache file's location; ``None`` keeps the desktop's.
+    """
+
+    def __init__(
+        self,
+        folders: Sequence[Path] | None = None,
+        cache_path: Path | None = None,
+    ) -> None:
         self._faces: list[FontFace] = []
         self._by_path: dict[str, list[FontFace]] = {}
+        self._folders = list(folders) if folders is not None else None
+        self._cache_path = cache_path
+
+    def _cache_file(self) -> Path:
+        return self._cache_path if self._cache_path is not None else _cache_path()
 
     def faces(self) -> list[FontFace]:
         return list(self._faces)
@@ -430,7 +444,7 @@ class FontCatalog:
 
         Fast path for app startup: shows what was known as of the last scan.
         """
-        path = _cache_path()
+        path = self._cache_file()
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
@@ -458,16 +472,22 @@ class FontCatalog:
         token: CancelToken | None = None,
         progress: ProgressFn = no_progress,
     ) -> None:
-        """Rebuild the catalog from ``dirs`` (default: :func:`system_font_dirs`).
+        """Rebuild the catalog from ``dirs`` (default: the constructor's folders, else
+        :func:`system_font_dirs`).
 
         Reuses the cache for files whose size and mtime haven't changed; reads everything
         else. Cancellable: raises :class:`pdfeditor.core.jobs.Cancelled` via ``token``, and
         the cache on disk is left as it was before the scan.
         """
-        search_dirs = list(dirs) if dirs is not None else system_font_dirs()
+        if dirs is not None:
+            search_dirs = list(dirs)
+        elif self._folders is not None:
+            search_dirs = list(self._folders)
+        else:
+            search_dirs = system_font_dirs()
         token = token or CancelToken()
 
-        path = _cache_path()
+        path = self._cache_file()
         cached_entries: dict[str, dict[str, object]] = {}
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))

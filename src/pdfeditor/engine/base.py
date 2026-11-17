@@ -371,6 +371,17 @@ class Document(Protocol):
     @property
     def is_dirty(self) -> bool: ...
 
+    @property
+    def is_repaired(self) -> bool:
+        """True when the file needed repair when it was opened (a saved copy must not)."""
+        ...
+
+    def prepare_full_save(self, options: SaveOptions) -> None:
+        """Do what :meth:`save` does before a full write, to the open document too: name the
+        unnamed annotations and subset the fonts the app embedded. For a caller that writes the
+        bytes itself (:meth:`to_bytes`), so the bytes match a saved file."""
+        ...
+
     def page(self, index: int) -> Page:
         """Page handle. Like ``page_count`` and ``Page.revision``, this must not call into the
         engine, so it's safe without the session lock; every other method needs the lock."""
@@ -514,6 +525,17 @@ class Document(Protocol):
 
     def can_save_incrementally(self) -> bool:
         """True if ``save(options=SaveOptions(incremental=True))`` to ``path`` can work."""
+        ...
+
+    def incremental_bytes(self, options: SaveOptions) -> bytes | None:
+        """The file as one incremental update would leave it, as bytes: the original file's
+        bytes followed by only the changes, so a signature's byte range stays valid.
+
+        Returns None when there is no original to append to (unsigned documents). The same
+        unchanged state returns the same bytes. After the one update has been written, a change
+        makes a further in-place update impossible: SaveError (save as a new file instead).
+        The file on disk and the document are not changed. The caller holds the engine lock.
+        """
         ...
 
     def load_state(self, data: bytes) -> None:

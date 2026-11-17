@@ -9,12 +9,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Literal
 
-from pdfeditor.core.commands.base import Change, Command, UndoStack
+from pdfeditor.core.commands.base import DESKTOP_SNAPSHOT_BUDGET, Change, Command, UndoStack
 from pdfeditor.core.commands.snapshot import SnapshotStore
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Document, Engine, PasswordCallback, SaveError, SaveOptions
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
+from pdfeditor.model.metadata import EncryptionMethod
 
 log = logging.getLogger(__name__)
 _ids = itertools.count(1)
@@ -40,6 +42,14 @@ class EventKind(Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class SaveBytes:
+    """A saved document as bytes, and whether it was written as an incremental update."""
+
+    data: bytes
+    incremental: bool
+
+
+@dataclass(frozen=True, slots=True)
 class SessionEvent:
     kind: EventKind
     changes: tuple[Change, ...] = field(default_factory=tuple)
@@ -57,7 +67,13 @@ class DocumentSession:
     changed.
     """
 
-    def __init__(self, document: Document, engine: Engine) -> None:
+    def __init__(
+        self,
+        document: Document,
+        engine: Engine,
+        *,
+        snapshot_budget: int = DESKTOP_SNAPSHOT_BUDGET,
+    ) -> None:
         self.id = next(_ids)
         self.uid = uuid.uuid4().hex  # stable name for recovery files
         self.document = document
@@ -65,7 +81,8 @@ class DocumentSession:
         # One lock for the whole process, not per document: see core/engine_lock.py.
         self.lock = ENGINE_LOCK
         self.closed = False
-        self.undo_stack = UndoStack()
+        # Undo snapshots over this many bytes drop the oldest commands (see UndoStack).
+        self.undo_stack = UndoStack(max_disk_bytes=snapshot_budget)
         self.undo_stack.on_change(lambda: self._emit(SessionEvent(EventKind.DIRTY)))
         self.save_path_hint: Path | None = None  # e.g. original path of a recovered document
         self.name_hint = ""  # shown for unsaved new documents, e.g. "Combined.pdf"
@@ -83,11 +100,13 @@ class DocumentSession:
         source: Path | bytes,
         password: str | PasswordCallback | None = None,
         engine_name: str = DEFAULT_ENGINE,
+        *,
+        snapshot_budget: int = DESKTOP_SNAPSHOT_BUDGET,
     ) -> DocumentSession:
         engine = get_engine(engine_name)
         doc = engine.open(source, password)
         log.info("opened %s (%d pages)", doc.path or "<memory>", doc.page_count)
-        return cls(doc, engine)
+        return cls(doc, engine, snapshot_budget=snapshot_budget)
 
     # -- properties -----------------------------------------------------------------------
     @property
@@ -223,15 +242,8 @@ class DocumentSession:
         with self.lock:
             doc = self.document
             in_place = doc.path is not None and target == doc.path
-            incremental = (
-                in_place
-                and not self.require_full_save
-                and doc.info().has_signatures
-                and doc.can_save_incrementally()
-            )
-            options = SaveOptions(
-                incremental=incremental, garbage=4 if self.require_full_save else 3
-            )
+            incremental = self._wants_incremental(in_place) and doc.can_save_incrementally()
+            options = SaveOptions(incremental=incremental, garbage=self._garbage_level())
             saved = doc.save(target, options)
         self.require_full_save = False
         self._file_stamp = _file_stamp(saved)
@@ -240,6 +252,74 @@ class DocumentSession:
         log.info("saved %s%s", saved, " (incremental)" if incremental else "")
         self._emit(SessionEvent(EventKind.SAVED))
         return saved
+
+    def _wants_incremental(self, in_place: bool) -> bool:
+        """The incremental-or-full decision shared by :meth:`save` and :meth:`save_bytes`:
+        a signed document saved over its own file keeps its signatures by an update."""
+        return in_place and not self.require_full_save and self.document.info().has_signatures
+
+    def _garbage_level(self) -> int:
+        return 4 if self.require_full_save else 3
+
+    def save_bytes(self, mode: Literal["in_place", "copy"] = "in_place") -> SaveBytes:
+        """The document as bytes, for a caller that writes the file itself (the web).
+
+        ``"copy"`` is always a full rewrite, as Save As. ``"in_place"`` makes the same decision
+        as :meth:`save` over the document's own file: a signed document gets an incremental
+        update that keeps its signatures, and it raises SaveError when that can't be made,
+        rather than falling back to a rewrite that would break the signatures. The bytes are
+        opened again before they're returned; a failed check raises SaveError.
+
+        This is a read: it clears neither ``require_full_save`` nor the clean state, sets no file
+        stamp and emits no SAVED. A caller that has written the bytes to a file decides that.
+        """
+        if self._tasks:
+            raise SaveError(f"wait until “{self.busy}” has finished, or cancel it, then save")
+        with self.lock:
+            doc = self.document
+            if mode == "copy":
+                incremental = False
+            elif mode == "in_place":
+                incremental = self._wants_incremental(in_place=True)
+            else:
+                raise ValueError(f"unknown save mode {mode!r}")
+            if incremental:
+                if doc.path is not None and self.file_changed_on_disk():
+                    raise SaveError(
+                        "the file changed on disk after it was opened; reopen it, or save as a "
+                        "new file, before saving in place"
+                    )
+                data = doc.incremental_bytes(SaveOptions(incremental=True))
+                if data is None:
+                    raise SaveError(
+                        "this signed document can't be saved in place; save as a new file to "
+                        "keep the signatures"
+                    )
+            else:
+                options = SaveOptions(incremental=False, garbage=self._garbage_level())
+                doc.prepare_full_save(options)  # the same preparation as save()
+                data = doc.to_bytes(options)
+            self._verify_bytes(data, doc.page_count)
+        log.info("saved %d bytes%s", len(data), " (incremental)" if incremental else "")
+        return SaveBytes(data=data, incremental=incremental)
+
+    def _verify_bytes(self, data: bytes, pages: int) -> None:
+        """Open the bytes again and compare the page count. An encrypted document would need its
+        password, which the session doesn't keep, so only the page count is checked for it
+        (the engine's own save check still covers it)."""
+        if self.document.info().encryption is not EncryptionMethod.NONE:
+            return
+        try:
+            reopened = self.engine.open(data)
+        except Exception as exc:
+            raise SaveError(f"saved bytes cannot be reopened: {exc}") from exc
+        try:
+            if reopened.is_repaired:
+                raise SaveError("saved bytes needed repair when reopened")
+            if reopened.page_count != pages:
+                raise SaveError(f"saved bytes have {reopened.page_count} pages, expected {pages}")
+        finally:
+            reopened.close()
 
     def close(self) -> None:
         with self.lock:
