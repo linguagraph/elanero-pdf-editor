@@ -561,3 +561,47 @@ def test_empty_contents_clear_the_stored_text(
     assert reopened.contents == ""
     assert raw.get("/Contents", "") == ""
     again.close()
+
+
+def test_degenerate_box_is_refused_and_leaves_the_square_unchanged(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, _ = _open(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    sq = page.add_annotation(AnnotationModel(AnnotationType.SQUARE, 0, BOX, color=RED))
+    before = next(a for a in page.annotations() if a.name == sq.name)
+    with pytest.raises(EngineError):
+        page.update_annotation(dataclasses.replace(sq, rect=Rect(150, 100, 150, 160), color=BLUE))
+    with pytest.raises(EngineError):
+        page.add_annotation(AnnotationModel(AnnotationType.CIRCLE, 0, Rect(10, 10, 10, 50)))
+    after = next(a for a in page.annotations() if a.name == sq.name)
+    _assert_rect(after.rect, BOX)
+    assert after.color == before.color == RED
+    assert len(page.annotations()) == 1  # the refused add left no annotation behind
+    doc.close()
+
+
+def test_no_fill_removes_the_interior_colour_on_a_line(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, path = _open(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    line = page.add_annotation(
+        AnnotationModel(
+            AnnotationType.LINE,
+            0,
+            Rect(0, 0, 0, 0),
+            color=RED,
+            fill=BLUE,
+            vertices=(Point(100, 400), Point(300, 420)),
+        )
+    )
+    assert line.fill == BLUE
+    cleared = page.update_annotation(dataclasses.replace(line, fill=None))
+    assert cleared.fill is None
+
+    again, raw = _save_and_reopen(writable, doc, path, "/Line")
+    reopened = next(a for a in again.page(0).annotations() if a.name == line.name)
+    assert reopened.fill is None
+    assert "/IC" not in raw
+    again.close()

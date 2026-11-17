@@ -7,6 +7,7 @@ geometry goes through one of the conversions below.
 
 from __future__ import annotations
 
+import math
 import re
 import uuid
 from collections.abc import Sequence
@@ -128,11 +129,22 @@ def _pdf_rect(geo: _Geo, r: Rect) -> tuple[float, float, float, float]:
     return (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
 
 
+def _check_box(rect: Rect) -> None:
+    """Refuse an empty or non-finite box before anything is written.
+
+    The old set_rect() path rejected these (MuPDF raises), so writing /Rect directly must too.
+    """
+    finite = all(math.isfinite(v) for v in (rect.x0, rect.y0, rect.x1, rect.y1))
+    if not finite or rect.normalized().is_empty:
+        raise EngineError(f"a box annotation needs a non-empty finite rectangle, got {rect}")
+
+
 def _write_box(doc: pymupdf.Document, geo: _Geo, xref: int, model: AnnotationModel) -> None:
     """Store a box annotation's visible rect as its /Rect, exactly.
 
     Read-back is ``annot.rect``, which is /Rect, so the rect written is the rect read.
     """
+    _check_box(model.rect)
     doc.xref_set_key(xref, "Rect", _nums(_pdf_rect(geo, model.rect)))
 
 
@@ -305,6 +317,8 @@ def _synthetic_xref(name: str) -> int | None:
 def add(page: MuPage, model: AnnotationModel) -> AnnotationModel:
     if model.type not in WRITABLE_TYPES:
         raise UnsupportedFeature(f"can't create {model.type.value} annotations")
+    if model.type in _EXACT_BOX_TYPES:
+        _check_box(model.rect)  # before the annotation exists, so a refusal leaves nothing behind
     fz = page.fz
     geo = _Geo(fz)
     t = model.type
@@ -428,6 +442,8 @@ def update(page: MuPage, model: AnnotationModel) -> AnnotationModel:
     geo = _Geo(page.fz)
     t = AnnotationType.from_pdf_name(annot.type[1])
     xref = annot.xref
+    if t in _EXACT_BOX_TYPES:
+        _check_box(model.rect)  # refuse before any write
     if t is AnnotationType.FREE_TEXT and model.is_callout:
         _write_callout(fz_doc, geo, xref, model)
         annot = find(page, xref)
