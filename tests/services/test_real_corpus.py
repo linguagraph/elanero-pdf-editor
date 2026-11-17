@@ -22,6 +22,8 @@ from pdfeditor.services.accessibility import Status, check
 from pdfeditor.services.ocr import OcrOptions, apply, installed_languages, recognize
 from pdfeditor.services.pdfa import preflight
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 REAL = Path(__file__).resolve().parent.parent / "fixtures" / "real"
 

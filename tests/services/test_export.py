@@ -50,6 +50,8 @@ from pdfeditor.services.export.structure import (
     main_size,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"

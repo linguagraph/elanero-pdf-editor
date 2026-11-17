@@ -8,6 +8,8 @@ import pytest
 
 from pdfeditor import app
 
+pytestmark = pytest.mark.desktop_only
+
 
 def test_setup_logging_writes_file(tmp_path: Path) -> None:
     log_file = app.setup_logging(log_dir=tmp_path)

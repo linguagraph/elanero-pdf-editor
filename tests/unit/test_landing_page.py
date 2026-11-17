@@ -4,6 +4,7 @@ browser or network is needed."""
 
 from __future__ import annotations
 
+import importlib
 import re
 import subprocess
 import sys
@@ -16,7 +17,9 @@ import pytest
 from pdfeditor import DOCS_URL, PRIVACY_URL, SOURCE_URL, WEBSITE_URL, __version__
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
-import build_site as bs
+# build_site imports PyYAML, which is not in the Pyodide package set: the web run skips this module.
+pytest.importorskip("yaml")
+bs = importlib.import_module("build_site")
 
 LANDING = bs.LANDING
 GUIDE_IMAGES = bs.ROOT / "docs" / "guide" / "images"
