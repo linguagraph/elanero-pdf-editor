@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import io
-import shutil
 import threading
-from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pikepdf
@@ -18,9 +16,8 @@ import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
-from pdfeditor.actions import REGISTRY, run
 from pdfeditor.actions import pages as page_actions
-from pdfeditor.actions.base import ActionResult, Busy, Refused, execute_all, snapshot
+from pdfeditor.actions.base import ActionResult, Refused, execute_all, snapshot
 from pdfeditor.actions.pages import (
     CropMargins,
     CropRect,
@@ -36,31 +33,12 @@ from pdfeditor.actions.pages import (
     TrimWhiteMargins,
 )
 from pdfeditor.core.engine_lock import ENGINE_LOCK
-from pdfeditor.core.session import DocumentSession, EventKind
+from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import PasswordRequired
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.pages import LabelStyle, PageLabelRule
-
-Opener = Callable[[str], DocumentSession]
-
-
-@pytest.fixture
-def open_copy(fixture_pdf, tmp_path: Path) -> Iterator[Opener]:
-    """``open_copy("name")`` -> a session on a copy of the fixture, closed after the test."""
-    sessions: list[DocumentSession] = []
-
-    def open_copy(name: str) -> DocumentSession:
-        path = tmp_path / f"{name}-{len(sessions)}.pdf"
-        shutil.copy2(fixture_pdf(name), path)
-        session = DocumentSession.open(path)
-        sessions.append(session)
-        return session
-
-    yield open_copy
-    for session in sessions:
-        with session.lock:
-            session.document.close()
+from tests.actions.conftest import Opener
 
 
 def texts(session: DocumentSession) -> list[str]:
@@ -374,8 +352,9 @@ def test_password_callback_giving_up_raises(open_copy: Opener, fixture_pdf) -> N
     assert s.page_count == count
 
 
-# One minimal, valid argument set per registered action: the Busy check runs before any of them
-# touches the document, so the values only have to type-check.
+# One minimal, valid argument set per action defined in ``pdfeditor.actions.pages``, for the Busy
+# test in test_registry.py: the check runs before the document is touched, so the values only
+# have to type-check.
 BUSY_CASES: dict[str, object] = {
     "pages.delete": DeletePages((0,)),
     "pages.move": MovePages((0,), before=2),
@@ -390,26 +369,6 @@ BUSY_CASES: dict[str, object] = {
     "pages.trim_white_margins": TrimWhiteMargins((0,)),
     "pages.set_labels": SetPageLabels(()),
 }
-
-
-def test_every_registered_action_has_a_busy_case() -> None:
-    assert set(BUSY_CASES) == set(REGISTRY)
-
-
-@pytest.mark.parametrize("name", sorted(BUSY_CASES))
-def test_actions_refuse_while_a_task_runs(open_copy: Opener, name: str) -> None:
-    s = open_copy("text_multipage")
-    events: list[EventKind] = []
-    unsubscribe = s.subscribe(lambda event: events.append(event.kind))
-    s.begin_task("OCR")
-    try:
-        with pytest.raises(Busy, match="OCR"):
-            run(s, name, BUSY_CASES[name])
-    finally:
-        s.end_task("OCR")
-        unsubscribe()
-    assert EventKind.BLOCKED in events
-    assert not s.undo_stack.can_undo
 
 
 def test_snapshot_returns_what_the_operation_returned(open_copy: Opener) -> None:

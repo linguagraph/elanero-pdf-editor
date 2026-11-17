@@ -60,4 +60,12 @@ def available(session: DocumentSession) -> list[str]:
 
 # Registration happens on import. The group modules import ``action`` from this package, so
 # they must come after it is defined.
-from pdfeditor.actions import pages  # noqa: E402,F401
+from pdfeditor.actions import (  # noqa: E402,F401
+    comments,
+    content,
+    document,
+    marks,
+    pages,
+    redaction,
+    security,
+)
