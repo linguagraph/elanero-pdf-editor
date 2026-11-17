@@ -189,6 +189,7 @@ class MuDocument:
         self._lineage_written = False  # the one update has been written (see incremental_bytes)
         self._lineage_output: bytes | None = None
         self._lineage_edit = -1
+        self._lineage_digest = b""
         self._edits = 0  # bumped by every change (see incremental_bytes)
         # synthetic name -> the /NM it was replaced with (this session; names are unique per
         # document, so the page isn't part of the key)
@@ -236,7 +237,12 @@ class MuDocument:
 
     def unshare_page(self, index: int) -> None:
         """Copy-on-write: call before changing page ``index`` in place, so the change can't
-        show on another page that shares its content, resources or annotations."""
+        show on another page that shares its content, resources or annotations.
+
+        Every in-place page change calls this first, shared or not, so it's where the edit
+        counter moves for page changes: a clean page changes no revision, and the save cache
+        must still notice (see incremental_bytes)."""
+        self._edits += 1
         result = ensure_page_unshared(self._fz, index, self._sharing)
         if result.structure:
             self.structure_changed()
@@ -506,9 +512,11 @@ class MuDocument:
         struct.set_struct_element(self._fz, ref, type, alt)
 
     def reorder_struct_children(self, parent: int | None, order: Sequence[int]) -> None:
+        self._edits += 1
         struct.reorder_children(self._fz, parent, order)
 
     def auto_tag(self) -> dict[str, int]:
+        self._edits += 1
         return autotag.auto_tag(self)
 
     def accessibility_settings(self) -> AccessibilitySettings:
@@ -535,6 +543,7 @@ class MuDocument:
         return int(self._fz.authenticate(self._password or "")) in (1, 4, 6)
 
     def unlock_owner(self, password: str) -> bool:
+        self._edits += 1
         # A wrong password leaves an already-open MuPDF document unreadable, so try it on a
         # scratch copy first.
         probe = pymupdf.open("pdf", self._fz.tobytes(encryption=pymupdf.PDF_ENCRYPT_KEEP))
@@ -603,6 +612,8 @@ class MuDocument:
                 fz.update_object(xref, source)
 
     def save(self, path: Path | None = None, options: SaveOptions | None = None) -> Path:
+        # A full save names unnamed annotations in the live document before writing (below).
+        self._edits += 1
         options = options or SaveOptions()
         base = path or self._path
         if base is None:
@@ -732,7 +743,12 @@ class MuDocument:
         """
         if not self._lineage_on or self._security is not None or self._backing_tmp is not None:
             return None
-        if self._lineage_output is not None and self._lineage_edit == self._edits:
+        digest = self._state_digest()
+        if (
+            self._lineage_output is not None
+            and self._lineage_edit == self._edits
+            and self._lineage_digest == digest
+        ):
             return self._lineage_output
         if self._lineage_written:
             raise SaveError(
@@ -773,7 +789,28 @@ class MuDocument:
             raise SaveError(f"incremental save failed: {exc}") from exc
         self._lineage_output = result
         self._lineage_edit = self._edits
+        self._lineage_digest = digest
         return result
+
+    def _state_digest(self) -> bytes:
+        """A digest of every object in the live document: the safety net under ``_edits``.
+
+        A change that bypasses the edit counter still changes an object, so the cached output
+        is never returned for a state it wasn't written from. The write itself leaves the
+        objects as they were (the digest is the same before and after it), so the cache
+        survives the write. Costs about 40 ms for a 1000-page file.
+        """
+        fz = self._fz
+        h = hashlib.sha256()
+        for xref in range(1, int(fz.xref_length())):
+            try:
+                h.update(fz.xref_object(xref, compressed=False).encode("utf-8", "surrogateescape"))
+            except RuntimeError:  # a free entry in the cross-reference table
+                h.update(b"free")
+                continue
+            if fz.xref_is_stream(xref):
+                h.update(bytes(fz.xref_stream(xref) or b""))
+        return h.digest()
 
     def load_state(self, data: bytes) -> None:
         self._edits += 1  # any change; see incremental_bytes

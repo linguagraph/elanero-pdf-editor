@@ -320,6 +320,7 @@ class MuPage:
         return content.image_data(self, key)
 
     def replace_image(self, key: str, data: bytes) -> None:
+        self._doc.unshare_page(self._index)
         content.replace_image(self, key, data)
 
     def font_program(self, name: str) -> bytes | None:
