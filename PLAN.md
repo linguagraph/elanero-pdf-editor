@@ -535,7 +535,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W1.2** RPC protocol spec
 - [x] **W1.3** Actions layer
 - [x] **W1.4** Rendering and viewport design
-- [ ] **W1.5** Editing tools design
+- [x] **W1.5** Editing tools design
 - [ ] **W1.6** UI/UX design
 - [ ] **W1.7** Test strategy
 
@@ -589,14 +589,15 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W6.5** R7 Print
 - [ ] **W6.6** R4 Translate
 - [ ] **W6.7a** R1a select, move and delete page objects
-- [ ] **W6.7b** R1a add text box and shapes; add and replace images
-- [ ] **W6.8a** R1b in-place paragraph editor
+- [ ] **W6.7b** R1a add shapes; add, replace and export images
+- [ ] **W6.8a** R1b in-place paragraph editor and add text
 - [ ] **W6.8b** R1b font picker
 - [ ] **W6.9** R1c Font upload
 
 **W7 Added features, #140**
 
-- [ ] **W7.1** A4 Comment tools and comments panel
+- [ ] **W7.1a** A4 Comment tools and `annotations.create`
+- [ ] **W7.1b** A4 Comments panel
 - [ ] **W7.2** A5 Comment summary export and XFDF import/export
 - [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds
 - [ ] **W7.4** A7 Redaction and sanitize
