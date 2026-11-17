@@ -194,3 +194,22 @@ def test_exactly_one_terminal_callback_per_start(mode: str) -> None:
 
     InlineRunner().start(work, **rec.kwargs())
     assert rec.terminal_calls() == 1
+
+
+def test_a_raising_on_done_is_not_reported_again_as_failed() -> None:
+    """on_done runs outside the work's try block, so its error propagates to the caller
+    instead of turning into on_failed after on_done already ran."""
+    rec = Recorder()
+
+    def on_done(_result: Any) -> None:
+        raise RuntimeError("handler broke")
+
+    with pytest.raises(RuntimeError, match="handler broke"):
+        InlineRunner().start(
+            lambda job: "ok",
+            on_done=on_done,
+            on_failed=rec.failed.append,
+            on_cancelled=rec._on_cancelled,
+        )
+    assert rec.failed == []
+    assert rec.cancelled == 0

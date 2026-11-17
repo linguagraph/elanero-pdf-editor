@@ -13,9 +13,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pdfeditor.core.jobs import Cancelled, CancelToken, JobContext, JobHandle
+
+if TYPE_CHECKING:
+    from pdfeditor.core.jobs import JobRunner
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +81,8 @@ class InlineJob:
     def hold(self, lock: AbstractContextManager[object]) -> Iterator[None]:
         """Hold ``lock`` for the body. Unlike the desktop's ``Job.hold`` this never yields at
         :meth:`progress`: no other thread can be waiting for the lock, so there is nothing to
-        yield to."""
+        yield to. A web job must never block on anything that needs the lock it holds, since
+        nothing else can run to release it."""
         with lock:
             yield
 
@@ -112,6 +116,8 @@ class InlineRunner:
         on_failed: Callable[[str], None],
         on_cancelled: Callable[[], None],
     ) -> JobHandle:
+        """Run ``work`` now. Returns only after the job has ended, so the returned handle's
+        ``cancel()`` has no effect for that run."""
         job = InlineJob(
             label=label,
             total=total,
@@ -120,9 +126,6 @@ class InlineRunner:
             on_report=self._on_report,
         )
         # The callbacks run outside the try blocks, so a failing on_done is not reported twice.
-        if job.token.cancelled:
-            on_cancelled()
-            return job
         try:
             result = work(job)
         except Cancelled:
@@ -139,3 +142,10 @@ class InlineRunner:
         else:
             on_done(result)
         return job
+
+
+if TYPE_CHECKING:
+    # mypy checks the package only (pyproject's [tool.mypy] packages), so the conformance
+    # checks live here rather than in the tests. Assigning to an annotated name is enough.
+    _runner_conforms: JobRunner = InlineRunner()
+    _job_conforms: JobContext = InlineJob()

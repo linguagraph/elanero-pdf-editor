@@ -24,41 +24,64 @@ FORBIDDEN_NAMES = {
     "start_new_thread",
 }
 FORBIDDEN_IMPORTS = {"concurrent", "multiprocessing", "PySide6", "shiboken6"}
+# The only names the core may take from threading: a Lock and an Event, never a thread.
+ALLOWED_THREADING_NAMES = {"Event", "Lock"}
 
 
-def _tree(name: str) -> ast.Module:
-    return ast.parse((CORE / name).read_text(encoding="utf-8"), filename=name)
-
-
-def _imported_roots(tree: ast.Module) -> set[str]:
-    roots: set[str] = set()
+def _violations(source: str, name: str) -> list[str]:
+    """Return every forbidden use in ``source``, checked on the AST so aliases can't hide it."""
+    tree = ast.parse(source, filename=name)
+    found: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            roots.add(node.module.split(".")[0])
-    return roots
-
-
-@pytest.mark.parametrize("name", THREAD_FREE)
-def test_no_thread_or_executor_names(name: str) -> None:
-    offending: list[str] = []
-    for node in ast.walk(_tree(name)):
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:
-            offending.append(f"{name}:{node.lineno} {node.id}")
+            found.append(f"{name}:{node.lineno} {node.id}")
         elif isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_NAMES:
-            offending.append(f"{name}:{node.lineno} .{node.attr}")
-    assert offending == []
+            found.append(f"{name}:{node.lineno} .{node.attr}")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                if root in FORBIDDEN_IMPORTS:
+                    found.append(f"{name}:{node.lineno} import {alias.name}")
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            root = node.module.split(".")[0]
+            if root in FORBIDDEN_IMPORTS:
+                found.append(f"{name}:{node.lineno} from {node.module}")
+            if node.module == "threading":
+                for alias in node.names:
+                    if alias.name not in ALLOWED_THREADING_NAMES or alias.asname is not None:
+                        found.append(f"{name}:{node.lineno} from threading import {alias.name}")
+    return found
 
 
 @pytest.mark.parametrize("name", THREAD_FREE)
-def test_no_concurrency_or_qt_imports(name: str) -> None:
-    assert _imported_roots(_tree(name)) & FORBIDDEN_IMPORTS == set()
+def test_core_job_files_are_thread_free(name: str) -> None:
+    source = (CORE / name).read_text(encoding="utf-8")
+    assert _violations(source, name) == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "from threading import Thread as T\n",
+        "from threading import Timer\n",
+        "import threading as t\nx = t.Thread\n",
+        "import concurrent.futures\n",
+        "import multiprocessing\n",
+        "from PySide6.QtCore import QThread\n",
+        "from threading import Event, Lock, Thread\n",
+        "x = threading.Thread()\n",
+    ],
+)
+def test_checker_catches_injected_violations(extra: str) -> None:
+    """Guards the guard: a copy of a real file with one forbidden line must fail."""
+    source = (CORE / "jobs.py").read_text(encoding="utf-8") + "\n" + extra
+    assert _violations(source, "jobs.py") != []
 
 
 def test_inline_jobs_imports_only_stdlib_and_core_or_model() -> None:
+    source = (CORE / "inline_jobs.py").read_text(encoding="utf-8")
     offending: list[str] = []
-    for node in ast.walk(_tree("inline_jobs.py")):
+    for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             modules = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
