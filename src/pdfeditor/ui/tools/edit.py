@@ -5,25 +5,34 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView
 
-from pdfeditor.core.commands import SnapshotCommand
-from pdfeditor.engine.base import Document, EngineError, UnsupportedFeature
+from pdfeditor.actions import content
+from pdfeditor.actions.base import ActionResult, Busy, StaleObject
+from pdfeditor.actions.content import (
+    AddImage,
+    AddShape,
+    AddText,
+    DeleteObjects,
+    ReplaceText,
+    TransformObjects,
+)
+from pdfeditor.engine.base import EngineError, UnsupportedFeature
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.model.objects import (
     FontChoice,
+    ObjectRef,
     ObjectType,
     PageObject,
     ShapeKind,
     ShapeSpec,
     TextStyle,
 )
-from pdfeditor.model.pages import ImageStamp
 from pdfeditor.ui.tools.base import Tool
 from pdfeditor.ui.view.text_editor import InlineTextEditor
 
@@ -38,19 +47,21 @@ notify: Callable[[str], None] = lambda message: None  # noqa: E731
 error: Callable[[str], None] = lambda message: None  # noqa: E731
 
 
-def run_edit(view: DocumentView, label: str, operation: Callable[[Document], object]) -> bool:
-    """Execute a content edit as one undo step; report refusals instead of raising."""
-    result: list[object] = []
+def object_ref(view: DocumentView, page: int, key: str) -> ObjectRef:
+    """The desktop always acts on what it shows, so it passes the page's current revision."""
+    return ObjectRef(page, key, view.session.document.page(page).revision)
 
-    def op(doc: Document) -> None:
-        result.append(operation(doc))
 
+def run_edit(view: DocumentView, act: Callable[[], ActionResult[Any]]) -> bool:
+    """Run a content-editing action; report refusals instead of raising."""
     try:
-        view.session.execute(SnapshotCommand(label, op, view.session.snapshots))
-    except (UnsupportedFeature, EngineError) as exc:
+        result = act()
+    except Busy:
+        return False  # the BLOCKED event has already told the user
+    except (UnsupportedFeature, EngineError, StaleObject) as exc:
         error(str(exc))
         return False
-    choice = result[0] if result else None
+    choice = result.value
     if isinstance(choice, FontChoice) and choice.substituted:
         detail = f" (missing: {choice.missing})" if choice.missing else ""
         notify(
@@ -199,12 +210,13 @@ class EditObjectsTool(Tool):
             self._drag, self._matrix = None, None
             if m is None or (abs(m.e) < 0.5 and abs(m.f) < 0.5 and m.a == 1 and m.d == 1):
                 return True
-            keys = [o.key for o in objs]
-            label = "Resize" if handle is not None else "Move"
-            what = "Text" if all(o.type is ObjectType.TEXT for o in objs) else "Object"
             moved = [o.bbox.transform(m) for o in objs]
+            refs = tuple(object_ref(view, page, o.key) for o in objs)
             if run_edit(
-                view, f"{label} {what}", lambda doc: doc.page(page).transform_objects(keys, m)
+                view,
+                lambda: content.transform(
+                    view.session, TransformObjects(refs, m, resize=handle is not None)
+                ),
             ):
                 self._reselect(view, page, moved)
             return True
@@ -253,7 +265,10 @@ class EditObjectsTool(Tool):
         def commit(text: str, new_style: TextStyle) -> None:
             self.editor = None
             run_edit(
-                view, "Edit Text", lambda doc: doc.page(page).replace_text(obj.key, text, new_style)
+                view,
+                lambda: content.replace_text(
+                    view.session, ReplaceText(object_ref(view, page, obj.key), text, new_style)
+                ),
             )
 
         def cancel() -> None:
@@ -361,7 +376,8 @@ class AddTextTool(_RectTool):
                 _used(
                     view,
                     run_edit(
-                        view, "Add Text", lambda doc: doc.page(page).add_text(rect, text, style)
+                        view,
+                        lambda: content.add_text(view.session, AddText(page, rect, text, style)),
                     ),
                 )
 
@@ -392,9 +408,7 @@ class AddImageTool(_RectTool):
         data = path.read_bytes()
         _used(
             view,
-            run_edit(
-                view, "Add Image", lambda doc: doc.page(page).stamp_image(ImageStamp(data, rect))
-            ),
+            run_edit(view, lambda: content.add_image(view.session, AddImage(page, rect, data))),
         )
 
 
@@ -419,23 +433,16 @@ class AddShapeTool(_RectTool):
             None if self.kind is ShapeKind.LINE else self.fill,
             self.width,
         )
-        label = {
-            ShapeKind.RECTANGLE: "Add Rectangle",
-            ShapeKind.ELLIPSE: "Add Ellipse",
-            ShapeKind.LINE: "Add Line",
-        }[self.kind]
-        _used(view, run_edit(view, label, lambda doc: doc.page(page).add_shape(spec)))
+        _used(
+            view,
+            run_edit(view, lambda: content.add_shape(view.session, AddShape(page, spec))),
+        )
 
 
 def delete_selected(view: DocumentView) -> bool:
     by_page = view.selected_object_pages()
     if not by_page:
         return False
-
-    def op(doc: Document) -> None:
-        for page, objs in by_page.items():
-            doc.page(page).delete_objects([o.key for o in objs])
-
-    count = sum(len(v) for v in by_page.values())
+    refs = tuple(object_ref(view, page, o.key) for page, objs in by_page.items() for o in objs)
     view.set_object_selection([])
-    return run_edit(view, "Delete Object" if count == 1 else f"Delete {count} Objects", op)
+    return run_edit(view, lambda: content.delete(view.session, DeleteObjects(refs)))

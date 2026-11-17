@@ -8,6 +8,8 @@ import pytest
 from PIL import Image
 from PySide6.QtCore import QPoint, Qt
 
+from pdfeditor.actions import content
+from pdfeditor.actions.content import ReplaceText
 from pdfeditor.model.geometry import Point
 from pdfeditor.model.objects import ObjectType
 from pdfeditor.ui.dialogs import confirm
@@ -175,7 +177,10 @@ def test_font_substitution_is_reported(
     monkeypatch.setattr(edit, "notify", messages.append)
     (block,) = (o for o in v.page_objects(0) if o.type is ObjectType.TEXT)
     assert edit.run_edit(
-        v, "Edit Text", lambda doc: doc.page(0).replace_text(block.key, "Zyxwvu 42")
+        v,
+        lambda: content.replace_text(
+            v.session, ReplaceText(edit.object_ref(v, 0, block.key), "Zyxwvu 42")
+        ),
     )
     assert messages and "instead" in messages[0]
 
