@@ -118,11 +118,12 @@ def insert_document(doc: MuDocument, source: MuDocument, pages: Sequence[int], a
         if not 0 <= index < source.page_count:
             raise EngineError(f"source page {index} out of range")
         target = at + offset
+        # live count: doc.page_count is refreshed only after the loop (issue #158)
         doc.fz.insert_pdf(
             source.fz,
             from_page=index,
             to_page=index,
-            start_at=target if target < doc.page_count else -1,
+            start_at=target if target < doc.fz.page_count else -1,
             annots=True,
             links=True,
         )
