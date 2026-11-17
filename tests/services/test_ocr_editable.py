@@ -28,10 +28,13 @@ from pdfeditor.services.ocr import (
 ENGINE = get_engine()
 REAL = Path(__file__).resolve().parent.parent / "fixtures" / "real"
 
-pytestmark = pytest.mark.skipif(
-    "eng" not in installed_languages(),
-    reason="English OCR data not installed (scripts/fetch_tessdata.py)",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        "eng" not in installed_languages(),
+        reason="English OCR data not installed (scripts/fetch_tessdata.py)",
+    ),
+    pytest.mark.desktop_only,
+]
 
 
 def ocr(doc: Document, cleanup: ScanCleanup) -> None:

@@ -40,6 +40,8 @@ from pdfeditor.services.signing import (
     tokens,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 PIN = "s3cret-pin"
 DER = serialization.Encoding.DER

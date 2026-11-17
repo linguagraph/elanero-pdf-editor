@@ -12,6 +12,8 @@ import pytest
 from pdfeditor import SOURCE_URL, __version__
 from pdfeditor.licenses import about_text, build_notices, license_text
 
+pytestmark = pytest.mark.desktop_only
+
 ROOT = Path(__file__).resolve().parents[2]
 
 

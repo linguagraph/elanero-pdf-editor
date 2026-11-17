@@ -26,6 +26,8 @@ from pdfeditor.ui.printing import (
     sheet_sequence,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 A4 = (595.0, 842.0)
 AREA = (500.0, 700.0)  # printable area in points (portrait)
 

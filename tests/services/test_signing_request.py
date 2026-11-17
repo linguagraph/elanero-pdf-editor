@@ -31,6 +31,8 @@ from pdfeditor.services.signing import (
     sign_file,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 BOX_A = Rect(50, 50, 300, 110)
 BOX_B = Rect(50, 130, 300, 190)

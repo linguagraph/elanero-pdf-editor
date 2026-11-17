@@ -13,6 +13,7 @@ import pytest
 pytestmark = [
     pytest.mark.gui,
     pytest.mark.skipif(sys.platform != "win32", reason="the committed page is the Windows one"),
+    pytest.mark.desktop_only,
 ]
 
 ROOT = Path(__file__).resolve().parents[2]

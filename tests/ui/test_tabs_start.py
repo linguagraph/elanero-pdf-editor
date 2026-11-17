@@ -17,7 +17,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.recent_files import MAX_RECENT, RecentFiles
 from pdfeditor.ui.start_page import MISSING_ROLE, PATH_ROLE, PINNED_ROLE
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

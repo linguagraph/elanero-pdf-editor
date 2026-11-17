@@ -16,7 +16,7 @@ from pdfeditor.model.pages import MarkKind
 from pdfeditor.ui.dialogs.pages import HeaderFooterDialog, WatermarkDialog
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

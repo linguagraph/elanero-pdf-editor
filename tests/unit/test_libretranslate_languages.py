@@ -20,6 +20,8 @@ from pdfeditor.services.translation.libretranslate import (
 )
 from pdfeditor.ui.settings import AppSettings
 
+pytestmark = pytest.mark.desktop_only
+
 SERVER_LIST = [
     {"code": "en", "name": "English"},
     {"code": "nb", "name": "Norwegian Bokmål", "targets": ["en"]},

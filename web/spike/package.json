@@ -4,8 +4,8 @@
   "private": true,
   "description": "W0.1 spike: PyMuPDF on Pyodide. Spike code only; never imported by the app.",
   "scripts": {
-    "prepare-spike": "node run_engine_tests.mjs prepare",
-    "engine-tests": "node run_engine_tests.mjs run",
+    "prepare-spike": "node ../test/pyodide/run_engine_tests.mjs prepare",
+    "engine-tests": "node ../test/pyodide/run_engine_tests.mjs run",
     "smoke": "playwright test",
     "cors-probe": "node cors/raw_probe.mjs && playwright test -c playwright.cors.config.ts && node cors/report.mjs"
   },

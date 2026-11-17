@@ -38,7 +38,7 @@ from pdfeditor.ui.theme import Theme, apply_theme
 from pdfeditor.ui.toasts import ToastAction
 from tests.golden.compare import Tolerance, compare, save_png
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 GOLDEN = Path(__file__).resolve().parent.parent / "golden" / "ui"
 PLATFORM = {"win32": "windows", "darwin": "macos"}.get(sys.platform, sys.platform)

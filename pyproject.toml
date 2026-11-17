@@ -122,6 +122,7 @@ markers = [
     "slow: long-running tests (large fixtures, OCR)",
     "gui: tests that need a Qt application",
     "network: talks to a real translation service; runs only with ELANERO_LIVE_TRANSLATION=1",
+    "desktop_only: needs the Windows desktop app (Qt, packaging, OCR, signing, PDF/A, stores, LibreOffice, live services); excluded from the Pyodide run",
 ]
 
 [tool.importlinter]

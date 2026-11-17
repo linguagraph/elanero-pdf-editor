@@ -19,7 +19,7 @@ from pdfeditor.ui import stamp_menu
 from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.tools import annotate
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

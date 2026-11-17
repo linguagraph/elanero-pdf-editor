@@ -15,6 +15,8 @@ from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.geometry import Matrix, Point, Quad
 from pdfeditor.services.ocr import OcrOptions, apply, installed_languages, recognize
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 SKEW = 4.0  # scripts/make_fixtures.py SKEW_DEGREES
 LOREM_START = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."

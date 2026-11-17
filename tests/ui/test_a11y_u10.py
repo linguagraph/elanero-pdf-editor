@@ -47,7 +47,7 @@ from pdfeditor.ui.view.mode_banner import ModeBanner
 from pdfeditor.ui.view.pill import CanvasPill
 from tests.ui.test_dialog_base import migrated
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 ACCENTS = [None, "#00b25a", "#ffd700", "#00ffff", "#0000ff", "#ffffff", "#000000", "#c42b1c"]
 

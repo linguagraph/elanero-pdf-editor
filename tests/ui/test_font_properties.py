@@ -8,7 +8,7 @@ from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.metadata import FontInfo
 from pdfeditor.ui.dialogs.properties import editing_use, page_ranges
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def font(**kw: object) -> FontInfo:

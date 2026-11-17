@@ -16,7 +16,7 @@ from pdfeditor.services.signing import inspect_signatures, sign_file
 from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.panels.signatures import VERDICT_LABELS, SignaturesPanel
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 ENGINE = get_engine()
 

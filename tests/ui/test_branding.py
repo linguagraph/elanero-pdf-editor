@@ -14,6 +14,8 @@ from pdfeditor import APP_DISPLAY_NAME
 from pdfeditor.bundle import data_path
 from pdfeditor.ui import branding
 
+pytestmark = pytest.mark.desktop_only
+
 PACK = data_path("branding", "elanero")
 
 

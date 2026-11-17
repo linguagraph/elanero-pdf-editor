@@ -26,7 +26,7 @@ from pdfeditor.ui.settings import AppSettings
 from pdfeditor.ui.tools import annotate
 from pdfeditor.ui.view.document_view import DocumentView
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

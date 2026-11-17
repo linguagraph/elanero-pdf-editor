@@ -14,7 +14,7 @@ from pdfeditor.ui.dialogs.properties import PropertiesDialog
 from pdfeditor.ui.dialogs.security import SecurityDialog
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

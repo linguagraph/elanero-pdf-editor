@@ -9,6 +9,7 @@ on:
   pull_request:
     paths:
       - "web/spike/**"
+      - "web/test/pyodide/**"
       - ".github/workflows/web-spike.yml"
 
 permissions:
@@ -208,11 +209,11 @@ jobs:
         working-directory: web/spike
         run: |
           set -euo pipefail
-          node run_engine_tests.mjs prepare --wheel "$(ls dist/wheel-build/*.whl)"
+          node ../test/pyodide/run_engine_tests.mjs prepare --wheel "$(ls dist/wheel-build/*.whl)"
 
       - name: Run tests/engine under Pyodide (Node)
         working-directory: web/spike
-        run: node run_engine_tests.mjs run
+        run: node ../test/pyodide/run_engine_tests.mjs run
 
       - name: Browser smoke test (Chromium, Pyodide in a Web Worker)
         working-directory: web/spike

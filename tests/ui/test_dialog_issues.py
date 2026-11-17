@@ -21,7 +21,7 @@ from pdfeditor.ui.dialogs import compare, ocr, optimize, pages, redaction
 from pdfeditor.ui.dialogs.base import FormDialog, Section
 from pdfeditor.ui.theme import Theme, apply_theme, current_colors
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "pdfeditor"
 

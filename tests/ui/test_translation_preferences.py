@@ -21,7 +21,7 @@ from pdfeditor.ui.dialogs import preferences as prefs_module
 from pdfeditor.ui.dialogs.preferences import PreferencesDialog
 from pdfeditor.ui.settings import AppSettings
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 URL = "https://lt.example.org"
 

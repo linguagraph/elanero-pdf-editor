@@ -17,7 +17,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.panels.bookmarks import BookmarksPanel
 from pdfeditor.ui.side_panels import RailButton
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def make_window(qtbot, register: bool = True) -> MainWindow:

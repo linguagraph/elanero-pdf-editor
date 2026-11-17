@@ -6,6 +6,10 @@ import os
 import subprocess
 import sys
 
+import pytest
+
+pytestmark = pytest.mark.desktop_only
+
 
 def test_main_window_import_does_not_load_winrt() -> None:
     code = (

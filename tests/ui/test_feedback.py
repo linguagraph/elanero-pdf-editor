@@ -21,7 +21,7 @@ from pdfeditor.ui.job_center import JobDetails
 from pdfeditor.ui.jobs import Job, wait_for
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

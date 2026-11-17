@@ -21,6 +21,8 @@ from pdfeditor.ui.single_instance import (
     new_window_command,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 
 def test_slots_number_the_running_copies(tmp_path: Path) -> None:
     first, second, third = InstanceSlot(tmp_path), InstanceSlot(tmp_path), InstanceSlot(tmp_path)

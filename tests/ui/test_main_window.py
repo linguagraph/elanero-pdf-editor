@@ -21,7 +21,7 @@ from pdfeditor.ui.panels.thumbnails import ThumbnailsPanel
 from pdfeditor.ui.single_instance import InstanceServer, send_to_running_instance
 from tests.ui.conftest import wait_rendered
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

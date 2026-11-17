@@ -21,7 +21,7 @@ from pdfeditor.services.store_updates import InstallOutcome, InstallResult
 from pdfeditor.ui.settings import AppSettings
 from pdfeditor.ui.store_updates import FIRST_CHECK_MS, StoreUpdates
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 STORE_URL = "ms-windows-store://pdp/?PFN=Publisher.Elanero_abc123"
 

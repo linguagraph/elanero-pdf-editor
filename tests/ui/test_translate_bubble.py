@@ -27,7 +27,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.translate_bubble import TranslateBubble
 from pdfeditor.ui.view.document_view import DocumentView
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 class FakeTranslator:

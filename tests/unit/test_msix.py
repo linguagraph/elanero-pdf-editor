@@ -13,6 +13,8 @@ from PIL import Image
 
 from pdfeditor import __version__
 
+pytestmark = pytest.mark.desktop_only
+
 ROOT = Path(__file__).resolve().parents[2]
 NS = {
     "m": "http://schemas.microsoft.com/appx/manifest/foundation/windows10",

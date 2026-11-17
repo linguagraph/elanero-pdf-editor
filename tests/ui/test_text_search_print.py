@@ -15,7 +15,7 @@ from pdfeditor.ui.printing import PrintOptions, Scaling, pdf_printer, print_page
 from pdfeditor.ui.tools.hand import HandTool
 from tests.ui.conftest import wait_rendered
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def _word_pos(view, page: int, word: str, offset: int = 0, frac: float = 0.25) -> QPoint:

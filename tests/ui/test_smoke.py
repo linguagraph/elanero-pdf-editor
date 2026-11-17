@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def test_main_window_shows(qtbot) -> None:

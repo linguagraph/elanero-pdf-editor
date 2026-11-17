@@ -15,6 +15,8 @@ import store_submit
 from store_listing import ListingError, parse, unwrap
 from store_submit import Store, SubmitError
 
+pytestmark = pytest.mark.desktop_only
+
 GOOD = """# Listing
 
 Paste each section.

@@ -53,6 +53,8 @@ from pdfeditor.services.signing.windows_store import (
     raise_for_status,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="needs Windows CNG")
 ENGINE = get_engine()
 DIGEST = hashlib.sha256(b"document").digest()

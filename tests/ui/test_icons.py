@@ -12,7 +12,7 @@ from pdfeditor.ui.icons import icon
 from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.panels.bookmarks import BookmarksPanel
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture
