@@ -16,7 +16,7 @@ from typing import cast
 import pikepdf
 import pypdfium2 as pdfium
 import pytest
-from PIL import Image
+from PIL import Image, ImageChops
 
 from pdfeditor.actions import REGISTRY, marks, run
 from pdfeditor.actions.base import NotSupported
@@ -369,6 +369,42 @@ def test_round_trip_image_watermark(open_copy: Opener, tmp_path: Path) -> None:
     finally:
         close(reopened)
     assert_reads_everywhere(out, s.page_count)
+
+
+def test_image_watermark_is_drawn_on_the_page(
+    open_copy: Opener, fixture_pdf, tmp_path: Path
+) -> None:
+    """The picture itself is drawn: page 1 lists one more image, and its render changes in the
+    watermark's area. Without ``spec.image`` the action draws empty text and fails both checks."""
+    s = open_copy("text_multipage")
+
+    def images_on_page_one() -> int:
+        with s.lock:
+            return sum(1 for image in s.document.images() if 0 in image.pages)
+
+    before = images_on_page_one()
+    spec = Watermark(image=png_bytes(), image_path="logo.png", scale=0.5, opacity=1.0)
+    marks.watermark(s, AddWatermark(spec, (0,)))
+    assert images_on_page_one() == before + 1
+    out = s.save(tmp_path / "drawn.pdf")
+    original = fixture_pdf("text_multipage")
+    with_mark = _render_first_page(out)
+    without = _render_first_page(original)
+    assert with_mark.size == without.size
+    w, h = with_mark.size
+    centre = (int(w * 0.3), int(h * 0.3), int(w * 0.7), int(h * 0.7))
+    changed = ImageChops.difference(
+        without.crop(centre).convert("RGB"), with_mark.crop(centre).convert("RGB")
+    )
+    assert changed.getbbox() is not None
+
+
+def _render_first_page(path: Path) -> Image.Image:
+    pd = pdfium.PdfDocument(path)
+    try:
+        return pd[0].render(scale=1).to_pil().convert("RGB")
+    finally:
+        pd.close()
 
 
 def test_round_trip_background(open_copy: Opener, tmp_path: Path) -> None:

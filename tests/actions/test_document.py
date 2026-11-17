@@ -153,21 +153,39 @@ def test_set_outline_with_a_custom_label(open_copy: Opener) -> None:
     assert s.undo()
 
 
+def pikepdf_outline(pdf: pikepdf.Pdf) -> list[tuple[int, str]]:
+    """(level, title) of every bookmark, walked by hand through /First and /Next."""
+    out: list[tuple[int, str]] = []
+
+    def walk(node: pikepdf.Object, level: int) -> None:
+        child = node.get("/First")
+        while child is not None:
+            out.append((level, str(child.Title)))
+            walk(child, level + 1)
+            child = child.get("/Next")
+
+    walk(pdf.Root.Outlines, 1)
+    return out
+
+
 def test_set_outline_round_trip(open_copy: Opener, tmp_path: Path) -> None:
     s = open_copy("text_multipage")
+    last = Destination(s.page_count - 1)
     items = (
         OutlineItem("Start", dest=Destination(0)),
-        OutlineItem("End", dest=Destination(s.page_count - 1)),
+        OutlineItem("Appendix", dest=last, children=[OutlineItem("Glossary", dest=last)]),
     )
     document.set_outline(s, SetOutline(items))
     out = s.save(tmp_path / "outline.pdf")
     reopened = DocumentSession.open(out)
     try:
-        assert outline_titles(reopened) == ["Start", "End"]
+        with reopened.lock:
+            levels = [(level, item.title) for level, item in _walk(reopened.document.outline())]
+        assert levels == [(1, "Start"), (1, "Appendix"), (2, "Glossary")]
     finally:
         close(reopened)
-    with pikepdf.open(out) as pdf, pdf.open_outline() as outline:
-        assert [item.title for item in outline.root] == ["Start", "End"]
+    with pikepdf.open(out) as pdf:
+        assert pikepdf_outline(pdf) == [(1, "Start"), (1, "Appendix"), (2, "Glossary")]
     assert_reads_everywhere(out, s.page_count)
 
 

@@ -1482,7 +1482,12 @@ class MainWindow(QMainWindow):
         result = run_action(
             lambda: document_actions.flatten(view.session, FlattenAnnotations(refs)), self.notify
         )
-        return result.value if result else 0
+        if result is None:
+            return 0
+        if not result.executed:
+            # e.g. a comment with no /NM name, which the action can't address yet (issue #168)
+            self.notify("Couldn't flatten the selected comment.")
+        return result.value
 
     def flatten_all(self, confirm: bool = True) -> int:
         """Burn every visible comment into the pages (one undo step)."""
