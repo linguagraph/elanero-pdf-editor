@@ -33,6 +33,10 @@ WEB = (
     "web/*",
     ".github/workflows/web-*.yml",
 )
+# Files under web/ that the desktop code generates and a desktop test checks (for example the
+# shortcut table of make_shortcut_docs.py). A hand edit to one of them must run the desktop CI,
+# which is what would catch the drift.
+DESKTOP_GENERATED = ("web/src/generated/*",)
 # These can break the installer or the MSIX package without any test noticing, so changing them
 # also runs the install tests of both.
 PACKAGING = (
@@ -61,7 +65,9 @@ def classify(paths: Iterable[str]) -> dict[str, bool]:
     code = [
         path
         for path in changed
-        if not _matches(path, DOCS) and not _matches(path, WEB) and path not in listing
+        if not _matches(path, DOCS)
+        and (not _matches(path, WEB) or _matches(path, DESKTOP_GENERATED))
+        and path not in listing
     ]
     return {
         "app": bool(code or listing),
