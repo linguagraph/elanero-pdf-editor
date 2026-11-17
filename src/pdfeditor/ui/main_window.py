@@ -1485,7 +1485,7 @@ class MainWindow(QMainWindow):
         if result is None:
             return 0
         if not result.executed:
-            # e.g. a comment with no /NM name, which the action can't address yet (issue #168)
+            # the comment is no longer on the page (the action found none of the named ones)
             self.notify("Couldn't flatten the selected comment.")
         return result.value
 

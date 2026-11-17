@@ -443,8 +443,8 @@ def test_saved_unnamed_comments_stay_addressable(
     doc.save()
     doc.close()
 
-    # Names may change across a save and reopen (the object numbers can be renumbered), so
-    # each comment is found again by its contents, then addressed by the name read back.
+    # A full save gives the untouched comments a real /NM, so their names survive the reopen;
+    # each is still found by its contents, then addressed by the name read back.
     again = writable.open(path)
     page = again.page(0)
     names = [a.name for a in page.annotations()]

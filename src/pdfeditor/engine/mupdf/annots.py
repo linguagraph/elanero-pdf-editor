@@ -260,12 +260,22 @@ def find(page: MuPage, annot_id: int | None = None, name: str = "") -> pymupdf.A
 
 
 def resolve_name(page: MuPage, name: str) -> str:
-    """The name an annotation is known by now: ``name``, or the /NM a synthetic name was replaced
-    with when ``add`` renamed it this session (only while no annotation still has ``name``)."""
-    renamed = page._doc.renamed.get((page.index, name))
-    if renamed is None or any(a.info.get("id") == name for a in page.fz.annots()):
+    """The name an annotation is known by now.
+
+    A live annotation wins: a synthetic name whose object is still on the page without a /NM
+    is returned unchanged, even after a snapshot restore that predates a rename. Only when the
+    original is gone is the rename followed, and only to a /NM that is actually on the page.
+    """
+    if not is_synthetic_name(name):
         return name
-    return renamed
+    xref = int(name[len(SYNTHETIC_NAME_PREFIX) :])
+    live = xref in {entry[0] for entry in page.fz.annot_xrefs()}
+    if live and not page.fz.load_annot(xref).info.get("id"):
+        return name
+    renamed = page._doc.renamed.get(name)
+    if renamed is not None and any(a.info.get("id") == renamed for a in page.fz.annots()):
+        return renamed
+    return name
 
 
 def synthetic_name(xref: int) -> str:
@@ -387,7 +397,7 @@ def add(page: MuPage, model: AnnotationModel) -> AnnotationModel:
     name = name or f"pdfeditor-{uuid.uuid4().hex}"
     page._doc.fz.xref_set_key(annot.xref, "NM", pymupdf.get_pdf_str(name))
     if model.name and model.name != name:
-        page._doc.renamed[(page.index, model.name)] = name
+        page._doc.renamed[model.name] = name
     if model.is_callout:
         _write_callout(page._doc.fz, geo, annot.xref, model)
         annot = find(page, annot.xref)

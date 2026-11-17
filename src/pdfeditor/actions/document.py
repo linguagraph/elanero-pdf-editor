@@ -42,13 +42,10 @@ class FlattenAnnotations:
 
 
 def _resolve(doc: Document, refs: Sequence[AnnotRef]) -> dict[int, list[int]]:
-    """The engine ids of the named comments, by page. Unknown names are skipped; so are names
-    that are empty, since an unnamed comment can't be told apart from another unnamed one.
-    Stopgap until comments get names on load (issue #168): an unnamed comment is skipped, not
-    guessed at."""
+    """The engine ids of the named comments, by page. Unknown names are skipped."""
     by_page: dict[int, list[int]] = {}
     for ref in refs:
-        if not ref.name or not 0 <= ref.page < doc.page_count:
+        if not 0 <= ref.page < doc.page_count:
             continue
         for model in doc.page(ref.page).annotations():
             if model.name == ref.name:

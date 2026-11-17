@@ -33,6 +33,7 @@ from pdfeditor.engine.mupdf import sanitize as scrub
 from pdfeditor.engine.mupdf import structure as struct
 from pdfeditor.engine.mupdf.page import MuPage
 from pdfeditor.engine.mupdf.pagecopy import SharingIndex, ensure_page_unshared
+from pdfeditor.model.annotations import SYNTHETIC_NAME_PREFIX
 from pdfeditor.model.color import Color
 from pdfeditor.model.metadata import (
     DocumentInfo,
@@ -168,8 +169,9 @@ class MuDocument:
     def __init__(self, fz: pymupdf.Document, path: Path | None, password: str | None) -> None:
         self._fz = fz
         self._path = path
-        # (page index, synthetic name) -> the /NM it was replaced with (this session only)
-        self.renamed: dict[tuple[int, str], str] = {}
+        # synthetic name -> the /NM it was replaced with (this session; names are unique per
+        # document, so the page isn't part of the key)
+        self.renamed: dict[str, str] = {}
         self._password = password
         self._pages: dict[int, MuPage] = {}
         self._revisions: dict[int, int] = {}
@@ -572,10 +574,29 @@ class MuDocument:
         if options.incremental:
             self._save_incremental(target)
         else:
+            self._name_unnamed_annotations()
             self._save_full(target, options)
         self._path = target
         self._force_dirty = False
         return target
+
+    def _name_unnamed_annotations(self) -> None:
+        """Give every annotation without a /NM a unique name before a full save.
+
+        Object numbers can change in a full rewrite, so a synthetic name would not survive the
+        save; a real /NM does. The names are set in the open document, so they are in the file
+        and stay after the reload. Each synthetic name is recorded as renamed, so undo entries
+        made before the save still find their comments. This doesn't go through a Command: it
+        changes no visible content and isn't a user edit. Incremental saves don't call this
+        (object numbers don't change there), and snapshots (``to_bytes``) never name anything.
+        """
+        for index in range(self.page_count):
+            for annot in self._fz.load_page(index).annots():
+                if annot.info.get("id"):
+                    continue
+                name = f"pdfeditor-{uuid.uuid4().hex}"
+                self._fz.xref_set_key(annot.xref, "NM", pymupdf.get_pdf_str(name))
+                self.renamed[f"{SYNTHETIC_NAME_PREFIX}{annot.xref}"] = name
 
     def _save_incremental(self, target: Path) -> None:
         if self._path is None or target != self._path or self._backing_tmp is not None:

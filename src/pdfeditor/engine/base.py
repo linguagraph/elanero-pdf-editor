@@ -462,6 +462,11 @@ class Document(Protocol):
         """Save safely (temp file + verify + atomic replace). ``path=None`` saves in place.
 
         After a successful save the document is bound to the saved path.
+
+        A full save gives annotations without /NM a unique name, so every comment in the file is
+        addressable by its name (issue #168). The names are set in the open document too, and
+        earlier names still resolve to them. An incremental save adds no names, and ``to_bytes``
+        (used for undo snapshots) never names anything.
         """
         ...
 
