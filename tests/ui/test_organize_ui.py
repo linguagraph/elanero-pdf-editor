@@ -207,6 +207,23 @@ def test_extract_to_new_tab_and_files(window: MainWindow, copy_pdf, tmp_path: Pa
     assert [p.name for p in written] == [f"text_multipage_page{i}.pdf" for i in (1, 2, 3)]
 
 
+def test_extract_keeps_the_copy_when_the_delete_is_blocked(window: MainWindow, copy_pdf) -> None:
+    """A background task blocks the delete after extracting: the copy is still returned."""
+    view = window.open_path(copy_pdf("text_multipage"))
+    session = view.session
+    count = session.page_count
+    d = ExtractDialog(count, 0, [0], window)
+    d.range.custom.setChecked(True)
+    d.range.edit.setText("2-3")
+    d.delete_after.setChecked(True)
+    session.begin_task("OCR")
+    try:
+        (new_session,) = window.organize.extract_pages(accepted(d))
+    finally:
+        session.end_task("OCR")
+    assert new_session.page_count == 2 and session.page_count == count
+
+
 def test_replace_pages(window: MainWindow, copy_pdf) -> None:
     view = window.open_path(copy_pdf("text_multipage"))
     tab = window.current_tab()

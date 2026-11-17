@@ -85,6 +85,8 @@ def snapshot(session: DocumentSession, label: str, op: Callable[[Document], R]) 
         results.append(op(doc))
 
     session.execute(SnapshotCommand(label, wrapped, session.snapshots))
+    if not results:  # a task started between the check and the execute: nothing ran
+        raise Busy(session.busy)
     return results[-1]
 
 

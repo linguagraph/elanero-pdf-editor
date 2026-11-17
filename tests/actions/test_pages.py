@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import io
 import shutil
+import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -17,6 +18,7 @@ import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
+from pdfeditor.actions import REGISTRY, run
 from pdfeditor.actions import pages as page_actions
 from pdfeditor.actions.base import ActionResult, Busy, Refused, execute_all, snapshot
 from pdfeditor.actions.pages import (
@@ -202,8 +204,8 @@ def test_insert_file_pdf_all_pages_then_a_subset(open_copy: Opener, fixture_pdf)
     source = texts_of_bytes(data)
     result = page_actions.insert_file(s, InsertFile(data, "outline.pdf", at=1))
     assert result == ActionResult("Insert 6 Pages", 6)
-    # The engine places the copied pages in a different order than the source's (the desktop
-    # has always called insert_pages the same way), so compare the contents, not the order.
+    # MuDocument.page_count is stale inside insert_document's loop (engine bug, fixed separately);
+    # make this strict after that fix.
     assert sorted(texts(s)) == sorted([before[0], *source, *before[1:]])
     assert s.undo() and texts(s) == before
 
@@ -322,14 +324,89 @@ def test_set_labels_with_the_same_rules_is_not_executed(open_copy: Opener) -> No
 # -- the shared helpers and the busy rule -----------------------------------------------------
 
 
-def test_actions_refuse_while_a_task_runs(open_copy: Opener) -> None:
+def test_password_callback_runs_outside_the_engine_lock(open_copy: Opener, fixture_pdf) -> None:
+    """A modal password dialog must not stall background renders: the lock is free while it runs."""
+    s = open_copy("text_multipage")
+    data = fixture_pdf("encrypted").read_bytes()
+    held_by_other_thread: list[bool] = []
+
+    def ask(attempt: int) -> str | None:
+        def probe() -> None:
+            got = ENGINE_LOCK.acquire(blocking=False)
+            if got:
+                ENGINE_LOCK.release()
+            held_by_other_thread.append(not got)
+
+        worker = threading.Thread(target=probe)
+        worker.start()
+        worker.join()
+        return "user"
+
+    page_actions.insert_file(s, InsertFile(data, "encrypted.pdf", at=0), password_callback=ask)
+    assert held_by_other_thread == [False]  # another thread could take the lock
+    assert s.page_count > 0
+
+
+def test_password_callback_wrong_then_right(open_copy: Opener, fixture_pdf) -> None:
+    s = open_copy("text_multipage")
+    count = s.page_count
+    data = fixture_pdf("encrypted").read_bytes()
+    attempts: list[int] = []
+    answers = iter(["wrong", "user"])
+
+    def ask(attempt: int) -> str | None:
+        attempts.append(attempt)
+        return next(answers)
+
+    result = page_actions.insert_file(
+        s, InsertFile(data, "encrypted.pdf", at=0), password_callback=ask
+    )
+    assert result.value == 1 and s.page_count == count + 1
+    assert attempts == [1, 2]
+
+
+def test_password_callback_giving_up_raises(open_copy: Opener, fixture_pdf) -> None:
+    s = open_copy("text_multipage")
+    count = s.page_count
+    data = fixture_pdf("encrypted").read_bytes()
+    with pytest.raises(PasswordRequired):
+        page_actions.insert_file(
+            s, InsertFile(data, "encrypted.pdf", at=0), password_callback=lambda attempt: None
+        )
+    assert s.page_count == count
+
+
+# One minimal, valid argument set per registered action: the Busy check runs before any of them
+# touches the document, so the values only have to type-check.
+BUSY_CASES: dict[str, object] = {
+    "pages.delete": DeletePages((0,)),
+    "pages.move": MovePages((0,), before=2),
+    "pages.duplicate": DuplicatePages((0,)),
+    "pages.rotate": RotatePages((0,), 90),
+    "pages.insert_blank": InsertBlankPage(at=0),
+    "pages.insert_file": InsertFile(b"", "scan.png", at=0),
+    "pages.insert_image": InsertImage(at=0, data=b""),
+    "pages.replace": ReplacePages((0,), b"", (0,)),
+    "pages.crop_margins": CropMargins((0,), 1, 1, 1, 1),
+    "pages.crop_rect": CropRect((0,), Rect(0, 0, 10, 10)),
+    "pages.trim_white_margins": TrimWhiteMargins((0,)),
+    "pages.set_labels": SetPageLabels(()),
+}
+
+
+def test_every_registered_action_has_a_busy_case() -> None:
+    assert set(BUSY_CASES) == set(REGISTRY)
+
+
+@pytest.mark.parametrize("name", sorted(BUSY_CASES))
+def test_actions_refuse_while_a_task_runs(open_copy: Opener, name: str) -> None:
     s = open_copy("text_multipage")
     events: list[EventKind] = []
     unsubscribe = s.subscribe(lambda event: events.append(event.kind))
     s.begin_task("OCR")
     try:
         with pytest.raises(Busy, match="OCR"):
-            page_actions.rotate(s, RotatePages((0,), 90))
+            run(s, name, BUSY_CASES[name])
     finally:
         s.end_task("OCR")
         unsubscribe()

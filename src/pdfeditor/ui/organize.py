@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -326,7 +327,10 @@ class OrganizeController:
             new = self.w.add_document(part, f"{Path(session.display_name).stem} (extract).pdf")
             results = [new.session]
         if dialog.delete_after.isChecked():
-            page_actions.delete(session, DeletePages(tuple(pages)))
+            # A busy document keeps its pages; the BLOCKED event already told the user, and the
+            # extracted copy above is still returned.
+            with contextlib.suppress(Busy):
+                page_actions.delete(session, DeletePages(tuple(pages)))
         return results
 
     def replace_pages(self, path: Path | None = None, source_range: str = "") -> None:

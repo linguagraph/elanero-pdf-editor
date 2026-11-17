@@ -19,7 +19,7 @@ from pdfeditor.actions.base import (
 )
 from pdfeditor.core.commands import SetPageLabelsCommand
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document, EngineError, PasswordCallback
+from pdfeditor.engine.base import Document, EngineError, PasswordCallback, PasswordRequired
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.pages import PageLabelRule
 from pdfeditor.services.assembly import IMAGE_SUFFIXES
@@ -186,6 +186,39 @@ def insert_blank(session: DocumentSession, args: InsertBlankPage) -> ActionResul
     return ActionResult(label, None)
 
 
+# Same limit as MAX_PASSWORD_ATTEMPTS in engine/mupdf/document.py. Not imported: that module
+# imports PyMuPDF, which the actions layer must never load.
+_PASSWORD_ATTEMPTS = 5
+
+
+def _open_source(
+    session: DocumentSession,
+    data: bytes,
+    password: str | None,
+    password_callback: PasswordCallback | None,
+) -> Document:
+    """Open a source document. The callback (a modal dialog on the desktop) runs outside the
+    engine lock, so background renders and jobs keep going while it is open."""
+    if password_callback is None:
+        with session.lock:
+            return session.engine.open(data, password)
+    try:
+        with session.lock:
+            return session.engine.open(data, None)
+    except PasswordRequired:
+        pass
+    for attempt in range(1, _PASSWORD_ATTEMPTS + 1):
+        candidate = password_callback(attempt)
+        if candidate is None:
+            break
+        try:
+            with session.lock:
+                return session.engine.open(data, candidate)
+        except PasswordRequired:
+            continue
+    raise PasswordRequired("document is password protected")
+
+
 @action("pages.insert_file", InsertFile, requires=("page_ops",))
 def insert_file(
     session: DocumentSession,
@@ -203,9 +236,7 @@ def insert_file(
         label = "Insert Image"
         snapshot(session, label, lambda doc: doc.insert_image_page(args.at, args.data))
         return ActionResult(label, 1)
-    password = password_callback if password_callback is not None else args.password
-    with session.lock:
-        source = session.engine.open(args.data, password)
+    source = _open_source(session, args.data, args.password, password_callback)
     try:
         with session.lock:
             chosen = list(range(source.page_count)) if args.pages is None else list(args.pages)
@@ -235,9 +266,7 @@ def replace(
     ensure_idle(session)
     chosen = sorted(set(args.pages))
     source_pages = list(args.source_pages)
-    password = password_callback if password_callback is not None else args.password
-    with session.lock:
-        source = session.engine.open(args.data, password)
+    source = _open_source(session, args.data, args.password, password_callback)
     try:
 
         def op(doc: Document) -> None:
