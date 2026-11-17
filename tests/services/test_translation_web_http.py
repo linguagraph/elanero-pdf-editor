@@ -75,12 +75,43 @@ def test_user_agent_is_not_set_but_other_headers_are(monkeypatch: pytest.MonkeyP
     assert names == ["Accept", "Content-Type"]
 
 
-def test_a_post_body_is_sent_as_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_post_body_is_sent_as_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pyodide passes no bytes to XHR: the UTF-8 JSON body goes as a str, decoded losslessly."""
     xhr = FakeXHR()
     install_js(monkeypatch, xhr)
-    body = '{"q": "Grüße"}'.encode()
-    make_xhr_opener()(Request("https://libretranslate.com/translate", "POST", {}, body), 5.0)
-    assert ("send", body) in xhr.calls
+    text = '{"q": "Grüße"}'
+    make_xhr_opener()(
+        Request("https://libretranslate.com/translate", "POST", {}, text.encode()), 5.0
+    )
+    sent = [args for name, args in xhr.calls if name == "send"]
+    assert sent == [text]
+    assert isinstance(sent[0], str)
+
+
+def test_a_non_utf8_body_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never happens for our clients (all bodies are UTF-8 JSON); the test documents it."""
+    install_js(monkeypatch, FakeXHR())
+    bad = Request("https://libretranslate.com/translate", "POST", {}, b"\xff\xfe")
+    with pytest.raises(UnicodeDecodeError):
+        make_xhr_opener()(bad, 5.0)
+
+
+def test_an_open_exception_is_a_network_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    xhr = FakeXHR()
+
+    def refuse(method: str, url: str, asynchronous: bool) -> None:
+        raise RuntimeError("invalid URL")
+
+    xhr.open = refuse  # type: ignore[method-assign]
+    install_js(monkeypatch, xhr)
+    with pytest.raises(OSError, match="network request failed"):
+        make_xhr_opener()(Request("https://libretranslate.com/translate", "GET", {}, None), 5.0)
+
+
+def test_a_missing_response_text_is_an_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_js(monkeypatch, FakeXHR(status=204, text=None))  # type: ignore[arg-type]
+    reply = make_xhr_opener()(Request("https://libretranslate.com/translate", "GET", {}, None), 5.0)
+    assert reply == Reply(204, b"")
 
 
 def test_status_zero_is_a_network_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,12 +126,21 @@ def test_a_send_exception_is_a_network_failure(monkeypatch: pytest.MonkeyPatch) 
         make_xhr_opener()(Request("https://libretranslate.com/translate", "GET", {}, None), 5.0)
 
 
+def test_web_origins_are_the_three_from_w03() -> None:
+    """Hard-coded on purpose: the set must match docs/web/spikes/W0.3-results.md (its CSP
+    connect-src line lists the same three). Changing one means changing the spike too."""
+    assert {
+        "https://api.mymemory.translated.net",
+        "https://api.cognitive.microsofttranslator.com",
+        "https://libretranslate.com",
+    } == WEB_ENDPOINT_ORIGINS
+
+
 def test_web_origins_cover_each_default_endpoint() -> None:
     def origin(url: str) -> str:
         parts = urllib.parse.urlsplit(url)
         return f"{parts.scheme}://{parts.netloc}"
 
-    # The three origins fixed by W0.3.
     assert {
         "https://api.mymemory.translated.net",
         "https://api.cognitive.microsofttranslator.com",

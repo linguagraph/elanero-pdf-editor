@@ -15,7 +15,8 @@ log = logging.getLogger(__name__)
 
 # The origins the browser may call directly (W0.3: CORS allowed for each). The clients'
 # default hosts must be in this set; the tests check that. LibreTranslate has no default host
-# in code (the user names the server), so this list is the source of truth for it.
+# in code (the user names the server), so this list is the source of truth for it. The web
+# app's Content-Security-Policy connect-src must match this set (W3 checks it).
 WEB_ENDPOINT_ORIGINS: frozenset[str] = frozenset(
     {
         "https://api.mymemory.translated.net",
@@ -33,20 +34,24 @@ def make_xhr_opener() -> Opener:
     from js import XMLHttpRequest  # the browser's API; only exists inside Pyodide
 
     def opener(request: Request, timeout: float) -> Reply:
+        # Pyodide does not convert bytes to a JS value; XHR needs a string here. Every body we
+        # send is JSON in UTF-8, so the decode is lossless. A non-UTF-8 body raises, by design.
+        text_body = None if request.data is None else request.data.decode("utf-8")
         xhr = XMLHttpRequest.new()
         try:
             xhr.open(request.method, request.url, False)
-            # Synchronous XHR in a worker accepts a timeout; a JS exception here is a failure
-            # to reach the service, so it maps to OSError like the rest of the network calls.
+            # The timeout works because this runs in a worker: synchronous XHR throws when a
+            # timeout is set on the main thread, so there every call would fail with OSError.
+            # A JS exception here is a failure to reach the service, so it maps to OSError.
             xhr.timeout = int(timeout * 1000)
             xhr.withCredentials = False
             for name, value in request.headers.items():
                 if name.lower() not in _SKIPPED_HEADERS:
                     xhr.setRequestHeader(name, value)
-            if request.data is None:
+            if text_body is None:
                 xhr.send()
             else:
-                xhr.send(request.data)
+                xhr.send(text_body)
         except Exception as exc:
             log.info("web translation request failed: %s", type(exc).__name__)
             raise OSError("network request failed") from exc
