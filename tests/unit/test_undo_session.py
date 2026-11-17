@@ -309,3 +309,18 @@ def test_required_full_save_overrides_incremental(fixture_pdf, tmp_path: Path) -
     assert not path.read_bytes().startswith(before)  # rewritten, not an appended revision
     assert session.require_full_save is False
     session.close()
+
+
+def test_execute_reports_whether_the_command_was_pushed(session: DocumentSession) -> None:
+    """True for a new step and for a merge into the previous one; False while a task runs."""
+    box = [0]
+    assert session.execute(Counter(box, 1)) is True
+    assert session.execute(Counter(box, 1, mergeable=True)) is True
+    assert session.execute(Counter(box, 1, mergeable=True)) is True  # merged into the last one
+    assert len(session.undo_stack) == 2
+    session.begin_task("OCR")
+    try:
+        assert session.execute(Counter(box, 1)) is False
+    finally:
+        session.end_task("OCR")
+    assert len(session.undo_stack) == 2

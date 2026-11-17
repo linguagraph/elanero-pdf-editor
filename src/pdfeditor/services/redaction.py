@@ -99,6 +99,16 @@ def mark_areas(mark: AnnotationModel) -> list[Rect]:
     return [q.rect for q in mark.quads] if mark.quads else [mark.rect]
 
 
+def redaction_marks(doc: Document) -> list[AnnotationModel]:
+    """Every redaction mark in the document, page by page (the caller holds the engine lock)."""
+    return [
+        a
+        for i in range(doc.page_count)
+        for a in doc.page(i).annotations()
+        if a.type is AnnotationType.REDACT
+    ]
+
+
 @dataclass
 class VerificationReport:
     areas: int = 0
