@@ -320,7 +320,8 @@ class MuPage:
         return content.image_data(self, key)
 
     def replace_image(self, key: str, data: bytes) -> None:
-        self._doc.unshare_page(self._index)
+        # No unshare_page: the swap is global by design, and content.replace_image already
+        # calls structure_changed(), which bumps the edit counter and drops the page caches.
         content.replace_image(self, key, data)
 
     def font_program(self, name: str) -> bytes | None:
