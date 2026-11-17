@@ -11,7 +11,7 @@ import pytest
 from pdfeditor.engine.base import Engine, SaveOptions
 from pdfeditor.model.annotations import AnnotationType
 from pdfeditor.model.color import Color
-from pdfeditor.model.geometry import Rect
+from pdfeditor.model.geometry import Quad, Rect
 from pdfeditor.model.objects import ObjectType
 from pdfeditor.model.redaction import ImageRedaction, RedactOptions, SanitizeOptions
 from pdfeditor.services.redaction import (
@@ -21,6 +21,7 @@ from pdfeditor.services.redaction import (
     mark_areas,
     mark_for_area,
     mark_for_hit,
+    redaction_marks,
     verify,
 )
 
@@ -319,4 +320,40 @@ def test_sanitize_without_layers_or_off_page_text_reports_nothing(
     doc, _ = _open(redactor, fixture_pdf, tmp_path, "sensitive")
     report = doc.sanitize(SanitizeOptions())
     assert not any("hidden layer" in r or "off-page" in r for r in report)
+    doc.close()
+
+
+def test_verify_checks_each_line_of_a_multi_line_mark(
+    redactor: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    """Text between the lines of a mark isn't under it (issue #165): only the line areas count."""
+    doc, _ = _open(redactor, fixture_pdf, tmp_path)
+    lines = _Cache(doc).get(0)
+    starts = [0, 23, 55]  # "Customer", "Email", "Phone" lines of the sensitive fixture
+    line_rects = [lines.rects(*lines.line_range(s))[0] for s in starts]
+    # Mark the first and third lines only; "Email: ..." sits between them.
+    mark = mark_for_area(0, line_rects[0].union(line_rects[2]))
+    mark.quads = (Quad.from_rect(line_rects[0]), Quad.from_rect(line_rects[2]))
+    doc.page(0).add_annotation(mark)
+    (read_back,) = redaction_marks(doc)  # read back from the engine, as the app does
+    assert len(read_back.quads) == 2
+    areas = {0: mark_areas(read_back)}
+    assert doc.page(0).apply_redactions(None, RedactOptions()) == 1
+    text = _text(doc)
+    assert "Customer" not in text and "Phone" not in text
+    assert "jane.example@example.com" in text  # the line between the marked lines survives
+    assert verify(doc, areas).ok  # so it isn't a leak
+    # The same lines as one box would cover that surviving email line: the fallback reports it.
+    assert not verify(doc, {0: [read_back.rect]}).ok
+    doc.close()
+
+    # Text under a line of a mark that isn't applied yet is still a leak.
+    (tmp_path / "unapplied").mkdir()
+    doc, _ = _open(redactor, fixture_pdf, tmp_path / "unapplied")
+    under = mark_for_area(0, line_rects[0])
+    under.quads = (Quad.from_rect(line_rects[0]),)
+    doc.page(0).add_annotation(under)
+    (read_back,) = redaction_marks(doc)
+    report = verify(doc, {0: mark_areas(read_back)})
+    assert not report.ok and "Customer" in report.leaks[0]
     doc.close()
