@@ -537,7 +537,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W1.4** Rendering and viewport design
 - [x] **W1.5** Editing tools design
 - [x] **W1.6** UI/UX design
-- [ ] **W1.7** Test strategy
+- [x] **W1.7** Test strategy
 
 **W2 Shared code made web-ready, #135**
 
@@ -547,7 +547,9 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W2.4** Injectable HTTP transport for translation
 - [ ] **W2.5** `core/jobs.py`: synchronous runner
 - [ ] **W2.6** Web package build
-- [ ] **W2.7** CI job running engine, core, actions and services tests under Pyodide
+- [ ] **W2.7a** Pyodide test runner and `web-pytest` CI job
+- [ ] **W2.7b** Host checks for Pyodide runs (C1), priority modules
+- [ ] **W2.7c** Host checks: remaining host-only modules
 
 **W3 Engine worker and RPC, #136**
 
