@@ -9,9 +9,12 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-import yaml
+import pytest
 
 from pdfeditor import DOCS_URL
+
+# PyYAML is not in the Pyodide package set: the web run skips these checks.
+yaml = pytest.importorskip("yaml")
 
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "guide"

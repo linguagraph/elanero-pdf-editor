@@ -106,6 +106,7 @@ def test_module_functions_keep_the_monkeypatch_points(monkeypatch: pytest.Monkey
     assert secrets.encrypt(b"k") == b"sealed:k"
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_module_imports_without_ctypes_windll() -> None:
     """Importing the module must not touch ctypes.windll: the web has none. Checked in a fresh
     interpreter that pretends to be Windows and has no windll, so the import can't be cached."""

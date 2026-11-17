@@ -1,9 +1,8 @@
-// W0.1 spike (spike-only, never imported by the app).
+// W0.1 spike (spike-only, never imported by the app). Moved here from web/spike in W2.7a; its
+// inputs and outputs stay under web/spike (dist/, out/, versions.json, node_modules/), so the
+// spike's audit, perf and smoke tooling is unchanged.
 //
 //   node web/test/pyodide/run_engine_tests.mjs prepare --wheel <pymupdf-wasm.whl>
-//
-// Moved here from web/spike in W2.7a. The spike's inputs and outputs stay under web/spike (dist/,
-// out/, versions.json, node_modules/), so the spike's audit, perf and smoke tooling is unchanged.
 //       Stages what both test runs need under web/spike/dist/: the PyMuPDF wheel (dist/packages),
 //       the Pyodide package closure (the only network use in the spike; each file is checked against the
 //       sha256 in pyodide-lock.json), the generated fixture the browser smoke test opens, and the

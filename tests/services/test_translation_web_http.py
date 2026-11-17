@@ -153,6 +153,7 @@ def test_web_origins_cover_each_default_endpoint() -> None:
     assert "https://libretranslate.com" in WEB_ENDPOINT_ORIGINS
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_web_http_imports_on_the_desktop_without_js() -> None:
     result = subprocess.run(
         [sys.executable, "-c", "import pdfeditor.services.translation.web_http"],

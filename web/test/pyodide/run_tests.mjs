@@ -31,10 +31,9 @@ const PACKAGES = path.join(DIST, "packages");
 const OUT = path.join(HERE, "out");
 const VERSIONS = JSON.parse(fs.readFileSync(path.join(SPIKE, "versions.json"), "utf8"));
 const CDN = `https://cdn.jsdelivr.net/pyodide/v${VERSIONS.pyodide}/full/`;
-// Added to versions.json's packageRoots for this run only: the spike does not import these.
-// hypothesis (tests/unit) and PyYAML (tests/unit/test_user_guide.py) are imported at module level.
-const EXTRA_PACKAGE_ROOTS = ["hypothesis", "pyyaml"];
-const PACKAGE_ROOTS = [...VERSIONS.packageRoots, ...EXTRA_PACKAGE_ROOTS];
+// The same roots as the spike. hypothesis and PyYAML are not in them: the modules that import them
+// are desktop-only or skip without yaml (tests/unit/test_user_guide.py), so the web run never does.
+const PACKAGE_ROOTS = VERSIONS.packageRoots;
 const MARK_EXPRESSION = "not desktop_only and not slow and not network";
 const WEB_ZIP_IN_PYODIDE = "/home/pyodide/pdfeditor-web.zip";
 const WEB_ROOT = "/home/pyodide";

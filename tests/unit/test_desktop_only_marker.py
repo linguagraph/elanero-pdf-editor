@@ -38,19 +38,29 @@ def has_marker(tree: ast.Module) -> bool:
 
 
 def needs_qt(tree: ast.Module) -> bool:
-    """True when the module imports Qt (any alias) or takes the qtbot or qapp fixture."""
+    """True when the module imports Qt (any alias), imports ``pdfeditor.ui`` (which imports Qt),
+    or takes the qtbot or qapp fixture."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            if any(alias.name.split(".")[0] in QT_TOP_LEVEL for alias in node.names):
+            if any(_needs_qt_name(alias.name) for alias in node.names):
                 return True
         elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and node.module and node.module.split(".")[0] in QT_TOP_LEVEL:
+            if node.level == 0 and node.module and _needs_qt_name(node.module):
                 return True
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             args = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
             if any(arg.arg in QT_FIXTURES for arg in args):
                 return True
     return False
+
+
+def _needs_qt_name(name: str) -> bool:
+    """A Qt package, or the ``pdfeditor.ui`` layer, which is Qt-only."""
+    return (
+        name.split(".")[0] in QT_TOP_LEVEL
+        or name == "pdfeditor.ui"
+        or name.startswith("pdfeditor.ui.")
+    )
 
 
 def check_tree(root: Path, allow: Mapping[str, str] = ALLOW) -> list[str]:
@@ -69,7 +79,9 @@ def check_tree(root: Path, allow: Mapping[str, str] = ALLOW) -> list[str]:
         if any(rel.startswith(d + "/") for d in DESKTOP_DIRS) and not marked:
             problems.append(f"{rel}: under a desktop directory but not marked {MARKER}")
         if needs_qt(tree) and not marked and rel not in allow:
-            problems.append(f"{rel}: imports Qt or uses qtbot/qapp but is not marked {MARKER}")
+            problems.append(
+                f"{rel}: imports Qt or pdfeditor.ui, or uses qtbot/qapp, but is not marked {MARKER}"
+            )
     return problems
 
 
@@ -90,7 +102,8 @@ def test_checker_reports_unmarked_qt_module(tmp_path: Path) -> None:
     probe.write_text("import PySide6\n\ndef test_x() -> None:\n    pass\n", encoding="utf-8")
     problems = check_tree(tmp_path)
     assert problems == [
-        "tests/unit/test_probe_qt.py: imports Qt or uses qtbot/qapp but is not marked desktop_only"
+        "tests/unit/test_probe_qt.py: imports Qt or pdfeditor.ui, or uses qtbot/qapp, "
+        "but is not marked desktop_only"
     ]
 
 
@@ -107,8 +120,8 @@ def test_checker_accepts_marked_qt_module_and_flags_fixture_use(tmp_path: Path) 
     fixture_user = tmp_path / "tests" / "unit" / "test_probe_fixture.py"
     fixture_user.write_text("def test_y(qtbot) -> None:\n    pass\n", encoding="utf-8")
     assert check_tree(tmp_path) == [
-        "tests/unit/test_probe_fixture.py: imports Qt or uses qtbot/qapp but is not marked "
-        "desktop_only"
+        "tests/unit/test_probe_fixture.py: imports Qt or pdfeditor.ui, or uses qtbot/qapp, "
+        "but is not marked desktop_only"
     ]
 
 
@@ -120,3 +133,22 @@ def test_checker_flags_unmarked_desktop_directory(tmp_path: Path, directory: str
     assert check_tree(tmp_path) == [
         f"{directory}/test_probe_plain.py: under a desktop directory but not marked desktop_only"
     ]
+
+
+def test_checker_flags_unmarked_pdfeditor_ui_import(tmp_path: Path) -> None:
+    """Negative control: importing the Qt-only ``pdfeditor.ui`` layer needs the marker too."""
+    probe = tmp_path / "tests" / "unit" / "test_probe_ui.py"
+    probe.parent.mkdir(parents=True)
+    probe.write_text("from pdfeditor.ui.settings import X\n", encoding="utf-8")
+    assert check_tree(tmp_path) == [
+        "tests/unit/test_probe_ui.py: imports Qt or pdfeditor.ui, or uses qtbot/qapp, but is not "
+        "marked desktop_only"
+    ]
+
+
+def test_checker_ignores_non_ui_pdfeditor_imports(tmp_path: Path) -> None:
+    """Positive control: a pdfeditor import outside ``pdfeditor.ui`` is web-safe, not flagged."""
+    module = tmp_path / "tests" / "unit" / "test_probe_engine.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("from pdfeditor.engine.registry import get_engine\n", encoding="utf-8")
+    assert check_tree(tmp_path) == []
