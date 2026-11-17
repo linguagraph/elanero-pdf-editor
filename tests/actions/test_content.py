@@ -279,6 +279,17 @@ def test_delete_nothing_is_not_executed(open_copy: Opener) -> None:
     assert not s.undo_stack.can_undo
 
 
+def test_delete_counts_a_key_named_twice_once(open_copy: Opener) -> None:
+    s = open_copy("mixed_content")
+    heading = refs(s, 0, ObjectType.TEXT)[0]
+    before = snapshot_of(s)
+    result = content.delete(s, DeleteObjects((heading, heading)))
+    assert result.label == "Delete Object" and result.value == 1
+    assert len(objects(s)) == len(before) - 1
+    assert s.undo()
+    assert snapshot_of(s) == before
+
+
 def test_replace_image_and_undo(open_copy: Opener) -> None:
     s = open_copy("mixed_content")
     before = snapshot_of(s)
@@ -292,14 +303,74 @@ def test_replace_image_and_undo(open_copy: Opener) -> None:
 # -- stale refs and refusals ---------------------------------------------------------------
 
 
-def test_ref_picked_before_another_edit_is_stale(open_copy: Opener) -> None:
+def act_on_one_ref(name: str, s: DocumentSession, ref: ObjectRef) -> object:
+    """Run the named ref-taking action on one object."""
+    if name == "transform":
+        return content.transform(s, TransformObjects((ref,), Matrix.translate(0, 5)))
+    if name == "replace_text":
+        return content.replace_text(s, ReplaceText(ref, "Stale edit"))
+    if name == "delete":
+        return content.delete(s, DeleteObjects((ref,)))
+    if name == "replace_image":
+        return content.replace_image(s, ReplaceImage(ref, png((0, 200, 0))))
+    raise AssertionError(name)
+
+
+# (action, the object type its ref points at)
+REF_ACTIONS = [
+    ("transform", ObjectType.TEXT),
+    ("replace_text", ObjectType.TEXT),
+    ("delete", ObjectType.TEXT),
+    ("replace_image", ObjectType.IMAGE),
+]
+
+
+@pytest.mark.parametrize(("name", "kind"), REF_ACTIONS)
+def test_ref_picked_before_another_edit_is_stale(
+    open_copy: Opener, name: str, kind: ObjectType
+) -> None:
     s = open_copy("mixed_content")
-    old = refs(s, 0, ObjectType.PATH)
+    old = refs(s, 0, kind)[0]
     content.add_shape(s, AddShape(0, ShapeSpec(ShapeKind.LINE, start=Point(1, 1), end=Point(9, 9))))
+    before = snapshot_of(s)
     with pytest.raises(StaleObject, match="Page 1 changed after the object was selected"):
-        content.delete(s, DeleteObjects(old))
-    # Only the shape is on the undo stack: the refused delete left nothing behind.
+        act_on_one_ref(name, s, old)
+    assert snapshot_of(s) == before
+    # Only the shape is on the undo stack: the refused edit left nothing behind.
     assert s.undo()
+    assert not s.undo_stack.can_undo
+
+
+@pytest.mark.parametrize(("name", "kind"), REF_ACTIONS)
+def test_ref_to_a_deleted_page_is_stale(open_copy: Opener, name: str, kind: ObjectType) -> None:
+    s = open_copy("mixed_content")
+    with s.lock:
+        revision = s.document.page(0).revision
+    gone = ObjectRef(99, "text:0", revision)  # no such page
+    with pytest.raises(StaleObject):
+        act_on_one_ref(name, s, gone)
+    assert not s.undo_stack.can_undo
+
+
+@pytest.mark.parametrize(
+    "run_creation",
+    [
+        lambda s: content.add_text(s, AddText(99, Rect(0, 0, 50, 20), "Text", TextStyle())),
+        lambda s: content.add_image(s, AddImage(99, Rect(0, 0, 50, 20), png((0, 0, 0)))),
+        lambda s: content.add_shape(
+            s, AddShape(99, ShapeSpec(ShapeKind.RECTANGLE, Rect(0, 0, 50, 20)))
+        ),
+    ],
+    ids=["add_text", "add_image", "add_shape"],
+)
+def test_creation_on_a_missing_page_is_refused(open_copy: Opener, run_creation) -> None:
+    s = open_copy("mixed_content")
+    with s.lock:
+        before = s.document.page(0).revision
+    with pytest.raises(Refused, match="Page 100 doesn't exist"):
+        run_creation(s)
+    with s.lock:
+        assert s.document.page(0).revision == before
     assert not s.undo_stack.can_undo
 
 
@@ -389,6 +460,18 @@ def test_round_trip_add_shape(open_copy: Opener, tmp_path: Path) -> None:
     assert r > 200 and g < 80 and b < 80
     with reopened(out) as doc:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.PATH) == 1
+
+
+def test_round_trip_replace_image(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("mixed_content")
+    (image,) = refs(s, 0, ObjectType.IMAGE)  # its bbox is (420, 80, 540, 180)
+    content.replace_image(s, ReplaceImage(image, png((0, 200, 0))))
+    out = s.save(tmp_path / "replaced_image.pdf")
+    assert_opens_everywhere(out)
+    r, g, b = pdfium_pixel(out, 480, 130)
+    assert g > 150 and r < 80 and b < 80
+    with reopened(out) as doc:
+        assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.IMAGE) == 1
 
 
 def test_round_trip_delete(open_copy: Opener, tmp_path: Path) -> None:

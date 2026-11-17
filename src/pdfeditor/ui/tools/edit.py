@@ -12,7 +12,7 @@ from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView
 
 from pdfeditor.actions import content
-from pdfeditor.actions.base import ActionResult, Busy, StaleObject
+from pdfeditor.actions.base import ActionError, ActionResult, Busy
 from pdfeditor.actions.content import (
     AddImage,
     AddShape,
@@ -58,7 +58,7 @@ def run_edit(view: DocumentView, act: Callable[[], ActionResult[Any]]) -> bool:
         result = act()
     except Busy:
         return False  # the BLOCKED event has already told the user
-    except (UnsupportedFeature, EngineError, StaleObject) as exc:
+    except (UnsupportedFeature, EngineError, ActionError) as exc:
         error(str(exc))
         return False
     choice = result.value

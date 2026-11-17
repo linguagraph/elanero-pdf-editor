@@ -20,7 +20,7 @@ from pdfeditor.actions.base import (
     snapshot,
 )
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document
+from pdfeditor.engine.base import Document, EngineError
 from pdfeditor.model.geometry import Matrix, Rect
 from pdfeditor.model.objects import (
     FontChoice,
@@ -91,10 +91,25 @@ def _stale_message(page: int) -> str:
 
 
 def _check_fresh(session: DocumentSession, refs: Sequence[ObjectRef]) -> None:
-    """Raise StaleObject when a page changed since its objects were picked. Call under the lock."""
+    """Raise StaleObject when a page changed since its objects were picked. Call under the lock.
+
+    A page that no longer exists (deleted since the ref was made) is stale too.
+    """
     for ref in refs:
-        if session.document.page(ref.page).revision != ref.revision:
+        if not 0 <= ref.page < session.document.page_count:
             raise StaleObject(_stale_message(ref.page))
+        try:
+            revision = session.document.page(ref.page).revision
+        except (IndexError, EngineError):
+            raise StaleObject(_stale_message(ref.page)) from None
+        if revision != ref.revision:
+            raise StaleObject(_stale_message(ref.page))
+
+
+def _check_page(session: DocumentSession, page: int) -> None:
+    """Refuse a creation on a page that doesn't exist. Call under the lock."""
+    if not 0 <= page < session.document.page_count:
+        raise Refused(f"Page {page + 1} doesn't exist.")
 
 
 _SHAPE_LABELS = {
@@ -118,14 +133,15 @@ def transform(session: DocumentSession, args: TransformObjects) -> ActionResult[
         raise Refused("Objects on different pages can't be moved together.")
     (page,) = pages
     keys = [ref.key for ref in args.objects]
+    # One lock across the check and the edit, so nothing can change the page in between.
     with session.lock:
         _check_fresh(session, args.objects)
         types = {obj.key: obj.type for obj in session.document.page(page).content_objects()}
-    if any(key not in types for key in keys):
-        raise StaleObject(_stale_message(page))
-    what = "Text" if all(types[key] is ObjectType.TEXT for key in keys) else "Object"
-    label = f"{verb} {what}"
-    snapshot(session, label, lambda doc: doc.page(page).transform_objects(keys, args.matrix))
+        if any(key not in types for key in keys):
+            raise StaleObject(_stale_message(page))
+        what = "Text" if all(types[key] is ObjectType.TEXT for key in keys) else "Object"
+        label = f"{verb} {what}"
+        snapshot(session, label, lambda doc: doc.page(page).transform_objects(keys, args.matrix))
     return ActionResult(label, None)
 
 
@@ -133,14 +149,15 @@ def transform(session: DocumentSession, args: TransformObjects) -> ActionResult[
 def replace_text(session: DocumentSession, args: ReplaceText) -> ActionResult[FontChoice | None]:
     ensure_idle(session)
     ref = args.object
+    label = "Edit Text"
+    # One lock across the check and the edit, so nothing can change the page in between.
     with session.lock:
         _check_fresh(session, [ref])
-    label = "Edit Text"
-    choice = snapshot(
-        session,
-        label,
-        lambda doc: doc.page(ref.page).replace_text(ref.key, args.text, args.style),
-    )
+        choice = snapshot(
+            session,
+            label,
+            lambda doc: doc.page(ref.page).replace_text(ref.key, args.text, args.style),
+        )
     return ActionResult(label, choice)
 
 
@@ -148,6 +165,8 @@ def replace_text(session: DocumentSession, args: ReplaceText) -> ActionResult[Fo
 def add_text(session: DocumentSession, args: AddText) -> ActionResult[FontChoice | None]:
     ensure_idle(session)
     label = "Add Text"
+    with session.lock:
+        _check_page(session, args.page)
     if not args.text.strip():
         return ActionResult(label, None, executed=False)
     choice = snapshot(
@@ -162,6 +181,8 @@ def add_text(session: DocumentSession, args: AddText) -> ActionResult[FontChoice
 def add_image(session: DocumentSession, args: AddImage) -> ActionResult[None]:
     ensure_idle(session)
     label = "Add Image"
+    with session.lock:
+        _check_page(session, args.page)
     snapshot(
         session,
         label,
@@ -174,29 +195,34 @@ def add_image(session: DocumentSession, args: AddImage) -> ActionResult[None]:
 def add_shape(session: DocumentSession, args: AddShape) -> ActionResult[None]:
     ensure_idle(session)
     label = _SHAPE_LABELS[args.spec.kind]
+    with session.lock:
+        _check_page(session, args.page)
     snapshot(session, label, lambda doc: doc.page(args.page).add_shape(args.spec))
     return ActionResult(label, None)
 
 
 @action("content.delete", DeleteObjects, requires=("content_edit",))
 def delete(session: DocumentSession, args: DeleteObjects) -> ActionResult[int]:
-    """Delete the objects, one undo step across pages; the value is how many were named."""
+    """Delete the objects, one undo step across pages; the value is how many distinct objects
+    were deleted (a key named twice is deleted once)."""
     ensure_idle(session)
-    count = len(args.objects)
-    label = "Delete Object" if count == 1 else f"Delete {count} Objects"
     if not args.objects:
-        return ActionResult(label, 0, executed=False)
-    with session.lock:
-        _check_fresh(session, args.objects)
+        return ActionResult("Delete 0 Objects", 0, executed=False)
     by_page: dict[int, list[str]] = {}
     for ref in args.objects:
         by_page.setdefault(ref.page, []).append(ref.key)
+    unique = {page: list(dict.fromkeys(keys)) for page, keys in by_page.items()}
+    count = sum(len(keys) for keys in unique.values())
+    label = "Delete Object" if count == 1 else f"Delete {count} Objects"
 
     def op(doc: Document) -> None:
-        for page, keys in by_page.items():
+        for page, keys in unique.items():
             doc.page(page).delete_objects(keys)
 
-    snapshot(session, label, op)
+    # One lock across the check and the edit, so nothing can change the page in between.
+    with session.lock:
+        _check_fresh(session, args.objects)
+        snapshot(session, label, op)
     return ActionResult(label, count)
 
 
@@ -204,8 +230,9 @@ def delete(session: DocumentSession, args: DeleteObjects) -> ActionResult[int]:
 def replace_image(session: DocumentSession, args: ReplaceImage) -> ActionResult[None]:
     ensure_idle(session)
     ref = args.object
+    label = "Replace Image"
+    # One lock across the check and the edit, so nothing can change the page in between.
     with session.lock:
         _check_fresh(session, [ref])
-    label = "Replace Image"
-    snapshot(session, label, lambda doc: doc.page(ref.page).replace_image(ref.key, args.data))
+        snapshot(session, label, lambda doc: doc.page(ref.page).replace_image(ref.key, args.data))
     return ActionResult(label, None)

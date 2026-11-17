@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Any, cast
 
 import pikepdf
 import pytest
@@ -9,6 +10,7 @@ from PIL import Image
 from PySide6.QtCore import QPoint, Qt
 
 from pdfeditor.actions import content
+from pdfeditor.actions.base import ActionResult, Busy, Refused
 from pdfeditor.actions.content import ReplaceText
 from pdfeditor.model.geometry import Point
 from pdfeditor.model.objects import ObjectType
@@ -183,6 +185,24 @@ def test_font_substitution_is_reported(
         ),
     )
     assert messages and "instead" in messages[0]
+
+
+def test_run_edit_reports_an_action_error_instead_of_raising(monkeypatch) -> None:
+    messages: list[str] = []
+    monkeypatch.setattr(edit, "error", messages.append)
+
+    def refused() -> ActionResult[None]:
+        raise Refused("Objects on different pages can't be moved together.")
+
+    def busy() -> ActionResult[None]:
+        raise Busy("OCR")
+
+    # run_edit never touches the view itself, only the action it is given.
+    assert edit.run_edit(cast(Any, None), refused) is False
+    assert messages == ["Objects on different pages can't be moved together."]
+    messages.clear()
+    assert edit.run_edit(cast(Any, None), busy) is False  # Busy is silent
+    assert messages == []
 
 
 def test_signed_document_warning(
