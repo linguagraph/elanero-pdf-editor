@@ -123,7 +123,8 @@ def section_m2_m3(report: dict, full_gzip: int | None) -> list[str]:
         cold = [cold_phases(r["cold"]) for r in group]
         warm = [cold_phases(r["warm"]) for r in group]
         lines += [
-            f"**{fixture}** ({len(group)} runs; cold = new browser context, warm = reload)",
+            f"**{fixture}** ({len(group)} runs; cold = first load in a fresh empty profile, "
+            "warm = reload in the same profile)",
             "",
             "| Phase (ms) | Cold: median (min-max) | Warm: median (min-max) |",
             "|---|---:|---:|",
