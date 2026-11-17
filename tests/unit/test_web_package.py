@@ -46,12 +46,15 @@ print("RESULT " + json.dumps(failures))
 """
 
 
-def _import_failures(modules: list[str], extra_path: tuple[str, ...] = ()) -> dict[str, str]:
-    """Import ``modules`` in one interpreter whose import hook refuses ``BLOCKED``. Returns the
+def _import_failures(
+    modules: list[str], extra_path: tuple[str, ...] = (), blocked: tuple[str, ...] = BLOCKED
+) -> dict[str, str]:
+    """Import ``modules`` in one interpreter whose import hook refuses ``blocked``. Returns the
     modules that failed, with the error. One interpreter keeps this to a single startup; a
     module that fails is dropped from ``sys.modules`` by Python, so it can't leak into later
     imports."""
-    code = GUARD.format(blocked=", ".join(repr(b) for b in BLOCKED)) + RUNNER.format(
+    # The trailing comma keeps a one-name list a tuple: ('PIL',), not the string ('PIL').
+    code = GUARD.format(blocked="".join(f"{b!r}, " for b in blocked)) + RUNNER.format(
         extra=list(extra_path), modules=modules
     )
     result = subprocess.run(
@@ -73,10 +76,32 @@ def _fake_package(root: Path) -> Path:
     return package
 
 
+# Decision 9 of docs/web/plan.md: what the engine's open path needs from the runtime. Each key is
+# a package blocked on its own; each value is the set of modules that must then fail to import.
+# PIL is imported at module level on the open path, so blocking it must break the engine. fontTools
+# is needed only by font loading and services/export, so blocking it must leave the engine alone.
+# If one of these changes, the manifest's expected_runtime (scripts/build_web_wheel.py) must too.
+EXPECTED_IMPORT_FAILURES_WITHOUT: dict[str, frozenset[str]] = {
+    "PIL": frozenset({"pdfeditor.engine.mupdf"}),
+    "fontTools": frozenset(),
+}
+
+
 def test_web_modules_import_without_desktop_packages() -> None:
     modules = list(dict.fromkeys([*wp.web_modules(), "pdfeditor.engine.mupdf"]))
     failures = _import_failures(modules)
     assert failures == {}, failures
+
+
+def test_engine_open_path_needs_pillow() -> None:
+    failures = _import_failures(["pdfeditor.engine.mupdf"], blocked=("PIL",))
+    assert set(failures) == EXPECTED_IMPORT_FAILURES_WITHOUT["PIL"], failures
+    assert "blocked for the web build: PIL" in failures["pdfeditor.engine.mupdf"]
+
+
+def test_engine_open_path_does_not_need_fonttools() -> None:
+    failures = _import_failures(["pdfeditor.engine.mupdf"], blocked=("fontTools",))
+    assert set(failures) == EXPECTED_IMPORT_FAILURES_WITHOUT["fontTools"], failures
 
 
 def test_guard_catches_a_module_that_imports_pikepdf(tmp_path: Path) -> None:

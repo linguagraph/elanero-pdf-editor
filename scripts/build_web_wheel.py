@@ -25,13 +25,22 @@ ZIP_NAME = "pdfeditor-web.zip"
 MANIFEST_NAME = "manifest.json"
 GZIP_BUDGET_BYTES = 40 * 1024 * 1024
 
-# Packages the web build does not bundle. Each is imported only when its feature is used, and
-# the app has to say so when it is missing (W3 and W4 own that message).
+# Packages the web build needs from the Pyodide runtime, and the ones it can do without. The
+# engine imports PIL at module level, so the browser cannot open a PDF without it. fontTools is
+# imported only by font loading and services/export; the engine's open path does not need it.
+# tests/unit/test_web_package.py checks both claims (decision 9, docs/web/plan.md). Making the
+# PIL imports lazy would shrink the first load, but that is a later optimisation.
+#
+# Not shipped in W2.6: the About/licences path (licenses.py) reads LICENSE, the third-party
+# notices and the icon licence text through data_path, and none of them are under
+# src/pdfeditor on the web. W4.1 must solve that before the About page works in the browser.
+# Also, the path filter of the perf gate in .github/workflows/web-spike.yml does not list
+# scripts/web_package.py, so a change there does not trigger the perf run (W2.7/W9.1 to fix).
 EXPECTED_RUNTIME = {
-    "always": [],
+    "always": ["Pillow"],
     "optional": {
-        "fonttools": "editing and font upload",
-        "Pillow": "image export, text editing and watermarks",
+        "fonttools": "needed only by font loading and services/export; the engine's open path "
+        "does not need it",
     },
 }
 
