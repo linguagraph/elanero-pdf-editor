@@ -71,6 +71,9 @@ def test_close_button_on_active_and_hovered_tab(window: MainWindow, fixture_pdf,
     assert close.accessibleName() == "Close outline.pdf" and not close.icon().isNull()
     assert bar.close_button(0).icon().isNull()
 
+    # Start from a point off the tabs: if an earlier test left the cursor over tab 0, moving
+    # there again sends no hover event (seen under pytest -n, where the test order differs).
+    qtbot.mouseMove(window.ribbon, QPoint(5, 5))
     qtbot.mouseMove(bar, bar.tabRect(0).center())
     qtbot.waitUntil(lambda: _modes(window) == ["close", "close"])
     qtbot.mouseMove(window.ribbon, QPoint(5, 5))

@@ -17,5 +17,5 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         return
     skip = pytest.mark.skip(reason="timing budgets need an idle machine: run serially")
     for item in items:
-        if "test_ui_budgets" in item.nodeid:
+        if item.path.name == "test_ui_budgets.py":
             item.add_marker(skip)
