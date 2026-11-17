@@ -15,6 +15,10 @@ from pdfeditor.engine.base import Document, SaveOptions
 # Fast snapshots: no garbage collection or recompression; streams are copied as they are.
 SNAPSHOT_OPTIONS = SaveOptions(garbage=0, deflate=False)
 
+# The web keeps its snapshots in MEMFS, so its budget is much smaller (W2.3). The web passes it
+# to DocumentSession; the desktop keeps DESKTOP_SNAPSHOT_BUDGET.
+WEB_SNAPSHOT_BUDGET = 512 * 1024**2
+
 
 class SnapshotStore:
     """Temp directory holding one session's undo snapshots; removed on :meth:`cleanup`."""

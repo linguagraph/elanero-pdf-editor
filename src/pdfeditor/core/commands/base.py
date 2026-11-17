@@ -97,10 +97,21 @@ class MacroCommand(Command):
             command.discard()
 
 
-class UndoStack:
-    """Linear undo/redo history with a clean marker for dirty tracking."""
+# Temp-disk budget for undo snapshots on the desktop (per document).
+DESKTOP_SNAPSHOT_BUDGET = 2 * 1024**3
 
-    def __init__(self, limit: int = 200, max_disk_bytes: int = 2 * 1024**3) -> None:
+
+class UndoStack:
+    """Linear undo/redo history with a clean marker for dirty tracking.
+
+    When the snapshots on the stack exceed ``max_disk_bytes`` the oldest commands are dropped
+    from the stack entirely, so they can't be undone (the newest stay undoable). The newest
+    command is always kept, even if it alone exceeds the budget: a single large edit may go over
+    it, since dropping it would lose the undo. :attr:`history_shortened` tells the UI when that
+    has happened, so it can say "undo history shortened".
+    """
+
+    def __init__(self, limit: int = 200, max_disk_bytes: int = DESKTOP_SNAPSHOT_BUDGET) -> None:
         self.limit = limit
         self.max_disk_bytes = max_disk_bytes
         self._undo: list[Command] = []
@@ -108,6 +119,8 @@ class UndoStack:
         self._clean: int | None = 0  # len(_undo) at the last save; None = unreachable
         self._listeners: list[Callable[[], None]] = []
         self._version = 0
+        self._dropped = 0
+        self._history_shortened = False
 
     # -- state ----------------------------------------------------------------------------
     @property
@@ -134,6 +147,16 @@ class UndoStack:
     @property
     def is_clean(self) -> bool:
         return self._clean == len(self._undo)
+
+    @property
+    def dropped(self) -> int:
+        """How many commands the budget has dropped from the stack since the last clear()."""
+        return self._dropped
+
+    @property
+    def history_shortened(self) -> bool:
+        """True once the budget has dropped a command (until clear())."""
+        return self._history_shortened
 
     def __len__(self) -> int:
         return len(self._undo)
@@ -206,6 +229,8 @@ class UndoStack:
         self._undo.clear()
         self._redo.clear()
         self._clean = 0
+        self._dropped = 0
+        self._history_shortened = False
         self._notify()
 
     def _trim(self) -> None:
@@ -216,5 +241,7 @@ class UndoStack:
             len(self._undo) > self.limit or disk() > self.max_disk_bytes
         ):
             self._undo.pop(0).discard()
+            self._dropped += 1
+            self._history_shortened = True
             if self._clean is not None:
                 self._clean = self._clean - 1 if self._clean > 0 else None

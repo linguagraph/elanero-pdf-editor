@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pdfeditor.core.commands.base import Change, Command, UndoStack
+from pdfeditor.core.commands.base import DESKTOP_SNAPSHOT_BUDGET, Change, Command, UndoStack
 from pdfeditor.core.commands.snapshot import SnapshotStore
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Document, Engine, PasswordCallback, SaveError, SaveOptions
@@ -67,7 +67,13 @@ class DocumentSession:
     changed.
     """
 
-    def __init__(self, document: Document, engine: Engine) -> None:
+    def __init__(
+        self,
+        document: Document,
+        engine: Engine,
+        *,
+        snapshot_budget: int = DESKTOP_SNAPSHOT_BUDGET,
+    ) -> None:
         self.id = next(_ids)
         self.uid = uuid.uuid4().hex  # stable name for recovery files
         self.document = document
@@ -75,7 +81,8 @@ class DocumentSession:
         # One lock for the whole process, not per document: see core/engine_lock.py.
         self.lock = ENGINE_LOCK
         self.closed = False
-        self.undo_stack = UndoStack()
+        # Undo snapshots over this many bytes drop the oldest commands (see UndoStack).
+        self.undo_stack = UndoStack(max_disk_bytes=snapshot_budget)
         self.undo_stack.on_change(lambda: self._emit(SessionEvent(EventKind.DIRTY)))
         self.save_path_hint: Path | None = None  # e.g. original path of a recovered document
         self.name_hint = ""  # shown for unsaved new documents, e.g. "Combined.pdf"
@@ -93,11 +100,13 @@ class DocumentSession:
         source: Path | bytes,
         password: str | PasswordCallback | None = None,
         engine_name: str = DEFAULT_ENGINE,
+        *,
+        snapshot_budget: int = DESKTOP_SNAPSHOT_BUDGET,
     ) -> DocumentSession:
         engine = get_engine(engine_name)
         doc = engine.open(source, password)
         log.info("opened %s (%d pages)", doc.path or "<memory>", doc.page_count)
-        return cls(doc, engine)
+        return cls(doc, engine, snapshot_budget=snapshot_budget)
 
     # -- properties -----------------------------------------------------------------------
     @property
