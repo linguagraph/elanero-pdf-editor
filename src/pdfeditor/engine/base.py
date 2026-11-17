@@ -371,6 +371,17 @@ class Document(Protocol):
     @property
     def is_dirty(self) -> bool: ...
 
+    @property
+    def is_repaired(self) -> bool:
+        """True when the file needed repair when it was opened (a saved copy must not)."""
+        ...
+
+    def prepare_full_save(self, options: SaveOptions) -> None:
+        """Do what :meth:`save` does before a full write, to the open document too: name the
+        unnamed annotations and subset the fonts the app embedded. For a caller that writes the
+        bytes itself (:meth:`to_bytes`), so the bytes match a saved file."""
+        ...
+
     def page(self, index: int) -> Page:
         """Page handle. Like ``page_count`` and ``Page.revision``, this must not call into the
         engine, so it's safe without the session lock; every other method needs the lock."""

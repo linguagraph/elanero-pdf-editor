@@ -279,6 +279,11 @@ class MuDocument:
     def is_dirty(self) -> bool:
         return bool(self._fz.is_dirty) or self._force_dirty
 
+    @property
+    def is_repaired(self) -> bool:
+        """MuPDF had to repair the file when it was opened (the desktop's save check uses it)."""
+        return bool(self._fz.is_repaired)
+
     def page(self, index: int) -> MuPage:
         if not 0 <= index < self.page_count:
             raise IndexError(f"page index {index} out of range 0..{self.page_count - 1}")
@@ -676,6 +681,19 @@ class MuDocument:
             with contextlib.suppress(OSError):
                 backup.unlink()
 
+    def _subset_gained_fonts(self, options: SaveOptions) -> None:
+        """Subset the fonts this app embedded, for a full save (not for an incremental one)."""
+        if self._gained_file_fonts and options.subset_fonts:
+            self._subset_new_fonts()
+
+    def prepare_full_save(self, options: SaveOptions) -> None:
+        """What a full save does to the open document before writing it, as :meth:`save`
+        does: names unnamed annotations and subsets the fonts this app embedded. Done in the
+        open document too, so it counts as a change (it bumps the edit counter)."""
+        self._edits += 1
+        self._name_unnamed_annotations()
+        self._subset_gained_fonts(options)
+
     def _save_full(self, target: Path, options: SaveOptions) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(f".{target.name}.{uuid.uuid4().hex[:8]}.tmp")
@@ -689,8 +707,7 @@ class MuDocument:
                 else security.owner_password or security.user_password
             )
         try:
-            if self._gained_file_fonts and options.subset_fonts:
-                self._subset_new_fonts()
+            self._subset_gained_fonts(options)
             self._fz.save(tmp, **self._save_kwargs(options))
             self._verify(tmp, pages)
         except Exception as exc:
@@ -775,9 +792,12 @@ class MuDocument:
         write_opts.do_encrypt = pymupdf.mupdf.PDF_ENCRYPT_KEEP
         write_opts.do_garbage = 0
         write_opts.dont_regenerate_id = 1
-        self._lineage_written = True  # MuPDF's state advances from here, even if the write fails
+        self._lineage_written = True
         try:
             pdf = pymupdf._as_pdf_document(self._fz)
+            # The clean steps may change objects before the update is written. The update
+            # contains those changes, so the digest is taken after them: a repeat call on the
+            # same state then finds the cache.
             pymupdf.JM_embedded_clean(pdf)
             pymupdf.JM_ensure_identity(pdf)
             with tempfile.TemporaryDirectory(prefix="pdfeditor-incr-") as tmp:
@@ -786,10 +806,14 @@ class MuDocument:
                 pymupdf.mupdf.pdf_save_document(pdf, str(target), write_opts)
                 result = target.read_bytes()
         except Exception as exc:
+            # Nothing was returned, so the lineage is not spent: a later call may try again.
+            # (A failure inside the writer after MuPDF advanced its state is not detected here;
+            # see the W2.3 report.)
+            self._lineage_written = False
             raise SaveError(f"incremental save failed: {exc}") from exc
         self._lineage_output = result
         self._lineage_edit = self._edits
-        self._lineage_digest = digest
+        self._lineage_digest = self._state_digest()
         return result
 
     def _state_digest(self) -> bytes:

@@ -124,3 +124,68 @@ def test_bytes_opened_signed_document_works_the_same() -> None:
 def test_unsigned_document_has_no_in_place_bytes(fixture_pdf: Callable[[str], Path]) -> None:
     doc = _open_signed(fixture_pdf("text_multipage"))
     assert doc.incremental_bytes(INCREMENTAL) is None
+
+
+def test_pyhanko_validates_the_first_signature_after_an_in_place_save() -> None:
+    """Structure isn't enough: the signature itself must still verify, read by pyHanko's strict
+    reader. The sample's own signer is the trust root (a throwaway test certificate); the
+    fixture is only read, never signed or saved over."""
+    from pyhanko.pdf_utils.reader import PdfFileReader
+    from pyhanko.sign.validation import validate_pdf_signature
+    from pyhanko_certvalidator import ValidationContext
+
+    def first_signature(data: bytes) -> object:
+        reader = PdfFileReader(io.BytesIO(data))  # strict by default
+        sig = reader.embedded_signatures[0]
+        status = validate_pdf_signature(sig, ValidationContext(trust_roots=[sig.signer_cert]))
+        assert status.intact is True
+        assert status.valid is True
+        return sig
+
+    original = SIGNED.read_bytes()
+    first_signature(original)
+    doc = _open_signed(SIGNED)
+    doc.set_metadata(Metadata(title="pyhanko"))
+    data = doc.incremental_bytes(INCREMENTAL)
+    assert data is not None
+    assert data.startswith(original)
+    first_signature(data)
+
+
+def test_signed_flag_document_with_empty_embedded_files_repeats_from_cache(
+    tmp_path: Path, fixture_pdf: Callable[[str], Path]
+) -> None:
+    """Review repro: /SigFlags 3 and an empty /Names /EmbeddedFiles. The clean steps change
+    objects before the write, so the second call must compare against the state after them."""
+    pikepdf = pytest.importorskip("pikepdf")
+    path = tmp_path / "flagged.pdf"
+    with pikepdf.open(fixture_pdf("text_multipage")) as pdf:
+        pdf.Root.AcroForm = pikepdf.Dictionary(SigFlags=3, Fields=pikepdf.Array())
+        pdf.Root.Names = pikepdf.Dictionary(EmbeddedFiles=pikepdf.Dictionary(Names=pikepdf.Array()))
+        pdf.save(path)
+    doc = _open_signed(path)
+    first = doc.incremental_bytes(INCREMENTAL)
+    assert first is not None
+    assert doc.incremental_bytes(INCREMENTAL) == first
+
+
+def test_writer_failure_raises_with_the_cause_and_a_later_call_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = SIGNED.read_bytes()
+    doc = _open_signed(SIGNED)
+    doc.set_metadata(Metadata(title="before failure"))
+
+    def broken_writer(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("writer exploded")
+
+    monkeypatch.setattr(pymupdf.mupdf, "pdf_save_document", broken_writer)
+    with pytest.raises(SaveError, match="incremental save failed") as caught:
+        doc.incremental_bytes(INCREMENTAL)
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    monkeypatch.undo()
+
+    data = doc.incremental_bytes(INCREMENTAL)  # not spent by the failure
+    assert data is not None
+    assert data.startswith(original)
+    assert _title(data) == "before failure"

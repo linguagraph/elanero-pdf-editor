@@ -296,7 +296,9 @@ class DocumentSession:
                         "keep the signatures"
                     )
             else:
-                data = doc.to_bytes(SaveOptions(incremental=False, garbage=self._garbage_level()))
+                options = SaveOptions(incremental=False, garbage=self._garbage_level())
+                doc.prepare_full_save(options)  # the same preparation as save()
+                data = doc.to_bytes(options)
             self._verify_bytes(data, doc.page_count)
         log.info("saved %d bytes%s", len(data), " (incremental)" if incremental else "")
         return SaveBytes(data=data, incremental=incremental)
@@ -312,6 +314,8 @@ class DocumentSession:
         except Exception as exc:
             raise SaveError(f"saved bytes cannot be reopened: {exc}") from exc
         try:
+            if reopened.is_repaired:
+                raise SaveError("saved bytes needed repair when reopened")
             if reopened.page_count != pages:
                 raise SaveError(f"saved bytes have {reopened.page_count} pages, expected {pages}")
         finally:
