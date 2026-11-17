@@ -18,9 +18,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core.commands import ChangeKind, SetOutlineCommand
+from pdfeditor.actions import document as document_actions
+from pdfeditor.actions.document import SetOutline
+from pdfeditor.core.commands import ChangeKind
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.outline import Destination, Link, LinkKind, OutlineItem
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.panels.base import EmptyState, ViewPanel
 
@@ -160,7 +163,12 @@ class BookmarksPanel(ViewPanel):
     def commit(self, label: str) -> None:
         if self.view is None or self._building:
             return
-        self.view.session.execute(SetOutlineCommand(self.outline_from_tree(), label))
+        session = self.view.session
+        run_action(
+            lambda: document_actions.set_outline(
+                session, SetOutline(tuple(self.outline_from_tree()), label)
+            )
+        )
 
     def _current_destination(self) -> Destination | None:
         view = self.view

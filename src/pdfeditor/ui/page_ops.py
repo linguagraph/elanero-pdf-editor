@@ -1,23 +1,12 @@
-"""Desktop helpers around the page actions: the clipboard image and the snapshot runner.
+"""Desktop helper for the page actions: reads the clipboard image (the actions take the bytes).
 
 The page operations themselves live in ``pdfeditor.actions.pages``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from PySide6.QtCore import QBuffer, QIODevice
 from PySide6.QtGui import QGuiApplication, QImage
-
-from pdfeditor.actions.base import snapshot
-from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document
-
-
-def run(session: DocumentSession, label: str, operation: Callable[[Document], None]) -> None:
-    # Goes away in slice (d): its remaining callers are the page-mark code in organize.py.
-    snapshot(session, label, operation)
 
 
 def clipboard_image_png() -> bytes | None:
