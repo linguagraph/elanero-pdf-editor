@@ -10,6 +10,8 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 from shiboken6 import isValid
 
+from pdfeditor.actions import content
+from pdfeditor.actions.content import ReplaceImage
 from pdfeditor.model.objects import ObjectType, ShapeKind
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.tools import edit
@@ -165,7 +167,10 @@ class EditController:
             path = Path(chosen)
         data = path.read_bytes()
         return edit.run_edit(
-            view, "Replace Image", lambda doc: doc.page(page).replace_image(key, data)
+            view,
+            lambda: content.replace_image(
+                view.session, ReplaceImage(edit.object_ref(view, page, key), data)
+            ),
         )
 
     def export_image(self, path: Path | None = None) -> Path | None:
