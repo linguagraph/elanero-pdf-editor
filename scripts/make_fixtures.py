@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import random
 import struct
 import sys
 import zlib
@@ -16,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pymupdf
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 OUT = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "generated"
 
@@ -234,6 +235,87 @@ def large_doc(pages: int = 1000) -> None:
         page.insert_text((72, 72), f"Large document page {i + 1}", fontsize=14)
         page.insert_textbox(pymupdf.Rect(72, 90, A4.width - 72, 400), LOREM, fontsize=10)
     _save(doc, "large_1000.pdf")
+
+
+PERF_SEED_EVERY = 10  # a new photo every 10 pages, so the pages don't share one image object
+PERF_PHOTO_SIZE = (1200, 800)
+PERF_FONT_CHARS = "".join(chr(c) for c in range(0x20, 0x7F))  # printable ASCII, for LOREM
+
+
+def _perf_photo(seed: int) -> bytes:
+    """A photo-like JPEG (1200x800 RGB, quality 80): a seeded gradient plus mild noise.
+
+    Deterministic for a given Pillow version: the same seed gives the same bytes (the gradient is
+    fixed, and the noise comes from ``random.Random(seed)``), so the sizes in the W0.2 report
+    are reproducible from this lock.
+    """
+    rng = random.Random(seed)
+    w, h = PERF_PHOTO_SIZE
+    ramp = Image.linear_gradient("L").resize((w, h), Image.Resampling.BILINEAR)
+    turn = ramp.transpose(Image.Transpose.ROTATE_90).resize((w, h))
+    channels = (
+        ramp.point(lambda v: (v + seed * 17) % 256),
+        turn.point(lambda v: (255 - v + seed * 29) % 256),
+        ramp.point(lambda v: (v // 2 + seed * 5) % 256),
+    )
+    gradient = Image.merge("RGB", channels)
+    noise = Image.frombytes("L", (w, h), rng.randbytes(w * h)).point(lambda v: v // 8)
+    photo = ImageChops.add(gradient, Image.merge("RGB", (noise, noise, noise)))
+    buf = io.BytesIO()
+    photo.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+def perf_mixed(pages: int) -> None:
+    """Mixed A4 pages for the W0.2 load and render measurements (web/spike/perf).
+
+    Per page: a base-14 heading and a LOREM paragraph in an embedded TrueType face (built here,
+    with glyphs for printable ASCII, since the face above covers only ABCabc), one photo-like
+    image, and three vector shapes (a rectangle, a Bezier curve, a filled polygon).
+    """
+    face = _build_face("Perf Sans", "Regular", 400, False, PERF_FONT_CHARS)
+    # fontTools stamps the build time into the font; pin it, and skip the random /ID on save, so
+    # two builds give the same bytes.
+    face["head"].created = 0
+    face["head"].modified = 0
+    face_bytes = io.BytesIO()
+    face.save(face_bytes)
+    font = face_bytes.getvalue()
+    photos: dict[int, bytes] = {}
+    doc = pymupdf.open()
+    for i in range(pages):
+        seed = i // PERF_SEED_EVERY
+        if seed not in photos:
+            photos[seed] = _perf_photo(seed)
+        page = doc.new_page(width=A4.width, height=A4.height)
+        page.insert_text((72, 90), f"Mixed page {i + 1}", fontsize=20, fontname="hebo")
+        page.insert_font(fontname="PerfSans", fontbuffer=font)
+        page.insert_textbox(
+            pymupdf.Rect(72, 110, A4.width - 72, 330), LOREM, fontsize=11, fontname="PerfSans"
+        )
+        page.insert_image(pymupdf.Rect(72, 350, 523, 650), stream=photos[seed])
+        page.draw_rect(pymupdf.Rect(72, 680, 250, 760), color=(0, 0, 0), fill=(0.8, 0.2, 0.2))
+        page.draw_bezier(
+            pymupdf.Point(300, 760),
+            pymupdf.Point(360, 660),
+            pymupdf.Point(440, 860),
+            pymupdf.Point(520, 760),
+            color=(0, 0, 1),
+            width=2,
+        )
+        shape = page.new_shape()
+        shape.draw_polyline(
+            [
+                pymupdf.Point(72, 800),
+                pymupdf.Point(200, 780),
+                pymupdf.Point(260, 830),
+                pymupdf.Point(120, 830),
+                pymupdf.Point(72, 800),
+            ]
+        )
+        shape.finish(color=(0, 0.4, 0), fill=(0.6, 0.9, 0.6))
+        shape.commit()
+    _save(doc, f"perf_mixed_{pages}.pdf", no_new_id=True)
 
 
 SKEW_DEGREES = 4.0  # skewed_scan: counterclockwise as displayed, about the page center
@@ -659,6 +741,9 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "cjk_text": cjk_text,
     "subset_fonts": subset_fonts,
     "large_1000": large_doc,
+    "perf_mixed_10": lambda: perf_mixed(10),
+    "perf_mixed_200": lambda: perf_mixed(200),
+    "perf_mixed_1000": lambda: perf_mixed(1000),
 }
 
 
@@ -747,7 +832,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     OUT.mkdir(parents=True, exist_ok=True)
     for name, gen in GENERATORS.items():
-        if args.skip_large and name == "large_1000":
+        if args.skip_large and name in {"large_1000", "perf_mixed_1000"}:
             continue
         gen()
         print(f"generated {name}.pdf")

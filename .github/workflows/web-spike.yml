@@ -273,3 +273,129 @@ jobs:
             web/spike/dist/audit/audit-input.json
             docs/web/spikes/W0.1-results.md
             docs/web/spikes/W0.4-results.md
+
+  # W0.2 (docs/web/design/W0.2.md): the load, render and memory measurements in Chromium on the
+  # CI runner, for trends only. Not a required check, and it never fails on a missed budget: the
+  # numbers go into the report and perf-ci.json. It runs after the spike job, from its wheel
+  # artifact, and on a PR only when the PR touches the perf harness (or this workflow).
+  pyodide-perf:
+    name: pyodide-perf
+    needs: pyodide-spike
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether this run measures
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" "$GITHUB_SHA" -- \
+            web/spike/perf web/spike/perf.spec.ts web/spike/playwright.perf.config.ts \
+            web/spike/web_package.py scripts/make_fixtures.py \
+            .github/workflows/web-spike.yml)
+          if [ -n "$changed" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No change under the perf harness: skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Read the pinned versions
+        if: steps.gate.outputs.run == 'true'
+        id: versions
+        run: |
+          v=web/spike/versions.json
+          {
+            echo "node=$(jq -r .node $v)"
+            echo "host_python=$(jq -r .hostPython $v)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+
+      - name: Install the npm packages (exact, from the lockfile)
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web/spike
+        run: npm ci
+
+      - name: Install Chromium
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web/spike
+        run: npx playwright install --with-deps chromium
+
+      # The wheel comes from the spike job of this run (its artifact), not from a rebuild.
+      - name: Download the spike job's artifact
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: w0.1-pyodide-spike
+          path: ${{ runner.temp }}/w01
+
+      - name: Stage the wheel under web/spike/dist
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p web/spike/dist/wheel-build
+          find "$RUNNER_TEMP/w01" -name '*.whl' -exec cp {} web/spike/dist/wheel-build/ \;
+          n=$(ls web/spike/dist/wheel-build/*.whl 2>/dev/null | wc -l)
+          test "$n" -eq 1 || { echo "expected one wheel, found $n"; exit 1; }
+          ls -l web/spike/dist/wheel-build/
+
+      - name: Set up the host Python (fixtures and the staging step)
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.versions.outputs.host_python }}
+
+      - name: Install the host packages and generate the fixtures
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
+          python scripts/make_fixtures.py
+
+      - name: Stage the packages, the pdfeditor zip and the fixtures
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web/spike
+        run: node perf/stage.mjs --wheel "$(ls dist/wheel-build/*.whl)" --python python
+
+      - name: Measure in Chromium (5 cold and 5 warm runs per fixture)
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web/spike
+        env:
+          PERF_ENV: ci
+        run: npx playwright test -c playwright.perf.config.ts
+
+      - name: Sizes (M1) and the report
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web/spike
+        run: |
+          set -euo pipefail
+          python perf/sizes.py
+          python perf/report.py out > out/perf-report.md
+          cat out/perf-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the measurements
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pyodide-perf-ci
+          if-no-files-found: warn
+          path: |
+            web/spike/out/perf-ci.json
+            web/spike/out/sizes.json
+            web/spike/out/perf-report.md
