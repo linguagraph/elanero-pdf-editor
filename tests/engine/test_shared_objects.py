@@ -8,14 +8,13 @@ Fixtures are built with pikepdf so the sharing is exactly what each test says.
 
 from __future__ import annotations
 
+import base64
 import io
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
-from pikepdf import Array, Dictionary, Name, String
 from PIL import Image
 
 from pdfeditor.engine.base import Document, Engine, Page, SaveOptions
@@ -26,13 +25,17 @@ from pdfeditor.model.objects import ObjectType, ShapeKind, ShapeSpec, TextStyle
 from pdfeditor.model.pages import ImageStamp, MarkKind, TextStamp
 from pdfeditor.model.redaction import RedactOptions
 from pdfeditor.services.optimize import preset, reduce_size
+from tests.hostcheck import record
+
+# pikepdf and pypdfium2 are imported inside the host-only functions, never at module level, so
+# this module imports under Pyodide. A test that builds its fixture with pikepdf skips there.
 
 RED = Color(1, 0, 0)
 SHARES = ("contents", "resources", "annotation")
 
 
 # -- fixtures -----------------------------------------------------------------------------------
-def _content(pdf: pikepdf.Pdf, text: str) -> pikepdf.Stream:
+def _content(pdf: Any, text: str) -> Any:
     ops = f"BT /F1 24 Tf 72 700 Td ({text}) Tj ET q 100 0 0 100 72 400 cm /Im1 Do Q"
     return pdf.make_stream(ops.encode())
 
@@ -40,7 +43,10 @@ def _content(pdf: pikepdf.Pdf, text: str) -> pikepdf.Stream:
 def _shared_pdf(path: Path, share: str) -> Path:
     """Two pages that share ``share``: their content (stream and array), one resource
     dictionary (with indirect category dictionaries) or one annotation (and the /Annots array
-    listing it). Font and image are always shared."""
+    listing it). Font and image are always shared. Host-only: builds with pikepdf."""
+    import pikepdf
+    from pikepdf import Array, Dictionary, Name, String
+
     pdf = pikepdf.new()
     font = pdf.make_indirect(
         Dictionary(
@@ -196,6 +202,8 @@ MUTATIONS: dict[str, tuple[str, Callable[[Document, Page, Engine], None]]] = {
 # -- checks -------------------------------------------------------------------------------------
 def _look(path: Path, index: int) -> tuple[str, bytes]:
     """Text and pixels of a page, as an independent implementation (PDFium) sees them."""
+    import pypdfium2 as pdfium
+
     pd = pdfium.PdfDocument(path)
     try:
         page = pd[index]
@@ -207,6 +215,8 @@ def _look(path: Path, index: int) -> tuple[str, bytes]:
 
 
 def _objgens(value: object) -> set[tuple[int, int]]:
+    import pikepdf
+
     if isinstance(value, pikepdf.Array):
         return {item.objgen for item in value if item.is_indirect}
     return {value.objgen} if isinstance(value, pikepdf.Object) and value.is_indirect else set()
@@ -214,6 +224,9 @@ def _objgens(value: object) -> set[tuple[int, int]]:
 
 def _assert_unshared(data: bytes) -> None:
     """Nothing an edit writes to is shared between the pages; fonts and images still are."""
+    import pikepdf
+    from pikepdf import Array, Dictionary
+
     with pikepdf.open(io.BytesIO(data)) as pdf:
         a, b = (p.obj for p in pdf.pages)
         assert not _objgens(a.Contents) & _objgens(b.Contents)
@@ -236,6 +249,10 @@ def _assert_unshared(data: bytes) -> None:
 def test_editing_one_page_leaves_a_sharing_page_alone(
     engine: Engine, tmp_path: Path, share: str, mutation: str
 ) -> None:
+    # Host-only: the fixture is built with pikepdf (_shared_pdf), which the Pyodide run lacks.
+    import pikepdf
+    from pikepdf import Array
+
     capability, mutate = MUTATIONS[mutation]
     if not getattr(engine.capabilities, capability):
         pytest.skip(f"engine lacks {capability}")
@@ -270,6 +287,7 @@ def test_editing_one_page_leaves_a_sharing_page_alone(
 
 
 def test_shared_annotation_keeps_its_id_on_the_edited_page(engine: Engine, tmp_path: Path) -> None:
+    # Host-only: the fixture is built with pikepdf (_shared_pdf), which the Pyodide run lacks.
     if not engine.capabilities.annotations_write:
         pytest.skip("engine lacks annotations_write")
     doc = engine.open(_shared_pdf(tmp_path / "shared.pdf", "annotation").read_bytes())
@@ -289,6 +307,10 @@ def test_shared_annotation_keeps_its_id_on_the_edited_page(engine: Engine, tmp_p
 
 def test_page_object_listed_twice_is_split(engine: Engine, tmp_path: Path) -> None:
     """A page tree naming the same page object twice (as MuPDF's select used to make)."""
+    # Host-only: the fixture is built with pikepdf, which the Pyodide run lacks.
+    import pikepdf
+    from pikepdf import Array, Dictionary, Name
+
     if not engine.capabilities.page_ops:
         pytest.skip("engine lacks page_ops")
     path = tmp_path / "twice.pdf"
@@ -327,13 +349,7 @@ def test_optimize_then_edit_one_duplicate(engine: Engine, fixture_pdf, tmp_path:
     doc.close()
     src = tmp_path / "optimized.pdf"
     src.write_bytes(optimized)
-    with pikepdf.open(src) as pdf:  # the merge really happened
-        a, b = (p.obj for p in pdf.pages)
-        contents = (_objgens(a.Contents) or {a.Contents.objgen}) & (
-            _objgens(b.Contents) or {b.Contents.objgen}
-        )
-        assert contents or a.Resources.objgen == b.Resources.objgen
-    before = _look(src, 1)
+    record("optimized_pages_merged_pikepdf", optimized)  # the merge really happened
 
     doc = engine.open(src)
     try:
@@ -349,13 +365,21 @@ def test_optimize_then_edit_one_duplicate(engine: Engine, fixture_pdf, tmp_path:
         out = doc.save(tmp_path / "edited.pdf")
     finally:
         doc.close()
-    assert _look(out, 1) == before
-    assert "FOOTER" in _look(out, 0)[0] and "FOOTER" not in _look(out, 1)[0]
+    # Page 1 looks as it did before the edit (the source is the optimized file, passed as base64)
+    source = base64.b64encode(optimized).decode("ascii")
+    record("page_looks_same_pdfium", out, source=source, index=1)
+    record("text_contains_pdfium", out, page=0, text="FOOTER")
+    record("text_lacks_pdfium", out, page=1, text="FOOTER")
 
 
 def test_deleted_pages_leave_no_references(engine: Engine, tmp_path: Path) -> None:
     """Open action, named destinations (both kinds), bookmarks, links and form fields that
     pointed at a deleted page are dropped; everything else in the catalog survives."""
+    # Host-only: the fixture is built with pikepdf, and the result is checked with it.
+    import pikepdf
+    import pypdfium2 as pdfium
+    from pikepdf import Array, Dictionary, Name, String
+
     if not engine.capabilities.page_ops:
         pytest.skip("engine lacks page_ops")
     path = tmp_path / "dests.pdf"

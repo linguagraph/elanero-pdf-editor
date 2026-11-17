@@ -692,3 +692,50 @@ def _structure_saved_pikepdf(data: bytes, lang: str, alt: str) -> None:
         assert str(pdf.Root.Lang) == lang and pdf.Root.ViewerPreferences.DisplayDocTitle
         assert str(pdf.Root.StructTreeRoot.K.K[2].Alt) == alt
         assert all(p.obj.Tabs == "/S" for p in pdf.pages)
+
+
+# -- shared-object checks (tests/engine/test_shared_objects.py) ------------------------------------
+
+
+def _indirect_objgens(value: Any) -> set[tuple[int, int]]:
+    """The indirect objects an entry names: the indirect items of an array, or the value itself."""
+    import pikepdf
+
+    if isinstance(value, pikepdf.Array):
+        return {item.objgen for item in value if item.is_indirect}
+    return {value.objgen} if isinstance(value, pikepdf.Object) and value.is_indirect else set()
+
+
+@host_check("optimized_pages_merged_pikepdf")
+def _optimized_pages_merged_pikepdf(data: bytes) -> None:
+    """Optimize merged the two duplicate pages' content or resources (issue #49)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        a, b = (p.obj for p in pdf.pages)
+        contents = (_indirect_objgens(a.Contents) or {a.Contents.objgen}) & (
+            _indirect_objgens(b.Contents) or {b.Contents.objgen}
+        )
+        assert contents or a.Resources.objgen == b.Resources.objgen
+
+
+def _page_look_pdfium(data: bytes, index: int) -> tuple[str, bytes]:
+    """Text and pixels of a page, as an independent implementation (PDFium) sees them."""
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        page = pd[index]
+        text = page.get_textpage().get_text_range()
+        pixels = page.render(scale=1, may_draw_forms=True).to_pil().convert("RGB").tobytes()
+        return text, pixels
+    finally:
+        pd.close()
+
+
+@host_check("page_looks_same_pdfium")
+def _page_looks_same_pdfium(data: bytes, source: str, index: int) -> None:
+    """Page ``index`` of ``data`` has the text and pixels of the same page of ``source``
+    (base64 of the bytes the edit started from)."""
+    before = _page_look_pdfium(base64.b64decode(source), index)
+    assert _page_look_pdfium(data, index) == before
