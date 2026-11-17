@@ -715,6 +715,36 @@ def print_to_pdf() -> None:
     _save(doc, "print_to_pdf.pdf")
 
 
+def annotations_unnamed() -> None:
+    """Comments without /NM, as other applications often write them (issue #168).
+
+    Page 1 has two squares and a sticky note, page 2 a redaction mark, all with the /NM removed
+    so the engine has to give each one a synthetic name.
+    """
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    squares = [
+        page.add_rect_annot(pymupdf.Rect(72, 120, 200, 180)),
+        page.add_rect_annot(pymupdf.Rect(72, 220, 200, 280)),
+    ]
+    for sq, colour, text in zip(
+        squares, [(1, 0, 0), (0, 0, 1)], ["Box one", "Box two"], strict=True
+    ):
+        sq.set_colors(stroke=colour)
+        sq.set_info(content=text)
+        sq.update()
+    note = page.add_text_annot((400, 90), "Note three")
+    note.set_info(title="Reviewer", content="Note three")
+    note.update()
+    page2 = doc.new_page(width=A4.width, height=A4.height)
+    page2.insert_text((72, 100), "Sensitive words here.", fontsize=12)
+    page2.add_redact_annot(pymupdf.Rect(72, 85, 200, 110))
+    xrefs = [a.xref for pno in range(len(doc)) for a in doc.load_page(pno).annots()]
+    for xref in xrefs:
+        doc.xref_set_key(xref, "NM", "null")
+    _save(doc, "annotations_unnamed.pdf")
+
+
 GENERATORS: dict[str, Callable[[], None]] = {
     "print_to_pdf": print_to_pdf,
     "letter_spacing": letter_spacing,
@@ -734,6 +764,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "images": images,
     "vector_art": vector_art,
     "annotations": annotations,
+    "annotations_unnamed": annotations_unnamed,
     "outline": outline,
     "encrypted": encrypted,
     "hybrid_xref": hybrid_xref,

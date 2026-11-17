@@ -244,6 +244,9 @@ class MuPage:
         self._doc.unshare_page(self._index)
         annots.delete(self, annot_id, name)
 
+    def current_annotation_name(self, name: str) -> str:
+        return annots.resolve_name(self, name)
+
     def annotation_order(self) -> list[int]:
         return annots.order(self)
 
@@ -433,7 +436,7 @@ class MuPage:
             page_index=self._index,
             rect=self._vrect(rect, m),
             id=annot.xref,
-            name=info.get("id", ""),
+            name=info.get("id") or annots.synthetic_name(annot.xref),
             contents=info.get("content", ""),
             author=info.get("title", ""),
             subject=info.get("subject", ""),

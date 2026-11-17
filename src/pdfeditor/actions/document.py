@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from pdfeditor.actions import action
-from pdfeditor.actions.base import ActionResult, ensure_idle, execute_all, snapshot
+from pdfeditor.actions.base import ActionResult, current_name, ensure_idle, execute_all, snapshot
 from pdfeditor.core.commands import SetMetadataCommand, SetOutlineCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Document
@@ -42,16 +42,15 @@ class FlattenAnnotations:
 
 
 def _resolve(doc: Document, refs: Sequence[AnnotRef]) -> dict[int, list[int]]:
-    """The engine ids of the named comments, by page. Unknown names are skipped; so are names
-    that are empty, since an unnamed comment can't be told apart from another unnamed one.
-    Stopgap until comments get names on load (issue #168): an unnamed comment is skipped, not
-    guessed at."""
+    """The engine ids of the named comments, by page. Unknown names are skipped. A name from
+    before a full save resolves to the comment's current /NM (call with the lock held)."""
     by_page: dict[int, list[int]] = {}
     for ref in refs:
-        if not ref.name or not 0 <= ref.page < doc.page_count:
+        if not 0 <= ref.page < doc.page_count:
             continue
+        name = current_name(doc, ref.page, ref.name)
         for model in doc.page(ref.page).annotations():
-            if model.name == ref.name:
+            if model.name == name:
                 if model.id is not None:
                     by_page.setdefault(ref.page, []).append(model.id)
                 break

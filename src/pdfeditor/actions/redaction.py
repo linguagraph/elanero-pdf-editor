@@ -10,7 +10,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from pdfeditor.actions import action
-from pdfeditor.actions.base import ActionResult, Refused, ensure_idle, execute_all, snapshot
+from pdfeditor.actions.base import (
+    ActionResult,
+    Refused,
+    current_name,
+    ensure_idle,
+    execute_all,
+    snapshot,
+)
 from pdfeditor.core.commands import AddAnnotationCommand, Command, DeleteAnnotationsCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Document
@@ -58,13 +65,20 @@ class ApplyRedactions:
 # -- helpers -------------------------------------------------------------------------------
 
 
+def _current_refs(doc: Document, refs: Sequence[MarkRef]) -> tuple[MarkRef, ...]:
+    """The refs with each name resolved to the mark's current /NM (issue #168: a full save may
+    have given an unnamed mark a name since the caller made the ref). Call with the lock held."""
+    return tuple(MarkRef(r.page, current_name(doc, r.page, r.name)) for r in refs)
+
+
 def _chosen_marks(
     all_marks: Sequence[AnnotationModel], refs: Sequence[MarkRef]
 ) -> list[AnnotationModel]:
     """The marks named by ``refs``, in their order, each once.
 
-    Refused when a name is empty (the mark came from another application and has no /NM), when
-    it matches no mark, or when two marks on the page share it (the name can't pick one).
+    Refused when a name is empty, when it matches no mark, or when two marks on the page share it
+    (the name can't pick one). The engine names a mark that has no /NM from its object number, so
+    an empty name is only a caller's mistake; the refusal stays as the guard for that.
     """
     by_name: dict[tuple[int, str], list[AnnotationModel]] = {}
     for m in all_marks:
@@ -119,8 +133,9 @@ def remove_marks(session: DocumentSession, args: RemoveRedactionMarks) -> Action
     ensure_idle(session)
     with session.lock:
         present = {(m.page_index, m.name) for m in redaction_marks(session.document) if m.name}
+        refs = _current_refs(session.document, args.marks)
     by_page: dict[int, dict[str, None]] = {}  # ordered sets: first-seen order per page
-    for ref in args.marks:
+    for ref in refs:
         if (ref.page, ref.name) in present:
             by_page.setdefault(ref.page, {})[ref.name] = None
     commands: list[Command] = [
@@ -138,7 +153,8 @@ def apply(session: DocumentSession, args: ApplyRedactions) -> ActionResult[Verif
     ensure_idle(session)
     with session.lock:
         all_marks = redaction_marks(session.document)
-    chosen = all_marks if args.marks is None else _chosen_marks(all_marks, args.marks)
+        wanted_refs = None if args.marks is None else _current_refs(session.document, args.marks)
+    chosen = all_marks if wanted_refs is None else _chosen_marks(all_marks, wanted_refs)
     if not chosen:
         raise Refused("There are no redaction marks to apply.")
 

@@ -193,7 +193,16 @@ class Page(Protocol):
 
     def links(self) -> list[Link]: ...
 
-    def annotations(self) -> list[AnnotationModel]: ...
+    def annotations(self) -> list[AnnotationModel]:
+        """Every annotation on the page, each with a non-empty ``name``.
+
+        Names are distinct within the page and stable while the document stays open: reading the
+        page twice gives the same names, and a name addresses one annotation for every later
+        call (update, delete, ...). An annotation without a /NM gets an engine-made name, so
+        comments from other applications are addressable too. Names may change after a save and
+        reopen, when the engine renumbers objects.
+        """
+        ...
 
     @property
     def pdf_matrix(self) -> Matrix:
@@ -214,6 +223,15 @@ class Page(Protocol):
         ...
 
     def delete_annotation(self, annot_id: int | None, name: str = "") -> None: ...
+
+    def current_annotation_name(self, name: str) -> str:
+        """The name an annotation known by ``name`` has now.
+
+        Usually ``name`` itself. When ``add`` replaced a synthetic name with a real /NM (the
+        annotation was re-created, e.g. by an undo), this maps the old name to the new one for
+        as long as the document stays open, so a command that kept the old name still finds it.
+        """
+        ...
 
     def annotation_order(self) -> list[int]:
         """Annotation ids in drawing order (last = on top)."""
@@ -444,6 +462,11 @@ class Document(Protocol):
         """Save safely (temp file + verify + atomic replace). ``path=None`` saves in place.
 
         After a successful save the document is bound to the saved path.
+
+        A full save gives annotations without /NM a unique name, so every comment in the file is
+        addressable by its name (issue #168). The names are set in the open document too, and
+        earlier names still resolve to them. An incremental save adds no names, and ``to_bytes``
+        (used for undo snapshots) never names anything.
         """
         ...
 

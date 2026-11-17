@@ -8,6 +8,7 @@ and render in pypdfium2 (independent implementations), not only in MuPDF.
 from __future__ import annotations
 
 import dataclasses
+import shutil
 from pathlib import Path
 from xml.etree.ElementTree import ParseError
 
@@ -31,12 +32,19 @@ from pdfeditor.actions.comments import (
     restyle_args,
 )
 from pdfeditor.core.commands import UpdateAnnotationCommand
+from pdfeditor.core.commands.snapshot import SnapshotCommand
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef, ReviewState
+from pdfeditor.model.annotations import (
+    AnnotationModel,
+    AnnotationType,
+    AnnotRef,
+    ReviewState,
+    is_synthetic_name,
+)
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.services.xfdf import export_xfdf
-from tests.actions.conftest import Opener
+from tests.actions.conftest import Opener, pretend_signed
 
 # One minimal value per action; the Busy test in test_registry.py runs each one.
 BUSY_CASES: dict[str, object] = {
@@ -399,6 +407,287 @@ def test_restyle_merge_key_is_one_undo_step(open_copy: Opener) -> None:
     assert s.undo()
     assert find(s, "fitz-A0").opacity == pytest.approx(1.0)
     assert not s.undo_stack.can_undo
+
+
+# -- comments without /NM (issue #168) ------------------------------------------------------
+
+
+def unnamed_names(session: DocumentSession, page: int = 0) -> list[str]:
+    with session.lock:
+        return [a.name for a in session.document.page(page).annotations()]
+
+
+def test_set_text_on_the_second_unnamed_comment_changes_only_that_one(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    before = state(s)
+    result = comments.set_text(s, SetAnnotationText(ref(second), "Edited"))
+    assert result.executed
+    assert find(s, second).contents == "Edited"
+    assert find(s, first).contents == "Box one" and find(s, third).contents == "Note three"
+    assert s.undo()
+    assert_same(state(s), before)
+
+
+def test_restyle_the_second_unnamed_comment_changes_only_that_one(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    before = {n: find(s, n) for n in (first, second, third)}
+    result = comments.restyle(
+        s, restyle_args((ref(second),), "color", Color(0, 1, 0), "Change Color")
+    )
+    assert result.executed and result.value == (ref(second),)
+    assert find(s, second).color == Color(0, 1, 0)
+    assert find(s, first).color == before[first].color
+    assert find(s, third).color == before[third].color
+    assert s.undo()
+    assert find(s, second).color == before[second].color
+
+
+def test_delete_the_second_unnamed_comment_and_undo_brings_it_back(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    before = state(s)
+    result = comments.delete(s, DeleteAnnotations((ref(second),)))
+    assert result.executed
+    assert unnamed_names(s) == [first, third]
+    assert s.undo()
+    restored = [n for n in unnamed_names(s) if n not in (first, third)]
+    assert len(restored) == 1 and restored[0].startswith("pdfeditor-")  # a real /NM now
+    assert sorted(c[1] for c in state(s)) == sorted(c[1] for c in before)
+    # the restored comment is addressable by its name again
+    assert comments.set_text(s, SetAnnotationText(ref(restored[0]), "Back")).executed
+    assert find(s, restored[0]).contents == "Back"
+
+
+def test_undo_redo_cycles_keep_the_restored_comment_addressable(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    """Delete the second unnamed comment, then undo/redo, then save and reopen: every name is
+    distinct, none is a backend name, and the restored comment is found on each step."""
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    assert comments.delete(s, DeleteAnnotations((ref(second),))).executed
+    assert s.undo()
+    restored = next(n for n in unnamed_names(s) if n not in (first, third))
+    assert s.redo()
+    assert unnamed_names(s) == [first, third]
+    assert s.undo()
+    restored = next(n for n in unnamed_names(s) if n not in (first, third))
+    assert comments.set_text(s, SetAnnotationText(ref(restored), "Once")).executed
+    assert s.undo()  # the set_text goes; the restored comment stays
+    assert find(s, restored).contents == "Box two"
+
+    path = tmp_path / "saved.pdf"
+    s.save(path)  # the open_copy session is closed by its fixture
+    reopened = reopen(path)
+    names = unnamed_names(reopened)
+    assert len(names) == 3 and len(set(names)) == 3
+    # a full save gives every comment a real /NM, so none is addressed by object number any more
+    edited = next(a for a in reopened.document.page(0).annotations() if a.contents == "Box two")
+    assert edited.name.startswith("pdfeditor-") and not is_synthetic_name(edited.name)
+    assert_reads_everywhere(path, reopened.page_count)
+    close(reopened)
+    with pikepdf.open(path) as pdf:
+        nm = [str(x.NM) for x in pdf.pages[0].Annots if x.get("/NM") is not None]
+    assert not any(n.startswith("#") for n in nm)
+
+
+def test_undo_redo_of_a_delete_with_a_reply_keeps_both_linked(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    parent_name = unnamed_names(s)[0]  # "Box one"
+    assert comments.reply(s, ReplyToAnnotation(ref(parent_name), "Agreed", "Reviewer")).executed
+    assert comments.delete(s, DeleteAnnotations((ref(parent_name),))).executed  # reply goes too
+    for step in ("undo", "redo", "undo"):
+        assert getattr(s, step)()
+    with s.lock:
+        models = s.document.page(0).annotations()
+    parent = next(a for a in models if a.contents == "Box one")
+    replies = [a for a in models if a.contents == "Agreed"]
+    assert len(replies) == 1 and replies[0].in_reply_to == parent.id
+    assert not is_synthetic_name(parent.name)
+
+
+def test_xfdf_round_trip_of_unnamed_comments_writes_no_backend_names(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    src = open_copy("annotations_unnamed")
+    first = unnamed_names(src)[0]
+    assert comments.reply(src, ReplyToAnnotation(ref(first), "Agreed", "Reviewer")).executed
+    with src.lock:
+        text = export_xfdf(src.document)
+    assert 'name="#' not in text and 'inreplyto="#' not in text
+
+    dst = open_copy("annotations_unnamed")
+    with dst.lock:
+        before_ids = {a.id for a in dst.document.page(0).annotations()}
+    assert comments.import_xfdf(dst, ImportXfdf(text)).executed
+    with dst.lock:
+        models = dst.document.page(0).annotations()
+    imported = [a for a in models if a.id not in before_ids]
+    assert len(imported) == 4  # three comments and the reply
+    assert len({a.name for a in models}) == len(models)  # every name distinct
+    assert not any(is_synthetic_name(a.name) for a in imported)
+    parent = next(a for a in imported if a.contents == "Box one")
+    replies = [a for a in imported if a.contents == "Agreed"]
+    assert len(replies) == 1 and replies[0].in_reply_to == parent.id
+
+    out = tmp_path / "imported.pdf"
+    dst.save(out)  # the open_copy session is closed by its fixture
+    with pikepdf.open(out) as pdf:
+        nm = [str(x.NM) for pg in pdf.pages for x in pg.get("/Annots", []) if x.get("/NM")]
+    assert nm and not any(n.startswith("#") for n in nm)
+    assert_reads_everywhere(out, 2)
+
+
+def test_undo_of_an_earlier_edit_finds_the_comment_a_delete_restored(open_copy: Opener) -> None:
+    """An edit made before a delete keeps the comment's old synthetic name on the undo stack; the
+    delete's undo re-creates the comment under a real name, and undoing the edit must still
+    find it."""
+    s = open_copy("annotations_unnamed")
+    second = unnamed_names(s)[1]
+    assert comments.set_text(s, SetAnnotationText(ref(second), "Edited")).executed
+    assert comments.delete(s, DeleteAnnotations((ref(second),))).executed
+    assert s.undo()
+    assert s.undo()  # the edit, found through the name it had when it was made
+    assert sorted(c[1] for c in state(s)) == ["Box one", "Box two", "Note three"]
+    assert s.redo() and s.redo()
+    assert sorted(a.contents for a in _page0(s)) == ["Box one", "Note three"]
+
+
+def test_redo_of_a_reply_finds_its_parent_after_the_parent_was_restored(
+    open_copy: Opener,
+) -> None:
+    s = open_copy("annotations_unnamed")
+    parent = unnamed_names(s)[0]
+    assert comments.reply(s, ReplyToAnnotation(ref(parent), "Agreed", "Reviewer")).executed
+    assert comments.delete(s, DeleteAnnotations((ref(parent),))).executed  # parent and reply
+    assert s.undo()  # both back; the parent has a real name now
+    assert s.undo()  # the reply goes
+    assert s.redo()  # the reply comes back, its parent is found by the name it was made with
+    replies = [a for a in _page0(s) if a.contents == "Agreed"]
+    parent_model = next(a for a in _page0(s) if a.contents == "Box one")
+    assert len(replies) == 1 and replies[0].in_reply_to == parent_model.id
+
+
+def _page0(session: DocumentSession) -> list[AnnotationModel]:
+    with session.lock:
+        return session.document.page(0).annotations()
+
+
+# -- names across snapshots, saves and literal names (issue #168 follow-up) ----------------
+
+
+def _contents(session: DocumentSession, page: int = 0) -> list[str]:
+    with session.lock:
+        return sorted(a.contents for a in session.document.page(page).annotations())
+
+
+def test_snapshot_undo_then_delete_of_a_live_unnamed_comment_works(open_copy: Opener) -> None:
+    """A snapshot edit, a delete of the second unnamed comment, both undone: the comment is
+    unnamed again, so its name must resolve to itself, not to the name its undo gave it."""
+    s = open_copy("annotations_unnamed")
+    second = unnamed_names(s)[1]
+    assert s.execute(SnapshotCommand("Edit", lambda d: None, s.snapshots))
+    assert comments.delete(s, DeleteAnnotations((ref(second),))).executed
+    assert s.undo() and s.undo()
+    assert _contents(s) == ["Box one", "Box two", "Note three"]
+    assert s.redo() and s.redo()  # the snapshot again, then the delete
+    assert _contents(s) == ["Box one", "Note three"]
+    assert s.undo() and s.undo()
+    assert comments.delete(s, DeleteAnnotations((ref(second),))).executed
+    assert _contents(s) == ["Box one", "Note three"]
+
+
+def test_reply_after_snapshot_undo_links_to_the_live_comment(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    second = unnamed_names(s)[1]
+    assert s.execute(SnapshotCommand("Edit", lambda d: None, s.snapshots))
+    assert comments.delete(s, DeleteAnnotations((ref(second),))).executed
+    assert s.undo() and s.undo()
+    assert comments.reply(s, ReplyToAnnotation(ref(second), "hi", "me")).executed
+    with s.lock:
+        models = s.document.page(0).annotations()
+    target = next(a for a in models if a.contents == "Box two")
+    reply = next(a for a in models if a.contents == "hi")
+    assert reply.in_reply_to == target.id
+
+
+def test_edit_before_a_full_save_undoes_and_redoes_after_it(open_copy: Opener) -> None:
+    """A full save names every unnamed comment in the file; an edit made before the save still
+    undoes onto the right comment, and redo works too."""
+    s = open_copy("annotations_unnamed")
+    second = unnamed_names(s)[1]
+    assert comments.set_text(s, SetAnnotationText(ref(second), "Edited")).executed
+    s.save()  # in place: a full save (no signatures)
+    with s.lock:
+        names_after = [a.name for a in s.document.page(0).annotations()]
+    assert all(n.startswith("pdfeditor-") for n in names_after)
+    assert _contents(s) == ["Box one", "Edited", "Note three"]
+    assert s.undo()
+    assert _contents(s) == ["Box one", "Box two", "Note three"]
+    assert s.redo()
+    assert _contents(s) == ["Box one", "Edited", "Note three"]
+
+
+def test_full_save_gives_every_comment_a_real_name_in_the_file(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("annotations_unnamed")
+    out = tmp_path / "named.pdf"
+    s.save(out)
+    with pikepdf.open(out) as pdf:
+        annots = [a for a in pdf.pages[0].Annots if a.get("/Subtype") != "/Popup"]
+        nm = [str(a.NM) for a in annots if a.get("/NM") is not None]
+        assert len(nm) == len(annots) == 3
+        assert not any(n.startswith("#") for n in nm)
+        assert len(set(nm)) == 3
+    assert_reads_everywhere(out, s.page_count)
+
+
+def test_delete_then_full_save_then_undo_restores_the_right_comment(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    second = unnamed_names(s)[1]
+    assert comments.delete(s, DeleteAnnotations((ref(second),))).executed
+    s.save()
+    assert s.undo()
+    assert _contents(s) == ["Box one", "Box two", "Note three"]
+    restored = next(a.name for a in s.document.page(0).annotations() if a.contents == "Box two")
+    assert comments.set_text(s, SetAnnotationText(ref(restored), "Again")).executed
+    assert _contents(s) == ["Again", "Box one", "Note three"]  # sorted
+
+
+def test_incremental_save_adds_no_names(open_copy: Opener, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A signed-looking document saved in place takes the incremental path, which must not give
+    the unnamed comments names (their object numbers don't change there)."""
+    s = open_copy("annotations_unnamed")
+    pretend_signed(s, monkeypatch)
+    before = s.path.read_bytes()
+    s.save()
+    assert s.path.read_bytes().startswith(before)  # appended, not rewritten
+    with pikepdf.open(s.path) as pdf:
+        annots = [a for a in pdf.pages[0].Annots if a.get("/Subtype") != "/Popup"]
+        assert all(a.get("/NM") is None for a in annots)
+    with s.lock:
+        assert all(a.name.startswith("#") for a in s.document.page(0).annotations())
+
+
+def test_literal_hash_name_from_a_file_stays_addressable(fixture_pdf, tmp_path: Path) -> None:
+    """A file whose /NM is literally "#123" keeps that name: find() checks /NM first."""
+    path = tmp_path / "literal.pdf"
+    shutil.copy2(fixture_pdf("annotations_unnamed"), path)
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        square = next(a for a in pdf.pages[0].Annots if a.get("/Subtype") == "/Square")
+        square.NM = pikepdf.String("#123")
+        pdf.save(path)
+    s = DocumentSession.open(path)
+    try:
+        assert "#123" in unnamed_names(s)
+        assert comments.set_text(s, SetAnnotationText(ref("#123"), "Literal")).executed
+        assert "Literal" in _contents(s)
+    finally:
+        with s.lock:
+            s.document.close()
 
 
 # -- text, replies, order -------------------------------------------------------------------

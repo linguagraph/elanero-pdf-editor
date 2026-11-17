@@ -66,6 +66,18 @@ class ReviewState(Enum):
     COMPLETED = "Completed"
 
 
+# Names of this form are assigned by the backend to annotations that have no /NM in the file
+# (``#`` plus the object number). They identify the annotation while the document is open and
+# are never written to a file: a save or export replaces them with a real name.
+SYNTHETIC_NAME_PREFIX = "#"
+
+
+def is_synthetic_name(name: str) -> bool:
+    """True for a backend-assigned name: the prefix followed by ASCII digits only."""
+    digits = name[len(SYNTHETIC_NAME_PREFIX) :]
+    return name.startswith(SYNTHETIC_NAME_PREFIX) and digits.isascii() and digits.isdigit()
+
+
 @dataclass(slots=True)
 class AnnotationModel:
     """A snapshot of one annotation's editable properties.
@@ -78,7 +90,9 @@ class AnnotationModel:
     page_index: int
     rect: Rect
     id: int | None = None
-    name: str = ""  # /NM unique name
+    # /NM unique name. Engines read back a non-empty name for every annotation (a synthetic one
+    # when the file has no /NM); "" only means "not created in the document yet".
+    name: str = ""
     contents: str = ""
     author: str = ""
     subject: str = ""

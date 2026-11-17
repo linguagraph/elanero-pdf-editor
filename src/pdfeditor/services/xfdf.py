@@ -6,13 +6,19 @@ so everything goes through ``Page.pdf_matrix`` and its inverse.
 
 from __future__ import annotations
 
+import uuid
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from datetime import datetime
 
 from pdfeditor.core.commands import AddAnnotationCommand, MacroCommand
 from pdfeditor.engine.base import Document
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, ReviewState
+from pdfeditor.model.annotations import (
+    AnnotationModel,
+    AnnotationType,
+    ReviewState,
+    is_synthetic_name,
+)
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Quad, Rect
 
@@ -64,19 +70,40 @@ def _parse_date(value: str | None) -> datetime | None:
 
 
 # -- export -----------------------------------------------------------------------------------
+def _export_names(doc: Document) -> dict[int, str]:
+    """The /NM each comment is written with, by object id.
+
+    A comment without a real name (its name is synthetic) gets a per-export name, so the file
+    never carries a backend name and replies can still point at their parent.
+    """
+    out: dict[int, str] = {}
+    count = 0
+    for index in range(doc.page_count):
+        for a in doc.page(index).annotations():
+            if a.id is None:
+                continue
+            if not a.name or is_synthetic_name(a.name):
+                count += 1
+                out[a.id] = f"pdfeditor-xfdf-{count}"
+            else:
+                out[a.id] = a.name
+    return out
+
+
 def export_xfdf(doc: Document, file_name: str = "") -> str:
     root = ET.Element("xfdf", {"xmlns": NS, "xml:space": "preserve"})
     annots = ET.SubElement(root, "annots")
+    names = _export_names(doc)
     for index in range(doc.page_count):
         page = doc.page(index)
         m = page.pdf_matrix
         models = page.annotations()
-        names = {a.id: a.name for a in models}
         for a in models:
             tag = _TAGS.get(a.type)
-            if tag is None:
+            if tag is None or a.id is None:
                 continue
             el = ET.SubElement(annots, tag, _common_attrs(a, index, m))
+            el.set("name", names[a.id])
             if a.in_reply_to is not None and names.get(a.in_reply_to):
                 el.set("inreplyto", names[a.in_reply_to])
             _geometry_out(el, a, m)
@@ -212,15 +239,27 @@ def parse_xfdf(text: str, doc: Document) -> list[AnnotationModel]:
 
 
 def import_command(text: str, doc: Document) -> MacroCommand:
-    """One undoable step that adds every comment in ``text`` (parents before replies)."""
+    """One undoable step that adds every comment in ``text`` (parents before replies).
+
+    A name that is synthetic, empty or already in the document gets a fresh one, and the replies
+    that point at a renamed comment are pointed at its new name.
+    """
     models = parse_xfdf(text, doc)
     models.sort(key=lambda m: bool(m.extra.get("irt_name")))
     existing = {a.name for i in range(doc.page_count) for a in doc.page(i).annotations()}
-    commands = []
+    renamed: dict[str, str] = {}
     for model in models:
-        if model.name in existing:
-            model.name = ""  # importing twice must not create duplicate /NM names
-        commands.append(AddAnnotationCommand(model))
+        old = model.name
+        if not old or is_synthetic_name(old) or old in existing:
+            model.name = f"pdfeditor-{uuid.uuid4().hex}"
+        if old:
+            renamed.setdefault(old, model.name)
+        existing.add(model.name)
+    for model in models:
+        irt = model.extra.get("irt_name")
+        if irt:
+            model.extra = {**model.extra, "irt_name": renamed.get(irt, irt)}
+    commands = [AddAnnotationCommand(model) for model in models]
     return MacroCommand(f"Import {len(commands)} Comments", list(commands))
 
 

@@ -22,9 +22,11 @@ from pdfeditor.model.annotations import (
     FLAG_LOCKED,
     IMAGE_STAMP,
     STANDARD_STAMPS,
+    SYNTHETIC_NAME_PREFIX,
     AnnotationModel,
     AnnotationType,
     ReviewState,
+    is_synthetic_name,
 )
 from pdfeditor.model.geometry import Point, Quad, Rect
 from pdfeditor.model.redaction import GraphicsRedaction, ImageRedaction, RedactOptions
@@ -45,6 +47,7 @@ _LINE_END_CODES = {
     "Slash": pymupdf.PDF_ANNOT_LE_SLASH,
 }
 _REF = re.compile(r"(\d+)\s+0\s+R")
+
 # Types whose geometry is just their rectangle.
 _RECT_TYPES = {
     AnnotationType.TEXT,
@@ -230,19 +233,60 @@ def stamp_image(doc: pymupdf.Document, xref: int) -> bytes | None:
 
 # -- lookup ---------------------------------------------------------------------------------
 def find(page: MuPage, annot_id: int | None = None, name: str = "") -> pymupdf.Annot:
-    """Load an annotation by /NM name, falling back to object id.
+    """Load an annotation by /NM name, then by synthetic name, falling back to object id.
 
     The name comes first: MuPDF can reuse the object number of a deleted annotation, so after an
     undo/redo cycle an old id may point at a different annotation.
+
+    A synthetic name (``SYNTHETIC_NAME_PREFIX`` + object number) addresses an annotation that has
+    no /NM. It only matches an annotation that still has no /NM, so a reused object number can't
+    hit a named annotation. A synthetic name that was replaced by a real /NM (see ``add``) is
+    followed to that name, so a command that kept the old name still finds its comment.
     """
     fz = page.fz
+    name = resolve_name(page, name)
     if name:
         for annot in fz.annots():
             if annot.info.get("id") == name:
                 return annot
+        xref = _synthetic_xref(name)
+        if xref is not None and xref in {entry[0] for entry in fz.annot_xrefs()}:
+            annot = fz.load_annot(xref)
+            if not annot.info.get("id"):
+                return annot
     if annot_id is not None and annot_id in {entry[0] for entry in fz.annot_xrefs()}:
         return fz.load_annot(annot_id)
     raise EngineError(f"annotation not found (id={annot_id}, name={name!r})")
+
+
+def resolve_name(page: MuPage, name: str) -> str:
+    """The name an annotation is known by now.
+
+    A live annotation wins: a synthetic name whose object is still on the page without a /NM
+    is returned unchanged, even after a snapshot restore that predates a rename. Only when the
+    original is gone is the rename followed, and only to a /NM that is actually on the page.
+    """
+    if not is_synthetic_name(name):
+        return name
+    xref = int(name[len(SYNTHETIC_NAME_PREFIX) :])
+    live = xref in {entry[0] for entry in page.fz.annot_xrefs()}
+    if live and not page.fz.load_annot(xref).info.get("id"):
+        return name
+    renamed = page._doc.renamed.get(name)
+    if renamed is not None and any(a.info.get("id") == renamed for a in page.fz.annots()):
+        return renamed
+    return name
+
+
+def synthetic_name(xref: int) -> str:
+    """The name an annotation without /NM is read back with: stable while the document is open."""
+    return f"{SYNTHETIC_NAME_PREFIX}{xref}"
+
+
+def _synthetic_xref(name: str) -> int | None:
+    if not is_synthetic_name(name):
+        return None
+    return int(name[len(SYNTHETIC_NAME_PREFIX) :])
 
 
 # -- create / update --------------------------------------------------------------------------
@@ -346,8 +390,14 @@ def add(page: MuPage, model: AnnotationModel) -> AnnotationModel:
         raise UnsupportedFeature(f"can't create {t.value} annotations")
     if annot is None:
         raise EngineError(f"MuPDF refused to create a {t.value} annotation")
-    name = model.name or f"pdfeditor-{uuid.uuid4().hex}"
+    # A synthetic name is never written: it would clash with another unnamed annotation's name
+    # once the file is saved and reopened. Earlier commands may still hold it, so it is recorded
+    # as renamed (see ``find``).
+    name = model.name if model.name and not is_synthetic_name(model.name) else ""
+    name = name or f"pdfeditor-{uuid.uuid4().hex}"
     page._doc.fz.xref_set_key(annot.xref, "NM", pymupdf.get_pdf_str(name))
+    if model.name and model.name != name:
+        page._doc.renamed[model.name] = name
     if model.is_callout:
         _write_callout(page._doc.fz, geo, annot.xref, model)
         annot = find(page, annot.xref)
