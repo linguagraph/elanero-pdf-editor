@@ -56,7 +56,10 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     from pdfeditor.core.engine_lock import install_manual_gc
 
     install_manual_gc()
-    if not (FIXTURES / "text_multipage.pdf").exists():
+    # Under xdist only the controller generates the corpus (it runs this hook before the workers
+    # start), so workers never write the same files at once.
+    is_worker = hasattr(session.config, "workerinput")
+    if not is_worker and not (FIXTURES / "text_multipage.pdf").exists():
         subprocess.run([sys.executable, str(ROOT / "scripts" / "make_fixtures.py")], check=True)
 
 
