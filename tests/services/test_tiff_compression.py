@@ -3,6 +3,7 @@ reach the deflate branch (W0.4 item 4), so both values are exercised and read ba
 
 from __future__ import annotations
 
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -26,7 +27,19 @@ def text_doc(fixture_pdf):
     doc.close()
 
 
-@pytest.mark.parametrize("compression", ["tiff_deflate", "tiff_lzw"])
+@pytest.mark.parametrize(
+    "compression",
+    [
+        pytest.param(
+            "tiff_deflate",
+            marks=pytest.mark.skipif(
+                sys.platform == "emscripten",
+                reason="Pillow's deflate TIFF writer aborts the Pyodide runtime (W0.4 must-fix 4)",
+            ),
+        ),
+        "tiff_lzw",
+    ],
+)
 def test_tiff_export_uses_platform_compression(text_doc, tmp_path: Path, compression: str) -> None:
     saved = current()
     configure(replace(saved, tiff_compression=compression))

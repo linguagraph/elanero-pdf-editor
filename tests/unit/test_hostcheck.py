@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,7 @@ def probe(monkeypatch: pytest.MonkeyPatch) -> str:
     return name
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="desktop mode only")
 def test_desktop_runs_the_check_inline(probe: str, desktop: None, tmp_path: Path) -> None:
     path = tmp_path / "saved.bin"
     path.write_bytes(b"ok")

@@ -122,10 +122,27 @@ def test_guard_catches_a_module_that_imports_pikepdf(tmp_path: Path) -> None:
     assert "blocked for the web build: pikepdf" in failures["fakepkg.leaky"]
 
 
+# Excluded data that is git-ignored and fetched on demand (scripts/fetch_tessdata.py), so a CI
+# checkout doesn't have it. These entries are exempt from the must-exist check below, but still
+# have to be excluded and git-ignored.
+GENERATED_EXCLUDED = ("data/tessdata/",)
+
+
 def test_excluded_entries_exist_in_the_tree() -> None:
     report = bww.excluded_report(wp.PACKAGE)
-    missing = [row["path"] for row in report if not row["matched"]]
+    missing = [
+        row["path"]
+        for row in report
+        if not row["matched"] and row["path"] not in GENERATED_EXCLUDED
+    ]
     assert missing == []
+
+
+def test_generated_excluded_entries_are_listed_and_git_ignored() -> None:
+    ignored = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
+    for entry in GENERATED_EXCLUDED:
+        assert entry in wp.EXCLUDED, entry
+        assert f"src/pdfeditor/{entry}" in ignored, entry
 
 
 def test_zip_has_no_excluded_path_and_no_build_output(tmp_path: Path) -> None:
