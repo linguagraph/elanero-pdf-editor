@@ -122,3 +122,19 @@ def test_host_only_reason_is_the_plugin_reason(skips):
         "pyodide_host_stubs_for_skips", ROOT / "web" / "test" / "pyodide" / "host_stubs.py"
     )
     assert skips.HOST_ONLY_REASON_PREFIX == stubs.HOST_PREFIX
+
+
+def test_committed_budget_gates_every_simulated_module(skips, tmp_path, capsys):
+    """Every module the simulation skips on host calls has a budget entry, and the committed
+    file passes when each one is at its budget. An unbudgeted module fails the gate (exit 1)."""
+    budgets = skips.load_budget(BUDGET)
+    assert len(budgets) == 36
+    doc = json.loads(BUDGET.read_text(encoding="utf-8"))
+    assert doc["max_total"] == sum(budgets.values())
+    summary = _write(tmp_path / "pytest-summary.json", {"hostSkipsByModule": dict(budgets)})
+    assert skips.main(["--summary", str(summary), "--budget", str(BUDGET)]) == 0
+    extra = dict(budgets, **{"tests/unit/test_new_host_module.py": 1})
+    summary = _write(tmp_path / "pytest-summary.json", {"hostSkipsByModule": extra})
+    assert skips.main(["--summary", str(summary), "--budget", str(BUDGET)]) == 1
+    out = capsys.readouterr().out
+    assert "test_new_host_module.py: 1 host-only skips and no budget entry" in out
