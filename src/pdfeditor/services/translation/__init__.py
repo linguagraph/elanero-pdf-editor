@@ -76,7 +76,8 @@ class TranslationConfig:
     libretranslate_languages: list[ServerLanguage] | None = None
     azure_key: str = ""
     azure_region: str = ""
-    opener: Opener | None = None  # tests only: replaces the network
+    # the transport: urllib on the desktop, the browser's XMLHttpRequest on the web (W3)
+    opener: Opener | None = None
 
 
 def make_translator(service_id: str, config: TranslationConfig) -> Translator:

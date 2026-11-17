@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import urllib.parse
-import urllib.request
 from typing import Any
 
 import pytest
@@ -24,15 +23,16 @@ from pdfeditor.services.translation.base import (
     ServiceError,
     TranslationError,
 )
-from pdfeditor.services.translation.http import Reply
+from pdfeditor.services.translation.http import Reply, Request
+from tests.services.translation_fakes import header_of
 
 
 class Recorder:
     def __init__(self, *replies: Reply) -> None:
         self.replies = list(replies)
-        self.requests: list[urllib.request.Request] = []
+        self.requests: list[Request] = []
 
-    def __call__(self, request: urllib.request.Request, timeout: float) -> Reply:
+    def __call__(self, request: Request, timeout: float) -> Reply:
         self.requests.append(request)
         return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
 
@@ -54,7 +54,7 @@ def error(status: int, code: int | None, message: str) -> Reply:
     return Reply(status, json.dumps(body).encode("utf-8"))
 
 
-def sent(request: urllib.request.Request) -> list[dict[str, str]]:
+def sent(request: Request) -> list[dict[str, str]]:
     assert request.data is not None
     return json.loads(request.data.decode("utf-8"))
 
@@ -71,8 +71,8 @@ def test_request_url_query_headers_and_body_without_region() -> None:
     rec = Recorder(answer(["Hello"]))
     AzureTranslator("secret-key", opener=rec).translate("Hello", "en", "de")
     request = rec.requests[0]
-    assert request.get_method() == "POST"
-    parts = urllib.parse.urlsplit(request.full_url)
+    assert request.method == "POST"
+    parts = urllib.parse.urlsplit(request.url)
     assert f"{parts.scheme}://{parts.netloc}{parts.path}" == (
         "https://api.cognitive.microsofttranslator.com/translate"
     )
@@ -81,22 +81,22 @@ def test_request_url_query_headers_and_body_without_region() -> None:
         "to": ["de"],
         "from": ["en"],
     }
-    assert request.get_header("Ocp-apim-subscription-key") == "secret-key"
-    assert request.get_header("Ocp-apim-subscription-region") is None
-    assert request.get_header("Content-type") == "application/json; charset=UTF-8"
+    assert header_of(request, "Ocp-apim-subscription-key") == "secret-key"
+    assert header_of(request, "Ocp-apim-subscription-region") is None
+    assert header_of(request, "Content-type") == "application/json; charset=UTF-8"
     assert sent(request) == [{"Text": "Hello"}]
 
 
 def test_request_carries_the_region_when_there_is_one() -> None:
     rec = Recorder(answer(["Hello"]))
     AzureTranslator("k", " westeurope ", opener=rec).translate("Hello", "en", "fr")
-    assert rec.requests[0].get_header("Ocp-apim-subscription-region") == "westeurope"
+    assert header_of(rec.requests[0], "Ocp-apim-subscription-region") == "westeurope"
 
 
 def test_source_is_left_out_when_detecting() -> None:
     rec = Recorder(answer(["Hallo"], detected="de"))
     result = AzureTranslator("k", opener=rec).translate("Hallo", None, "en")
-    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].full_url).query)
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].url).query)
     assert "from" not in query
     assert result.source_detected == "de"
 
@@ -113,7 +113,7 @@ def test_test_connection_translates_hello_to_check_the_key() -> None:
     rec = Recorder(answer(["Hello"]))
     AzureTranslator("k", opener=rec).test_connection()
     assert sent(rec.requests[0]) == [{"Text": "Hello"}]
-    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].full_url).query)
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].url).query)
     assert query["to"] == ["de"] and query["from"] == ["en"]
 
 
@@ -166,7 +166,7 @@ def test_a_failed_later_batch_keeps_the_earlier_results_on_the_error() -> None:
 def test_azure_codes(ours: str, azure: str) -> None:
     rec = Recorder(answer(["x"]))
     AzureTranslator("k", opener=rec).translate("x", ours, ours)
-    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].full_url).query)
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].url).query)
     assert query["from"] == [azure]
     assert query["to"] == [azure]
 
@@ -256,7 +256,7 @@ def test_a_detected_chinese_is_never_sent_back_as_from() -> None:
     results = AzureTranslator("k", opener=rec).translate_many([big, big], None, "en")
     assert len(rec.requests) == 2
     for request in rec.requests:
-        query = urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query)
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(request.url).query)
         assert "from" not in query
     assert results[0].source_detected == "zh"
 
@@ -277,5 +277,5 @@ def test_traditional_chinese_is_offered_and_sent_as_zh_hant() -> None:
     assert translator.languages()["zh-Hant"] == "Chinese (Traditional)"
     rec = Recorder(answer(["x"]))
     AzureTranslator("k", opener=rec).translate("x", "en", "zh-Hant")
-    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].full_url).query)
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(rec.requests[0].url).query)
     assert query["to"] == ["zh-Hant"]

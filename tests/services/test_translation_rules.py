@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import urllib.request
 from typing import Any
 
 import pytest
@@ -22,7 +21,7 @@ from pdfeditor.services.translation.base import (
     Translation,
 )
 from pdfeditor.services.translation.deepl import DeepLTranslator
-from pdfeditor.services.translation.http import Reply, request_json
+from pdfeditor.services.translation.http import Reply, Request, request_json
 from pdfeditor.services.translation.libretranslate import LibreTranslateTranslator, check_url
 from pdfeditor.services.translation.mymemory import MyMemoryTranslator
 from pdfeditor.services.translation.text import clean_pdf_text
@@ -31,9 +30,9 @@ from pdfeditor.services.translation.text import clean_pdf_text
 class Recorder:
     def __init__(self, *replies: Reply | Exception) -> None:
         self.replies = list(replies)
-        self.requests: list[urllib.request.Request] = []
+        self.requests: list[Request] = []
 
-    def __call__(self, request: urllib.request.Request, timeout: float) -> Reply:
+    def __call__(self, request: Request, timeout: float) -> Reply:
         self.requests.append(request)
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         if isinstance(reply, Exception):
@@ -45,7 +44,7 @@ def ok(payload: Any) -> Reply:
     return Reply(200, json.dumps(payload).encode("utf-8"))
 
 
-def body_of(request: urllib.request.Request) -> dict[str, Any]:
+def body_of(request: Request) -> dict[str, Any]:
     assert request.data is not None
     return json.loads(request.data.decode("utf-8"))
 
@@ -167,7 +166,7 @@ def test_deepl_maps_norwegian_to_nb_for_source_and_target() -> None:
 def test_mymemory_maps_chinese_and_norwegian_in_the_language_pair() -> None:
     rec = Recorder(ok({"responseData": {"translatedText": "x"}, "responseStatus": 200}))
     MyMemoryTranslator(opener=rec).translate("hi", "zh", "no")
-    assert "langpair=zh-CN%7Cnb" in rec.requests[0].full_url
+    assert "langpair=zh-CN%7Cnb" in rec.requests[0].url
 
 
 def test_libretranslate_maps_norwegian_and_chinese() -> None:
@@ -266,7 +265,7 @@ def test_soft_hyphens_and_unicode_hyphens_are_handled() -> None:
 
 
 def test_invalid_url_error_is_a_service_error() -> None:
-    def opener(request: urllib.request.Request, timeout: float) -> Reply:
+    def opener(request: Request, timeout: float) -> Reply:
         raise http.client.InvalidURL("bad url")
 
     with pytest.raises(ServiceError):
@@ -274,7 +273,7 @@ def test_invalid_url_error_is_a_service_error() -> None:
 
 
 def test_value_error_from_the_address_is_a_service_error() -> None:
-    def opener(request: urllib.request.Request, timeout: float) -> Reply:
+    def opener(request: Request, timeout: float) -> Reply:
         raise ValueError("unknown url type")
 
     with pytest.raises(ServiceError):
@@ -282,7 +281,7 @@ def test_value_error_from_the_address_is_a_service_error() -> None:
 
 
 def test_broken_http_response_is_an_offline_error() -> None:
-    def opener(request: urllib.request.Request, timeout: float) -> Reply:
+    def opener(request: Request, timeout: float) -> Reply:
         raise http.client.RemoteDisconnected("closed")
 
     with pytest.raises(OfflineError):

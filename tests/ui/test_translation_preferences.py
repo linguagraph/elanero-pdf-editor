@@ -6,7 +6,6 @@ translation is left off, the reason is said once, and everything else is saved."
 from __future__ import annotations
 
 import json
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +15,7 @@ from PySide6.QtWidgets import QLabel, QMessageBox
 
 from pdfeditor.core import secrets
 from pdfeditor.core.secrets import SecretError
-from pdfeditor.services.translation.http import Reply
+from pdfeditor.services.translation.http import Reply, Request
 from pdfeditor.services.translation.libretranslate import LibreTranslateTranslator
 from pdfeditor.ui.dialogs import preferences as prefs_module
 from pdfeditor.ui.dialogs.preferences import PreferencesDialog
@@ -235,8 +234,8 @@ def fake_server(languages_ok: bool) -> Any:
     """An opener for a LibreTranslate server: /translate answers, /languages answers or fails."""
     server_list = [{"code": "nb", "name": "Norwegian Bokmål"}, {"code": "de", "name": "German"}]
 
-    def opener(request: urllib.request.Request, timeout: float) -> Reply:
-        if request.full_url.endswith("/languages"):
+    def opener(request: Request, timeout: float) -> Reply:
+        if request.url.endswith("/languages"):
             if languages_ok:
                 return Reply(200, json.dumps(server_list).encode("utf-8"))
             return Reply(500, b"{}")

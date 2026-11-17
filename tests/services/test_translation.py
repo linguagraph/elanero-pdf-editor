@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
 from typing import Any
 
@@ -26,10 +25,11 @@ from pdfeditor.services.translation.base import (
     TranslationError,
 )
 from pdfeditor.services.translation.deepl import DeepLTranslator, host_for
-from pdfeditor.services.translation.http import Reply
+from pdfeditor.services.translation.http import Reply, Request
 from pdfeditor.services.translation.libretranslate import LibreTranslateTranslator, check_url
 from pdfeditor.services.translation.mymemory import MyMemoryTranslator
 from pdfeditor.services.translation.text import clean_pdf_text, split_chunks
+from tests.services.translation_fakes import header_of
 
 
 class Recorder:
@@ -37,9 +37,9 @@ class Recorder:
 
     def __init__(self, *replies: Reply | Exception) -> None:
         self.replies = list(replies)
-        self.requests: list[urllib.request.Request] = []
+        self.requests: list[Request] = []
 
-    def __call__(self, request: urllib.request.Request, timeout: float) -> Reply:
+    def __call__(self, request: Request, timeout: float) -> Reply:
         self.requests.append(request)
         assert timeout > 0
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
@@ -52,7 +52,7 @@ def ok(payload: Any, status: int = 200) -> Reply:
     return Reply(status, json.dumps(payload).encode("utf-8"))
 
 
-def body_of(request: urllib.request.Request) -> dict[str, Any]:
+def body_of(request: Request) -> dict[str, Any]:
     assert request.data is not None
     return json.loads(request.data.decode("utf-8"))
 
@@ -142,17 +142,17 @@ def test_mymemory_request_has_url_and_params() -> None:
     result = MyMemoryTranslator(opener=rec).translate("Hello", "en", "de")
     assert result == Translation("Hallo", None, "mymemory")
     request = rec.requests[0]
-    assert request.get_method() == "GET"
-    assert request.full_url.split("?")[0] == "https://api.mymemory.translated.net/get"
+    assert request.method == "GET"
+    assert request.url.split("?")[0] == "https://api.mymemory.translated.net/get"
     # No email is sent unless the user gave one.
-    assert query_of(request.full_url) == {"q": ["Hello"], "langpair": ["en|de"]}
-    assert request.get_header("User-agent") == "Elanero"
+    assert query_of(request.url) == {"q": ["Hello"], "langpair": ["en|de"]}
+    assert header_of(request, "User-agent") == "Elanero"
 
 
 def test_mymemory_sends_the_optional_email() -> None:
     rec = Recorder(ok({"responseData": {"translatedText": "x"}, "responseStatus": "200"}))
     MyMemoryTranslator(email=" me@example.com ", opener=rec).translate("a", "en", "fr")
-    assert query_of(rec.requests[0].full_url)["de"] == ["me@example.com"]
+    assert query_of(rec.requests[0].url)["de"] == ["me@example.com"]
 
 
 def test_mymemory_unescapes_html_entities() -> None:
@@ -221,10 +221,10 @@ def test_deepl_request_format() -> None:
     translator = DeepLTranslator("secret:fx", opener=rec)
     result = translator.translate("Hello", "en", "en")
     request = rec.requests[0]
-    assert request.full_url == "https://api-free.deepl.com/v2/translate"
-    assert request.get_method() == "POST"
-    assert request.get_header("Authorization") == "DeepL-Auth-Key secret:fx"
-    assert request.get_header("Content-type", "").startswith("application/json")
+    assert request.url == "https://api-free.deepl.com/v2/translate"
+    assert request.method == "POST"
+    assert header_of(request, "Authorization") == "DeepL-Auth-Key secret:fx"
+    assert header_of(request, "Content-type", "").startswith("application/json")
     assert body_of(request) == {"text": ["Hello"], "target_lang": "EN-US", "source_lang": "EN"}
     assert result == Translation("Hallo", "en", "deepl")
 
@@ -268,8 +268,8 @@ def test_deepl_without_key_is_config_error_and_sends_nothing() -> None:
 def test_deepl_test_connection_uses_usage_endpoint() -> None:
     rec = Recorder(ok({"character_count": 1, "character_limit": 500000}))
     DeepLTranslator("k:fx", opener=rec).test_connection()
-    assert rec.requests[0].full_url == "https://api-free.deepl.com/v2/usage"
-    assert rec.requests[0].get_method() == "GET"
+    assert rec.requests[0].url == "https://api-free.deepl.com/v2/usage"
+    assert rec.requests[0].method == "GET"
 
 
 # -- LibreTranslate --------------------------------------------------------------------------
@@ -296,8 +296,8 @@ def test_libre_request_and_detection() -> None:
     translator = LibreTranslateTranslator("https://lt.example.org/", "key1", opener=rec)
     result = translator.translate("Hello", None, "fr")
     request = rec.requests[0]
-    assert request.full_url == "https://lt.example.org/translate"
-    assert request.get_method() == "POST"
+    assert request.url == "https://lt.example.org/translate"
+    assert request.method == "POST"
     assert body_of(request) == {
         "q": "Hello",
         "source": "auto",
@@ -337,8 +337,8 @@ def test_libre_test_connection_sends_a_tiny_translation_with_the_key() -> None:
     rec = Recorder(ok({"translatedText": "Hallo"}))
     LibreTranslateTranslator("https://lt.example.org", "k", opener=rec).test_connection()
     request = rec.requests[0]
-    assert request.full_url == "https://lt.example.org/translate"
-    assert request.get_method() == "POST"
+    assert request.url == "https://lt.example.org/translate"
+    assert request.method == "POST"
     assert body_of(request) == {
         "q": "Hello",
         "source": "en",
