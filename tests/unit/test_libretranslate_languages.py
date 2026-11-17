@@ -5,7 +5,6 @@ address is normalised by one function everywhere. Mocked HTTP only."""
 from __future__ import annotations
 
 import json
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,7 @@ from PySide6.QtCore import QSettings
 
 from pdfeditor.services.translation import make_translator
 from pdfeditor.services.translation.base import OfflineError, TranslationError
-from pdfeditor.services.translation.http import Reply
+from pdfeditor.services.translation.http import Reply, Request
 from pdfeditor.services.translation.libretranslate import (
     LibreTranslateTranslator,
     check_url,
@@ -35,8 +34,8 @@ class Recorder:
         self.urls: list[str] = []
         self.bodies: list[bytes] = []
 
-    def __call__(self, request: urllib.request.Request, timeout: float) -> Reply:
-        self.urls.append(request.full_url)
+    def __call__(self, request: Request, timeout: float) -> Reply:
+        self.urls.append(request.url)
         self.bodies.append(request.data or b"")
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         if isinstance(reply, Exception):

@@ -29,13 +29,27 @@ class Reply:
     body: bytes
 
 
-Opener = Callable[[urllib.request.Request, float], Reply]
+@dataclass(frozen=True)
+class Request:
+    """What a client asks the transport to send. Plain data, so the web opener needs no urllib."""
+
+    url: str
+    method: str
+    headers: dict[str, str]
+    data: bytes | None
 
 
-def urllib_opener(request: urllib.request.Request, timeout: float) -> Reply:
+Opener = Callable[[Request, float], Reply]
+
+
+def urllib_opener(request: Request, timeout: float) -> Reply:
     """The real opener. HTTP error statuses come back as replies; network failures raise."""
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # Built here, not in request_json, so the wire request is exactly what it was before.
+        urllib_request = urllib.request.Request(
+            request.url, data=request.data, headers=request.headers, method=request.method
+        )
+        with urllib.request.urlopen(urllib_request, timeout=timeout) as response:
             return Reply(response.status, response.read())
     except urllib.error.HTTPError as exc:
         try:
@@ -66,7 +80,7 @@ def request_json(
         data = json.dumps(body).encode("utf-8")
         all_headers.setdefault("Content-Type", "application/json; charset=utf-8")
     try:
-        request = urllib.request.Request(url, data=data, headers=all_headers, method=method)
+        request = Request(url, method, all_headers, data)
         send = opener or urllib_opener
         reply = send(request, TIMEOUT_SECONDS)
     except (ValueError, http.client.InvalidURL) as exc:  # a malformed address, not a network fault
