@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pdfeditor.actions import comments
 from pdfeditor.core.commands import ChangeKind
 from pdfeditor.core.layout import (
     PAGE_GAP,
@@ -57,12 +58,13 @@ from pdfeditor.core.layout import (
 )
 from pdfeditor.core.render_cache import THUMBNAIL_TILE, TileKey
 from pdfeditor.core.session import DocumentSession, EventKind, SessionEvent
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType
+from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.objects import PageObject
 from pdfeditor.model.outline import Link, LinkKind
 from pdfeditor.model.text import SearchHit
 from pdfeditor.services.text import TextIndexCache, TextPos, TextSelection
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.theme import current_colors, theme_manager
 from pdfeditor.ui.tools.base import Tool
 from pdfeditor.ui.tools.select import SelectTool
@@ -762,19 +764,12 @@ class DocumentView(QGraphicsView):
         self.history_changed.emit()
 
     def delete_selected_annotations(self) -> bool:
-        from pdfeditor.core.commands import Command, DeleteAnnotationsCommand, MacroCommand
-
-        by_page: dict[int, list[str]] = {}
-        for model in self.selected_models():
-            if not model.locked:
-                by_page.setdefault(model.page_index, []).append(model.name)
-        if not by_page:
+        refs = tuple(AnnotRef(m.page_index, m.name) for m in self.selected_models() if not m.locked)
+        if not refs:
             return False
-        commands: list[Command] = [DeleteAnnotationsCommand(p, n) for p, n in by_page.items()]
-        label = "Delete Comments" if sum(map(len, by_page.values())) > 1 else "Delete Comment"
         self.set_annotation_selection([])
-        self.session.execute(commands[0] if len(commands) == 1 else MacroCommand(label, commands))
-        return True
+        result = run_action(lambda: comments.delete(self.session, comments.DeleteAnnotations(refs)))
+        return result is not None
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()

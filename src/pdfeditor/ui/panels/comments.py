@@ -24,8 +24,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core.commands import AddAnnotationCommand, ChangeKind
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, ReviewState
+from pdfeditor.actions import comments
+from pdfeditor.core.commands import ChangeKind
+from pdfeditor.model.annotations import AnnotationModel, AnnotRef, ReviewState
 from pdfeditor.services.comments import (
     Thread,
     comment_threads,
@@ -33,7 +34,8 @@ from pdfeditor.services.comments import (
     summary_html,
     type_label,
 )
-from pdfeditor.services.xfdf import export_xfdf, import_command
+from pdfeditor.services.xfdf import export_xfdf
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.panels.base import EmptyState, ViewPanel
 from pdfeditor.ui.printing import pdf_printer
@@ -47,17 +49,10 @@ ALL = "All"
 def add_reply(
     view: DocumentView, parent: AnnotationModel, text: str, state: ReviewState = ReviewState.NONE
 ) -> None:
-    reply = AnnotationModel(
-        AnnotationType.TEXT,
-        parent.page_index,
-        parent.rect,
-        contents=text,
-        author=view.author,
-        state=state,
+    request = comments.ReplyToAnnotation(
+        AnnotRef(parent.page_index, parent.name), text, view.author, state
     )
-    reply.extra = {"irt_name": parent.name}
-    label = f"Set Status {state.value}" if state is not ReviewState.NONE else "Reply"
-    view.session.execute(AddAnnotationCommand(reply, label))
+    run_action(lambda: comments.reply(view.session, request))
 
 
 class CommentsPanel(ViewPanel):
@@ -312,11 +307,9 @@ class CommentsPanel(ViewPanel):
             path = Path(chosen)
         try:
             text = path.read_text(encoding="utf-8")
-            with self.view.session.lock:
-                command = import_command(text, self.view.session.document)
+            session = self.view.session
+            result = run_action(lambda: comments.import_xfdf(session, comments.ImportXfdf(text)))
         except Exception as exc:  # malformed XML, unreadable file
             QMessageBox.warning(self, "Import Comments", f"Couldn't import comments:\n\n{exc}")
             return 0
-        if command.commands:
-            self.view.session.execute(command)
-        return len(command.commands)
+        return result.value if result is not None else 0

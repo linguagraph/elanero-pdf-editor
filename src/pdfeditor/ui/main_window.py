@@ -46,16 +46,10 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor import APP_DISPLAY_NAME, bundle
+from pdfeditor.actions import comments
 from pdfeditor.core import engine_lock
 from pdfeditor.core.autosave import Autosaver, RecoveryStore
-from pdfeditor.core.commands import (
-    AddAnnotationCommand,
-    Command,
-    MacroCommand,
-    ReorderAnnotationCommand,
-    SnapshotCommand,
-    UpdateAnnotationCommand,
-)
+from pdfeditor.core.commands import SnapshotCommand
 from pdfeditor.core.layout import LayoutMode
 from pdfeditor.core.paths import recovery_dir
 from pdfeditor.core.render_cache import RenderCache
@@ -66,13 +60,14 @@ from pdfeditor.model.annotations import (
     STANDARD_STAMPS,
     AnnotationModel,
     AnnotationType,
+    AnnotRef,
     ReviewState,
 )
-from pdfeditor.model.geometry import Matrix
 from pdfeditor.model.objects import ObjectType
 from pdfeditor.model.outline import Link, LinkKind
 from pdfeditor.services.assembly import SUPPORTED_SUFFIXES
 from pdfeditor.services.fonts import same_font_family
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.action_help import apply_short_labels, refresh_tooltips
 from pdfeditor.ui.combine_controller import CombineController
 from pdfeditor.ui.command_search import CommandSearch
@@ -201,12 +196,6 @@ def unsaved_text(session: DocumentSession) -> str:
             "without saving."
         )
     return "Your changes will be lost if you close it without saving."
-
-
-def annotate_transform(model: AnnotationModel, m: Matrix) -> AnnotationModel:
-    from pdfeditor.model.annotations import transformed
-
-    return transformed(model, m)
 
 
 # Left rail: settings key and icon of each navigation panel.
@@ -1383,27 +1372,11 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if view is None or not self._annotation_clipboard:
             return
-        page = view.current_page
-        rect = view.page_rect(page)
-        commands: list[Command] = []
-        for original in self._annotation_clipboard:
-            model = annotate_transform(original, Matrix.translate(12, 12))
-            model.page_index = page
-            model.name = ""
-            model.id = None
-            model.in_reply_to = None
-            # keep pasted comments on the page even when it is smaller than the source
-            b = model.rect
-            if not b.intersects(rect):
-                model = annotate_transform(
-                    model, Matrix.translate(rect.x0 - b.x0 + 20, rect.y0 - b.y0 + 20)
-                )
-            commands.append(AddAnnotationCommand(model, "Paste Comment"))
-        view.session.execute(
-            commands[0] if len(commands) == 1 else MacroCommand("Paste Comments", commands)
-        )
-        added = [(page, c.model.name) for c in commands if isinstance(c, AddAnnotationCommand)]
-        view.set_annotation_selection(added)
+        request = comments.PasteAnnotations(tuple(self._annotation_clipboard), view.current_page)
+        result = run_action(lambda: comments.paste(view.session, request), self.notify)
+        if result is None:
+            return
+        view.set_annotation_selection([(r.page, r.name) for r in result.value])
 
     def delete_annotations(self) -> None:
         view = self.current_view()
@@ -1459,9 +1432,8 @@ class MainWindow(QMainWindow):
             return
         text = annotate.ask_text(view, "Edit Comment", model.contents)
         if text is not None and text != model.contents:
-            after = copy.deepcopy(model)
-            after.contents = text
-            view.session.execute(UpdateAnnotationCommand(model, after, "Edit Comment Text"))
+            request = comments.SetAnnotationText(AnnotRef(model.page_index, model.name), text)
+            run_action(lambda: comments.set_text(view.session, request), self.notify)
 
     def annotation_menu(self, model: AnnotationModel, pos: QPoint) -> None:
         view = self.current_view()
@@ -1478,22 +1450,16 @@ class MainWindow(QMainWindow):
                 status.addAction(state.value, functools.partial(add_reply, view, model, "", state))
         menu.addAction("Properties", self.show_inspector)
         menu.addSeparator()
-        menu.addAction(
-            "Bring to Front",
-            lambda: view.session.execute(
-                ReorderAnnotationCommand(model.page_index, model.name, True)
-            ),
-        )
-        menu.addAction(
-            "Send to Back",
-            lambda: view.session.execute(
-                ReorderAnnotationCommand(model.page_index, model.name, False)
-            ),
-        )
+        menu.addAction("Bring to Front", functools.partial(self._reorder, view, model, True))
+        menu.addAction("Send to Back", functools.partial(self._reorder, view, model, False))
         menu.addSeparator()
         menu.addAction("Flatten", self.flatten_selected)
         menu.addAction("Delete", view.delete_selected_annotations).setEnabled(not model.locked)
         menu.exec(pos)
+
+    def _reorder(self, view: DocumentView, model: AnnotationModel, to_front: bool) -> None:
+        request = comments.ReorderAnnotation(AnnotRef(model.page_index, model.name), to_front)
+        run_action(lambda: comments.reorder(view.session, request), self.notify)
 
     def reply_to(self, view: DocumentView, model: AnnotationModel) -> None:
         text = annotate.ask_text(view, "Reply")
