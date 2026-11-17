@@ -516,6 +516,17 @@ class Document(Protocol):
         """True if ``save(options=SaveOptions(incremental=True))`` to ``path`` can work."""
         ...
 
+    def incremental_bytes(self, options: SaveOptions) -> bytes | None:
+        """The file as one incremental update would leave it, as bytes: the original file's
+        bytes followed by only the changes, so a signature's byte range stays valid.
+
+        Returns None when there is no original to append to (unsigned documents). The same
+        unchanged state returns the same bytes. After the one update has been written, a change
+        makes a further in-place update impossible: SaveError (save as a new file instead).
+        The file on disk and the document are not changed. The caller holds the engine lock.
+        """
+        ...
+
     def load_state(self, data: bytes) -> None:
         """Replace the whole document with a snapshot made by :meth:`to_bytes` (used by undo).
 
