@@ -590,13 +590,16 @@ class MuDocument:
         changes no visible content and isn't a user edit. Incremental saves don't call this
         (object numbers don't change there), and snapshots (``to_bytes``) never name anything.
         """
+        # Collect first, then write: nothing is changed while the annotation list is walked.
+        unnamed: list[int] = []
         for index in range(self.page_count):
-            for annot in self._fz.load_page(index).annots():
-                if annot.info.get("id"):
-                    continue
-                name = f"pdfeditor-{uuid.uuid4().hex}"
-                self._fz.xref_set_key(annot.xref, "NM", pymupdf.get_pdf_str(name))
-                self.renamed[f"{SYNTHETIC_NAME_PREFIX}{annot.xref}"] = name
+            unnamed.extend(
+                a.xref for a in self._fz.load_page(index).annots() if not a.info.get("id")
+            )
+        for xref in unnamed:
+            name = f"pdfeditor-{uuid.uuid4().hex}"
+            self._fz.xref_set_key(xref, "NM", pymupdf.get_pdf_str(name))
+            self.renamed[f"{SYNTHETIC_NAME_PREFIX}{xref}"] = name
 
     def _save_incremental(self, target: Path) -> None:
         if self._path is None or target != self._path or self._backing_tmp is not None:

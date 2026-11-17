@@ -98,6 +98,18 @@ def snapshot(session: DocumentSession, label: str, op: Callable[[Document], R]) 
     return results[-1]
 
 
+def current_name(doc: Document, page: int, name: str) -> str:
+    """The name a comment known by ``name`` has now on ``page``.
+
+    A full save gives every unnamed comment a real /NM (issue #168), so a ref made before the
+    save still names the comment through the engine's rename map. Call with the session lock
+    held; a page index that is out of range is left for the caller's own check.
+    """
+    if not name or not 0 <= page < doc.page_count:
+        return name
+    return doc.page(page).current_annotation_name(name)
+
+
 def plural(n: int, word: str = "Page") -> str:
     """The count and noun for an undo label: "3 Pages", or "Page" alone for one."""
     return f"{n} {word}s" if n != 1 else f"{word}"

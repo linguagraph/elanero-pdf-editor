@@ -22,6 +22,7 @@ from pdfeditor.actions.base import (
     ActionResult,
     Refused,
     StaleObject,
+    current_name,
     ensure_idle,
     execute_all,
 )
@@ -238,8 +239,9 @@ def _current(session: DocumentSession, ref: AnnotRef) -> AnnotationModel:
     """The comment as the document holds it now. Actions never trust the models a caller
     passes in for the "before" state."""
     with session.lock:
+        name = current_name(session.document, ref.page, ref.name)
         for model in session.document.page(ref.page).annotations():
-            if model.name == ref.name:
+            if model.name == name:
                 return model
     raise StaleObject(f"comment {ref.name} on page {ref.page + 1} no longer exists")
 
@@ -319,7 +321,7 @@ def restyle(
         if after is None:  # locked, or already that value
             continue
         commands.append(UpdateAnnotationCommand(cur, after, args.label, args.merge_key))
-        changed.append(ref)
+        changed.append(AnnotRef(ref.page, cur.name))
     if not execute_all(session, commands, args.label):
         return ActionResult(args.label, (), False)
     return ActionResult(args.label, tuple(changed), True)
@@ -362,8 +364,8 @@ def reply(session: DocumentSession, args: ReplyToAnnotation) -> ActionResult[Ann
 @action("annotations.reorder", ReorderAnnotation, requires=WRITE)
 def reorder(session: DocumentSession, args: ReorderAnnotation) -> ActionResult[None]:
     ensure_idle(session)
-    _current(session, args.ref)
-    command = ReorderAnnotationCommand(args.ref.page, args.ref.name, args.to_front)
+    cur = _current(session, args.ref)
+    command = ReorderAnnotationCommand(args.ref.page, cur.name, args.to_front)
     session.execute(command)
     return ActionResult(command.label, None, True)
 
@@ -373,8 +375,7 @@ def delete(session: DocumentSession, args: DeleteAnnotations) -> ActionResult[No
     ensure_idle(session)
     by_page: dict[int, list[str]] = {}
     for ref in args.refs:
-        _current(session, ref)
-        by_page.setdefault(ref.page, []).append(ref.name)
+        by_page.setdefault(ref.page, []).append(_current(session, ref).name)
     # the label is passed to every command, so two comments on one page read "Delete Comments"
     label = "Delete Comments" if sum(map(len, by_page.values())) > 1 else "Delete Comment"
     commands: list[Command] = [

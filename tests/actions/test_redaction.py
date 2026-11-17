@@ -298,6 +298,20 @@ def test_selective_apply_of_an_unnamed_mark_applies_it(open_copy: Opener) -> Non
     assert "Sensitive" not in _pdfium_text(s.path)
 
 
+def test_apply_with_a_ref_made_before_a_full_save_still_applies(open_copy: Opener) -> None:
+    """A full save names the unnamed mark; a MarkRef made before it still applies that mark."""
+    s = open_copy("annotations_unnamed")
+    (mark,) = _marks(s, page=1)
+    before = MarkRef(1, mark.name)
+    s.save()  # a full save: the mark gets a real /NM
+    (after,) = _marks(s, page=1)
+    assert after.name != before.name
+    result = run(s, "redaction.apply", ApplyRedactions((before,)))
+    assert result.label == "Apply Redaction"
+    assert _marks(s, page=1) == []
+    assert "Sensitive" not in _text(s, page=1)
+
+
 def test_apply_refuses_a_name_shared_by_two_marks(open_copy: Opener) -> None:
     s = open_copy("sensitive")
     with s.lock:
