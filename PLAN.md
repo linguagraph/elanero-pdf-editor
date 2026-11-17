@@ -532,11 +532,11 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W1 Design, #134**
 
 - [x] **W1.1** Overall web architecture
-- [ ] **W1.2** RPC protocol spec
+- [x] **W1.2** RPC protocol spec
 - [x] **W1.3** Actions layer
-- [ ] **W1.4** Rendering and viewport design
-- [ ] **W1.5** Editing tools design
-- [ ] **W1.6** UI/UX design
+- [x] **W1.4** Rendering and viewport design
+- [x] **W1.5** Editing tools design
+- [x] **W1.6** UI/UX design
 - [x] **W1.7** Test strategy
 
 **W2 Shared code made web-ready, #135**
@@ -566,9 +566,12 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W4 Front-end shell, #137**
 
 - [ ] **W4.1** Project scaffold in `web/`
-- [ ] **W4.2** App shell: start page, tabs, recent files
-- [ ] **W4.3** Ribbon, command registry and command palette
-- [ ] **W4.4** Theme (light/dark, CSS variables)
+- [ ] **W4.2a** Layout grid, breakpoints, side rails and panel frames
+- [ ] **W4.2b** Start page, tabs, recent files
+- [ ] **W4.3a** Command registry, ribbon and app menu
+- [ ] **W4.3b** Command palette and shortcuts
+- [ ] **W4.4a** Theme (generated CSS variables, light/dark, icons, brand)
+- [ ] **W4.4b** Toasts, job progress, loading screen, not-responding dialog
 - [ ] **W4.5** Preferences dialog
 - [ ] **W4.6** PWA: manifest and service worker
 - [ ] **W4.7** Message catalogue (i18n) and RPC error mapping
@@ -591,14 +594,15 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W6.5** R7 Print
 - [ ] **W6.6** R4 Translate
 - [ ] **W6.7a** R1a select, move and delete page objects
-- [ ] **W6.7b** R1a add text box and shapes; add and replace images
-- [ ] **W6.8a** R1b in-place paragraph editor
+- [ ] **W6.7b** R1a add shapes; add, replace and export images
+- [ ] **W6.8a** R1b in-place paragraph editor and add text
 - [ ] **W6.8b** R1b font picker
 - [ ] **W6.9** R1c Font upload
 
 **W7 Added features, #140**
 
-- [ ] **W7.1** A4 Comment tools and comments panel
+- [ ] **W7.1a** A4 Comment tools and `annotations.create`
+- [ ] **W7.1b** A4 Comments panel
 - [ ] **W7.2** A5 Comment summary export and XFDF import/export
 - [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds
 - [ ] **W7.4** A7 Redaction and sanitize
