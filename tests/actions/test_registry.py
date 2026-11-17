@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import importlib
 import os
 import subprocess
 import sys
@@ -21,11 +22,12 @@ from typing import Any, cast
 import pytest
 
 from pdfeditor.actions import REGISTRY, available, run
-from pdfeditor.actions.base import NotSupported
+from pdfeditor.actions.base import Busy, NotSupported
 from pdfeditor.actions.pages import DeletePages, RotatePages
-from pdfeditor.core.session import DocumentSession
+from pdfeditor.core.session import DocumentSession, EventKind
 from pdfeditor.engine.base import Capabilities
 from pdfeditor.engine.registry import get_engine
+from tests.actions.conftest import Opener
 
 PAGE_ACTIONS = {
     "pages.delete",
@@ -162,7 +164,37 @@ def test_run_refuses_a_missing_capability(session: DocumentSession) -> None:
 
 
 def test_available_lists_the_page_actions_for_mupdf(session: DocumentSession) -> None:
-    assert available(session) == sorted(PAGE_ACTIONS)
+    names = available(session)
+    assert names == sorted(names)
+    assert PAGE_ACTIONS <= set(names) <= set(REGISTRY)
+
+
+def busy_cases_for(name: str) -> object:
+    """The minimal args for ``name``: ``BUSY_CASES`` in the test module of the module that defines
+    the action (``pdfeditor.actions.pages`` -> ``tests.actions.test_pages``), so each group adds
+    its cases in its own test file."""
+    module = REGISTRY[name].fn.__module__.rsplit(".", 1)[1]
+    tests = importlib.import_module(f"tests.actions.test_{module}")
+    cases: dict[str, object] = getattr(tests, "BUSY_CASES", {})
+    assert name in cases, f"add {name!r} to BUSY_CASES in tests/actions/test_{module}.py"
+    return cases[name]
+
+
+@pytest.mark.parametrize("name", sorted(REGISTRY))
+def test_actions_refuse_while_a_task_runs(open_copy: Opener, name: str) -> None:
+    args = busy_cases_for(name)
+    s = open_copy("text_multipage")
+    events: list[EventKind] = []
+    unsubscribe = s.subscribe(lambda event: events.append(event.kind))
+    s.begin_task("OCR")
+    try:
+        with pytest.raises(Busy, match="OCR"):
+            run(s, name, args)
+    finally:
+        s.end_task("OCR")
+        unsubscribe()
+    assert EventKind.BLOCKED in events
+    assert not s.undo_stack.can_undo
 
 
 def test_importing_the_package_does_not_load_qt() -> None:
