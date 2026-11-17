@@ -222,3 +222,24 @@ def test_same_state_repeated_in_place_save_returns_equal_bytes(tmp_path: Path) -
     assert first.incremental is True
     assert second.data == first.data
     session.close()
+
+
+def test_copy_of_an_unchanged_signed_document_does_not_spend_the_in_place_save(
+    tmp_path: Path,
+) -> None:
+    session = DocumentSession.open(_signed_copy(tmp_path))
+    first = session.save_bytes("in_place")
+    session.save_bytes("copy")
+    assert session.save_bytes("in_place").data == first.data
+    session.close()
+
+
+def test_copy_after_a_real_edit_still_refuses_the_next_in_place_save(tmp_path: Path) -> None:
+    session = DocumentSession.open(_signed_copy(tmp_path))
+    _edit(session, "one")
+    session.save_bytes("in_place")
+    _edit(session, "two")
+    session.save_bytes("copy")
+    with pytest.raises(SaveError, match="once after it changes"):
+        session.save_bytes("in_place")
+    session.close()

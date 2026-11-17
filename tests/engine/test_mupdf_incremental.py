@@ -169,10 +169,11 @@ def test_signed_flag_document_with_empty_embedded_files_repeats_from_cache(
     assert doc.incremental_bytes(INCREMENTAL) == first
 
 
-def test_writer_failure_raises_with_the_cause_and_a_later_call_still_works(
+def test_writer_failure_raises_with_the_cause_and_keeps_the_lineage_spent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = SIGNED.read_bytes()
+    """MuPDF's writer may advance its state before it fails, so the one update counts as used:
+    a later call refuses rather than writing on a state it can't match."""
     doc = _open_signed(SIGNED)
     doc.set_metadata(Metadata(title="before failure"))
 
@@ -184,8 +185,27 @@ def test_writer_failure_raises_with_the_cause_and_a_later_call_still_works(
         doc.incremental_bytes(INCREMENTAL)
     assert isinstance(caught.value.__cause__, RuntimeError)
     monkeypatch.undo()
+    with pytest.raises(SaveError, match=ONCE_MESSAGE):
+        doc.incremental_bytes(INCREMENTAL)
 
-    data = doc.incremental_bytes(INCREMENTAL)  # not spent by the failure
+
+def test_failure_before_the_writer_leaves_the_lineage_unspent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = SIGNED.read_bytes()
+    doc = _open_signed(SIGNED)
+    doc.set_metadata(Metadata(title="before failure"))
+
+    def broken_clean(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("clean steps exploded")
+
+    monkeypatch.setattr(pymupdf, "JM_embedded_clean", broken_clean)
+    with pytest.raises(SaveError, match="incremental save failed") as caught:
+        doc.incremental_bytes(INCREMENTAL)
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    monkeypatch.undo()
+
+    data = doc.incremental_bytes(INCREMENTAL)  # the writer never ran, so the update is still due
     assert data is not None
     assert data.startswith(original)
     assert _title(data) == "before failure"

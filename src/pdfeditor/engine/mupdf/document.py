@@ -637,7 +637,7 @@ class MuDocument:
         self._force_dirty = False
         return target
 
-    def _name_unnamed_annotations(self) -> None:
+    def _name_unnamed_annotations(self) -> int:
         """Give every annotation without a /NM a unique name before a full save.
 
         Object numbers can change in a full rewrite, so a synthetic name would not survive the
@@ -657,6 +657,7 @@ class MuDocument:
             name = f"pdfeditor-{uuid.uuid4().hex}"
             self._fz.xref_set_key(xref, "NM", pymupdf.get_pdf_str(name))
             self.renamed[f"{SYNTHETIC_NAME_PREFIX}{xref}"] = name
+        return len(unnamed)
 
     def _save_incremental(self, target: Path) -> None:
         if self._path is None or target != self._path or self._backing_tmp is not None:
@@ -681,18 +682,23 @@ class MuDocument:
             with contextlib.suppress(OSError):
                 backup.unlink()
 
-    def _subset_gained_fonts(self, options: SaveOptions) -> None:
-        """Subset the fonts this app embedded, for a full save (not for an incremental one)."""
+    def _subset_gained_fonts(self, options: SaveOptions) -> bool:
+        """Subset the fonts this app embedded, for a full save (not for an incremental one).
+        Returns whether it ran."""
         if self._gained_file_fonts and options.subset_fonts:
             self._subset_new_fonts()
+            return True
+        return False
 
     def prepare_full_save(self, options: SaveOptions) -> None:
         """What a full save does to the open document before writing it, as :meth:`save`
         does: names unnamed annotations and subsets the fonts this app embedded. Done in the
-        open document too, so it counts as a change (it bumps the edit counter)."""
-        self._edits += 1
-        self._name_unnamed_annotations()
-        self._subset_gained_fonts(options)
+        open document too. It counts as a change (bumps the edit counter) only when it changed
+        something: a repeat copy of an unchanged document must not spend the in-place lineage."""
+        changed = self._name_unnamed_annotations() > 0
+        changed = self._subset_gained_fonts(options) or changed
+        if changed:
+            self._edits += 1
 
     def _save_full(self, target: Path, options: SaveOptions) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -792,7 +798,6 @@ class MuDocument:
         write_opts.do_encrypt = pymupdf.mupdf.PDF_ENCRYPT_KEEP
         write_opts.do_garbage = 0
         write_opts.dont_regenerate_id = 1
-        self._lineage_written = True
         try:
             pdf = pymupdf._as_pdf_document(self._fz)
             # The clean steps may change objects before the update is written. The update
@@ -803,13 +808,13 @@ class MuDocument:
             with tempfile.TemporaryDirectory(prefix="pdfeditor-incr-") as tmp:
                 target = Path(tmp) / "incremental.pdf"
                 target.write_bytes(base)
+                # Failures before this point leave the lineage unspent: MuPDF's writer hasn't run.
+                # From here on it may have advanced its cross-reference state even if it fails,
+                # so the lineage stays spent.
+                self._lineage_written = True
                 pymupdf.mupdf.pdf_save_document(pdf, str(target), write_opts)
                 result = target.read_bytes()
         except Exception as exc:
-            # Nothing was returned, so the lineage is not spent: a later call may try again.
-            # (A failure inside the writer after MuPDF advanced its state is not detected here;
-            # see the W2.3 report.)
-            self._lineage_written = False
             raise SaveError(f"incremental save failed: {exc}") from exc
         self._lineage_output = result
         self._lineage_edit = self._edits
@@ -987,11 +992,22 @@ class MuDocument:
 
     def to_bytes(self, options: SaveOptions | None = None) -> bytes:
         options = options or SaveOptions()
-        data = bytes(self._fz.tobytes(**self._save_kwargs(options)))
+        # Garbage collection (garbage >= 2) compacts the open document's objects in place, which
+        # would change the state an in-place update of a signed document is built on. Such a
+        # write goes through a scratch copy instead.
+        source = self._scratch_copy() if options.garbage >= 2 and self._lineage_on else self
+        data = bytes(source._fz.tobytes(**source._save_kwargs(options)))
         if options.garbage == 0:  # keeps object numbers: a snapshot that may be loaded back
             key = hashlib.sha1(data).digest()
             self._snapshot_fonts[key] = (self._loaded_xrefs, self._gained_file_fonts)
         return data
+
+    def _scratch_copy(self) -> MuDocument:
+        """An independent copy of the current state, with the same pending security settings."""
+        data = bytes(self._fz.tobytes(garbage=0, encryption=pymupdf.PDF_ENCRYPT_KEEP))
+        scratch = open_document(data, self._password)
+        scratch._security = self._security
+        return scratch
 
     def close(self) -> None:
         self._reset_pages()
