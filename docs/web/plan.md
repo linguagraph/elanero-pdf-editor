@@ -182,12 +182,15 @@ Legend: **[D]** design by Opus 5.5 · **[I]** implementation by a Haiku 5.5 suba
 
 ### W4: Front-end shell (TypeScript, React, Vite)
 - **W4.1 [I]** Project scaffold in `web/` (Vite, React, TypeScript strict, ESLint, Prettier, Vitest, Playwright), CSP meta tag, AGPL source link in About (exact commit).
-- **W4.2 [I]** App shell: start page with open, drag and drop, recent files (names only, stored locally), tabs for several documents, a `beforeunload` warning for unsaved changes.
-- **W4.3 [I]** Ribbon, command registry, command palette (Ctrl+Shift+P), shortcuts (from `web/src/generated/shortcuts.json`, W2.1 (f)).
-- **W4.4 [I]** Theme (light/dark, CSS variables generated from `ui/style/tokens.py`), icons from `data/icons`, toasts, job progress centre.
-- **W4.5 [I]** Preferences dialog (stored locally; no secrets in `localStorage`).
+- **W4.2a [I]** Layout grid with the breakpoints and overlays, side rails and panel frames ([design/W1.6.md](design/W1.6.md) §1, §4, §8).
+- **W4.2b [I]** Start page with open, drag and drop, recent files (names only, stored locally), tabs for several documents, a `beforeunload` warning for unsaved changes (W1.6 §3).
+- **W4.3a [I]** Command registry; ribbon with the desktop's seven tabs in its order (Home, Edit, Organize, Protect, Comment, View, Tools), group overflow, compact and collapsed modes; the ☰ app menu (W1.6 §2, §6, §9).
+- **W4.3b [I]** Command palette (Ctrl+Shift+P), shortcuts (from `web/src/generated/shortcuts.json`, W2.1 (f)) with the web override table for browser-reserved keys, a Playwright probe of which keys reach the page in each browser, and the Keyboard Shortcuts dialog (W1.6 §9).
+- **W4.4a [I]** Theme: `scripts/make_web_tokens.py` generates `web/src/generated/tokens.css` from `ui/style/tokens.py` (2 schemes × the 8 accent presets, with a `--check` test); light/dark/system; forced colours; icons compiled from `data/icons`; the brand assets of W1.6 §7.
+- **W4.4b [I]** Toasts, job chip and job list, loading screen, the engine-not-responding dialog (W1.6 §10).
+- **W4.5 [I]** Preferences dialog (stored locally; no secrets in `localStorage`), with uploaded-font management and "Clear all local data"; desktop-only options left out (W1.6 §9).
 - **W4.6 [I]** PWA: manifest, service worker with versioned cache, offline after first load, update prompt, File Handling API. Must-do from W0.2: the service worker caches the versioned Pyodide core and wheels, so a repeat visit makes no network request before page 1 (W0.2 found the 18 MB wheel refetched when the browser cache dropped it).
-- **W4.7 [I]** Message catalogue (i18n) and the mapping from RPC error codes to messages.
+- **W4.7 [I]** Message catalogue (i18n) and the mapping from RPC error codes to messages: flat JSON per language, `Intl.PluralRules` plurals, no i18n library, tests that every used key and every error code has an English message (W1.6 §11).
 
 ### W5: Viewer and navigation (A1–A3)
 - **W5.1a [I]** Document view: virtualised page list, single and continuous layouts, zoom and fit modes.
@@ -226,7 +229,7 @@ Legend: **[D]** design by Opus 5.5 · **[I]** implementation by a Haiku 5.5 suba
 - **W8.2 [I]** Visual golden tests for rendering, comparing with desktop output.
 - **W8.3 [I]** Performance tests in CI with the budgets in decision 10 (repeat visit ≤ 4 s gate; the 6 s / 2 s targets tracked as trends; CI runners vary by up to ~40%, so compare against a pinned baseline, not absolute numbers) (load, first page, scroll on a 1000-page file, save, job-worker start).
 - **W8.4 [I]** Fuzz/robustness: open the malformed fixtures and a fuzzed corpus in the worker; the app must show an error, never hang the tab.
-- **W8.5 [I]** Accessibility: keyboard-only walkthrough, axe-core checks in CI, screen reader labels, contrast in both themes.
+- **W8.5 [I]** Accessibility: keyboard-only walkthrough of every F6 region, axe-core checks in CI, screen reader labels, contrast in both themes, forced colours, reduced motion, 44 px touch targets (W1.6 §12).
 - **W8.6 [D+review] Security review** by a Sonnet 5.5 subagent of the whole web app against the threat model in W1.1 (not just per PR): CSP, RPC, link handling, translation, storage, service worker, dependencies. Opus 5.5 designs fixes for anything structural.
 
 ### W9: Build, release and docs
