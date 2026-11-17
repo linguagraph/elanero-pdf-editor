@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from pdfeditor import bundle
 from pdfeditor.ui import branding
@@ -44,8 +44,9 @@ def test_store_update_check_is_on_by_default_and_persists(tmp_path: Path) -> Non
 
 
 def test_disabled_splash_is_a_null_splash_and_decodes_nothing(
-    monkeypatch: pytest.MonkeyPatch,
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Builds a QWidget, so it needs the application itself: run alone, it aborted the process.
     def decoded(*args: object, **kwargs: object) -> None:
         raise AssertionError("the splash art was decoded")
 

@@ -28,6 +28,7 @@ uv pip install -e ".[dev]"            # add ",ocr,export" for optional features
 uv run python scripts/make_fixtures.py  # regenerate tests/fixtures/generated (git-ignored)
 uv run pytest                          # all tests; GUI tests need QT_QPA_PLATFORM=offscreen headless
 uv run pytest -m "not slow"            # quick loop
+QT_QPA_PLATFORM=offscreen uv run pytest -n auto  # parallel (pytest-xdist, ~40 s locally); the serial run above stays the reference
 uv run ruff check . && uv run ruff format .
 uv run lint-imports                    # architecture contracts
 uv run mypy

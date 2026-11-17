@@ -33,3 +33,6 @@ site/
 web/spike/node_modules/
 web/spike/out/
 web/spike/dist/
+
+# Local pytest run logs (serial vs -n auto comparisons; never committed)
+.pytest-xdist-logs/

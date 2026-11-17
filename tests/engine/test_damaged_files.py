@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import random
 import re
 from pathlib import Path
 
@@ -36,9 +36,17 @@ def test_truncated_file_is_repaired(engine: Engine, fixture_pdf, tmp_path: Path)
     doc.close()
 
 
+# Fixed-seed noise, not os.urandom: xdist workers must collect identical test ids.
+_NOISE = random.Random(20260917).randbytes(3000)
+
+
 @pytest.mark.parametrize(
     ("content", "message"),
-    [(b"", "empty"), (os.urandom(3000), "isn't a PDF"), (b"%PDF-1.7\n", "isn't a PDF")],
+    [
+        pytest.param(b"", "empty", id="empty"),
+        pytest.param(_NOISE, "isn't a PDF", id="noise"),
+        pytest.param(b"%PDF-1.7\n", "isn't a PDF", id="header-only"),
+    ],
 )
 def test_unreadable_files(engine: Engine, tmp_path: Path, content: bytes, message: str) -> None:
     path = tmp_path / "bad.pdf"
