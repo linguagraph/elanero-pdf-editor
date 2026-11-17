@@ -5,11 +5,10 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass, field, replace
 
-import pikepdf
-
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
 from pdfeditor.engine.base import Document, OptimizeOptions, SaveOptions
 from pdfeditor.model.metadata import SpaceUsage
+from pdfeditor.model.platform import current
 
 
 @dataclass(frozen=True)
@@ -83,6 +82,9 @@ def audit(doc: Document) -> SpaceUsage:
 def linearize(data: bytes) -> bytes:
     """Rewrite for fast web view (qpdf). Encrypted files are not supported (qpdf would drop
     the encryption), so callers must check first."""
+    # pikepdf is imported here, not at module level, so the web build can import this module
+    import pikepdf
+
     with pikepdf.open(io.BytesIO(data)) as pdf:
         out = io.BytesIO()
         pdf.save(
@@ -95,6 +97,8 @@ def linearize(data: bytes) -> bytes:
 
 
 def _is_encrypted(data: bytes) -> bool:
+    import pikepdf
+
     try:
         with pikepdf.open(io.BytesIO(data)) as pdf:
             return bool(pdf.is_encrypted)
@@ -114,7 +118,9 @@ def reduce_size(
     ``before`` is the size to compare with (the file on disk); by default what a normal save
     would write now.
     """
-    steps = 4 if options.linearize else 3
+    # The fast web view needs pikepdf, which the web build doesn't ship: skip it there.
+    linearize_on = options.linearize and current().linearize
+    steps = 4 if linearize_on else 3
 
     def step(n: int) -> None:
         if token is not None:
@@ -140,12 +146,14 @@ def reduce_size(
         work.close()
     step(2)
     notes: list[str] = []
-    if options.linearize:
+    if linearize_on:
         if _is_encrypted(data):
             notes.append("Fast web view was skipped: it isn't supported for encrypted files.")
         else:
             data = linearize(data)
         step(3)
+    elif options.linearize:
+        notes.append("Fast web view isn't available on this platform.")
     progress(steps, steps)
     if len(data) >= before:
         notes.append("The file is already compact; these settings don't make it smaller.")

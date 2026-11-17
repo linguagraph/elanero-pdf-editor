@@ -13,6 +13,7 @@ from PIL import Image
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
 from pdfeditor.engine.base import ColorMode, Document, RenderRequest
 from pdfeditor.model.geometry import Matrix
+from pdfeditor.model.platform import current
 
 
 class ImageFormat(Enum):
@@ -48,12 +49,21 @@ def render_page(doc: Document, index: int, options: PageImageOptions) -> Image.I
     return img
 
 
+def tiff_compression() -> str:
+    """The TIFF writer's compression for this platform.
+
+    A failed deflate write aborts the Pyodide runtime (W0.4), so the web build takes LZW through
+    its platform flag and must never reach the deflate branch.
+    """
+    return current().tiff_compression
+
+
 def _save(img: Image.Image, target: Path, options: PageImageOptions) -> None:
     kwargs: dict[str, object] = {"dpi": (options.dpi, options.dpi)}
     if options.format is ImageFormat.JPEG:
         kwargs.update(quality=options.jpeg_quality, optimize=True)
     elif options.format is ImageFormat.TIFF:
-        kwargs["compression"] = "tiff_deflate"
+        kwargs["compression"] = tiff_compression()
     img.save(target, format=options.format.value.upper(), **kwargs)
 
 
@@ -94,7 +104,7 @@ def export_pages(
             format="TIFF",
             save_all=True,
             append_images=frames[1:],
-            compression="tiff_deflate",
+            compression=tiff_compression(),
             dpi=(options.dpi, options.dpi),
         )
         written.append(target)

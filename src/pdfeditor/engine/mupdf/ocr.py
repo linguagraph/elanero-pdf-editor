@@ -22,7 +22,6 @@ import pymupdf
 from pdfeditor.engine.base import EngineError
 from pdfeditor.engine.contentstream.parser import Name, parse, write
 from pdfeditor.engine.deskew import estimate_skew, rotate_about_center
-from pdfeditor.engine.mupdf import ocr_worker
 from pdfeditor.engine.mupdf.flatten import flatten_inserted_forms
 
 if TYPE_CHECKING:
@@ -42,6 +41,9 @@ def text_layer(
     angle = 0.0
     if preprocess or deskew:
         pix, angle = _prepare(pix, preprocess, deskew)
+    # imported here so the engine imports without the OCR helper process (web build)
+    from pdfeditor.engine.mupdf import ocr_worker
+
     try:
         # in a helper process: MuPDF's OCR holds the GIL, which would freeze the window
         data = ocr_worker.recognize(pix, dpi, language, str(tessdata))

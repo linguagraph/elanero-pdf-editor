@@ -20,6 +20,7 @@ from fontTools.ttLib.ttCollection import TTCollection
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
 from pdfeditor.core.paths import data_dir
 from pdfeditor.model.fonts import BITMAP_ONLY, RESTRICTED, FontFace, FontRef, FontRefKind
+from pdfeditor.model.platform import current
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +202,13 @@ def installed_ref_for_font_name(
 
 
 def system_font_dirs() -> list[Path]:
-    """Existing, platform-appropriate directories to scan for installed fonts."""
+    """Existing, platform-appropriate directories to scan for installed fonts.
+
+    Empty on the web build, which has no OS font folders (W0.4, item 7); its fonts come from the
+    bundle or from uploaded files.
+    """
+    if not current().system_fonts:
+        return []
     system = platform.system()
     candidates: list[Path] = []
     if system == "Windows":
