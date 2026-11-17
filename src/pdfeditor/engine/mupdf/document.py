@@ -168,6 +168,8 @@ class MuDocument:
     def __init__(self, fz: pymupdf.Document, path: Path | None, password: str | None) -> None:
         self._fz = fz
         self._path = path
+        # (page index, synthetic name) -> the /NM it was replaced with (this session only)
+        self.renamed: dict[tuple[int, str], str] = {}
         self._password = password
         self._pages: dict[int, MuPage] = {}
         self._revisions: dict[int, int] = {}

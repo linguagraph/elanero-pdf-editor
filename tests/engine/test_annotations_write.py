@@ -12,7 +12,12 @@ import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.base import ColorMode, Engine, EngineError, RenderRequest
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, ReviewState
+from pdfeditor.model.annotations import (
+    AnnotationModel,
+    AnnotationType,
+    ReviewState,
+    is_synthetic_name,
+)
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Quad, Rect
 
@@ -411,7 +416,7 @@ def test_delete_by_name_of_an_unnamed_annotation_deletes_only_that_one(
     doc.close()
 
 
-def test_undo_of_delete_stores_the_synthetic_name_as_nm(
+def test_undo_of_delete_gives_a_real_name_and_stays_addressable(
     writable: Engine, fixture_pdf, tmp_path: Path
 ) -> None:
     doc, _ = _unnamed(writable, fixture_pdf, tmp_path)
@@ -419,10 +424,12 @@ def test_undo_of_delete_stores_the_synthetic_name_as_nm(
     gone = page.annotations()[1]
     page.delete_annotation(gone.id, name=gone.name)
     stored = page.add_annotation(dataclasses.replace(gone, id=None))
-    assert stored.name == gone.name  # the synthetic name becomes the /NM it is written with
-    assert {a.name for a in page.annotations()} >= {gone.name}
-    page.update_annotation(dataclasses.replace(stored, contents="Back"))
-    assert next(a for a in page.annotations() if a.name == gone.name).contents == "Back"
+    # a synthetic name is never written: the re-created comment gets a real /NM
+    assert stored.name.startswith("pdfeditor-") and not is_synthetic_name(stored.name)
+    assert page.current_annotation_name(gone.name) == stored.name
+    # a command that still holds the old name finds the comment
+    page.update_annotation(dataclasses.replace(gone, contents="Back"))
+    assert next(a for a in page.annotations() if a.name == stored.name).contents == "Back"
     doc.close()
 
 
@@ -448,6 +455,9 @@ def test_saved_unnamed_comments_stay_addressable(
     assert contents == ["Box one", "Edited again", "Note three"]
     again.close()
     with pikepdf.open(path) as pdf:  # a note's /Popup is an Annots entry too: not a comment
+        # no backend name is ever written: the untouched comments simply have no /NM
+        nm = [str(a.NM) for a in pdf.pages[0].Annots if a.get("/NM") is not None]
+        assert not any(n.startswith("#") for n in nm)
         assert [a.Subtype for a in pdf.pages[0].Annots if a.Subtype != "/Popup"] == [
             "/Square",
             "/Square",

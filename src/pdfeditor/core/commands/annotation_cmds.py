@@ -1,12 +1,15 @@
 """Undoable annotation edits.
 
-Annotations are tracked by their /NM ``name``, which stays the same when an undo re-creates a
-deleted annotation (the engine object id may change).
+Annotations are tracked by their /NM ``name``. An undo that re-creates a deleted annotation may
+get a new name (an annotation that had no /NM is given a real one, see ``Page.add_annotation``),
+so every command takes the name the engine returns and resolves the names it holds through
+``Page.current_annotation_name`` before using them.
 """
 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import uuid
 from collections.abc import Sequence
 
@@ -27,6 +30,7 @@ def _ensure_name(model: AnnotationModel) -> AnnotationModel:
 
 
 def _by_name(doc: Document, page: int, name: str) -> AnnotationModel | None:
+    name = doc.page(page).current_annotation_name(name)
     return next((a for a in doc.page(page).annotations() if a.name == name), None)
 
 
@@ -42,9 +46,13 @@ class AddAnnotationCommand(Command):
             parent = _by_name(doc, model.page_index, self.model.extra["irt_name"])
             model.in_reply_to = parent.id if parent else None
         self.stored = doc.page(model.page_index).add_annotation(model)
+        # The engine may have given a new name (a synthetic one is never written): undo and a
+        # later redo must use the name it actually stored.
+        self.model.name = self.stored.name
 
     def undo(self, doc: Document) -> None:
-        doc.page(self.model.page_index).delete_annotation(None, self.model.name)
+        page = doc.page(self.model.page_index)
+        page.delete_annotation(None, page.current_annotation_name(self.model.name))
 
     def changes(self) -> list[Change]:
         return _changes([self.model.page_index])
@@ -67,10 +75,14 @@ class UpdateAnnotationCommand(Command):
         self.merge_key = merge_key
 
     def do(self, doc: Document) -> None:
-        doc.page(self.after.page_index).update_annotation(self.after)
+        page = doc.page(self.after.page_index)
+        self.after.name = page.current_annotation_name(self.after.name)
+        page.update_annotation(self.after)
 
     def undo(self, doc: Document) -> None:
-        doc.page(self.before.page_index).update_annotation(self.before)
+        page = doc.page(self.before.page_index)
+        self.before.name = page.current_annotation_name(self.before.name)
+        page.update_annotation(self.before)
 
     def merge_with(self, other: Command) -> bool:
         if (
@@ -103,7 +115,8 @@ class DeleteAnnotationsCommand(Command):
         page = doc.page(self.page_index)
         existing = page.annotations()
         by_id = {a.id: a for a in existing}
-        chosen = {a.name for a in existing if a.name in self.names}
+        held = {page.current_annotation_name(n) for n in self.names}
+        chosen = {a.name for a in existing if a.name in held}
         # include replies, transitively
         changed = True
         while changed:
@@ -129,13 +142,24 @@ class DeleteAnnotationsCommand(Command):
 
     def undo(self, doc: Document) -> None:
         page = doc.page(self.page_index)
-        for model in self._saved:
-            model = copy.deepcopy(model)
+        # old name -> the name each comment is re-created with
+        renamed: dict[str, str] = {}
+        restored: list[AnnotationModel] = []
+        for saved in self._saved:  # parents first, so a reply finds its re-created parent
+            model = copy.deepcopy(saved)
             irt = model.extra.get("irt_name")
             if irt:
-                parent = _by_name(doc, self.page_index, irt)
+                parent = _by_name(doc, self.page_index, renamed.get(irt, irt))
                 model.in_reply_to = parent.id if parent else None
-            page.add_annotation(model)
+            stored = page.add_annotation(model)
+            renamed[saved.name] = stored.name
+            extra = dict(saved.extra)
+            if irt:
+                extra["irt_name"] = renamed.get(irt, irt)
+            restored.append(dataclasses.replace(stored, extra=extra))
+        self._saved = restored
+        self.names = [renamed.get(n, n) for n in self.names]
+        self._order = [renamed.get(n, n) for n in self._order]
         _restore_order(doc, self.page_index, self._order)
 
     def changes(self) -> list[Change]:
@@ -146,7 +170,11 @@ def _restore_order(doc: Document, page_index: int, names: list[str]) -> None:
     page = doc.page(page_index)
     current = page.annotations()
     name_to_id = {a.name: a.id for a in current if a.id is not None}
-    ordered = [name_to_id[n] for n in names if n in name_to_id]
+    ordered = []
+    for n in names:
+        key = page.current_annotation_name(n)
+        if key in name_to_id:
+            ordered.append(name_to_id[key])
     rest = [i for i in page.annotation_order() if i not in ordered]
     target = ordered + rest
     if target != page.annotation_order():
@@ -170,6 +198,7 @@ class ReorderAnnotationCommand(Command):
 
     def do(self, doc: Document) -> None:
         self._before = self._names(doc)
+        self.name = doc.page(self.page_index).current_annotation_name(self.name)
         order = [n for n in self._before if n != self.name]
         order = [*order, self.name] if self.to_front else [self.name, *order]
         _restore_order(doc, self.page_index, order)

@@ -224,6 +224,15 @@ class Page(Protocol):
 
     def delete_annotation(self, annot_id: int | None, name: str = "") -> None: ...
 
+    def current_annotation_name(self, name: str) -> str:
+        """The name an annotation known by ``name`` has now.
+
+        Usually ``name`` itself. When ``add`` replaced a synthetic name with a real /NM (the
+        annotation was re-created, e.g. by an undo), this maps the old name to the new one for
+        as long as the document stays open, so a command that kept the old name still finds it.
+        """
+        ...
+
     def annotation_order(self) -> list[int]:
         """Annotation ids in drawing order (last = on top)."""
         ...
