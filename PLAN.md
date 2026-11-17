@@ -541,7 +541,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W2 Shared code made web-ready, #135**
 
-- [ ] **W2.1** `pdfeditor.actions` layer _(partial: slice (a) done; (b)–(f) pending)_
+- [x] **W2.1** `pdfeditor.actions` layer (#159, #161, #162, #166, #167, #171, #173; #168 fixed in #172)
 - [ ] **W2.2** Platform capabilities
 - [ ] **W2.3** Bytes and storage
 - [ ] **W2.4** Injectable HTTP transport for translation
