@@ -28,6 +28,7 @@ from pdfeditor.core.session import DocumentSession, EventKind
 from pdfeditor.engine.base import Capabilities
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.annotations import AnnotationModel
+from pdfeditor.model.outline import OutlineItem
 from tests.actions.conftest import Opener
 
 PAGE_ACTIONS = {
@@ -101,6 +102,11 @@ def field_violations(tp: Any, where: str, seen: set[type]) -> list[str]:
 
 _DATETIME_FIELDS = {"created", "modified"}
 
+# W1.2's JSON mapping treats a list like a tuple; the model keeps lists here because the bookmarks
+# panel edits them in place. Only these (class, field) pairs may be a list; the element type is
+# still checked.
+MODEL_LIST_FIELDS = {(OutlineItem, "children")}
+
 
 def _fields_violations(cls: type, where: str, seen: set[type]) -> list[str]:
     hints = typing.get_type_hints(cls)
@@ -109,6 +115,8 @@ def _fields_violations(cls: type, where: str, seen: set[type]) -> list[str]:
         ftype = hints[f.name]
         if cls is AnnotationModel and f.name in _DATETIME_FIELDS and _is_optional_datetime(ftype):
             continue  # ISO 8601 on the wire (W1.2 §6)
+        if (cls, f.name) in MODEL_LIST_FIELDS and typing.get_origin(ftype) is list:
+            ftype = typing.get_args(ftype)[0]
         out += field_violations(ftype, f"{where}.{f.name}", seen)
     return out
 
@@ -169,6 +177,14 @@ def test_walker_rejects_forbidden_types() -> None:
         "created",
     ):
         assert any(p.startswith(f"_Bad.{name}:") for p in problems), name
+
+
+def test_walker_exempts_only_the_listed_model_list_fields() -> None:
+    # SetOutline carries OutlineItem, whose children are a list: allowed by the exception
+    assert args_violations(OutlineItem) == []
+    # the same list anywhere else is still rejected, and so is a list of a forbidden type
+    assert field_violations(list[OutlineItem], "where", set()) != []
+    assert any("names" in p for p in args_violations(_Bad))
 
 
 def test_walker_accepts_annotation_model_with_its_datetimes() -> None:

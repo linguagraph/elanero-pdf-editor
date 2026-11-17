@@ -18,10 +18,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core.commands import SetMetadataCommand
+from pdfeditor.actions import document as document_actions
+from pdfeditor.actions.document import SetMetadata
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.metadata import EncryptionMethod, FontInfo
 from pdfeditor.services.fonts import cached_catalog, installed_ref_for_font_name
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.dialogs.base import FormDialog, add_row, form_layout
 from pdfeditor.ui.panels.attachments import human_size
 from pdfeditor.ui.style.tokens import METRICS
@@ -208,7 +210,8 @@ class PropertiesDialog(FormDialog):
         for key, edit in self.fields.items():
             setattr(meta, key, edit.text())
         if meta != self.original:
-            self.session.execute(SetMetadataCommand(meta))
+            session = self.session
+            run_action(lambda: document_actions.set_metadata(session, SetMetadata(meta)))
         super().accept()
 
     def _selected_font(self) -> FontInfo | None:

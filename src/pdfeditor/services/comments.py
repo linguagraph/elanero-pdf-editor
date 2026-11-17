@@ -85,6 +85,17 @@ def comment_threads(doc: Document) -> list[Thread]:
     return threads
 
 
+def flattenable(doc: Document) -> tuple[int, int]:
+    """Comments Flatten All would burn in, and on how many pages (as the engine counts:
+    links, form fields, popups and hidden ones stay). Callers hold the engine lock."""
+    skip = {AnnotationType.POPUP, AnnotationType.LINK, AnnotationType.WIDGET}
+    per_page = [
+        sum(1 for a in doc.page(p).annotations() if a.type not in skip and not a.flags & 2)
+        for p in range(doc.page_count)
+    ]
+    return sum(per_page), sum(1 for n in per_page if n)
+
+
 def summary_csv(threads: list[Thread], page_labels: list[str] | None = None) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)

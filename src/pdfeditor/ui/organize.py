@@ -11,8 +11,10 @@ from typing import TYPE_CHECKING
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QMenu, QMessageBox, QToolButton
 
+from pdfeditor.actions import marks as mark_actions
 from pdfeditor.actions import pages as page_actions
 from pdfeditor.actions.base import ActionError, Busy, Refused
+from pdfeditor.actions.marks import AddBackground, AddHeaderFooter, AddWatermark, RemoveMarks
 from pdfeditor.actions.pages import (
     CropMargins,
     DeletePages,
@@ -26,7 +28,7 @@ from pdfeditor.actions.pages import (
     TrimWhiteMargins,
 )
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document, EngineError
+from pdfeditor.engine.base import EngineError
 from pdfeditor.model.pages import MarkKind
 from pdfeditor.services import stamping
 from pdfeditor.services.assembly import (
@@ -41,9 +43,6 @@ from pdfeditor.services.pages import format_page_ranges, parse_page_ranges
 from pdfeditor.services.stamping import (
     MARK_NAMES,
     MarkInfo,
-    apply_background,
-    apply_header_footer,
-    apply_watermark,
     background_from_settings,
     header_footer_from_settings,
     watermark_from_settings,
@@ -494,23 +493,6 @@ class OrganizeController:
             dialog.header_subtitle.setVisible(True)
         dialog.range.select_pages(info.pages)
 
-    def _run_marks(
-        self, kind: MarkKind, existing: MarkInfo | None, draw: Callable[[Document], object]
-    ) -> None:
-        tab = self.tab()
-        if tab is None:
-            return
-        session = tab.view.session
-        engine = session.engine
-
-        def op(doc: Document) -> None:
-            if existing is not None:
-                stamping.remove_marks(engine, doc, [kind])
-            draw(doc)
-
-        verb = "Update" if existing is not None else "Add"
-        page_ops.run(session, f"{verb} {MARK_NAMES[kind]}", op)
-
     def header_footer_dialog(self, bates: bool, existing: MarkInfo | None) -> HeaderFooterDialog:
         tab = self.tab()
         assert tab is not None
@@ -542,10 +524,15 @@ class OrganizeController:
         spec = dialog.spec()
         if not pages or not spec.texts:
             return
-        name = tab.view.session.display_name
-        engine = tab.view.session.engine
-        self._run_marks(
-            kind, existing, lambda doc: apply_header_footer(engine, doc, spec, pages, name, kind)
+        mark_actions.header_footer(
+            tab.view.session,
+            AddHeaderFooter(
+                spec=spec,
+                pages=tuple(pages),
+                file_name=tab.view.session.display_name,
+                bates=bates,
+                replace_existing=existing is not None,
+            ),
         )
 
     def watermark_dialog(self, existing: MarkInfo | None) -> WatermarkDialog:
@@ -573,10 +560,11 @@ class OrganizeController:
         pages = checked_pages(self.w, dialog.range)
         if not pages:
             return
-        spec = dialog.spec()
-        engine = tab.view.session.engine
-        self._run_marks(
-            MarkKind.WATERMARK, existing, lambda doc: apply_watermark(engine, doc, spec, pages)
+        mark_actions.watermark(
+            tab.view.session,
+            AddWatermark(
+                spec=dialog.spec(), pages=tuple(pages), replace_existing=existing is not None
+            ),
         )
 
     def background_dialog(self, existing: MarkInfo | None) -> BackgroundDialog:
@@ -604,12 +592,14 @@ class OrganizeController:
         pages = checked_pages(self.w, dialog.range)
         if not pages:
             return
-        color, opacity = dialog.color_button.color, dialog.opacity.value() / 100
-        engine = tab.view.session.engine
-        self._run_marks(
-            MarkKind.BACKGROUND,
-            existing,
-            lambda doc: apply_background(doc, color, pages, opacity, engine),
+        mark_actions.background(
+            tab.view.session,
+            AddBackground(
+                color=dialog.color_button.color,
+                opacity=dialog.opacity.value() / 100,
+                pages=tuple(pages),
+                replace_existing=existing is not None,
+            ),
         )
 
     def remove_marks(self, kind: MarkKind) -> int:
@@ -626,18 +616,12 @@ class OrganizeController:
             )
             return 0
         session = tab.view.session
-        engine = session.engine
-        removed: list[int] = []
-        page_ops.run(
-            session,
-            f"Remove {MARK_NAMES[kind]}",
-            lambda doc: removed.append(stamping.remove_marks(engine, doc, [kind])),
-        )
+        result = mark_actions.remove(session, RemoveMarks(kind))
         self.w.notify(
             f"Removed {_bare(kind)} from {len(info.pages)} page(s).",
             action=undo_action(session),
         )
-        return sum(removed)
+        return result.value
 
 
 _PHRASES = {
