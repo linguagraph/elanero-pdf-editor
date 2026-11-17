@@ -17,12 +17,12 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.actions.comments import shown_color
 from pdfeditor.core.commands import ChangeKind
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
 from pdfeditor.model.color import Color
 from pdfeditor.services.comments import type_label
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.color_picker import pick_color, swatch_icon
 from pdfeditor.ui.panels.base import EmptyState, ViewPanel
 from pdfeditor.ui.view.document_view import DocumentView
@@ -180,10 +180,8 @@ class InspectorPanel(ViewPanel):
             label,
             merge_key=f"inspector:{field}",
         )
-        try:
-            comments.restyle(self.view.session, request)
-        except Busy:
-            return
+        session = self.view.session
+        run_action(lambda: comments.restyle(session, request))
 
     def _pick(self, field: str) -> None:
         if self.model is None:

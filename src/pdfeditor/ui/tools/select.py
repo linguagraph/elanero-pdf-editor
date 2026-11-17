@@ -15,7 +15,6 @@ from PySide6.QtGui import QCursor, QMouseEvent
 from PySide6.QtWidgets import QApplication, QGraphicsView
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.actions.comments import TransformAnnotations
 from pdfeditor.model.annotations import (
     AnnotationModel,
@@ -25,6 +24,7 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.services.text import TextPos, TextSelection
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.tools.base import Tool
 
 if TYPE_CHECKING:
@@ -176,10 +176,12 @@ class SelectTool(Tool):
                 view.note_clicked.emit(models[0], QCursor.pos())  # a click (no drag) opens it
             return
         refs = tuple(AnnotRef(a.page_index, a.name) for a in models)
-        try:
-            comments.transform(view.session, TransformAnnotations(refs, m, handle is not None))
-        except Busy:  # a background task holds the document: the comments stay put
-            return
+        # busy or refused: the comments stay where they were
+        run_action(
+            lambda: comments.transform(
+                view.session, TransformAnnotations(refs, m, handle is not None)
+            )
+        )
 
     def press(self, view: DocumentView, event: QMouseEvent) -> bool:
         scene = view.mapToScene(event.position().toPoint())

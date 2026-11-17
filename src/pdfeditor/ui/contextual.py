@@ -51,10 +51,10 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.actions.comments import shown_color
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
 from pdfeditor.model.color import Color
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.color_picker import pick_color, swatch_icon
 from pdfeditor.ui.i18n import QT_TRANSLATE_NOOP
 from pdfeditor.ui.icons import icon
@@ -576,11 +576,8 @@ class ContextualToolbars:
             return False
         refs = tuple(AnnotRef(m.page_index, m.name) for m in self._editable())
         request = comments.restyle_args(refs, field, value, label)
-        try:
-            result = comments.restyle(view.session, request)
-        except Busy:
-            return False
-        return result.executed
+        result = run_action(lambda: comments.restyle(view.session, request), self.w.notify)
+        return result is not None and result.executed
 
     def set_annotation_color(self, color: Color) -> bool:
         return self._restyle("color", color, "Change Color")

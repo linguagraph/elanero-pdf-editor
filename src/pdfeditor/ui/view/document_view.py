@@ -47,7 +47,6 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.core.commands import ChangeKind
 from pdfeditor.core.layout import (
     PAGE_GAP,
@@ -65,6 +64,7 @@ from pdfeditor.model.objects import PageObject
 from pdfeditor.model.outline import Link, LinkKind
 from pdfeditor.model.text import SearchHit
 from pdfeditor.services.text import TextIndexCache, TextPos, TextSelection
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.theme import current_colors, theme_manager
 from pdfeditor.ui.tools.base import Tool
 from pdfeditor.ui.tools.select import SelectTool
@@ -768,11 +768,8 @@ class DocumentView(QGraphicsView):
         if not refs:
             return False
         self.set_annotation_selection([])
-        try:
-            comments.delete(self.session, comments.DeleteAnnotations(refs))
-        except Busy:
-            return False
-        return True
+        result = run_action(lambda: comments.delete(self.session, comments.DeleteAnnotations(refs)))
+        return result is not None
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()

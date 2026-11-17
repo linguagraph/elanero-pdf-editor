@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.core.commands import ChangeKind
 from pdfeditor.model.annotations import AnnotationModel, AnnotRef, ReviewState
 from pdfeditor.services.comments import (
@@ -36,6 +35,7 @@ from pdfeditor.services.comments import (
     type_label,
 )
 from pdfeditor.services.xfdf import export_xfdf
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.panels.base import EmptyState, ViewPanel
 from pdfeditor.ui.printing import pdf_printer
@@ -52,10 +52,7 @@ def add_reply(
     request = comments.ReplyToAnnotation(
         AnnotRef(parent.page_index, parent.name), text, view.author, state
     )
-    try:
-        comments.reply(view.session, request)
-    except Busy:
-        return
+    run_action(lambda: comments.reply(view.session, request))
 
 
 class CommentsPanel(ViewPanel):
@@ -310,10 +307,9 @@ class CommentsPanel(ViewPanel):
             path = Path(chosen)
         try:
             text = path.read_text(encoding="utf-8")
-            result = comments.import_xfdf(self.view.session, comments.ImportXfdf(text))
-        except Busy:
-            return 0
+            session = self.view.session
+            result = run_action(lambda: comments.import_xfdf(session, comments.ImportXfdf(text)))
         except Exception as exc:  # malformed XML, unreadable file
             QMessageBox.warning(self, "Import Comments", f"Couldn't import comments:\n\n{exc}")
             return 0
-        return result.value
+        return result.value if result is not None else 0

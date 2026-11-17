@@ -18,8 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.model.annotations import AnnotationModel, AnnotRef
+from pdfeditor.ui.action_errors import run_action
 
 if TYPE_CHECKING:
     from pdfeditor.ui.view.document_view import DocumentView
@@ -84,10 +84,7 @@ class NotePopup(QFrame):
         request = comments.SetAnnotationText(
             AnnotRef(current.page_index, current.name), text, "Edit Note"
         )
-        try:
-            comments.set_text(self.view.session, request)
-        except Busy:
-            return
+        run_action(lambda: comments.set_text(self.view.session, request))
 
     def show_at(self, pos: QPoint) -> None:
         self.move(pos)

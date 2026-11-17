@@ -14,7 +14,6 @@ from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView, QInputDialog, QMessageBox
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.actions.comments import DEFAULT_STYLES, AddAnnotations, CommentStyle
 from pdfeditor.model.annotations import (
     IMAGE_STAMP,
@@ -26,6 +25,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Quad, Rect, simplify
 from pdfeditor.services.custom_stamps import StampLibrary, image_size, stamp_rect
 from pdfeditor.services.text import TextPos, TextSelection
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.tools.base import Tool
 
 if TYPE_CHECKING:
@@ -63,11 +63,8 @@ def new_model(view: DocumentView, kind: AnnotationType, page: int, rect: Rect) -
 
 
 def commit(view: DocumentView, models: list[AnnotationModel], label: str) -> None:
-    try:
-        result = comments.add(view.session, AddAnnotations(tuple(models), label))
-    except Busy:  # a background task holds the document: nothing was added
-        return
-    if not result.executed:
+    result = run_action(lambda: comments.add(view.session, AddAnnotations(tuple(models), label)))
+    if result is None or not result.executed:  # busy, refused, or nothing to add
         return
     view.set_annotation_selection([(r.page, r.name) for r in result.value])
     view.tool_used.emit()

@@ -47,7 +47,6 @@ from PySide6.QtWidgets import (
 
 from pdfeditor import APP_DISPLAY_NAME, bundle
 from pdfeditor.actions import comments
-from pdfeditor.actions.base import Busy
 from pdfeditor.core import engine_lock
 from pdfeditor.core.autosave import Autosaver, RecoveryStore
 from pdfeditor.core.commands import SnapshotCommand
@@ -68,6 +67,7 @@ from pdfeditor.model.objects import ObjectType
 from pdfeditor.model.outline import Link, LinkKind
 from pdfeditor.services.assembly import SUPPORTED_SUFFIXES
 from pdfeditor.services.fonts import same_font_family
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.action_help import apply_short_labels, refresh_tooltips
 from pdfeditor.ui.combine_controller import CombineController
 from pdfeditor.ui.command_search import CommandSearch
@@ -1373,9 +1373,8 @@ class MainWindow(QMainWindow):
         if view is None or not self._annotation_clipboard:
             return
         request = comments.PasteAnnotations(tuple(self._annotation_clipboard), view.current_page)
-        try:
-            result = comments.paste(view.session, request)
-        except Busy:
+        result = run_action(lambda: comments.paste(view.session, request), self.notify)
+        if result is None:
             return
         view.set_annotation_selection([(r.page, r.name) for r in result.value])
 
@@ -1434,10 +1433,7 @@ class MainWindow(QMainWindow):
         text = annotate.ask_text(view, "Edit Comment", model.contents)
         if text is not None and text != model.contents:
             request = comments.SetAnnotationText(AnnotRef(model.page_index, model.name), text)
-            try:
-                comments.set_text(view.session, request)
-            except Busy:
-                return
+            run_action(lambda: comments.set_text(view.session, request), self.notify)
 
     def annotation_menu(self, model: AnnotationModel, pos: QPoint) -> None:
         view = self.current_view()
@@ -1463,10 +1459,7 @@ class MainWindow(QMainWindow):
 
     def _reorder(self, view: DocumentView, model: AnnotationModel, to_front: bool) -> None:
         request = comments.ReorderAnnotation(AnnotRef(model.page_index, model.name), to_front)
-        try:
-            comments.reorder(view.session, request)
-        except Busy:
-            return
+        run_action(lambda: comments.reorder(view.session, request), self.notify)
 
     def reply_to(self, view: DocumentView, model: AnnotationModel) -> None:
         text = annotate.ask_text(view, "Reply")

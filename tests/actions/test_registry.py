@@ -53,6 +53,7 @@ def _is_string_key(tp: Any) -> bool:
     return (
         isinstance(tp, type)
         and issubclass(tp, enum.Enum)
+        and bool(tp.__members__)  # an Enum with no members has no keys to speak of: refuse it
         and all(isinstance(m.value, str) for m in tp)
     )
 
@@ -134,6 +135,10 @@ class _Good:
     slots: dict[_StrSlot, str] = dataclasses.field(default_factory=dict)  # like HeaderFooter
 
 
+class _EmptySlot(enum.StrEnum):
+    pass
+
+
 @dataclass(frozen=True)
 class _Bad:
     names: list[str]
@@ -142,6 +147,8 @@ class _Bad:
     callback: Any
     by_int: dict[int, str]
     by_int_enum: dict[_IntSlot, str]
+    by_empty_enum: dict[_EmptySlot, str]
+    created: datetime | None  # the AnnotationModel exemption is for that class only
 
 
 def test_walker_accepts_allowed_types() -> None:
@@ -150,8 +157,17 @@ def test_walker_accepts_allowed_types() -> None:
 
 def test_walker_rejects_forbidden_types() -> None:
     problems = args_violations(_Bad)
-    assert len(problems) == 6
-    for name in ("names", "where", "when", "callback", "by_int", "by_int_enum"):
+    assert len(problems) == 8
+    for name in (
+        "names",
+        "where",
+        "when",
+        "callback",
+        "by_int",
+        "by_int_enum",
+        "by_empty_enum",
+        "created",
+    ):
         assert any(p.startswith(f"_Bad.{name}:") for p in problems), name
 
 

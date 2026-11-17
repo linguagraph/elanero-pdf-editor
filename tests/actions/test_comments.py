@@ -30,6 +30,7 @@ from pdfeditor.actions.comments import (
     TransformAnnotations,
     restyle_args,
 )
+from pdfeditor.core.commands import UpdateAnnotationCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef, ReviewState
 from pdfeditor.model.color import Color
@@ -63,16 +64,30 @@ def find(session: DocumentSession, name: str, page: int = 0) -> AnnotationModel:
         return next(a for a in session.document.page(page).annotations() if a.name == name)
 
 
+TIGHT = 0.01  # points: the drift allowed for every comment type but squares
+# MuPDF grows a bordered square by half its border width on every write (add, update, and
+# re-creating a deleted comment on undo). Tracked in issue #163; squares get that slack and
+# nothing else does.
+SQUARE_SLACK_ISSUE = 163
+
+
+def slack(model: AnnotationModel) -> float:
+    if model.type is AnnotationType.SQUARE:
+        return model.border_width + 0.5
+    return TIGHT
+
+
 def state(session: DocumentSession, page: int = 0) -> list[tuple[object, ...]]:
-    """Every comment on ``page`` as (name, contents, rect, color, opacity), sorted by name."""
+    """Every comment on ``page`` as (name, contents, rect, color, opacity, slack), by name."""
     with session.lock:
         out = [
             (
                 a.name,
                 a.contents,
-                tuple(round(v, 2) for v in (a.rect.x0, a.rect.y0, a.rect.x1, a.rect.y1)),
+                (a.rect.x0, a.rect.y0, a.rect.x1, a.rect.y1),
                 a.color,
                 a.opacity,
+                slack(a),
             )
             for a in session.document.page(page).annotations()
         ]
@@ -95,22 +110,19 @@ def new_square(rect: Rect = SQUARE_RECT, page: int = 0) -> AnnotationModel:
     )
 
 
-# MuPDF grows a bordered square's rect by its border width each time it writes it (add, update,
-# and re-creating a deleted comment on undo), so geometry checks allow a couple of points.
-GEOMETRY_TOLERANCE = 2.5
-
-
-def assert_rect(actual: Rect, expected: Rect) -> None:
+def assert_rect(actual: Rect, expected: Rect, tol: float = TIGHT) -> None:
     got = (actual.x0, actual.y0, actual.x1, actual.y1)
     want = (expected.x0, expected.y0, expected.x1, expected.y1)
-    assert got == pytest.approx(want, abs=GEOMETRY_TOLERANCE)
+    assert got == pytest.approx(want, abs=tol)
 
 
 def assert_same(actual: list[tuple[object, ...]], expected: list[tuple[object, ...]]) -> None:
-    """Same comments with the same text and style, rects within the geometry tolerance."""
-    assert [row[:2] + row[3:] for row in actual] == [row[:2] + row[3:] for row in expected]
+    """Same comments with the same text and style; each rect within its row's slack."""
+    assert [(r[0], r[1], r[3], r[4]) for r in actual] == [
+        (r[0], r[1], r[3], r[4]) for r in expected
+    ]
     for got, want in zip(actual, expected, strict=True):
-        assert got[2] == pytest.approx(want[2], abs=GEOMETRY_TOLERANCE)
+        assert got[2] == pytest.approx(want[2], abs=want[5])
 
 
 def assert_reads_everywhere(path: Path, pages: int) -> None:
@@ -220,6 +232,33 @@ def test_paste_keeps_an_off_page_comment_on_the_page(open_copy: Opener) -> None:
     assert_same(state(s), before)
 
 
+def test_paste_in_page_offsets_by_12_and_resets_identity(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    source = find(s, "fitz-A0")  # a highlight: exact geometry, no square slack
+    result = comments.paste(s, PasteAnnotations((source,), 0))
+    pasted = find(s, result.value[0].name)
+    assert_rect(pasted.rect, source.rect.translated(12, 12))
+    assert pasted.name not in ("", "fitz-A0")  # a new /NM name, not the source's
+    assert pasted.id != source.id  # the engine gave it a new object
+    assert pasted.in_reply_to is None
+    assert source.name == "fitz-A0"  # the caller's model is not mutated
+
+
+def test_paste_a_reply_detaches_it_from_its_parent(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    reply = comments.reply(s, ReplyToAnnotation(ref("fitz-A1"), "Agreed", "Reviewer")).value
+    reply_model = find(s, reply.name)
+    assert reply_model.in_reply_to is not None
+    comments.paste(s, PasteAnnotations((reply_model,), 0))
+    pasted = [a for a in state_models(s) if a.contents == "Agreed" and a.name != reply.name]
+    assert len(pasted) == 1 and pasted[0].in_reply_to is None
+
+
+def state_models(session: DocumentSession, page: int = 0) -> list[AnnotationModel]:
+    with session.lock:
+        return list(session.document.page(page).annotations())
+
+
 def test_paste_several_uses_the_plural_label(open_copy: Opener) -> None:
     s = open_copy("annotations")
     models = (new_square(Rect(100, 500, 160, 540)), new_square(Rect(200, 500, 260, 540)))
@@ -238,10 +277,36 @@ def test_transform_move(open_copy: Opener) -> None:
         s, TransformAnnotations((ref("fitz-A3"),), Matrix.translate(10, 20), False)
     )
     assert result.executed and result.label == "Move Comment" and result.value is None
-    assert_rect(find(s, "fitz-A3").rect, before.rect.translated(10, 20))
+    assert_rect(find(s, "fitz-A3").rect, before.rect.translated(10, 20), slack(before))
     assert s.undo_stack.undo_label == "Move Comment"
     assert s.undo()
-    assert_rect(find(s, "fitz-A3").rect, before.rect)
+    assert_rect(find(s, "fitz-A3").rect, before.rect, slack(before))
+
+
+def test_transform_highlight_and_ink_undo_is_exact(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = state(s)
+    highlight, ink = find(s, "fitz-A0"), find(s, "fitz-A4")
+    comments.transform(
+        s, TransformAnnotations((ref("fitz-A0"), ref("fitz-A4")), Matrix.translate(10, 20), False)
+    )
+    assert_rect(find(s, "fitz-A0").rect, highlight.rect.translated(10, 20))
+    assert_rect(find(s, "fitz-A4").rect, ink.rect.translated(10, 20))
+    assert s.undo()
+    assert_same(state(s), before)
+    restored = find(s, "fitz-A4")
+    for got, want in zip(restored.ink, ink.ink, strict=True):
+        for p, q in zip(got, want, strict=True):
+            assert (p.x, p.y) == pytest.approx((q.x, q.y), abs=TIGHT)
+
+
+def test_transform_a_single_highlight_undo_is_exact(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = find(s, "fitz-A0")
+    comments.transform(s, TransformAnnotations((ref("fitz-A0"),), Matrix.translate(10, 20), False))
+    assert_rect(find(s, "fitz-A0").rect, before.rect.translated(10, 20))
+    assert s.undo()
+    assert_rect(find(s, "fitz-A0").rect, before.rect)
 
 
 def test_resize_a_callout_keeps_its_leader_target(open_copy: Opener) -> None:
@@ -282,16 +347,23 @@ def test_restyle_color_on_a_text_box_changes_its_text(open_copy: Opener) -> None
     assert find(s, "fitz-A2").text_color == before.text_color
 
 
-def test_restyle_fill_to_none(open_copy: Opener) -> None:
+@pytest.mark.xfail(strict=True, reason="engine keeps the fill: issue #164")
+def test_restyle_fill_to_none_clears_the_stored_fill(open_copy: Opener) -> None:
     s = open_copy("annotations")
     comments.restyle(s, restyle_args((ref("fitz-A3"),), "fill", Color(1, 1, 0), "Change Fill"))
-    assert find(s, "fitz-A3").fill == Color(1, 1, 0)
+    comments.restyle(s, restyle_args((ref("fitz-A3"),), "fill", None, "Change Fill"))
+    assert find(s, "fitz-A3").fill is None  # fails today: MuPDF keeps the old interior color
+
+
+def test_restyle_fill_to_none_builds_a_command_with_no_fill(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    comments.restyle(s, restyle_args((ref("fitz-A3"),), "fill", Color(1, 1, 0), "Change Fill"))
     result = comments.restyle(s, restyle_args((ref("fitz-A3"),), "fill", None, "Change Fill"))
     assert result.executed and result.value == (ref("fitz-A3"),)
     assert s.undo_stack.undo_label == "Change Fill"
-    # Not asserted: the stored fill after this. MuPDF keeps the old interior color when the
-    # update carries no fill (the same engine path as origin/main), so the fill stays yellow.
-    # Reported as an engine issue; the action builds the right command.
+    top = s.undo_stack.top
+    assert isinstance(top, UpdateAnnotationCommand)
+    assert top.after.fill is None  # the step the undo stack holds carries the right model
 
 
 def test_restyle_skips_a_locked_comment(open_copy: Opener) -> None:
