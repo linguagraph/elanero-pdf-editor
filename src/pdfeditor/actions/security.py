@@ -11,7 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from pdfeditor.actions import action
-from pdfeditor.actions.base import ActionResult, Refused, ensure_idle, snapshot
+from pdfeditor.actions.base import (
+    ActionResult,
+    Refused,
+    ensure_idle,
+    execute_command,
+    snapshot,
+)
 from pdfeditor.core.commands import SetSecurityCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.metadata import EncryptionMethod, SecuritySettings
@@ -48,7 +54,7 @@ def set_security(session: DocumentSession, args: SetSecurity) -> ActionResult[No
         if not session.document.has_owner_access():
             raise Refused(OWNER_NEEDED)
     command = SetSecurityCommand(args.settings)
-    session.execute(command)
+    execute_command(session, command)
     return ActionResult(command.label, None)
 
 
@@ -66,7 +72,7 @@ def remove_security(session: DocumentSession, args: RemoveSecurity) -> ActionRes
     if encrypted and not owner:
         raise Refused(OWNER_NEEDED)
     command = SetSecurityCommand(SecuritySettings(EncryptionMethod.NONE))
-    session.execute(command)
+    execute_command(session, command)
     return ActionResult(command.label, None)
 
 

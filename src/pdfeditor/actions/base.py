@@ -64,14 +64,24 @@ def ensure_idle(session: DocumentSession) -> None:
         raise Busy(session.busy)
 
 
+def execute_command(session: DocumentSession, command: Command) -> None:
+    """Execute ``command``; raise :class:`Busy` if it didn't land.
+
+    ``DocumentSession.execute`` drops the command silently when a task started after the
+    :func:`ensure_idle` check. The undo top is the only sign of that, so compare it.
+    """
+    before = session.undo_stack.top
+    session.execute(command)
+    if session.undo_stack.top is before:
+        raise Busy(session.busy)
+
+
 def execute_all(session: DocumentSession, commands: Sequence[Command], label: str) -> bool:
     """Run ``commands`` as one undo step: the command itself, a MacroCommand, or nothing."""
     if not commands:
         return False
-    if len(commands) == 1:
-        session.execute(commands[0])
-    else:
-        session.execute(MacroCommand(label, list(commands)))
+    command = commands[0] if len(commands) == 1 else MacroCommand(label, list(commands))
+    execute_command(session, command)
     return True
 
 

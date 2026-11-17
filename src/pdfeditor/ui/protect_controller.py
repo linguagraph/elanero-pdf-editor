@@ -162,15 +162,15 @@ class ProtectController:
 
     # -- marking --------------------------------------------------------------------------
     def add_marks(self, view: DocumentView, areas: list[RedactionArea], label: str) -> bool:
-        """Mark the areas as one undo step; False when nothing was added (the session is busy
-        or there were no areas)."""
+        """Mark the areas as one undo step. False only when the session was busy and the marks
+        weren't added (the BLOCKED event has already told the user)."""
         try:
-            result = redaction_actions.mark(
+            redaction_actions.mark(
                 view.session, MarkForRedaction(tuple(areas), self.style, view.author, label)
             )
         except Busy:
-            return False  # the BLOCKED event has already told the user
-        return result.executed
+            return False
+        return True
 
     def start_redact_tool(self) -> None:
         """With text selected, mark the selection at once; otherwise switch to the box tool
@@ -219,7 +219,7 @@ class ProtectController:
             for h in hits
         ]
         if not self.add_marks(view, areas, "Mark Text for Redaction"):
-            return 0
+            return 0  # busy: the marks weren't added, so there is nothing to show
         self.show_panel()
         return len(hits)
 

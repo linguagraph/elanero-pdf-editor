@@ -1,6 +1,6 @@
 """Redaction actions on real documents: marks, unmarking, applying and the leak check.
 
-No Qt here. The leak test saves the document and checks the file with pikepdf and pypdfium2
+No Qt here. The leak tests save the document and check the file with pikepdf and pypdfium2
 (independent implementations), not only with MuPDF.
 """
 
@@ -13,20 +13,21 @@ import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.actions import run
-from pdfeditor.actions.base import Refused
+from pdfeditor.actions.base import Busy, Refused
 from pdfeditor.actions.redaction import (
     ApplyRedactions,
     MarkForRedaction,
     RemoveRedactionMarks,
 )
 from pdfeditor.core.session import DocumentSession
+from pdfeditor.engine.base import SaveError
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType
 from pdfeditor.model.color import WHITE, Color
 from pdfeditor.model.geometry import Quad, Rect
 from pdfeditor.model.redaction import MarkRef, RedactionArea
-from pdfeditor.services.redaction import MarkStyle, find_sensitive
+from pdfeditor.services.redaction import MarkStyle, find_sensitive, mark_for_area
 from pdfeditor.services.text import PageTextIndex
-from tests.actions.conftest import Opener
+from tests.actions.conftest import Opener, pretend_signed
 
 BUSY_CASES = {
     "redaction.mark": MarkForRedaction((RedactionArea(0, Rect(0, 0, 10, 10)),)),
@@ -35,6 +36,12 @@ BUSY_CASES = {
 }
 
 STYLE = MarkStyle(Color(0.2, 0.4, 0.6), "REDACTED", WHITE)
+UNKNOWN = "A redaction mark to apply no longer exists."
+UNNAMED = (
+    "Some of the selected marks come from another application and can't be applied one at a "
+    "time. Choose “All redaction marks” instead."
+)
+DUPLICATE = "Two redaction marks share a name; apply all marks instead."
 
 
 class _Cache:
@@ -113,6 +120,7 @@ def test_mark_adds_marks_as_one_undo_step(open_copy: Opener) -> None:
     assert result.label == "Mark Two" and result.executed
     marks = _marks(s)
     assert len(marks) == 2
+    # the names returned are the names of the marks now on the page
     assert {(m.page_index, m.name) for m in marks} == {(r.page, r.name) for r in result.value}
     by_text = {m.contents: m for m in marks}
     text_mark = by_text[email.text]
@@ -130,6 +138,24 @@ def test_mark_with_no_areas_does_nothing(open_copy: Opener) -> None:
     assert result.executed is False and result.value == ()
     assert result.label == "Mark for Redaction"
     assert not s.undo_stack.can_undo
+
+
+def test_mark_that_loses_a_race_with_a_task_raises_busy(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A task starting between the idle check and the execute must not look like success."""
+    s = open_copy("sensitive")
+    real_execute = s.execute
+
+    def task_starts_first(command) -> None:
+        s.begin_task("OCR")
+        real_execute(command)
+
+    monkeypatch.setattr(s, "execute", task_starts_first)
+    with pytest.raises(Busy, match="OCR"):
+        run(s, "redaction.mark", MarkForRedaction((RedactionArea(0, Rect(72, 72, 200, 90)),)))
+    s.end_task("OCR")
+    assert _marks(s) == [] and not s.undo_stack.can_undo
 
 
 # -- redaction.remove_marks ----------------------------------------------------------------
@@ -167,6 +193,28 @@ def test_remove_with_nothing_to_remove(open_copy: Opener) -> None:
     result = run(s, "redaction.remove_marks", RemoveRedactionMarks(()))
     assert result.label == "Remove Redaction Marks" and result.executed is False
     assert not s.undo_stack.can_undo
+
+
+def test_remove_ignores_a_name_that_is_gone(open_copy: Opener) -> None:
+    """A stale selection must not push an empty undo step, nor disturb the marks that remain."""
+    s = open_copy("sensitive")
+    refs = _mark_hits(s, ["Email addresses", "US Social Security numbers"])
+    stale = MarkRef(0, "pdfeditor-no-such-mark")
+    email_ref = next(r for r in refs if r.name == _name_of(s, "jane.example@example.com"))
+    ssn_ref = next(r for r in refs if r is not email_ref)
+
+    undo_before = s.undo_stack.undo_label
+    result = run(s, "redaction.remove_marks", RemoveRedactionMarks((stale,)))
+    assert result.executed is False and result.label == "Remove Redaction Marks"
+    assert len(_marks(s)) == 2 and s.undo_stack.undo_label == undo_before  # no new step
+
+    result = run(s, "redaction.remove_marks", RemoveRedactionMarks((stale, email_ref)))
+    assert result.executed and result.label == "Remove Redaction Mark"
+    assert [m.name for m in _marks(s)] == [ssn_ref.name]
+
+
+def _name_of(session: DocumentSession, contents: str) -> str:
+    return next(m.name for m in _marks(session) if m.contents == contents)
 
 
 # -- redaction.apply -----------------------------------------------------------------------
@@ -219,18 +267,35 @@ def test_selective_apply_keeps_the_other_marks(open_copy: Opener) -> None:
 def test_apply_refuses_an_unknown_mark(open_copy: Opener) -> None:
     s = open_copy("sensitive")
     _mark_hits(s, ["Email addresses"])
-    with pytest.raises(Refused, match="no longer exists"):
+    with pytest.raises(Refused) as refused:
         run(s, "redaction.apply", ApplyRedactions((MarkRef(0, "nope"),)))
+    assert str(refused.value) == UNKNOWN
     assert len(_marks(s)) == 1 and not s.require_full_save
     assert "jane.example@example.com" in _text(s)
 
 
-def test_apply_refuses_an_unnamed_mark(open_copy: Opener) -> None:
+def test_apply_refuses_an_unnamed_mark_with_its_own_message(open_copy: Opener) -> None:
     s = open_copy("sensitive")
     _mark_hits(s, ["Email addresses"])
-    with pytest.raises(Refused, match="no longer exists"):
+    with pytest.raises(Refused) as refused:
         run(s, "redaction.apply", ApplyRedactions((MarkRef(0, ""),)))
+    assert str(refused.value) == UNNAMED
     assert len(_marks(s)) == 1 and not s.require_full_save
+
+
+def test_apply_refuses_a_name_shared_by_two_marks(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    with s.lock:
+        page = s.document.page(0)
+        for _ in range(2):
+            model = mark_for_area(0, Rect(72, 300, 200, 320))
+            model.name = "twin"
+            page.add_annotation(model)
+    assert [m.name for m in _marks(s)] == ["twin", "twin"]
+    with pytest.raises(Refused) as refused:
+        run(s, "redaction.apply", ApplyRedactions((MarkRef(0, "twin"),)))
+    assert str(refused.value) == DUPLICATE
+    assert len(_marks(s)) == 2 and not s.require_full_save
 
 
 def test_apply_refuses_when_there_are_no_marks(open_copy: Opener) -> None:
@@ -238,6 +303,67 @@ def test_apply_refuses_when_there_are_no_marks(open_copy: Opener) -> None:
     with pytest.raises(Refused, match="no redaction marks to apply"):
         run(s, "redaction.apply", ApplyRedactions())
     assert not s.undo_stack.can_undo and not s.require_full_save
+
+
+def test_in_place_save_after_apply_keeps_no_redacted_text(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The in-place save of a file that looks signed takes the incremental path unless
+    ``require_full_save`` (set by apply) forces a rewrite. With the flag: one clean revision and no
+    trace of the text, in the bytes or in any decoded stream."""
+    secret = b"jane.example"
+
+    s = open_copy("sensitive")
+    _mark_hits(s, ["Email addresses"])
+    run(s, "redaction.apply", ApplyRedactions())
+    pretend_signed(s, monkeypatch)
+    assert s.require_full_save
+    s.save()  # in place
+    data = s.path.read_bytes()
+    assert data.count(b"%%EOF") == 1
+    assert secret not in data and not _streams_mention(s.path, secret)
+
+    # Control: without the flag, the engine itself refuses the incremental save (MuPDF reports
+    # that a document changed by redaction can't be saved incrementally), so the file is left
+    # alone. The flag is therefore a second guard, not the only one.
+    control = open_copy("sensitive")
+    _mark_hits(control, ["Email addresses"])
+    run(control, "redaction.apply", ApplyRedactions())
+    pretend_signed(control, monkeypatch)
+    before = control.path.read_bytes()
+    control.require_full_save = False
+    with pytest.raises(SaveError):
+        control.save()
+    assert control.path.read_bytes() == before
+
+
+def test_redacted_image_area_is_one_colour_after_save(open_copy: Opener, tmp_path: Path) -> None:
+    """A mark over part of the image: after apply and a save, the pixels under it are one colour
+    (the image was blanked), checked by pypdfium2 on the render and by pikepdf on the image."""
+    s = open_copy("sensitive")
+    plain = MarkStyle(Color(0.2, 0.4, 0.6))  # no overlay label: the area must stay one colour
+    area = RedactionArea(0, Rect(60, 90, 250, 200))  # the image is placed at 60..400 x 90..200
+    run(s, "redaction.mark", MarkForRedaction((area,), plain))
+    result = run(s, "redaction.apply", ApplyRedactions())
+    assert result.value.ok and result.value.images_checked >= 1
+
+    out = s.save(tmp_path / "image.pdf")
+    render = pdfium.PdfDocument(out)[0].render(scale=1).to_pil().convert("RGB")
+    inside = render.crop((66, 96, 244, 194))  # within the mark, clear of its edges
+    colours = inside.getcolors(maxcolors=16)
+    assert colours is not None and len(colours) == 1, colours
+    assert all(abs(c - e) <= 8 for c, e in zip(colours[0][1], (51, 102, 153), strict=True))
+
+    with pikepdf.open(out) as pdf:  # the image under the mark is removed or blanked
+        resources = pdf.pages[0].obj.get("/Resources", {})
+        for xobject in resources.get("/XObject", {}).values():
+            if xobject.get("/Subtype") != "/Image":
+                continue
+            picture = pikepdf.PdfImage(xobject).as_pil_image().convert("RGB")
+            cut = round(picture.width * (250 - 60) / (400 - 60)) - 2
+            under = picture.crop((2, 2, cut, picture.height - 2))
+            found = under.getcolors(maxcolors=16)
+            assert found is not None and len(found) == 1, found
 
 
 def test_applied_file_leaks_nothing(open_copy: Opener, tmp_path: Path) -> None:

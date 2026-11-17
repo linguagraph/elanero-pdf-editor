@@ -26,6 +26,13 @@ from pdfeditor.services.redaction import (
     verify,
 )
 
+UNKNOWN_MARK = "A redaction mark to apply no longer exists."
+UNNAMED_MARK = (
+    "Some of the selected marks come from another application and can't be applied one at a "
+    "time. Choose “All redaction marks” instead."
+)
+DUPLICATE_NAME = "Two redaction marks share a name; apply all marks instead."
+
 # -- argument types ------------------------------------------------------------------------
 
 
@@ -54,19 +61,29 @@ class ApplyRedactions:
 def _chosen_marks(
     all_marks: Sequence[AnnotationModel], refs: Sequence[MarkRef]
 ) -> list[AnnotationModel]:
-    """The marks named by ``refs``, in their order, each once. An unnamed or unknown mark is
-    refused: it can't be told apart from the others."""
-    by_name = {(m.page_index, m.name): m for m in all_marks if m.name}
+    """The marks named by ``refs``, in their order, each once.
+
+    Refused when a name is empty (the mark came from another application and has no /NM), when
+    it matches no mark, or when two marks on the page share it (the name can't pick one).
+    """
+    by_name: dict[tuple[int, str], list[AnnotationModel]] = {}
+    for m in all_marks:
+        if m.name:
+            by_name.setdefault((m.page_index, m.name), []).append(m)
     chosen: list[AnnotationModel] = []
     seen: set[tuple[int, str]] = set()
     for ref in refs:
         key = (ref.page, ref.name)
-        mark = by_name.get(key) if ref.name else None
-        if mark is None:
-            raise Refused("A redaction mark to apply no longer exists.")
+        if not ref.name:
+            raise Refused(UNNAMED_MARK)
+        found = by_name.get(key, [])
+        if not found:
+            raise Refused(UNKNOWN_MARK)
+        if len(found) > 1:
+            raise Refused(DUPLICATE_NAME)
         if key not in seen:
             seen.add(key)
-            chosen.append(mark)
+            chosen.append(found[0])
     return chosen
 
 
@@ -87,20 +104,27 @@ def mark(session: DocumentSession, args: MarkForRedaction) -> ActionResult[tuple
         if area.text:
             model.contents = area.text
         commands.append(AddAnnotationCommand(model, args.label))
-    execute_all(session, commands, args.label)
+    execute_all(session, commands, args.label)  # raises Busy if the command didn't land
     added = tuple(MarkRef(c.model.page_index, c.model.name) for c in commands)
     return ActionResult(args.label, added)
 
 
 @action("redaction.remove_marks", RemoveRedactionMarks, requires=("annotations_write",))
 def remove_marks(session: DocumentSession, args: RemoveRedactionMarks) -> ActionResult[None]:
-    """Delete the named marks: one undo step per page, labelled by how many pages changed."""
+    """Delete the named marks: one undo step per page, labelled by how many pages changed.
+
+    A name that matches no mark is ignored (it was removed already), so a stale selection
+    doesn't push an empty undo step.
+    """
     ensure_idle(session)
-    by_page: dict[int, list[str]] = {}
+    with session.lock:
+        present = {(m.page_index, m.name) for m in redaction_marks(session.document) if m.name}
+    by_page: dict[int, dict[str, None]] = {}  # ordered sets: first-seen order per page
     for ref in args.marks:
-        by_page.setdefault(ref.page, []).append(ref.name)
+        if (ref.page, ref.name) in present:
+            by_page.setdefault(ref.page, {})[ref.name] = None
     commands: list[Command] = [
-        DeleteAnnotationsCommand(page, names, "Remove Redaction Mark")
+        DeleteAnnotationsCommand(page, list(names), "Remove Redaction Mark")
         for page, names in by_page.items()
     ]
     label = "Remove Redaction Mark" if len(commands) == 1 else "Remove Redaction Marks"
@@ -119,16 +143,23 @@ def apply(session: DocumentSession, args: ApplyRedactions) -> ActionResult[Verif
         raise Refused("There are no redaction marks to apply.")
 
     areas: dict[int, list[Rect]] = {}
-    by_page: dict[int, list[int]] = {}
     for m in chosen:
         areas.setdefault(m.page_index, []).extend(mark_areas(m))
-        if m.id is not None:
-            by_page.setdefault(m.page_index, []).append(m.id)
     selective = len(chosen) != len(all_marks)
+    # the marks to burn, by (page, name); None when every mark is wanted
+    wanted = None if args.marks is None else {(m.page_index, m.name) for m in chosen}
     options = args.options
 
     def operation(doc: Document) -> None:
-        for page, ids in by_page.items():
+        # Engine ids are read here, under the same lock as the apply, so they match the marks
+        # the apply touches. Nothing is refused in here: the checks above have already run.
+        ids_by_page: dict[int, list[int]] = {}
+        for m in redaction_marks(doc):
+            if wanted is not None and (m.page_index, m.name) not in wanted:
+                continue
+            if m.id is not None:
+                ids_by_page.setdefault(m.page_index, []).append(m.id)
+        for page, ids in ids_by_page.items():
             doc.page(page).apply_redactions(ids if selective else None, options)
 
     label = "Apply Redaction" if len(chosen) == 1 else f"Apply {len(chosen)} Redactions"

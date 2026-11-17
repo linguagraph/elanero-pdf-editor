@@ -15,12 +15,13 @@ import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.actions import run
-from pdfeditor.actions.base import Refused
+from pdfeditor.actions.base import Busy, Refused
 from pdfeditor.actions.security import RemoveSecurity, SanitizeDocument, SetSecurity
 from pdfeditor.core.session import DocumentSession
+from pdfeditor.engine.base import SaveError
 from pdfeditor.model.metadata import EncryptionMethod, Permissions, SecuritySettings
 from pdfeditor.model.redaction import SanitizeOptions
-from tests.actions.conftest import Opener
+from tests.actions.conftest import Opener, pretend_signed
 
 BUSY_CASES = {
     "security.set": SetSecurity(SecuritySettings()),
@@ -165,3 +166,67 @@ def test_remove_drops_a_pending_encryption_and_undo_brings_it_back(open_copy: Op
 
     s.undo()
     assert _pending(s) == settings
+
+
+def test_in_place_sanitize_then_save_drops_the_title_from_the_bytes(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same in-place setup as the redaction leak test, for sanitizing: the flag (set by sanitize)
+    forces a full rewrite, and the saved file has one revision and no title in its bytes."""
+    title = b"Confidential report"
+
+    s = open_copy("sensitive")
+    run(s, "document.sanitize", SanitizeDocument())
+    pretend_signed(s, monkeypatch)
+    s.save()
+    data = s.path.read_bytes()
+    assert data.count(b"%%EOF") == 1
+    assert title not in data
+
+    # Control: without the flag the engine refuses the incremental save after sanitizing, and the
+    # file is left alone (see the redaction test for the same point).
+    control = open_copy("sensitive")
+    run(control, "document.sanitize", SanitizeDocument())
+    pretend_signed(control, monkeypatch)
+    before = control.path.read_bytes()
+    control.require_full_save = False
+    with pytest.raises(SaveError):
+        control.save()
+    assert control.path.read_bytes() == before
+
+
+def test_security_set_that_loses_a_race_with_a_task_raises_busy(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = open_copy("report")
+    real_execute = s.execute
+
+    def task_starts_first(command) -> None:
+        s.begin_task("OCR")
+        real_execute(command)
+
+    monkeypatch.setattr(s, "execute", task_starts_first)
+    settings = SecuritySettings(EncryptionMethod.AES_256, "open me", "boss", RESTRICTED)
+    with pytest.raises(Busy, match="OCR"):
+        run(s, "security.set", SetSecurity(settings))
+    s.end_task("OCR")
+    assert _pending(s) is None and not s.undo_stack.can_undo
+
+
+def test_security_remove_that_loses_a_race_with_a_task_raises_busy(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = open_copy("report")
+    settings = SecuritySettings(EncryptionMethod.AES_256, "open me", "boss", RESTRICTED)
+    run(s, "security.set", SetSecurity(settings))
+    real_execute = s.execute
+
+    def task_starts_first(command) -> None:
+        s.begin_task("OCR")
+        real_execute(command)
+
+    monkeypatch.setattr(s, "execute", task_starts_first)
+    with pytest.raises(Busy, match="OCR"):
+        run(s, "security.remove", RemoveSecurity())
+    s.end_task("OCR")
+    assert _pending(s) == settings  # the pending encryption was not touched
