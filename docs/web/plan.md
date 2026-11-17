@@ -204,14 +204,15 @@ Legend: **[D]** design by Opus 5.5 · **[I]** implementation by a Haiku 5.5 suba
 - **W6.4 [I] R5 Compress dialog**: presets, custom options, space audit before and after, result size (job worker).
 - **W6.5 [I] R7 Print**: page range, scale, include comments, print via iframe; progress for large documents.
 - **W6.6 [I] R4 Translate**: bubble on selection, consent notice, service settings, From/To pickers, Copy, Add as note; Preferences → Translation. No DeepL row and no LibreTranslate server-address row (the public instance is fixed by the CSP).
-- **W6.7a [I] R1a** Select, move and delete page objects; image and shape handles.
-- **W6.7b [I] R1a** Add text box; add shapes; add and replace images.
-- **W6.8a [I] R1b** In-place paragraph editor: caret, selection, typing, IME, undo grouping (layout from the worker).
-- **W6.8b [I] R1b** Font picker (document, standard, uploaded fonts), styles, substitution disclosure.
-- **W6.9 [I] R1c Font upload**: load a TTF/OTF, validate with fontTools, respect embedding restrictions (reuses the `FontCatalog` checks).
+- **W6.7a [I] R1a** Edit tool: object outlines, the per-revision object cache, hit testing in TS with shared test vectors, selection, move and resize handles, delete, `STALE_OBJECT` handling, the signed-document warning ([design/W1.5.md](design/W1.5.md) §2–3).
+- **W6.7b [I] R1a** Add shapes; add, replace and export images (add text moved to W6.8a, since it needs the paragraph editor).
+- **W6.8a [I] R1b** In-place paragraph editor: a native textarea over the block, previewing the document's own font (`content.preview_font`, CSS Font Loading API); typing, IME, clipboard and in-editor undo are the browser's; Python lays the text out on commit (`content.replace_text`/`content.add_text`), not per keystroke; Add Text tool; the substitution notice (W1.5 §5).
+- **W6.8b [I] R1b** Style bar and font picker (document, standard, uploaded fonts; no installed-fonts section).
+- **W6.9 [I] R1c Font upload**: load a TTF/OTF/TTC, validate with fontTools, respect embedding restrictions (reuses the `FontCatalog` checks; `INVALID_FONT`, `FONT_NOT_EMBEDDABLE`); kept in OPFS, loaded at start-up, removable (W1.5 §7).
 
 ### W7: Added features
-- **W7.1 [I] A4** Comment tools and comments panel (replies, status, filter).
+- **W7.1a [I] A4** Comment tools: the shared Python builders and the `annotations.create` action (unless W2.1 (b) already has them), each tool's gesture and preview, comment selection, move and resize, note popup (W1.5 §6).
+- **W7.1b [I] A4** Comments panel (replies, status, filter), contextual bar and inspector restyle.
 - **W7.2 [I] A5** Comment summary export and XFDF import/export.
 - **W7.3 [I] A6** Stamps, watermarks, headers/footers, Bates, backgrounds.
 - **W7.4 [I] A7** Redaction and sanitize (apply runs in the job worker; leak test required).
