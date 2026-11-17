@@ -116,3 +116,26 @@ The build pins what it can, but these are not pinned to a hash and can change be
 What is pinned and checked: the MuPDF tarball (sha256), the PyMuPDF tag commit, the wheel
 (`wheel.sha256`, re-checked on every cache restore), the Pyodide package closure (`pyodide-lock.json`
 sha256 per file), the npm lockfile, and every GitHub action (commit SHA).
+
+## Load and render measurements (W0.2)
+
+The W0.2 harness (`docs/web/design/W0.2.md`) lives in `perf/` and `perf.spec.ts`. It measures the
+W0.1 stack (wheel, Pyodide, the trimmed `pdfeditor` zip from `web_package.py`) on the `perf_mixed_*`
+fixtures; the tables are in `docs/web/spikes/W0.2-results.md`.
+
+```sh
+# the W0.1 wheel (CI artifact, or a local build) and the generated fixtures
+uv run python scripts/make_fixtures.py
+cd web/spike
+node perf/stage.mjs --wheel /path/to/pymupdf-1.28.2-*.whl --python /path/to/python
+
+PERF_ENV=laptop npx playwright test -c playwright.perf.config.ts          # Chromium, 5 runs
+PERF_ENV=laptop PERF_BROWSERS=chromium,firefox,webkit PERF_FIXTURES=perf_mixed_10.pdf \
+  npx playwright test -c playwright.perf.config.ts                       # the 10-page cross-browser check
+python perf/sizes.py                                                      # M1 -> out/sizes.json
+python perf/report.py out                                                 # Markdown tables
+```
+
+`perf/shim_zip.py` adds one stub module (`engine/mupdf/ocr_worker.py`) to the zip, because the
+web set leaves it out but `engine/mupdf/ocr.py` imports it. The Playwright config is separate from
+`playwright.config.ts` (W0.1) so the two runs cannot clash.
