@@ -7,8 +7,6 @@ import shutil
 from pathlib import Path
 
 import numpy as np
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.base import ColorMode, Engine, EngineError, RenderRequest
@@ -20,6 +18,7 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Quad, Rect
+from tests.hostcheck import record
 
 RED = Color(1, 0, 0)
 BLUE = Color(0, 0, 1)
@@ -144,11 +143,8 @@ def test_create_every_type_roundtrip(
     doc.save()
     doc.close()
 
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages[page_index].Annots) >= len(created)
-    pdoc = pdfium.PdfDocument(path)
-    assert len(pdoc) == 5
-    pdoc.close()
+    record("annot_count_pikepdf", path, page=page_index, minimum=len(created))
+    record("page_count_pdfium", path, pages=5)
     again = writable.open(path)
     names = {a.name for a in again.page(page_index).annotations()}
     assert {c.name for c in created} <= names
@@ -346,9 +342,7 @@ def test_file_attachment_annotation(writable: Engine, fixture_pdf, tmp_path: Pat
     assert att.type is AnnotationType.FILE_ATTACHMENT
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:
-        annot = next(a for a in pdf.pages[0].Annots if a.Subtype == "/FileAttachment")
-        assert annot.FS.EF.F.read_bytes() == b"a,b\n1,2\n"
+    record("attachment_bytes_pikepdf", path, expected="a,b\n1,2\n")
 
 
 def test_pdf_matrix_maps_to_pdf_space(engine: Engine, fixture_pdf) -> None:
@@ -454,15 +448,8 @@ def test_saved_unnamed_comments_stay_addressable(
     contents = sorted(a.contents for a in page.annotations())
     assert contents == ["Box one", "Edited again", "Note three"]
     again.close()
-    with pikepdf.open(path) as pdf:  # a note's /Popup is an Annots entry too: not a comment
-        # no backend name is ever written: the untouched comments simply have no /NM
-        nm = [str(a.NM) for a in pdf.pages[0].Annots if a.get("/NM") is not None]
-        assert not any(n.startswith("#") for n in nm)
-        assert [a.Subtype for a in pdf.pages[0].Annots if a.Subtype != "/Popup"] == [
-            "/Square",
-            "/Square",
-            "/Text",
-        ]
+    # a note's /Popup is an Annots entry too: not a comment; no backend name is ever written
+    record("comments_unnamed_pikepdf", path)
 
 
 # -- box geometry, "no fill" and empty contents (issues #163, #164, #170) --------------------
@@ -478,23 +465,32 @@ def _assert_rect(actual: Rect, expected: Rect) -> None:
     assert got == pytest.approx((expected.x0, expected.y0, expected.x1, expected.y1), abs=0.01)
 
 
-def _save_and_reopen(engine: Engine, doc, path: Path, subtype: str):
+def _save_and_reopen(
+    engine: Engine,
+    doc,
+    path: Path,
+    subtype: str,
+    present: tuple[str, ...] = (),
+    absent: tuple[str, ...] = (),
+    contents: str | None = None,
+):
     """Save, check the file in pikepdf and pypdfium2, and reopen it with the engine.
 
-    Returns the reopened document and the saved annotation's entries as plain strings (the
-    pikepdf file is closed by the time the caller looks).
+    ``present``, ``absent`` and ``contents`` assert on the saved annotation's entries.
     """
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:
-        annots = [a for a in pdf.pages[0].get("/Annots", []) if a.get("/Subtype") == subtype]
-        assert annots, "saved file lost the annotation"
-        raw = {str(key): str(value) for key, value in annots[0].items()}
-    pdoc = pdfium.PdfDocument(path)
-    assert len(pdoc) == 5  # text_multipage has five pages
-    pdoc[0].render(scale=1).to_pil()
-    pdoc.close()
-    return engine.open(path), raw
+    record(
+        "annot_keys_pikepdf",
+        path,
+        subtype=subtype,
+        present=list(present),
+        absent=list(absent),
+        contents=contents,
+    )
+    record("page_count_pdfium", path, pages=5)  # text_multipage has five pages
+    record("render_pdfium", path, page=0, scale=1)
+    return engine.open(path)
 
 
 @pytest.mark.parametrize(
@@ -520,11 +516,10 @@ def test_bordered_box_reads_back_the_rect_it_was_written_with(
     _assert_rect(recreated.rect, BOX)
     _assert_rect(page.update_annotation(dataclasses.replace(recreated, contents="again")).rect, BOX)
 
-    again, raw = _save_and_reopen(writable, doc, path, f"/{kind.value}")
+    again = _save_and_reopen(writable, doc, path, f"/{kind.value}", present=("/Rect",))
     reopened = next(a for a in again.page(0).annotations() if a.name == recreated.name)
     _assert_rect(reopened.rect, BOX)
     assert reopened.border_width == pytest.approx(2)
-    assert "/Rect" in raw
     again.close()
 
 
@@ -537,10 +532,9 @@ def test_no_fill_removes_the_interior_colour(writable: Engine, fixture_pdf, tmp_
     assert cleared.fill is None and cleared.color == RED
     _assert_rect(cleared.rect, BOX)
 
-    again, raw = _save_and_reopen(writable, doc, path, "/Square")
+    again = _save_and_reopen(writable, doc, path, "/Square", absent=("/IC",))
     reopened = next(a for a in again.page(0).annotations() if a.name == sq.name)
     assert reopened.fill is None
-    assert "/IC" not in raw
     again.close()
 
 
@@ -556,10 +550,9 @@ def test_empty_contents_clear_the_stored_text(
     assert cleared.contents == ""
     assert next(a for a in page.annotations() if a.name == sq.name).contents == ""
 
-    again, raw = _save_and_reopen(writable, doc, path, "/Square")
+    again = _save_and_reopen(writable, doc, path, "/Square", contents="")
     reopened = next(a for a in again.page(0).annotations() if a.name == sq.name)
     assert reopened.contents == ""
-    assert raw.get("/Contents", "") == ""
     again.close()
 
 
@@ -600,10 +593,9 @@ def test_no_fill_removes_the_interior_colour_on_a_line(
     cleared = page.update_annotation(dataclasses.replace(line, fill=None))
     assert cleared.fill is None
 
-    again, raw = _save_and_reopen(writable, doc, path, "/Line")
+    again = _save_and_reopen(writable, doc, path, "/Line", absent=("/IC",))
     reopened = next(a for a in again.page(0).annotations() if a.name == line.name)
     assert reopened.fill is None
-    assert "/IC" not in raw
     again.close()
 
 
@@ -633,7 +625,7 @@ def test_two_line_redaction_mark_round_trips_quads_and_colour(
     assert _corners(stored.quads) == pytest.approx(_corners(lines))  # add
     assert stored.text_color == RED
 
-    again, _ = _save_and_reopen(writable, doc, path, "/Redact")
+    again = _save_and_reopen(writable, doc, path, "/Redact")
     reopened = next(a for a in again.page(0).annotations() if a.name == stored.name)
     assert _corners(reopened.quads) == pytest.approx(_corners(lines))
     assert reopened.text_color == RED
@@ -641,11 +633,5 @@ def test_two_line_redaction_mark_round_trips_quads_and_colour(
     again.close()
 
     # The saved /QuadPoints hold the two lines in PDF space (origin bottom-left).
-    with pikepdf.open(path) as pdf:
-        annot = next(a for a in pdf.pages[0].Annots if a.get("/Subtype") == "/Redact")
-        height = float(pdf.pages[0].MediaBox[3])
-        stored_points = [float(v) for v in annot.QuadPoints]
-    expected = []
-    for x, y in _corners(lines):
-        expected.extend([x, height - y])
-    assert stored_points == pytest.approx(expected)
+    corners = [list(c) for c in _corners(lines)]
+    record("quad_points_pikepdf", path, subtype="/Redact", corners=corners)

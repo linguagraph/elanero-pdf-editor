@@ -10,9 +10,7 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
-import pikepdf
 import pymupdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.core.commands.snapshot import SnapshotCommand
@@ -22,6 +20,7 @@ from pdfeditor.model.fonts import FontRef
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.objects import ObjectType, TextStyle
 from pdfeditor.model.pages import TextStamp
+from tests.hostcheck import record
 
 
 @pytest.fixture
@@ -78,13 +77,8 @@ def test_replace_text_with_file_font_embeds_and_subsets(
     finally:
         reopened.close()
 
-    with pikepdf.open(path):
-        pass  # must open cleanly
-    pdf = pdfium.PdfDocument(str(path))
-    try:
-        assert "ABC abc" in pdf[0].get_textpage().get_text_range()
-    finally:
-        pdf.close()
+    record("opens_pikepdf", path)  # must open cleanly
+    record("text_contains_pdfium", path, page=0, text="ABC abc")
 
 
 def test_missing_glyphs_substitute_and_report(
@@ -178,11 +172,7 @@ def test_stamp_with_file_font_round_trips(
         assert fonts
     finally:
         reopened.close()
-    pdf = pdfium.PdfDocument(str(path))
-    try:
-        pdf[0].render(scale=0.5).to_pil()
-    finally:
-        pdf.close()
+    record("render_pdfium", path, page=0, scale=0.5)
 
 
 def test_large_font_save_subsets_small(
@@ -210,18 +200,17 @@ def test_large_font_save_subsets_small(
         assert buffer, "font must still be embedded after save"
         assert len(buffer) < full_size / 3, "a subset of 3 glyphs must be much smaller"
 
-    with pikepdf.open(path):
-        pass
-    pdf = pdfium.PdfDocument(str(path))
-    try:
-        pdf[0].render(scale=0.5).to_pil()
-    finally:
-        pdf.close()
+    record("opens_pikepdf", path)
+    record("render_pdfium", path, page=0, scale=0.5)
 
 
 def test_incremental_save_of_signed_document_does_not_subset(
     tmp_path: Path, fonts_dir: Path, fixtures_dir: Path
 ) -> None:
+    # Host-only: the expected ByteRange and Contents come from pikepdf reading the original file
+    # before the save, and a check gets only the saved bytes, so this stays a host skip.
+    import pikepdf
+
     real = fixtures_dir.parent / "real" / "signed_selfsigned.pdf"
     if not real.exists():
         pytest.skip("real-world sample signed_selfsigned.pdf is not available")
@@ -359,13 +348,7 @@ def test_save_then_undo_keeps_the_document_fonts_whole(tmp_path: Path, fonts_dir
         session.save()
     finally:
         session.close()
-    with pikepdf.open(path) as pdf:
-        names = {
-            str(f.get("/BaseFont"))
-            for page in pdf.pages
-            for f in page.Resources.get("/Font", {}).values()
-        }
-    assert any("Test Large" in n and "+" not in n for n in names), names  # still complete
+    record("font_names_complete_pikepdf", path, family="Test Large")  # still complete
 
 
 def test_a_failing_subset_is_a_save_error(

@@ -7,8 +7,6 @@ import shutil
 from pathlib import Path
 
 import numpy as np
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -21,6 +19,7 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
+from tests.hostcheck import record
 
 RED = Color(1, 0, 0)
 TIP = Point(90, 120)
@@ -65,15 +64,6 @@ def _engine_rgb(page) -> np.ndarray:
     return arr[:, : img.width * 3].reshape(img.height, img.width, 3)
 
 
-def _pdfium_rgb(path: Path, index: int) -> np.ndarray:
-    pdf = pdfium.PdfDocument(path)
-    try:
-        bitmap = pdf[index].render(scale=1, may_draw_forms=True)
-        return np.array(bitmap.to_pil().convert("RGB"))
-    finally:
-        pdf.close()
-
-
 def _callout(page_index: int) -> AnnotationModel:
     return AnnotationModel(
         AnnotationType.FREE_TEXT,
@@ -87,6 +77,11 @@ def _callout(page_index: int) -> AnnotationModel:
         vertices=callout_line(TIP, BOX),
         line_endings=("OpenArrow", "None"),
     )
+
+
+def _clip(rect: Rect) -> list[float]:
+    """A clip rectangle as the host checks take it: [x0, y0, x1, y1]."""
+    return [rect.x0, rect.y0, rect.x1, rect.y1]
 
 
 def _near(p: Point, q: Point, tol: float = 1.5) -> bool:
@@ -112,13 +107,8 @@ def test_callout_roundtrip(writable: Engine, fixture_pdf, tmp_path: Path, page_i
     doc.save()
     doc.close()
 
-    with pikepdf.open(path) as pdf:
-        annot = next(a for a in pdf.pages[page_index].Annots if a.Subtype == "/FreeText")
-        assert annot.IT == "/FreeTextCallout"
-        assert len(annot.CL) == 6
-        assert annot.LE == "/OpenArrow"
-        assert "/N" in annot.AP
-    assert _red_pixels(_pdfium_rgb(path, page_index), tip_clip) > 5
+    record("callout_annot_pikepdf", path, page=page_index)
+    record("red_pixels_pdfium", path, page=page_index, clip=_clip(tip_clip), minimum=5)
 
     again = writable.open(path)
     back = next(a for a in again.page(page_index).annotations() if a.name == stored.name)
@@ -147,9 +137,7 @@ def test_callout_move_and_detach(writable: Engine, fixture_pdf, tmp_path: Path) 
     assert plain.rect.x0 == pytest.approx(BOX.x0 + 40, abs=1.5)
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:
-        annot = next(a for a in pdf.pages[0].Annots if a.Subtype == "/FreeText")
-        assert "/CL" not in annot and "/IT" not in annot
+    record("annot_lacks_keys_pikepdf", path, subtype="/FreeText", keys=["/CL", "/IT"])
 
 
 @pytest.mark.parametrize("fmt", ["PNG", "JPEG"])
@@ -180,11 +168,14 @@ def test_image_stamp_roundtrip(
     doc.save()
     doc.close()
 
-    with pikepdf.open(path) as pdf:
-        annot = next(a for a in pdf.pages[page_index].Annots if a.Subtype == "/Stamp")
-        xobjects = annot.AP.N.Resources.XObject
-        assert any(xobjects[k].Subtype == "/Image" for k in xobjects)
-    assert _red_pixels(_pdfium_rgb(path, page_index), inside.translated(0, 150)) > 1000
+    record("stamp_image_pikepdf", path, page=page_index)
+    record(
+        "red_pixels_pdfium",
+        path,
+        page=page_index,
+        clip=_clip(inside.translated(0, 150)),
+        minimum=1000,
+    )
 
     again = writable.open(path)
     back = next(a for a in again.page(page_index).annotations() if a.name == stored.name)
@@ -232,7 +223,4 @@ def test_image_stamp_is_upright_and_keeps_aspect(
     assert stored.rect.y0 == pytest.approx(325, abs=1.5)
     doc.save()
     doc.close()
-    rgb = _pdfium_rgb(path, page_index).astype(int)
-    left, right = rgb[350, 220], rgb[350, 280]
-    assert left[0] > 150 and left[2] < 100  # red on the left: not rotated or mirrored
-    assert right[2] > 150 and right[0] < 100
+    record("stamp_orientation_pdfium", path, page=page_index)

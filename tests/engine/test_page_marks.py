@@ -7,8 +7,6 @@ import io
 import shutil
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -16,6 +14,7 @@ from pdfeditor.engine.base import ColorMode, Engine, RenderRequest
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.pages import ImageStamp, MarkKind, PageMark, TextStamp
+from tests.hostcheck import record
 
 
 @pytest.fixture
@@ -33,17 +32,6 @@ def _copy(fixture_pdf, tmp_path: Path, name: str) -> Path:
 
 def _text(doc, index: int) -> str:
     return doc.page(index).text_page(with_chars=False).text
-
-
-def _pdfium_text(path: Path, index: int) -> str:
-    pd = pdfium.PdfDocument(path)
-    try:
-        page = pd[index]
-        text = page.get_textpage().get_text_range()
-        page.render(scale=0.5)  # renders without errors
-        return text
-    finally:
-        pd.close()
 
 
 def _png(rgb: tuple[int, int, int]) -> bytes:
@@ -77,15 +65,17 @@ def test_marks_round_trip_and_remove_only_their_kind(
     doc.save()
     doc.close()
 
-    with pikepdf.open(path) as pdf:  # an independent reader sees standard artifacts
-        ops = pikepdf.parse_content_stream(pdf.pages[0])
-        tags = [
-            (str(o.operands[1].get("/Subtype", "")), str(o.operands[1].get("/PDFEditorMark")))
-            for o in ops
-            if str(o.operator) == "BDC" and str(o.operands[0]) == "/Artifact"
-        ]
-    assert ("/Header", "/HeaderFooter") in tags and ("/Footer", "/HeaderFooter") in tags
-    assert ("/Watermark", "/Watermark") in tags and ("/Footer", "/Bates") in tags
+    # an independent reader sees standard artifacts
+    record(
+        "artifact_tags_pikepdf",
+        path,
+        present=[
+            ["/Header", "/HeaderFooter"],
+            ["/Footer", "/HeaderFooter"],
+            ["/Watermark", "/Watermark"],
+            ["/Footer", "/Bates"],
+        ],
+    )
 
     doc = marks.open(path)
     found = {m.kind: m for m in doc.page(0).page_marks()}
@@ -105,11 +95,12 @@ def test_marks_round_trip_and_remove_only_their_kind(
     doc.save()
     doc.close()
 
-    with pikepdf.open(path) as pdf:  # the watermark picture isn't drawn any more
-        ops = pikepdf.parse_content_stream(pdf.pages[0])
-        assert not [o for o in ops if str(o.operator) == "Do"]
-    text = _pdfium_text(path, 0)
-    assert "HEADER-X" not in text and "BATES-0001" in text and "needle-1" in text
+    # the watermark picture isn't drawn any more
+    record("no_do_operators_pikepdf", path, page=0)
+    record("text_lacks_pdfium", path, page=0, text="HEADER-X")
+    record("text_contains_pdfium", path, page=0, text="BATES-0001")
+    record("text_contains_pdfium", path, page=0, text="needle-1")
+    record("render_pdfium", path, page=0, scale=0.5)
     doc = marks.open(path)
     assert doc.page(0).remove_marks(list(MarkKind)) == 2
     assert doc.page(0).page_marks() == []
@@ -137,25 +128,21 @@ def test_removed_watermark_picture_leaves_the_file(marks: Engine, tmp_path: Path
     doc.page(0).stamp_image(stamp)
     path = tmp_path / "wm.pdf"
     doc.save(path)
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages[0].get_images()) == 1
+    record("image_count_pikepdf", path, count=1)
     assert doc.page(0).remove_marks([MarkKind.WATERMARK]) == 1
     doc.save(path)
     doc.close()
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages[0].get_images()) == 0
-        assert not [
-            o
-            for o in pdf.objects
-            if isinstance(o, pikepdf.Stream) and o.get("/Subtype") == "/Image"
-        ]
+    record("image_count_pikepdf", path, count=0)
+    record("no_image_streams_pikepdf", path)
 
 
 # -- other tools' marks -------------------------------------------------------------------------
 def _acrobat_like(path: Path) -> None:
     """A page with an Acrobat-style watermark (an artifact drawing a form XObject whose piece
     info names it), a word processor's running header (a plain pagination artifact) and
-    body text."""
+    body text. Built with pikepdf, so the test using it is host-only."""
+    import pikepdf
+
     pdf = pikepdf.new()
     pdf.add_blank_page(page_size=(300, 300))
     page = pdf.pages[0]
@@ -202,6 +189,7 @@ def test_acrobat_marks_are_found_and_removed_others_left_alone(
     assert page.remove_marks([MarkKind.WATERMARK]) == 1
     doc.save()
     doc.close()
-    text = _pdfium_text(path, 0)
-    assert "ACRO-WM" not in text
-    assert "Running header" in text and "Body text" in text
+    record("text_lacks_pdfium", path, page=0, text="ACRO-WM")
+    record("text_contains_pdfium", path, page=0, text="Running header")
+    record("text_contains_pdfium", path, page=0, text="Body text")
+    record("render_pdfium", path, page=0, scale=0.5)

@@ -8,8 +8,6 @@ from itertools import pairwise
 from pathlib import Path
 from statistics import median
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.base import Engine
@@ -20,6 +18,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.objects import Align, ObjectType, TextStyle
 from pdfeditor.model.text import Block, Char, FontFlags, Line, Span
+from tests.hostcheck import record
 
 HEADING = "Tracked heading"
 LINE = "Spaced words in one line"
@@ -148,15 +147,9 @@ def test_same_text_lands_on_the_same_glyph_positions(
     doc = editable.open(path)
     check(doc.page(0))
     doc.close()
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == 1
-    pdf = pdfium.PdfDocument(path)
-    try:
-        textpage = pdf[0].get_textpage()
-        assert text.split("\n")[0] in textpage.get_text_range().replace("\r", "")
-        assert pdf[0].render(scale=0.5).to_pil().size[0] > 0
-    finally:
-        pdf.close()
+    record("page_count_pikepdf", path, pages=1)
+    record("text_contains_pdfium_no_cr", path, page=0, text=text.split("\n")[0])
+    record("render_first_page_pdfium", path)
 
 
 def test_edited_text_keeps_the_spacing(editable: Engine, fixture_pdf, tmp_path: Path) -> None:
@@ -176,8 +169,7 @@ def test_edited_text_keeps_the_spacing(editable: Engine, fixture_pdf, tmp_path: 
     assert line[0].origin.x == pytest.approx(72, abs=1)
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == 1
+    record("page_count_pikepdf", path, pages=1)
 
 
 def test_move_keeps_the_spacing(editable: Engine, fixture_pdf, tmp_path: Path) -> None:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pikepdf
 import pytest
 
 from pdfeditor.core.commands import (
@@ -16,6 +15,7 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Engine, EngineError
 from pdfeditor.engine.pdfobject import Name, Ref, parse, text_string, write_name, write_text_string
 from pdfeditor.model.structure import AccessibilitySettings, walk_all
+from tests.hostcheck import record
 
 
 def test_pdf_object_parser() -> None:
@@ -47,7 +47,12 @@ def test_read_tree(engine: Engine, fixture_pdf) -> None:
 
 
 def test_indirect_values_are_read(engine: Engine, fixture_pdf, tmp_path: Path) -> None:
-    """Real files (e.g. IRS forms) store /Lang, /DisplayDocTitle and /Alt as indirect objects."""
+    """Real files (e.g. IRS forms) store /Lang, /DisplayDocTitle and /Alt as indirect objects.
+
+    The file is built with pikepdf, so this test is host-only (its builder needs the library).
+    """
+    import pikepdf
+
     if not engine.capabilities.structure:
         pytest.skip("no structure support")
     path = tmp_path / "indirect.pdf"
@@ -88,10 +93,7 @@ def test_edit_tags_round_trip(engine: Engine, fixture_pdf, tmp_path: Path) -> No
     assert root.children[2].alt == "Chart of sales — Снимка"
     assert reopened.accessibility_settings() == AccessibilitySettings("bg-BG", True, True)
     reopened.close()
-    with pikepdf.open(out) as pdf:
-        assert str(pdf.Root.Lang) == "bg-BG" and pdf.Root.ViewerPreferences.DisplayDocTitle
-        assert str(pdf.Root.StructTreeRoot.K.K[2].Alt) == "Chart of sales — Снимка"
-        assert all(p.obj.Tabs == "/S" for p in pdf.pages)
+    record("structure_saved_pikepdf", out, lang="bg-BG", alt="Chart of sales — Снимка")
 
 
 def test_commands_undo(fixture_pdf) -> None:

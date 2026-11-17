@@ -5,14 +5,13 @@ PyMuPDF builds the files here; the engine under test is the MuPDF backend.
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 
-import pikepdf
 import pymupdf
 
 from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS
 from pdfeditor.engine.registry import get_engine
+from tests.hostcheck import record
 
 PREFIX = "pdfeditor-"
 
@@ -34,16 +33,6 @@ def _many_squares(path: Path, count: int) -> None:
     doc.close()
 
 
-def _annots(path: Path, page: int = 0) -> list[tuple[str, str | None]]:
-    """(subtype, /NM) of each comment on ``page``, read while the file is open."""
-    with pikepdf.open(path) as pdf:
-        return [
-            (str(a.get("/Subtype")), str(a["/NM"]) if "/NM" in a else None)
-            for a in pdf.pages[page].get("/Annots", [])
-            if a.get("/Subtype") != "/Popup"
-        ]
-
-
 def test_a_full_save_names_every_one_of_many_unnamed_annotations(tmp_path: Path) -> None:
     src = tmp_path / "many.pdf"
     _many_squares(src, 20)
@@ -58,10 +47,7 @@ def test_a_full_save_names_every_one_of_many_unnamed_annotations(tmp_path: Path)
     assert all(n.startswith(PREFIX) for n in in_memory)
     doc.close()
 
-    annots = _annots(out)
-    nm = [name for _, name in annots]
-    assert len(annots) == 20 and all(name is not None for name in nm)
-    assert len(set(nm)) == 20 and all(n.startswith(PREFIX) for n in nm)
+    record("comment_names_pikepdf", out, count=20, prefix=PREFIX)
 
 
 def test_to_bytes_for_a_snapshot_names_nothing(tmp_path: Path, fixture_pdf) -> None:
@@ -72,9 +58,7 @@ def test_to_bytes_for_a_snapshot_names_nothing(tmp_path: Path, fixture_pdf) -> N
         assert names and all(n.startswith("#") for n in names)  # still synthetic in memory
     finally:
         doc.close()
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        nm = [str(a.NM) for a in pdf.pages[0].Annots if a.get("/NM") is not None]
-    assert not any(n.startswith(PREFIX) for n in nm)
+    record("no_prefixed_names_pikepdf", data, prefix=PREFIX)
 
 
 def test_widgets_links_and_popups_are_not_named_by_a_full_save(tmp_path: Path) -> None:
@@ -100,16 +84,7 @@ def test_widgets_links_and_popups_are_not_named_by_a_full_save(tmp_path: Path) -
     engine_doc.save(out)
     engine_doc.close()
 
-    with pikepdf.open(out) as pdf:
-        every = [(str(a.get("/Subtype")), str(a.get("/NM", ""))) for a in pdf.pages[0].Annots]
-    subtypes = dict(every)
-    assert "/Link" in subtypes and "/Widget" in subtypes
-    # links and widgets keep whatever name they had; the full save doesn't name them
-    for kind in ("/Link", "/Widget", "/Popup"):
-        for subtype, nm in every:
-            if subtype == kind:
-                assert not nm.startswith(PREFIX), (kind, nm)
-    assert subtypes["/Text"].startswith(PREFIX)
+    record("widget_link_names_pikepdf", out, prefix=PREFIX)
 
 
 def test_naming_one_annotation_matches_the_many_case(tmp_path: Path) -> None:
@@ -119,4 +94,4 @@ def test_naming_one_annotation_matches_the_many_case(tmp_path: Path) -> None:
     out = tmp_path / "one-named.pdf"
     doc.save(out)
     doc.close()
-    assert _annots(out)[0][1] is not None and _annots(out)[0][1].startswith(PREFIX)
+    record("first_comment_name_pikepdf", out, prefix=PREFIX)

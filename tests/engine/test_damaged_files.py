@@ -6,14 +6,18 @@ import random
 import re
 from pathlib import Path
 
-import pikepdf
 import pytest
 
 from pdfeditor.engine.base import Engine, OpenError
 
 
 def _with_encrypt_filter(src: Path, out: Path, handler: str) -> Path:
-    """A copy whose trailer names an /Encrypt dictionary with ``handler`` as its /Filter."""
+    """A copy whose trailer names an /Encrypt dictionary with ``handler`` as its /Filter.
+
+    Built with pikepdf (the rewrite), so the test that uses it is host-only.
+    """
+    import pikepdf
+
     with pikepdf.open(src) as pdf:
         pdf.save(out, object_stream_mode=pikepdf.ObjectStreamMode.disable)
     raw = out.read_bytes()
