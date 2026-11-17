@@ -195,6 +195,13 @@ jobs:
           test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
           PYMUPDF_WHEEL="$(ls web/spike/dist/wheel-build/*.whl)" node web/test/pyodide/run_tests.mjs
 
+      # The host halves of the migrated checks (W2.7b): pikepdf and pypdfium2 replay what the
+      # Pyodide run recorded. Runs even when the Pyodide tests failed, since the manifest is
+      # written then too. The host packages are the ones installed above.
+      - name: Replay the recorded host checks (host CPython)
+        if: always() && hashFiles('web/test/pyodide/out/host-checks.json') != ''
+        run: python scripts/web_host_verify.py web/test/pyodide/out/host-checks.json
+
       - name: Upload the test output
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
