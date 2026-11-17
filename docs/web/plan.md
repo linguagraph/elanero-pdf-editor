@@ -158,7 +158,7 @@ Legend: **[D]** design by Opus 5.5 · **[I]** implementation by a Haiku 5.5 suba
 - **W1.7 [D] Test strategy**: Python tests under Pyodide; round-trip checks split across the boundary (the edit and save run in Pyodide; the saved bytes are checked by pikepdf and pypdfium2 in host CPython, as AGENTS.md requires); TypeScript unit tests (Vitest); end-to-end tests (Playwright on Chromium, Firefox and WebKit); visual golden tests; performance budgets in CI.
 
 ### W2: Shared code made web-ready (Python, desktop keeps working)
-- **W2.1 [I] `pdfeditor.actions` layer**, per W1.3, in slices of ≤ ~400 lines: (a) package, registry and import-linter contract update, plus page actions; (b) annotation and comment actions; (c) redaction, sanitize and security actions; (d) stamping, flatten, metadata and outline actions; (e) content-editing actions; (f) the web's shortcut table, `web/src/generated/shortcuts.json`, written by `scripts/make_shortcut_docs.py` from the desktop's commands and kept in step by its `--check` (W1.3 §5: `ACROBAT_DEFAULTS` holds only 5 entries, so moving it wouldn't carry the shortcuts). Each slice moves the desktop controllers onto the new functions, and the desktop tests stay green. The 41 actions are listed in [design/W1.3.md](design/W1.3.md); OCR, auto-tag, PDF/A and the tag editor stay in `ui/` (desktop-only).
+- **W2.1 [I] `pdfeditor.actions` layer**, per W1.3, in slices of ≤ ~400 lines: (a) package, registry and import-linter contract update, plus page actions; (b) annotation and comment actions; (c) redaction, sanitize and security actions; (d) stamping, flatten, metadata and outline actions; (e) content-editing actions; (f) the web's shortcut table, `web/src/generated/shortcuts.json`, written by `scripts/make_shortcut_docs.py` from the desktop's commands and kept in step by its `--check` (W1.3 §5: `ACROBAT_DEFAULTS` holds only 5 entries, so moving it wouldn't carry the shortcuts). Each slice moves the desktop controllers onto the new functions, and the desktop tests stay green. The 42 actions are listed in [design/W1.3.md](design/W1.3.md) (41, plus `annotations.create` from W1.5); OCR, auto-tag, PDF/A and the tag editor stay in `ui/` (desktop-only).
 - **W2.2 [I] Platform capabilities**: `core/platform.py` with `linearize`, `ocr`, `signing`, `system_fonts`, `office_import`, `threads`; `services/fonts.system_font_dirs` and the export registry respect the flags. From the W0.4 audit:
   - `engine/mupdf/ocr.py` imports the excluded `ocr_worker` at module level (L25), and `engine/mupdf/page.py` imports `ocr` (L14), so the whole engine can't import on the web. Move the `ocr_worker` import into `text_layer()`, with `ocr` off on the web.
   - `services/optimize.py`: `linearize` and `_is_encrypted` import pikepdf lazily (the encryption check goes through the engine); `Document.optimize` works without pikepdf.
@@ -193,28 +193,29 @@ Legend: **[D]** design by Opus 5.5 · **[I]** implementation by a Haiku 5.5 suba
 - **W4.7 [I]** Message catalogue (i18n) and the mapping from RPC error codes to messages: flat JSON per language, `Intl.PluralRules` plurals, no i18n library, tests that every used key and every error code has an English message (W1.6 §11).
 
 ### W5: Viewer and navigation (A1–A3)
-- **W5.1a [I]** Document view: virtualised page list, single and continuous layouts, zoom and fit modes.
-- **W5.1b [I]** HiDPI tiles, render cache and prefetch.
-- **W5.1c [I]** Two-page and two-page-cover layouts, Ctrl+wheel zoom, night-reading inversion.
+- **W5.1a [I]** Document view: virtualised page list, single and continuous layouts, zoom and fit modes. Layout maths ported to TS and checked against shared vectors from `scripts/make_web_vectors.py`; a scaled scroll space above 8 million CSS px ([design/W1.4.md](design/W1.4.md) §7, §12).
+- **W5.1b [I]** HiDPI tiles, render cache and prefetch: whole page up to 4 MP, 1024-px tiles above; `ImageBitmap`s made in the worker; a main-thread render queue (2 in flight, priorities, stale requests dropped); `tile_grid` moved into `core/layout.py`; the backend's page and display-list caches bounded to 64 pages (desktop too) (W1.4 §4–§6).
+- **W5.1c [I]** Two-page and two-page-cover layouts, Ctrl+wheel zoom, night-reading inversion (a CSS `invert(1)` filter, no re-render; W1.4 §8).
 - **W5.2 [I]** Side panels: thumbnails, bookmarks (with editing), attachments, layers.
 - **W5.3 [I]** Links (scheme allow-list and confirmation) and navigation history, page jump, page labels.
-- **W5.4 [I]** Text selection and copy; search panel.
+- **W5.4 [I]** Text selection and copy; search panel. The desktop selection model (`PageTextIndex` queries, `TextSelection`) ported to TS with shared vectors; hidden DOM text spans for screen readers; large copies and search as chunked worker calls (W1.4 §10).
 
 ### W6: Required features
 - **W6.1 [I] R2 Page organizer**: grid of thumbnails, drag-and-drop reorder, multi-select, rotate, delete, insert blank, duplicate, extract, insert from file; all undoable.
 - **W6.2 [I] R3 Split dialog**: modes from `SplitMode`, preview of the resulting files, download as files or ZIP.
 - **W6.3 [I] R6 Combine dialog**: add PDFs and images, reorder, remove, page ranges per source, merged bookmarks.
 - **W6.4 [I] R5 Compress dialog**: presets, custom options, space audit before and after, result size (job worker).
-- **W6.5 [I] R7 Print**: page range, scale, include comments, print via iframe; progress for large documents.
+- **W6.5 [I] R7 Print**: page range, scale, include comments, print via iframe; progress for large documents. 150 dpi PNG pages (300 dpi option) encoded in the worker and streamed; job worker above 10 pages; warning above 200 pages (W1.4 §11).
 - **W6.6 [I] R4 Translate**: bubble on selection, consent notice, service settings, From/To pickers, Copy, Add as note; Preferences → Translation. No DeepL row and no LibreTranslate server-address row (the public instance is fixed by the CSP).
-- **W6.7a [I] R1a** Select, move and delete page objects; image and shape handles.
-- **W6.7b [I] R1a** Add text box; add shapes; add and replace images.
-- **W6.8a [I] R1b** In-place paragraph editor: caret, selection, typing, IME, undo grouping (layout from the worker).
-- **W6.8b [I] R1b** Font picker (document, standard, uploaded fonts), styles, substitution disclosure.
-- **W6.9 [I] R1c Font upload**: load a TTF/OTF, validate with fontTools, respect embedding restrictions (reuses the `FontCatalog` checks).
+- **W6.7a [I] R1a** Edit tool: object outlines, the per-revision object cache, hit testing in TS with shared test vectors, selection, move and resize handles, delete, `STALE_OBJECT` handling, the signed-document warning ([design/W1.5.md](design/W1.5.md) §2–3).
+- **W6.7b [I] R1a** Add shapes; add, replace and export images (add text moved to W6.8a, since it needs the paragraph editor).
+- **W6.8a [I] R1b** In-place paragraph editor: a native textarea over the block, previewing the document's own font (`content.preview_font`, CSS Font Loading API); typing, IME, clipboard and in-editor undo are the browser's; Python lays the text out on commit (`content.replace_text`/`content.add_text`), not per keystroke; Add Text tool; the substitution notice (W1.5 §5).
+- **W6.8b [I] R1b** Style bar and font picker (document, standard, uploaded fonts; no installed-fonts section).
+- **W6.9 [I] R1c Font upload**: load a TTF/OTF/TTC, validate with fontTools, respect embedding restrictions (reuses the `FontCatalog` checks; `INVALID_FONT`, `FONT_NOT_EMBEDDABLE`); kept in OPFS, loaded at start-up, removable (W1.5 §7).
 
 ### W7: Added features
-- **W7.1 [I] A4** Comment tools and comments panel (replies, status, filter).
+- **W7.1a [I] A4** Comment tools: the shared Python builders and the `annotations.create` action (unless W2.1 (b) already has them), each tool's gesture and preview, comment selection, move and resize, note popup (W1.5 §6).
+- **W7.1b [I] A4** Comments panel (replies, status, filter), contextual bar and inspector restyle.
 - **W7.2 [I] A5** Comment summary export and XFDF import/export.
 - **W7.3 [I] A6** Stamps, watermarks, headers/footers, Bates, backgrounds.
 - **W7.4 [I] A7** Redaction and sanitize (apply runs in the job worker; leak test required).
@@ -226,8 +227,8 @@ Legend: **[D]** design by Opus 5.5 · **[I]** implementation by a Haiku 5.5 suba
 
 ### W8: Quality
 - **W8.1 [I]** End-to-end tests (Playwright) for every required feature on Chromium, Firefox and WebKit, including round trips (edit → save → reopen, plus the host-side pikepdf/pypdfium2 check).
-- **W8.2 [I]** Visual golden tests for rendering, comparing with desktop output.
-- **W8.3 [I]** Performance tests in CI with the budgets in decision 10 (repeat visit ≤ 4 s gate; the 6 s / 2 s targets tracked as trends; CI runners vary by up to ~40%, so compare against a pinned baseline, not absolute numbers) (load, first page, scroll on a 1000-page file, save, job-worker start).
+- **W8.2 [I]** Visual golden tests for rendering, comparing with desktop output (same MuPDF version, so near-identical; the desktop goldens' tolerance).
+- **W8.3 [I]** Performance tests in CI with the budgets in decision 10 (repeat visit ≤ 4 s gate; the 6 s / 2 s targets tracked as trends; CI runners vary by up to ~40%, so compare against a pinned baseline, not absolute numbers) (load, first page, scroll on a 1000-page file, save, job-worker start; viewer budgets in W1.4 §14).
 - **W8.4 [I]** Fuzz/robustness: open the malformed fixtures and a fuzzed corpus in the worker; the app must show an error, never hang the tab.
 - **W8.5 [I]** Accessibility: keyboard-only walkthrough of every F6 region, axe-core checks in CI, screen reader labels, contrast in both themes, forced colours, reduced motion, 44 px touch targets (W1.6 §12).
 - **W8.6 [D+review] Security review** by a Sonnet 5.5 subagent of the whole web app against the threat model in W1.1 (not just per PR): CSP, RPC, link handling, translation, storage, service worker, dependencies. Opus 5.5 designs fixes for anything structural.
