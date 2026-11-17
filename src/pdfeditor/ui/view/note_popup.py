@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QPoint, Qt
@@ -18,8 +17,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core.commands import UpdateAnnotationCommand
-from pdfeditor.model.annotations import AnnotationModel
+from pdfeditor.actions import comments
+from pdfeditor.actions.base import Busy
+from pdfeditor.model.annotations import AnnotationModel, AnnotRef
 
 if TYPE_CHECKING:
     from pdfeditor.ui.view.document_view import DocumentView
@@ -81,9 +81,13 @@ class NotePopup(QFrame):
         current = self.view.annotation_by_name(self.note.page_index, self.note.name)
         if current is None or text == current.contents or current.locked:
             return
-        after = copy.deepcopy(current)
-        after.contents = text
-        self.view.session.execute(UpdateAnnotationCommand(current, after, "Edit Note"))
+        request = comments.SetAnnotationText(
+            AnnotRef(current.page_index, current.name), text, "Edit Note"
+        )
+        try:
+            comments.set_text(self.view.session, request)
+        except Busy:
+            return
 
     def show_at(self, pos: QPoint) -> None:
         self.move(pos)

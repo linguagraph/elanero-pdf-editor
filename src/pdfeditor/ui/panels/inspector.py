@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import copy
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -18,8 +16,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core.commands import ChangeKind, UpdateAnnotationCommand
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType
+from pdfeditor.actions import comments
+from pdfeditor.actions.base import Busy
+from pdfeditor.actions.comments import shown_color
+from pdfeditor.core.commands import ChangeKind
+from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
 from pdfeditor.model.color import Color
 from pdfeditor.services.comments import type_label
 from pdfeditor.ui.color_picker import pick_color, swatch_icon
@@ -33,33 +34,6 @@ FILL_TYPES = {
     AnnotationType.FREE_TEXT,
 }
 NO_BORDER = {AnnotationType.TEXT, AnnotationType.FILE_ATTACHMENT, AnnotationType.STAMP}
-
-
-def restyled(before: AnnotationModel, field: str, value: object) -> AnnotationModel | None:
-    """``before`` with ``field`` set to ``value``, or None when that changes nothing or the
-    comment is locked (locked comments only allow unlocking).
-
-    A text box's "color" is its text color: its border keeps its own."""
-    if field != "locked" and before.locked:
-        return None
-    current = before.text_color if _is_text_color(before, field) else getattr(before, field)
-    if current == value:
-        return None
-    after = copy.deepcopy(before)
-    if _is_text_color(before, field):
-        after.text_color = value  # type: ignore[assignment]
-    else:
-        setattr(after, field, value)
-    return after
-
-
-def _is_text_color(model: AnnotationModel, field: str) -> bool:
-    return field == "color" and model.type is AnnotationType.FREE_TEXT
-
-
-def shown_color(model: AnnotationModel) -> Color | None:
-    """The color a comment's "Color" control shows (a text box: its text)."""
-    return model.color or (model.text_color if model.type is AnnotationType.FREE_TEXT else None)
 
 
 class ColorButton(QPushButton):
@@ -199,12 +173,17 @@ class InspectorPanel(ViewPanel):
         if self._loading or self.model is None or self.view is None:
             return
         before = self.model
-        after = restyled(before, field, value)
-        if after is None:
-            return
-        self.view.session.execute(
-            UpdateAnnotationCommand(before, after, label, merge_key=f"inspector:{field}")
+        request = comments.restyle_args(
+            (AnnotRef(before.page_index, before.name),),
+            field,
+            value,
+            label,
+            merge_key=f"inspector:{field}",
         )
+        try:
+            comments.restyle(self.view.session, request)
+        except Busy:
+            return
 
     def _pick(self, field: str) -> None:
         if self.model is None:

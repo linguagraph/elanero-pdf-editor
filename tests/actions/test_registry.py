@@ -27,6 +27,7 @@ from pdfeditor.actions.pages import DeletePages, RotatePages
 from pdfeditor.core.session import DocumentSession, EventKind
 from pdfeditor.engine.base import Capabilities
 from pdfeditor.engine.registry import get_engine
+from pdfeditor.model.annotations import AnnotationModel
 from tests.actions.conftest import Opener
 
 PAGE_ACTIONS = {
@@ -45,11 +46,28 @@ PAGE_ACTIONS = {
 }
 
 
+def _is_string_key(tp: Any) -> bool:
+    """JSON object keys are strings: ``str`` or an Enum whose members all have str values."""
+    if tp is str:
+        return True
+    return (
+        isinstance(tp, type)
+        and issubclass(tp, enum.Enum)
+        and all(isinstance(m.value, str) for m in tp)
+    )
+
+
+def _is_optional_datetime(tp: Any) -> bool:
+    return tp is datetime or set(typing.get_args(tp)) == {datetime, type(None)}
+
+
 def field_violations(tp: Any, where: str, seen: set[type]) -> list[str]:
     """Why a field type breaks W1.3 §3 rule 1; an empty list when it is allowed.
 
-    Allowed: bool, int, float, str, bytes, Enum subclasses, ``tuple[X, ...]``, ``X | None``, and
-    dataclasses from pdfeditor.model or pdfeditor.services built from the same types.
+    Allowed: bool, int, float, str, bytes, Enum subclasses, ``tuple[X, ...]`` and fixed-length
+    ``tuple[X, Y, ...]``, ``dict[K, X]`` with a string key ``K``, ``X | None``, and dataclasses
+    from pdfeditor.model or pdfeditor.services built from the same types. ``datetime`` is
+    allowed only as ``AnnotationModel.created``/``modified`` (checked in the dataclass loop).
     """
     if tp in {bool, int, float, str, bytes}:
         return []
@@ -57,8 +75,14 @@ def field_violations(tp: Any, where: str, seen: set[type]) -> list[str]:
         return []
     origin = typing.get_origin(tp)
     args = typing.get_args(tp)
-    if origin is tuple and len(args) == 2 and args[1] is Ellipsis:
-        return field_violations(args[0], where, seen)
+    if origin is tuple:
+        if len(args) == 2 and args[1] is Ellipsis:
+            return field_violations(args[0], where, seen)
+        return [v for a in args for v in field_violations(a, where, seen)]
+    if origin is dict and len(args) == 2:
+        key, value = args
+        out = [] if _is_string_key(key) else [f"{where}: dict key {key!r} is not str"]
+        return out + field_violations(value, where, seen)
     if origin in (typing.Union, types.UnionType):
         non_none = [a for a in args if a is not type(None)]
         if len(args) == 2 and len(non_none) == 1:
@@ -70,21 +94,34 @@ def field_violations(tp: Any, where: str, seen: set[type]) -> list[str]:
         if tp in seen:
             return []
         seen.add(tp)
-        hints = typing.get_type_hints(tp)
-        out: list[str] = []
-        for f in dataclasses.fields(tp):
-            out += field_violations(hints[f.name], f"{where}.{f.name}", seen)
-        return out
+        return _fields_violations(tp, where, seen)
     return [f"{where}: {tp!r} is not allowed"]
 
 
-def args_violations(cls: type) -> list[str]:
-    seen: set[type] = set()
+_DATETIME_FIELDS = {"created", "modified"}
+
+
+def _fields_violations(cls: type, where: str, seen: set[type]) -> list[str]:
     hints = typing.get_type_hints(cls)
     out: list[str] = []
     for f in dataclasses.fields(cls):
-        out += field_violations(hints[f.name], f"{cls.__qualname__}.{f.name}", seen)
+        ftype = hints[f.name]
+        if cls is AnnotationModel and f.name in _DATETIME_FIELDS and _is_optional_datetime(ftype):
+            continue  # ISO 8601 on the wire (W1.2 §6)
+        out += field_violations(ftype, f"{where}.{f.name}", seen)
     return out
+
+
+def args_violations(cls: type) -> list[str]:
+    return _fields_violations(cls, cls.__qualname__, set())
+
+
+class _StrSlot(enum.StrEnum):
+    TOP = "top"
+
+
+class _IntSlot(enum.Enum):
+    ONE = 1
 
 
 @dataclass(frozen=True)
@@ -92,6 +129,9 @@ class _Good:
     count: int
     names: tuple[str, ...] = ()
     label: str | None = None
+    pair: tuple[str, str] = ("", "")  # fixed length, like line_endings
+    texts: dict[str, str] = dataclasses.field(default_factory=dict)  # like extra
+    slots: dict[_StrSlot, str] = dataclasses.field(default_factory=dict)  # like HeaderFooter
 
 
 @dataclass(frozen=True)
@@ -100,6 +140,8 @@ class _Bad:
     where: Path
     when: datetime
     callback: Any
+    by_int: dict[int, str]
+    by_int_enum: dict[_IntSlot, str]
 
 
 def test_walker_accepts_allowed_types() -> None:
@@ -108,9 +150,15 @@ def test_walker_accepts_allowed_types() -> None:
 
 def test_walker_rejects_forbidden_types() -> None:
     problems = args_violations(_Bad)
-    assert len(problems) == 4
-    assert any("names" in p for p in problems) and any("where" in p for p in problems)
-    assert any("when" in p for p in problems) and any("callback" in p for p in problems)
+    assert len(problems) == 6
+    for name in ("names", "where", "when", "callback", "by_int", "by_int_enum"):
+        assert any(p.startswith(f"_Bad.{name}:") for p in problems), name
+
+
+def test_walker_accepts_annotation_model_with_its_datetimes() -> None:
+    # line_endings, extra and created/modified are the W1.2 §6 cases the walker allows; a bare
+    # datetime elsewhere is rejected by _Bad.when above
+    assert args_violations(AnnotationModel) == []
 
 
 @pytest.fixture

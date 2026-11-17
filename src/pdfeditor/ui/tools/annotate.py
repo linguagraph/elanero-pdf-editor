@@ -6,7 +6,6 @@ Escape or pick another tool to stop.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,7 +13,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView, QInputDialog, QMessageBox
 
-from pdfeditor.core.commands import AddAnnotationCommand, Command, MacroCommand
+from pdfeditor.actions import comments
+from pdfeditor.actions.base import Busy
+from pdfeditor.actions.comments import DEFAULT_STYLES, AddAnnotations, CommentStyle
 from pdfeditor.model.annotations import (
     IMAGE_STAMP,
     AnnotationModel,
@@ -30,31 +31,6 @@ from pdfeditor.ui.tools.base import Tool
 if TYPE_CHECKING:
     from pdfeditor.ui.view.document_view import DocumentView
 
-
-@dataclass(frozen=True)
-class Style:
-    color: Color | None
-    fill: Color | None = None
-    width: float = 1.0
-    opacity: float = 1.0
-
-
-STYLES: dict[AnnotationType, Style] = {
-    AnnotationType.HIGHLIGHT: Style(Color(1, 0.92, 0)),
-    AnnotationType.UNDERLINE: Style(Color(0, 0.6, 0.2)),
-    AnnotationType.STRIKEOUT: Style(Color(0.85, 0.1, 0.1)),
-    AnnotationType.SQUIGGLY: Style(Color(1, 0.45, 0)),
-    AnnotationType.SQUARE: Style(Color(0.85, 0.1, 0.1), width=1.5),
-    AnnotationType.CIRCLE: Style(Color(0.85, 0.1, 0.1), width=1.5),
-    AnnotationType.LINE: Style(Color(0.85, 0.1, 0.1), width=1.5),
-    AnnotationType.POLYGON: Style(Color(0.85, 0.1, 0.1), width=1.5),
-    AnnotationType.POLYLINE: Style(Color(0.85, 0.1, 0.1), width=1.5),
-    AnnotationType.INK: Style(Color(0.1, 0.3, 0.9), width=2.0),
-    AnnotationType.TEXT: Style(Color(1, 0.85, 0.2)),
-    AnnotationType.FREE_TEXT: Style(None),
-    AnnotationType.STAMP: Style(None),
-    AnnotationType.FILE_ATTACHMENT: Style(Color(0.2, 0.4, 0.8)),
-}
 
 NOTE_SIZE = 20.0
 IMAGE_PREFIX = "image:"  # stamp names that refer to a custom image stamp
@@ -73,7 +49,7 @@ def ask_file(view: DocumentView) -> Path | None:
 
 
 def new_model(view: DocumentView, kind: AnnotationType, page: int, rect: Rect) -> AnnotationModel:
-    style = STYLES.get(kind, Style(Color(1, 0, 0)))
+    style = DEFAULT_STYLES.get(kind, CommentStyle(Color(1, 0, 0)))
     return AnnotationModel(
         kind,
         page,
@@ -87,18 +63,13 @@ def new_model(view: DocumentView, kind: AnnotationType, page: int, rect: Rect) -
 
 
 def commit(view: DocumentView, models: list[AnnotationModel], label: str) -> None:
-    commands: list[Command] = [AddAnnotationCommand(m) for m in models]
-    if not commands:
+    try:
+        result = comments.add(view.session, AddAnnotations(tuple(models), label))
+    except Busy:  # a background task holds the document: nothing was added
         return
-    command = commands[0] if len(commands) == 1 else MacroCommand(label, commands)
-    command.label = label
-    view.session.execute(command)
-    names = [
-        (m.page_index, c.model.name)
-        for m, c in zip(models, commands, strict=True)
-        if isinstance(c, AddAnnotationCommand)
-    ]
-    view.set_annotation_selection(names)
+    if not result.executed:
+        return
+    view.set_annotation_selection([(r.page, r.name) for r in result.value])
     view.tool_used.emit()
 
 

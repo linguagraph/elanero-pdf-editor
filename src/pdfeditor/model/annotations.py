@@ -117,6 +117,14 @@ class AnnotationModel:
         return self.type is AnnotationType.FREE_TEXT and len(self.vertices) >= 2
 
 
+@dataclass(frozen=True, slots=True)
+class AnnotRef:
+    """Names one comment for an action: its page and its /NM name (never the engine id)."""
+
+    page: int
+    name: str
+
+
 # Standard stamp names (PDF 32000 12.5.6.12), in the order MuPDF numbers them.
 STANDARD_STAMPS = (
     "Approved",

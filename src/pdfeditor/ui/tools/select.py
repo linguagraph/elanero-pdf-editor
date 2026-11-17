@@ -14,11 +14,13 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QCursor, QMouseEvent
 from PySide6.QtWidgets import QApplication, QGraphicsView
 
-from pdfeditor.core.commands import Command, MacroCommand, UpdateAnnotationCommand
+from pdfeditor.actions import comments
+from pdfeditor.actions.base import Busy
+from pdfeditor.actions.comments import TransformAnnotations
 from pdfeditor.model.annotations import (
     AnnotationModel,
     AnnotationType,
-    callout_line,
+    AnnotRef,
     transformed,
 )
 from pdfeditor.model.geometry import Matrix, Point, Rect
@@ -69,15 +71,6 @@ def _fit(old: Rect, new: Rect) -> Matrix:
     return (
         Matrix.translate(-old.x0, -old.y0) @ Matrix.scale(sx, sy) @ Matrix.translate(new.x0, new.y0)
     )
-
-
-def _reshaped(model: AnnotationModel, m: Matrix, resize: bool) -> AnnotationModel:
-    """``model`` moved or resized by ``m``. Resizing a callout resizes its box only: the
-    leader line keeps pointing at the same spot."""
-    out = transformed(model, m)
-    if resize and model.is_callout:
-        out.vertices = callout_line(model.vertices[0], out.rect)
-    return out
 
 
 class SelectTool(Tool):
@@ -182,12 +175,11 @@ class SelectTool(Tool):
             if handle is None and len(models) == 1 and models[0].type is AnnotationType.TEXT:
                 view.note_clicked.emit(models[0], QCursor.pos())  # a click (no drag) opens it
             return
-        label = "Resize Comment" if handle is not None else "Move Comment"
-        commands: list[Command] = [
-            UpdateAnnotationCommand(a, _reshaped(a, m, resize=handle is not None), label)
-            for a in models
-        ]
-        view.session.execute(commands[0] if len(commands) == 1 else MacroCommand(label, commands))
+        refs = tuple(AnnotRef(a.page_index, a.name) for a in models)
+        try:
+            comments.transform(view.session, TransformAnnotations(refs, m, handle is not None))
+        except Busy:  # a background task holds the document: the comments stay put
+            return
 
     def press(self, view: DocumentView, event: QMouseEvent) -> bool:
         scene = view.mapToScene(event.position().toPoint())
