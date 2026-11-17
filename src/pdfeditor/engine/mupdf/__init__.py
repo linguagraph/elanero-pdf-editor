@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pymupdf
@@ -9,6 +10,7 @@ import pymupdf
 from pdfeditor.engine.base import Capabilities, PasswordCallback
 from pdfeditor.engine.mupdf.document import MuDocument, open_document
 from pdfeditor.engine.mupdf.page import MuPage
+from pdfeditor.model.platform import current
 
 __all__ = ["MuDocument", "MuPDFEngine", "MuPage", "create_engine"]
 
@@ -16,31 +18,38 @@ __all__ = ["MuDocument", "MuPDFEngine", "MuPage", "create_engine"]
 pymupdf.TOOLS.mupdf_display_errors(False)
 
 
+# OCR is not listed here: it follows the platform flag, read on each access (see MuPDFEngine).
+_CAPABILITIES = Capabilities(
+    render=True,
+    text_extraction=True,
+    search=True,
+    incremental_save=True,
+    annotations_read=True,
+    annotations_write=True,
+    annotations_flatten=True,
+    page_ops=True,
+    page_marks=True,
+    content_edit=True,
+    redact=True,
+    export=True,
+    optimize=True,
+    encrypt=True,
+    structure=True,
+    auto_tag=True,
+    outline_write=True,
+    metadata_write=True,
+    xmp=True,
+    layers=True,
+)
+
+
 class MuPDFEngine:
     name = "mupdf"
-    capabilities = Capabilities(
-        render=True,
-        text_extraction=True,
-        search=True,
-        incremental_save=True,
-        annotations_read=True,
-        annotations_write=True,
-        annotations_flatten=True,
-        page_ops=True,
-        page_marks=True,
-        content_edit=True,
-        redact=True,
-        ocr=True,
-        export=True,
-        optimize=True,
-        encrypt=True,
-        structure=True,
-        auto_tag=True,
-        outline_write=True,
-        metadata_write=True,
-        xmp=True,
-        layers=True,
-    )
+
+    @property
+    def capabilities(self) -> Capabilities:
+        # Read per access so a platform build (the web) can turn OCR off through the flag.
+        return replace(_CAPABILITIES, ocr=current().ocr)
 
     @property
     def version(self) -> str:
