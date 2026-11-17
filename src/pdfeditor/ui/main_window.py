@@ -47,9 +47,10 @@ from PySide6.QtWidgets import (
 
 from pdfeditor import APP_DISPLAY_NAME, bundle
 from pdfeditor.actions import comments
+from pdfeditor.actions import document as document_actions
+from pdfeditor.actions.document import FlattenAnnotations
 from pdfeditor.core import engine_lock
 from pdfeditor.core.autosave import Autosaver, RecoveryStore
-from pdfeditor.core.commands import SnapshotCommand
 from pdfeditor.core.layout import LayoutMode
 from pdfeditor.core.paths import recovery_dir
 from pdfeditor.core.render_cache import RenderCache
@@ -66,6 +67,7 @@ from pdfeditor.model.annotations import (
 from pdfeditor.model.objects import ObjectType
 from pdfeditor.model.outline import Link, LinkKind
 from pdfeditor.services.assembly import SUPPORTED_SUFFIXES
+from pdfeditor.services.comments import flattenable
 from pdfeditor.services.fonts import same_font_family
 from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.action_help import apply_short_labels, refresh_tooltips
@@ -1471,21 +1473,16 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if view is None or not view.session.engine.capabilities.annotations_flatten:
             return 0
-        by_page: dict[int, list[int]] = {}
-        for model in view.selected_models():
-            if model.id is not None:
-                by_page.setdefault(model.page_index, []).append(model.id)
-        if not by_page:
+        refs = tuple(
+            AnnotRef(m.page_index, m.name) for m in view.selected_models() if m.id is not None
+        )
+        if not refs:
             return 0
-        counted: list[int] = []
-
-        def operation(doc: Document) -> None:
-            counted.append(sum(doc.page(p).flatten_annotations(ids) for p, ids in by_page.items()))
-
         view.set_annotation_selection([])
-        session = view.session
-        session.execute(SnapshotCommand("Flatten Comment", operation, session.snapshots))
-        return counted[0] if counted else 0
+        result = run_action(
+            lambda: document_actions.flatten(view.session, FlattenAnnotations(refs)), self.notify
+        )
+        return result.value if result else 0
 
     def flatten_all(self, confirm: bool = True) -> int:
         """Burn every visible comment into the pages (one undo step)."""
@@ -1493,37 +1490,25 @@ class MainWindow(QMainWindow):
         if view is None or not view.session.engine.capabilities.annotations_flatten:
             return 0
         if confirm:
-            comments, pages = self._flattenable(view)
-            if not comments:
+            session = view.session
+            with session.lock:
+                n_comments, n_pages = flattenable(session.document)
+            if not n_comments:
                 self.notify("There are no comments to flatten.")
                 return 0
             if not self.confirm(
                 "Flatten Comments",
-                f"Burn {count(comments, 'comment')} on {count(pages, 'page')} into the page "
+                f"Burn {count(n_comments, 'comment')} on {count(n_pages, 'page')} into the page "
                 "content. They can no longer be edited, replied to or deleted as comments. "
                 "This can't be undone after saving.",
-                f"Flatten {count(comments, 'Comment')}",
+                f"Flatten {count(n_comments, 'Comment')}",
             ):
                 return 0
-        counted: list[int] = []
-
-        def operation(doc: Document) -> None:
-            counted.append(sum(doc.page(i).flatten_annotations() for i in range(doc.page_count)))
-
-        session = view.session
-        session.execute(SnapshotCommand("Flatten Comments", operation, session.snapshots))
-        return counted[0] if counted else 0
-
-    @staticmethod
-    def _flattenable(view: DocumentView) -> tuple[int, int]:
-        """Comments Flatten All would burn in, and on how many pages (as the engine counts:
-        links, form fields, popups and hidden ones stay)."""
-        skip = {AnnotationType.POPUP, AnnotationType.LINK, AnnotationType.WIDGET}
-        per_page = [
-            sum(1 for a in view.page_annotations(p) if a.type not in skip and not a.flags & 2)
-            for p in range(view.page_count)
-        ]
-        return sum(per_page), sum(1 for n in per_page if n)
+        result = run_action(
+            lambda: document_actions.flatten(view.session, FlattenAnnotations(refs=None)),
+            self.notify,
+        )
+        return result.value if result else 0
 
     def confirm(self, title: str, text: str, action_label: str) -> bool:
         """Ask before a destructive command (red button naming it; Cancel is the default)."""
