@@ -18,7 +18,12 @@ import ast
 from collections import defaultdict
 from pathlib import Path
 
+import pytest
+
 from pdfeditor.bundle import data_path
+
+# Icons are excluded from the web package (W2.6), so the bundled-icon check is desktop-only.
+pytestmark = pytest.mark.desktop_only
 
 UI = Path(__file__).resolve().parents[2] / "src" / "pdfeditor" / "ui"
 # Helpers whose icon parameter isn't called *icon*: name -> positional index.

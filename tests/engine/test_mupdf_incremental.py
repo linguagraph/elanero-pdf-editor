@@ -126,6 +126,7 @@ def test_unsigned_document_has_no_in_place_bytes(fixture_pdf: Callable[[str], Pa
     assert doc.incremental_bytes(INCREMENTAL) is None
 
 
+@pytest.mark.desktop_only  # pyhanko is excluded from the web package (signing is desktop-only)
 def test_pyhanko_validates_the_first_signature_after_an_in_place_save() -> None:
     """Structure isn't enough: the signature itself must still verify, read by pyHanko's strict
     reader. The sample's own signer is the trust root (a throwaway test certificate); the

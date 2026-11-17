@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import pikepdf
@@ -270,6 +271,7 @@ def test_recovery_store_roundtrip(session: DocumentSession, tmp_path: Path) -> N
     assert store.entries(include_running=True) == []
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="needs host processes")
 def test_recovery_entries_from_dead_process(tmp_path: Path, fixture_pdf) -> None:
     store = RecoveryStore(tmp_path)
     (tmp_path / "abc.pdf").write_bytes(fixture_pdf("images").read_bytes())

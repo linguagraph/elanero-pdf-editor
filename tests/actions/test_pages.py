@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import sys
 import threading
 from pathlib import Path
 
@@ -300,6 +301,7 @@ def test_set_labels_with_the_same_rules_is_not_executed(open_copy: Opener) -> No
 # -- the shared helpers and the busy rule -----------------------------------------------------
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no threads in Pyodide (W0.4 C6)")
 def test_password_callback_runs_outside_the_engine_lock(open_copy: Opener, fixture_pdf) -> None:
     """A modal password dialog must not stall background renders: the lock is free while it runs."""
     s = open_copy("text_multipage")
