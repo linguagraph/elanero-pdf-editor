@@ -5,11 +5,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pikepdf
 import pymupdf
-import pypdfium2 as pdfium
 
 from pdfeditor.engine.mupdf.document import MuDocument, open_document
+from tests.hostcheck import record
 
 _REF = re.compile(r"(\d+) 0 R")
 
@@ -76,17 +75,8 @@ def test_inherited_attributes_and_form_fields(tmp_path: Path) -> None:
     doc.save()
     doc.close()
 
-    with pikepdf.open(path) as pdf:
-        names = [str(f.T) for f in pdf.Root.AcroForm.Fields]
-        assert len(names) == 2 and len(set(names)) == 2 and names[0] == "name"
-        assert [len(p.obj.Annots) for p in pdf.pages] == [1, 1]
-        assert pdf.pages[0].obj.Annots[0].objgen != pdf.pages[1].obj.Annots[0].objgen
-    pd = pdfium.PdfDocument(path)
-    try:
-        assert [round(pd[i].get_width()) for i in range(len(pd))] == [400, 400]
-        assert "form page" in pd[1].get_textpage().get_text_range()
-    finally:
-        pd.close()
+    record("copied_form_fields_pikepdf", path)
+    record("copied_form_page_pdfium", path, widths=[400, 400], page=1, text="form page")
 
 
 def test_reorder_and_delete_keep_the_catalog(tmp_path: Path) -> None:
@@ -113,9 +103,4 @@ def test_reorder_and_delete_keep_the_catalog(tmp_path: Path) -> None:
     doc.select_pages([0, 1])  # delete
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:
-        root = pdf.Root
-        assert str(root.Lang) == "de-CH" and bool(root.MarkInfo.Marked)
-        assert bool(root.ViewerPreferences.DisplayDocTitle) and root.PageMode == "/UseOutlines"
-        assert [str(f.T) for f in root.AcroForm.Fields] == ["agree"]
-        assert len(pdf.pages) == 2 and len(pdf.pages[0].obj.Annots) == 1
+    record("catalog_keys_pikepdf", path)

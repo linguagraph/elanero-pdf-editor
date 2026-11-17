@@ -6,13 +6,12 @@ it as an extra, empty "form" box on top of every edited or added text.
 
 from __future__ import annotations
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.geometry import Matrix, Rect
 from pdfeditor.model.objects import ObjectType, TextStyle
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 
@@ -50,10 +49,9 @@ def test_repeated_edits_do_not_pile_up(columns, tmp_path) -> None:
         current = new
     assert forms(page) == [] and len(page.content_objects()) == before
     out = columns.save(tmp_path / "edited.pdf")
-    with pikepdf.open(out) as pdf:
-        assert len(pdf.pages) == 1
-    text = pdfium.PdfDocument(out)[0].get_textpage().get_text_range()
-    assert current in text and "Заключване на вратата" in text
+    record("page_count_pikepdf", out, pages=1)
+    record("text_contains_pdfium", out, page=0, text=current)
+    record("text_contains_pdfium", out, page=0, text="Заключване на вратата")
 
 
 def test_move_and_add_text_leave_no_form(columns) -> None:

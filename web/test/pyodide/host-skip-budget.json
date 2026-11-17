@@ -1,0 +1,10 @@
+{
+  "max_total": 18,
+  "modules": {
+    "tests/engine/test_contract.py": 2,
+    "tests/engine/test_content_edit.py": 3,
+    "tests/engine/test_text_edit_forms.py": 3,
+    "tests/engine/test_page_ops.py": 7,
+    "tests/engine/test_mupdf_pagecopy.py": 3
+  }
+}

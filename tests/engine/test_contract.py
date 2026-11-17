@@ -8,8 +8,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.base import (
@@ -27,15 +25,13 @@ from pdfeditor.model.annotations import AnnotationType
 from pdfeditor.model.geometry import Matrix, Rect
 from pdfeditor.model.metadata import EncryptionMethod, Metadata
 from pdfeditor.model.outline import Destination, LinkKind, OutlineItem
+from tests.hostcheck import record
 
 
 def assert_valid_elsewhere(path: Path, pages: int, password: str = "") -> None:
     """Saved output must be readable by independent implementations (qpdf and pdfium)."""
-    with pikepdf.open(path, password=password) as pdf:
-        assert len(pdf.pages) == pages
-    doc = pdfium.PdfDocument(path, password=password or None)
-    assert len(doc) == pages
-    doc.close()
+    record("page_count_pikepdf", path, pages=pages, password=password)
+    record("page_count_pdfium", path, pages=pages, password=password)
 
 
 def _copy(fixture: Path, tmp_path: Path) -> Path:

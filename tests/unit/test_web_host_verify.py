@@ -12,6 +12,9 @@ import pytest
 
 from tests import hostcheck
 
+# The replay needs the host's pikepdf and pypdfium2, which the Pyodide run does not have.
+pytestmark = pytest.mark.desktop_only
+
 ROOT = Path(__file__).resolve().parents[2]
 
 

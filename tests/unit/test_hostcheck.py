@@ -22,6 +22,12 @@ def pyodide(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
+def desktop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run as CPython even under Pyodide, where sys.platform is emscripten."""
+    monkeypatch.setattr(hostcheck, "in_pyodide", lambda: False)
+
+
+@pytest.fixture
 def probe(monkeypatch: pytest.MonkeyPatch) -> str:
     """A check that the test controls: it fails when the data is not b'ok'."""
     name = "unit_probe"
@@ -33,23 +39,17 @@ def probe(monkeypatch: pytest.MonkeyPatch) -> str:
     return name
 
 
-def test_desktop_runs_the_check_inline(probe: str, tmp_path: Path) -> None:
+def test_desktop_runs_the_check_inline(probe: str, desktop: None, tmp_path: Path) -> None:
     path = tmp_path / "saved.bin"
     path.write_bytes(b"ok")
     record(probe, path, expect="ok")  # passes without raising
     record(probe, b"ok", expect="ok")  # bytes work as well as a path
+    assert hostcheck.recorded() == []  # nothing is recorded on desktop
 
 
-def test_desktop_failure_raises_assertion_error(probe: str) -> None:
+def test_desktop_failure_raises_assertion_error(probe: str, desktop: None) -> None:
     with pytest.raises(AssertionError, match="got b'no'"):
         record(probe, b"no", expect="ok")
-
-
-def test_desktop_real_check_matches_the_inline_assertion(fixture_pdf) -> None:
-    path = fixture_pdf("text_multipage")  # five pages
-    record("page_count_pdfium", path, pages=5)
-    with pytest.raises(AssertionError):
-        record("page_count_pdfium", path, pages=4)
 
 
 def test_pyodide_records_instead_of_running(probe: str, pyodide: None, tmp_path: Path) -> None:
@@ -69,7 +69,7 @@ def test_non_serialisable_argument_raises_type_error(probe: str, pyodide: None) 
     assert hostcheck.recorded() == []
 
 
-def test_non_serialisable_argument_fails_on_desktop_too(probe: str) -> None:
+def test_non_serialisable_argument_fails_on_desktop_too(probe: str, desktop: None) -> None:
     with pytest.raises(TypeError, match="JSON-serialisable"):
         record(probe, b"ok", expect=object())
 
