@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from contextlib import AbstractContextManager
+from typing import Any, Protocol, runtime_checkable
 
 ProgressFn = Callable[[int, int], None]  # (done, total)
 
@@ -34,3 +36,43 @@ class CancelToken:
 
 def no_progress(_done: int, _total: int) -> None:
     pass
+
+
+@runtime_checkable
+class JobContext(Protocol):
+    """What a job's work function receives. ``ui.jobs.Job`` and ``core.inline_jobs.InlineJob``
+    both satisfy it; services never need to know which one they got."""
+
+    token: CancelToken
+    label: str
+    total: int
+
+    def progress(self, done: int, total: int) -> None: ...
+
+    def status(self, text: str) -> None: ...
+
+    def report(self, value: object) -> None: ...
+
+    def commit(self) -> None: ...
+
+    def hold(self, lock: AbstractContextManager[object]) -> AbstractContextManager[None]: ...
+
+
+class JobHandle(Protocol):
+    def cancel(self) -> None: ...
+
+
+class JobRunner(Protocol):
+    """Runs one work function. The desktop's runner queues it on a thread pool (ui/jobs.py);
+    the web's runs it to completion on the calling thread (core/inline_jobs.py)."""
+
+    def start(
+        self,
+        work: Callable[[JobContext], Any],
+        *,
+        label: str = "",
+        total: int = 0,
+        on_done: Callable[[Any], None],
+        on_failed: Callable[[str], None],
+        on_cancelled: Callable[[], None],
+    ) -> JobHandle: ...
