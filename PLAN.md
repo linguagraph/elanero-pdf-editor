@@ -536,7 +536,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W1.3** Actions layer
 - [x] **W1.4** Rendering and viewport design
 - [x] **W1.5** Editing tools design
-- [ ] **W1.6** UI/UX design
+- [x] **W1.6** UI/UX design
 - [ ] **W1.7** Test strategy
 
 **W2 Shared code made web-ready, #135**
@@ -564,9 +564,12 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W4 Front-end shell, #137**
 
 - [ ] **W4.1** Project scaffold in `web/`
-- [ ] **W4.2** App shell: start page, tabs, recent files
-- [ ] **W4.3** Ribbon, command registry and command palette
-- [ ] **W4.4** Theme (light/dark, CSS variables)
+- [ ] **W4.2a** Layout grid, breakpoints, side rails and panel frames
+- [ ] **W4.2b** Start page, tabs, recent files
+- [ ] **W4.3a** Command registry, ribbon and app menu
+- [ ] **W4.3b** Command palette and shortcuts
+- [ ] **W4.4a** Theme (generated CSS variables, light/dark, icons, brand)
+- [ ] **W4.4b** Toasts, job progress, loading screen, not-responding dialog
 - [ ] **W4.5** Preferences dialog
 - [ ] **W4.6** PWA: manifest and service worker
 - [ ] **W4.7** Message catalogue (i18n) and RPC error mapping
