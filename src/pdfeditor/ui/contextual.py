@@ -50,13 +50,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.core.commands import Command, MacroCommand, UpdateAnnotationCommand
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType
+from pdfeditor.actions import comments
+from pdfeditor.actions.comments import shown_color
+from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
 from pdfeditor.model.color import Color
+from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.color_picker import pick_color, swatch_icon
 from pdfeditor.ui.i18n import QT_TRANSLATE_NOOP
 from pdfeditor.ui.icons import icon
-from pdfeditor.ui.panels.inspector import restyled, shown_color
 from pdfeditor.ui.style.tokens import METRICS
 from pdfeditor.ui.theme import current_colors, theme_manager
 from pdfeditor.ui.tools import annotate
@@ -573,15 +574,10 @@ class ContextualToolbars:
         view = self.view
         if view is None:
             return False
-        commands: list[Command] = []
-        for model in self._editable():
-            after = restyled(model, field, value)
-            if after is not None:
-                commands.append(UpdateAnnotationCommand(model, after, label))
-        if not commands:
-            return False
-        view.session.execute(commands[0] if len(commands) == 1 else MacroCommand(label, commands))
-        return True
+        refs = tuple(AnnotRef(m.page_index, m.name) for m in self._editable())
+        request = comments.restyle_args(refs, field, value, label)
+        result = run_action(lambda: comments.restyle(view.session, request), self.w.notify)
+        return result is not None and result.executed
 
     def set_annotation_color(self, color: Color) -> bool:
         return self._restyle("color", color, "Change Color")

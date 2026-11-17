@@ -316,3 +316,27 @@ def test_flatten_selected_only(qtbot, window: MainWindow, view) -> None:
     assert [a.name for a in annots(view)] == [keep.name]
     window.act_undo.trigger()
     assert len(annots(view)) == 2
+
+
+def test_edit_text_of_a_comment_deleted_since_the_menu_was_built(
+    qtbot, window: MainWindow, view, monkeypatch
+) -> None:
+    """The menu holds a snapshot: a comment deleted since then is refused with a notice, and
+    nothing reaches the undo stack or the event loop as an exception."""
+    from pdfeditor.actions import comments
+    from pdfeditor.actions.comments import DeleteAnnotations
+    from pdfeditor.model.annotations import AnnotRef
+
+    window.set_tool("rectangle")
+    drag(qtbot, view, 0, (100, 300), (200, 400))
+    (model,) = annots(view)
+    comments.delete(view.session, DeleteAnnotations((AnnotRef(0, model.name),)))
+    top_before = view.session.undo_stack.top
+    notices: list[str] = []
+    monkeypatch.setattr(window, "notify", lambda text, *a, **k: notices.append(text))
+    monkeypatch.setattr(annotate, "ask_text", lambda *a, **k: "Changed")
+
+    window.edit_annotation(model)
+
+    assert view.session.undo_stack.top is top_before
+    assert any("no longer exists" in text for text in notices)

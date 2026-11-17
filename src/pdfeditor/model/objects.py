@@ -57,6 +57,15 @@ class PageObject:
 
 
 @dataclass(frozen=True, slots=True)
+class ObjectRef:
+    """A content object as the caller saw it: object keys are valid for one page revision."""
+
+    page: int
+    key: str
+    revision: int
+
+
+@dataclass(frozen=True, slots=True)
 class FontChoice:
     """How edited text was set: the document's own font, a standard font, or a substitute."""
 
