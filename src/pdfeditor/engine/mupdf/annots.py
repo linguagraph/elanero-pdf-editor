@@ -45,6 +45,10 @@ _LINE_END_CODES = {
     "Slash": pymupdf.PDF_ANNOT_LE_SLASH,
 }
 _REF = re.compile(r"(\d+)\s+0\s+R")
+# Comments from other applications often have no /NM, and every caller addresses a comment by
+# name, so an unnamed one is read back as ``#<object number>`` (a /NM value a user would never
+# type). Writing such a model stores the name as the new /NM, which keeps it addressable.
+UNNAMED_PREFIX = "#"
 # Types whose geometry is just their rectangle.
 _RECT_TYPES = {
     AnnotationType.TEXT,
@@ -230,19 +234,40 @@ def stamp_image(doc: pymupdf.Document, xref: int) -> bytes | None:
 
 # -- lookup ---------------------------------------------------------------------------------
 def find(page: MuPage, annot_id: int | None = None, name: str = "") -> pymupdf.Annot:
-    """Load an annotation by /NM name, falling back to object id.
+    """Load an annotation by /NM name, then by synthetic name, falling back to object id.
 
     The name comes first: MuPDF can reuse the object number of a deleted annotation, so after an
     undo/redo cycle an old id may point at a different annotation.
+
+    A synthetic name (``UNNAMED_PREFIX`` + object number) addresses an annotation that has no
+    /NM. It only matches an annotation that still has no /NM, so a reused object number can't
+    hit a named annotation.
     """
     fz = page.fz
     if name:
         for annot in fz.annots():
             if annot.info.get("id") == name:
                 return annot
+        xref = _synthetic_xref(name)
+        if xref is not None and xref in {entry[0] for entry in fz.annot_xrefs()}:
+            annot = fz.load_annot(xref)
+            if not annot.info.get("id"):
+                return annot
     if annot_id is not None and annot_id in {entry[0] for entry in fz.annot_xrefs()}:
         return fz.load_annot(annot_id)
     raise EngineError(f"annotation not found (id={annot_id}, name={name!r})")
+
+
+def synthetic_name(xref: int) -> str:
+    """The name an annotation without /NM is read back with: stable while the document is open."""
+    return f"{UNNAMED_PREFIX}{xref}"
+
+
+def _synthetic_xref(name: str) -> int | None:
+    digits = name[len(UNNAMED_PREFIX) :]
+    if not name.startswith(UNNAMED_PREFIX) or not (digits.isascii() and digits.isdigit()):
+        return None
+    return int(digits)
 
 
 # -- create / update --------------------------------------------------------------------------

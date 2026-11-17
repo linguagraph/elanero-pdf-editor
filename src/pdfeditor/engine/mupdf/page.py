@@ -433,7 +433,7 @@ class MuPage:
             page_index=self._index,
             rect=self._vrect(rect, m),
             id=annot.xref,
-            name=info.get("id", ""),
+            name=info.get("id") or annots.synthetic_name(annot.xref),
             contents=info.get("content", ""),
             author=info.get("title", ""),
             subject=info.get("subject", ""),

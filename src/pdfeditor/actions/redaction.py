@@ -63,8 +63,9 @@ def _chosen_marks(
 ) -> list[AnnotationModel]:
     """The marks named by ``refs``, in their order, each once.
 
-    Refused when a name is empty (the mark came from another application and has no /NM), when
-    it matches no mark, or when two marks on the page share it (the name can't pick one).
+    Refused when a name is empty, when it matches no mark, or when two marks on the page share it
+    (the name can't pick one). The engine names a mark that has no /NM from its object number, so
+    an empty name is only a caller's mistake; the refusal stays as the guard for that.
     """
     by_name: dict[tuple[int, str], list[AnnotationModel]] = {}
     for m in all_marks:

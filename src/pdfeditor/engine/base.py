@@ -193,7 +193,16 @@ class Page(Protocol):
 
     def links(self) -> list[Link]: ...
 
-    def annotations(self) -> list[AnnotationModel]: ...
+    def annotations(self) -> list[AnnotationModel]:
+        """Every annotation on the page, each with a non-empty ``name``.
+
+        Names are distinct within the page and stable while the document stays open: reading the
+        page twice gives the same names, and a name addresses one annotation for every later
+        call (update, delete, ...). An annotation without a /NM gets an engine-made name, so
+        comments from other applications are addressable too. Names may change after a save and
+        reopen, when the engine renumbers objects.
+        """
+        ...
 
     @property
     def pdf_matrix(self) -> Matrix:

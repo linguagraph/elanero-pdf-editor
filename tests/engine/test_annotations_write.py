@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import shutil
 from pathlib import Path
 
@@ -355,3 +356,100 @@ def test_pdf_matrix_maps_to_pdf_space(engine: Engine, fixture_pdf) -> None:
     q = Point(rotated.rect.width, rotated.rect.height).transform(rotated.pdf_matrix)
     assert {round(p.x), round(q.x)} == {0, 595} and {round(p.y), round(q.y)} == {0, 842}
     doc.close()
+
+
+# -- comments without /NM (issue #168) ------------------------------------------------------
+# The fixture ``annotations_unnamed`` has three comments on page 0 (two squares, a note) and a
+# redaction mark on page 1, none with a /NM. Every one must still be addressable by a name that
+# is non-empty, distinct and stable while the document is open.
+
+
+def _unnamed(engine: Engine, fixture_pdf, tmp_path: Path):
+    doc, path = _open(engine, fixture_pdf, tmp_path, "annotations_unnamed")
+    return doc, path
+
+
+def test_unnamed_annotations_read_back_distinct_stable_names(engine: Engine, fixture_pdf) -> None:
+    doc = engine.open(fixture_pdf("annotations_unnamed"))
+    first = [a.name for a in doc.page(0).annotations()]
+    assert len(first) == 3 and all(first)
+    assert len(set(first)) == 3
+    assert [a.name for a in doc.page(0).annotations()] == first  # stable across reads
+    assert [a.name for a in doc.page(1).annotations()] != [""]
+    assert all(a.name for a in doc.page(1).annotations())
+    doc.close()
+
+
+def test_update_of_an_unnamed_annotation_changes_only_that_one(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, _ = _unnamed(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    before = page.annotations()
+    second = before[1]
+    page.update_annotation(dataclasses.replace(second, contents="Edited", color=RED))
+    after = {a.id: a for a in page.annotations()}
+    assert after[second.id].contents == "Edited"
+    assert after[second.id].color == RED
+    for other in (before[0], before[2]):
+        assert after[other.id].contents == other.contents
+        assert after[other.id].color == other.color
+        assert after[other.id].name == other.name
+    doc.close()
+
+
+def test_delete_by_name_of_an_unnamed_annotation_deletes_only_that_one(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, _ = _unnamed(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    before = page.annotations()
+    page.delete_annotation(None, name=before[1].name)
+    left = page.annotations()
+    assert [a.id for a in left] == [before[0].id, before[2].id]
+    assert [a.name for a in left] == [before[0].name, before[2].name]
+    doc.close()
+
+
+def test_undo_of_delete_stores_the_synthetic_name_as_nm(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, _ = _unnamed(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    gone = page.annotations()[1]
+    page.delete_annotation(gone.id, name=gone.name)
+    stored = page.add_annotation(dataclasses.replace(gone, id=None))
+    assert stored.name == gone.name  # the synthetic name becomes the /NM it is written with
+    assert {a.name for a in page.annotations()} >= {gone.name}
+    page.update_annotation(dataclasses.replace(stored, contents="Back"))
+    assert next(a for a in page.annotations() if a.name == gone.name).contents == "Back"
+    doc.close()
+
+
+def test_saved_unnamed_comments_stay_addressable(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, path = _unnamed(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    second = page.annotations()[1]
+    page.update_annotation(dataclasses.replace(second, contents="Edited"))
+    doc.save()
+    doc.close()
+
+    # Names may change across a save and reopen (the object numbers can be renumbered), so
+    # each comment is found again by its contents, then addressed by the name read back.
+    again = writable.open(path)
+    page = again.page(0)
+    names = [a.name for a in page.annotations()]
+    assert len(names) == 3 and all(names) and len(set(names)) == 3
+    edited = next(a for a in page.annotations() if a.contents == "Edited")
+    page.update_annotation(dataclasses.replace(edited, contents="Edited again"))
+    contents = sorted(a.contents for a in page.annotations())
+    assert contents == ["Box one", "Edited again", "Note three"]
+    again.close()
+    with pikepdf.open(path) as pdf:  # a note's /Popup is an Annots entry too: not a comment
+        assert [a.Subtype for a in pdf.pages[0].Annots if a.Subtype != "/Popup"] == [
+            "/Square",
+            "/Square",
+            "/Text",
+        ]

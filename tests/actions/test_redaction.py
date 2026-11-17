@@ -283,6 +283,21 @@ def test_apply_refuses_an_unnamed_mark_with_its_own_message(open_copy: Opener) -
     assert len(_marks(s)) == 1 and not s.require_full_save
 
 
+def test_selective_apply_of_an_unnamed_mark_applies_it(open_copy: Opener) -> None:
+    """A mark from another application has no /NM; the engine gives it a synthetic name (#168),
+    so applying it by name works and the redacted text leaves the saved file."""
+    s = open_copy("annotations_unnamed")
+    (mark,) = _marks(s, page=1)
+    assert mark.name and mark.type is AnnotationType.REDACT
+    result = run(s, "redaction.apply", ApplyRedactions((MarkRef(1, mark.name),)))
+    assert result.label == "Apply Redaction"
+    assert _marks(s, page=1) == []
+    assert "Sensitive" not in _text(s, page=1)
+    s.save()
+    assert b"Sensitive" not in s.path.read_bytes()
+    assert "Sensitive" not in _pdfium_text(s.path)
+
+
 def test_apply_refuses_a_name_shared_by_two_marks(open_copy: Opener) -> None:
     s = open_copy("sensitive")
     with s.lock:

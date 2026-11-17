@@ -78,7 +78,9 @@ class AnnotationModel:
     page_index: int
     rect: Rect
     id: int | None = None
-    name: str = ""  # /NM unique name
+    # /NM unique name. Engines read back a non-empty name for every annotation (a synthetic one
+    # when the file has no /NM); "" only means "not created in the document yet".
+    name: str = ""
     contents: str = ""
     author: str = ""
     subject: str = ""

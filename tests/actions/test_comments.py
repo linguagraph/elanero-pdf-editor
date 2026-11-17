@@ -401,6 +401,56 @@ def test_restyle_merge_key_is_one_undo_step(open_copy: Opener) -> None:
     assert not s.undo_stack.can_undo
 
 
+# -- comments without /NM (issue #168) ------------------------------------------------------
+
+
+def unnamed_names(session: DocumentSession, page: int = 0) -> list[str]:
+    with session.lock:
+        return [a.name for a in session.document.page(page).annotations()]
+
+
+def test_set_text_on_the_second_unnamed_comment_changes_only_that_one(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    before = state(s)
+    result = comments.set_text(s, SetAnnotationText(ref(second), "Edited"))
+    assert result.executed
+    assert find(s, second).contents == "Edited"
+    assert find(s, first).contents == "Box one" and find(s, third).contents == "Note three"
+    assert s.undo()
+    assert_same(state(s), before)
+
+
+def test_restyle_the_second_unnamed_comment_changes_only_that_one(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    before = {n: find(s, n) for n in (first, second, third)}
+    result = comments.restyle(
+        s, restyle_args((ref(second),), "color", Color(0, 1, 0), "Change Color")
+    )
+    assert result.executed and result.value == (ref(second),)
+    assert find(s, second).color == Color(0, 1, 0)
+    assert find(s, first).color == before[first].color
+    assert find(s, third).color == before[third].color
+    assert s.undo()
+    assert find(s, second).color == before[second].color
+
+
+def test_delete_the_second_unnamed_comment_and_undo_brings_it_back(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    first, second, third = unnamed_names(s)
+    before = state(s)
+    result = comments.delete(s, DeleteAnnotations((ref(second),)))
+    assert result.executed
+    assert unnamed_names(s) == [first, third]
+    assert s.undo()
+    assert sorted(unnamed_names(s)) == sorted([first, second, third])
+    assert_same(state(s), before)
+    # the restored comment is addressable by its name again
+    assert comments.set_text(s, SetAnnotationText(ref(second), "Back")).executed
+    assert find(s, second).contents == "Back"
+
+
 # -- text, replies, order -------------------------------------------------------------------
 
 
