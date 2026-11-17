@@ -9,27 +9,21 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QActionGroup, QMouseEvent
 from PySide6.QtWidgets import QGraphicsView, QInputDialog, QLineEdit, QMessageBox
 
-from pdfeditor.core.commands import (
-    AddAnnotationCommand,
-    Command,
-    DeleteAnnotationsCommand,
-    MacroCommand,
-    SetSecurityCommand,
-    SnapshotCommand,
-)
-from pdfeditor.engine.base import Document
+import pdfeditor.actions.redaction as redaction_actions
+import pdfeditor.actions.security as security_actions
+from pdfeditor.actions.base import Busy, Refused
+from pdfeditor.actions.redaction import ApplyRedactions, MarkForRedaction, RemoveRedactionMarks
+from pdfeditor.actions.security import RemoveSecurity, SanitizeDocument, SetSecurity
 from pdfeditor.model.annotations import AnnotationModel
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Quad, Rect
-from pdfeditor.model.metadata import EncryptionMethod, SecuritySettings
+from pdfeditor.model.metadata import EncryptionMethod
+from pdfeditor.model.redaction import MarkRef, RedactionArea
 from pdfeditor.services.redaction import (
     MarkStyle,
     VerificationReport,
     find_sensitive,
-    mark_areas,
-    mark_for_area,
-    mark_for_hit,
-    verify,
+    redaction_marks,
 )
 from pdfeditor.ui.dialogs.redaction import (
     ApplyRedactionsDialog,
@@ -89,11 +83,7 @@ class RedactTool(Tool):
         if abs(b.x - a.x) < 3 or abs(b.y - a.y) < 3:
             return True
         rect = Rect.from_points([a, b]).intersection(view.page_rect(page))
-        self.controller.add_marks(
-            view,
-            [mark_for_area(page, rect, self.controller.style, view.author)],
-            "Mark for Redaction",
-        )
+        self.controller.add_marks(view, [RedactionArea(page, rect)], "Mark for Redaction")
         view.tool_used.emit()
         return True
 
@@ -171,11 +161,16 @@ class ProtectController:
             r.add_group(self.act_encrypt, self.act_remove_security, title="Security")
 
     # -- marking --------------------------------------------------------------------------
-    def add_marks(self, view: DocumentView, marks: list[AnnotationModel], label: str) -> None:
-        if not marks:
-            return
-        commands: list[Command] = [AddAnnotationCommand(m, label) for m in marks]
-        view.session.execute(commands[0] if len(commands) == 1 else MacroCommand(label, commands))
+    def add_marks(self, view: DocumentView, areas: list[RedactionArea], label: str) -> bool:
+        """Mark the areas as one undo step. False only when the session was busy and the marks
+        weren't added (the BLOCKED event has already told the user)."""
+        try:
+            redaction_actions.mark(
+                view.session, MarkForRedaction(tuple(areas), self.style, view.author, label)
+            )
+        except Busy:
+            return False
+        return True
 
     def start_redact_tool(self) -> None:
         """With text selected, mark the selection at once; otherwise switch to the box tool
@@ -185,18 +180,16 @@ class ProtectController:
             return
         view = self.w.current_view()
         if view is not None and view.has_selection() and view.selection is not None:
-            marks = []
+            areas: list[RedactionArea] = []
             for page, rects in view.selection.rects(view.text_cache).items():
                 if not rects:
                     continue
                 box = rects[0]
                 for r in rects[1:]:
                     box = box.union(r)
-                mark = mark_for_area(page, box, self.style, view.author)
-                mark.quads = tuple(Quad.from_rect(r) for r in rects)
-                marks.append(mark)
+                areas.append(RedactionArea(page, box, tuple(Quad.from_rect(r) for r in rects)))
             view.clear_selection()
-            self.add_marks(view, marks, "Mark Selection for Redaction")
+            self.add_marks(view, areas, "Mark Selection for Redaction")
             self.w.tool_actions[self.w.current_tool].setChecked(True)
             return
         self.w.set_tool("redact")
@@ -219,8 +212,14 @@ class ProtectController:
         if not dialog.result() and not dialog.exec():
             return 0
         hits = dialog.selected_hits()
-        marks = [mark_for_hit(h, self.style, view.author) for h in hits]
-        self.add_marks(view, marks, "Mark Text for Redaction")
+        areas = [
+            RedactionArea(
+                h.page_index, h.rect, tuple(Quad.from_rect(q.rect) for q in h.quads), h.text
+            )
+            for h in hits
+        ]
+        if not self.add_marks(view, areas, "Mark Text for Redaction"):
+            return 0  # busy: the marks weren't added, so there is nothing to show
         self.show_panel()
         return len(hits)
 
@@ -229,24 +228,18 @@ class ProtectController:
         if tab is None:
             return
         view = tab.view
-        marks = [
-            mark_for_area(p, view.page_rect(p), self.style, view.author) for p in tab.target_pages()
-        ]
-        self.add_marks(view, marks, "Mark Pages for Redaction")
+        areas = [RedactionArea(p, view.page_rect(p)) for p in tab.target_pages()]
+        self.add_marks(view, areas, "Mark Pages for Redaction")
 
     def remove_marks(self, marks: list[AnnotationModel]) -> None:
         view = self.w.current_view()
         if view is None or not marks:
             return
-        by_page: dict[int, list[str]] = {}
-        for m in marks:
-            by_page.setdefault(m.page_index, []).append(m.name)
-        commands: list[Command] = [
-            DeleteAnnotationsCommand(p, n, "Remove Redaction Mark") for p, n in by_page.items()
-        ]
-        view.session.execute(
-            commands[0] if len(commands) == 1 else MacroCommand("Remove Redaction Marks", commands)
-        )
+        refs = tuple(MarkRef(m.page_index, m.name) for m in marks)
+        try:
+            redaction_actions.remove_marks(view.session, RemoveRedactionMarks(refs))
+        except Busy:
+            return
 
     def show_panel(self) -> None:
         self.w.show_panel(self.panel)
@@ -274,38 +267,26 @@ class ProtectController:
         if not dialog.result() and not dialog.exec():
             return None
         chosen = marks if (marks and dialog.selected.isChecked()) else all_marks
-        options = dialog.options()
-        areas: dict[int, list[Rect]] = {}
-        by_page: dict[int, list[int]] = {}
-        for m in chosen:
-            areas.setdefault(m.page_index, []).extend(mark_areas(m))
-            if m.id is not None:
-                by_page.setdefault(m.page_index, []).append(m.id)
-        selective = len(chosen) != len(all_marks)
-
-        def operation(doc: Document) -> None:
-            for page, ids in by_page.items():
-                doc.page(page).apply_redactions(ids if selective else None, options)
-
-        session = view.session
-        label = "Apply Redaction" if len(chosen) == 1 else f"Apply {len(chosen)} Redactions"
-        session.execute(SnapshotCommand(label, operation, session.snapshots))
-        session.require_full_save = True
-        with session.lock:
-            report = verify(session.document, areas, [m.overlay_text for m in chosen])
-        self._report(report)
-        return report
+        # None means "every mark", so the action needs no names for marks chosen one by one
+        refs = (
+            None
+            if len(chosen) == len(all_marks)
+            else tuple(MarkRef(m.page_index, m.name) for m in chosen)
+        )
+        try:
+            result = redaction_actions.apply(view.session, ApplyRedactions(refs, dialog.options()))
+        except Busy:
+            return None  # nothing was applied, so there is nothing to verify
+        except Refused as exc:
+            QMessageBox.information(self.w, "Apply Redactions", str(exc))
+            return None
+        self._report(result.value)
+        return result.value
 
     @staticmethod
     def _all_marks(view: DocumentView) -> list[AnnotationModel]:
-        from pdfeditor.model.annotations import AnnotationType
-
-        return [
-            a
-            for p in range(view.page_count)
-            for a in view.page_annotations(p)
-            if a.type is AnnotationType.REDACT
-        ]
+        with view.session.lock:
+            return redaction_marks(view.session.document)
 
     def _report(self, report: VerificationReport) -> None:
         if report.ok:
@@ -328,15 +309,12 @@ class ProtectController:
         dialog = dialog or SanitizeDialog(self.w)
         if not dialog.result() and not dialog.exec():
             return []
-        options = dialog.options()
-        removed: list[str] = []
-
-        def operation(doc: Document) -> None:
-            removed.extend(doc.sanitize(options))
-
         session = view.session
-        session.execute(SnapshotCommand("Sanitize Document", operation, session.snapshots))
-        session.require_full_save = True
+        try:
+            result = security_actions.sanitize(session, SanitizeDocument(dialog.options()))
+        except Busy:
+            return []  # the BLOCKED event has already told the user
+        removed = list(result.value)
         summary = ("Removed: " + "; ".join(removed)) if removed else "Nothing needed removing."
         self.last_message = summary + "\n\nSave the document to write the cleaned file."
         self.w.notify(summary, "success", undo_action(session) if removed else None)
@@ -385,7 +363,13 @@ class ProtectController:
             dialog = SecurityDialog(current, self.w)
         if not dialog.result() and not dialog.exec():
             return False
-        session.execute(SetSecurityCommand(dialog.settings()))
+        try:
+            security_actions.set_security(session, SetSecurity(dialog.settings()))
+        except Busy:
+            return False
+        except Refused as exc:
+            QMessageBox.warning(self.w, "Security", str(exc))
+            return False
         self._notify("Password security will be applied when you save the document.")
         return True
 
@@ -410,10 +394,15 @@ class ProtectController:
             "Remove Security",
         ):
             return False
-        if not encrypted:  # only a pending change: just drop it
-            session.execute(SetSecurityCommand(SecuritySettings(EncryptionMethod.NONE)))
+        try:
+            security_actions.remove_security(session, RemoveSecurity())
+        except Busy:
+            return False
+        except Refused as exc:
+            QMessageBox.information(self.w, "Remove Security", str(exc))
+            return False
+        if not encrypted:  # only a pending change: it was just dropped
             self._notify("The pending password security was removed.")
             return True
-        session.execute(SetSecurityCommand(SecuritySettings(EncryptionMethod.NONE)))
         self._notify("Security will be removed when you save the document.")
         return True

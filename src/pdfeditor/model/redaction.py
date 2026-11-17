@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from pdfeditor.model.geometry import Quad, Rect
+
 
 class ImageRedaction(Enum):
     NONE = "none"  # leave images alone
@@ -38,3 +40,21 @@ class SanitizeOptions:
     thumbnails: bool = True
     hidden_layers: bool = True  # content of optional-content layers that are off by default
     off_page_text: bool = True  # text lying entirely outside the page's crop box
+
+
+@dataclass(frozen=True, slots=True)
+class MarkRef:
+    """A redaction mark named by its page and /NM name (never the engine's object id)."""
+
+    page: int
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class RedactionArea:
+    """One redaction mark to add: a box, and optionally the text runs it covers and the text."""
+
+    page: int
+    rect: Rect
+    quads: tuple[Quad, ...] = ()
+    text: str = ""
