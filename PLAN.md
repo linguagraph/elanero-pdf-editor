@@ -533,7 +533,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 - [ ] **W1.1** Overall web architecture
 - [ ] **W1.2** RPC protocol spec
-- [ ] **W1.3** Actions layer
+- [x] **W1.3** Actions layer
 - [ ] **W1.4** Rendering and viewport design
 - [ ] **W1.5** Editing tools design
 - [ ] **W1.6** UI/UX design
