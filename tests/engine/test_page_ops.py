@@ -170,6 +170,36 @@ def test_insert_pages_from_other_document(ops: Engine, fixture_pdf, tmp_path: Pa
     doc.close()
 
 
+def test_insert_more_pages_than_remain_keeps_order(
+    ops: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    """Issue #158: pages past the original end of the target must not be appended at the end."""
+    doc, path = _open(ops, fixture_pdf, tmp_path, "text_multipage")
+    source = ops.open(fixture_pdf("outline"))
+    source_lines = [_first_line(source, i) for i in range(source.page_count)]
+    source.close()
+    before = [_first_line(doc, i) for i in range(doc.page_count)]
+    expected = [before[0], *source_lines, *before[1:]]
+
+    other = ops.open(fixture_pdf("outline"))
+    doc.insert_pages(other, list(range(other.page_count)), at=1)
+    other.close()
+    assert [_first_line(doc, i) for i in range(doc.page_count)] == expected
+    doc.save()
+    doc.close()
+
+    reopened = ops.open(path)
+    assert [_first_line(reopened, i) for i in range(reopened.page_count)] == expected
+    reopened.close()
+    with pikepdf.open(path) as pdf:
+        assert len(pdf.pages) == len(expected)
+    pd = pdfium.PdfDocument(path)
+    try:
+        assert pd[0].render(scale=0.5).to_pil().size[0] > 0
+    finally:
+        pd.close()
+
+
 def test_rotation_and_crop(ops: Engine, fixture_pdf, tmp_path: Path) -> None:
     doc, _ = _open(ops, fixture_pdf, tmp_path, "rotated_pages")
     page = doc.page(0)

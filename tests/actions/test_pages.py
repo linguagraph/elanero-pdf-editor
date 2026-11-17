@@ -204,9 +204,7 @@ def test_insert_file_pdf_all_pages_then_a_subset(open_copy: Opener, fixture_pdf)
     source = texts_of_bytes(data)
     result = page_actions.insert_file(s, InsertFile(data, "outline.pdf", at=1))
     assert result == ActionResult("Insert 6 Pages", 6)
-    # MuDocument.page_count is stale inside insert_document's loop (engine bug, fixed separately);
-    # make this strict after that fix.
-    assert sorted(texts(s)) == sorted([before[0], *source, *before[1:]])
+    assert texts(s) == [before[0], *source, *before[1:]]
     assert s.undo() and texts(s) == before
 
     result = page_actions.insert_file(s, InsertFile(data, "outline.pdf", at=0, pages=(0, 2)))
