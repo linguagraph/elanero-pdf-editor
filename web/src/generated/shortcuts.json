@@ -1,0 +1,656 @@
+{
+  "commands": {
+    "about-elanero": {
+      "label": "About Elanero",
+      "keys": []
+    },
+    "accessibility-check": {
+      "label": "Accessibility Check",
+      "keys": []
+    },
+    "actual-size": {
+      "label": "Actual Size",
+      "keys": [
+        "Ctrl+1"
+      ]
+    },
+    "add-background": {
+      "label": "Add Background",
+      "keys": []
+    },
+    "add-bates-numbers": {
+      "label": "Add Bates Numbers",
+      "keys": []
+    },
+    "add-ellipse": {
+      "label": "Add Ellipse",
+      "keys": []
+    },
+    "add-header-footer": {
+      "label": "Add Header & Footer",
+      "keys": []
+    },
+    "add-image": {
+      "label": "Add Image",
+      "keys": []
+    },
+    "add-line": {
+      "label": "Add Line",
+      "keys": []
+    },
+    "add-rectangle": {
+      "label": "Add Rectangle",
+      "keys": []
+    },
+    "add-text": {
+      "label": "Add Text",
+      "keys": []
+    },
+    "add-watermark": {
+      "label": "Add Watermark",
+      "keys": []
+    },
+    "apply-redactions": {
+      "label": "Apply Redactions",
+      "keys": []
+    },
+    "arrow": {
+      "label": "Arrow",
+      "keys": []
+    },
+    "attach-file": {
+      "label": "Attach File",
+      "keys": []
+    },
+    "auto-tag-document-experimental": {
+      "label": "Auto-Tag Document (experimental)",
+      "keys": []
+    },
+    "back": {
+      "label": "Back",
+      "keys": [
+        "Alt+Left"
+      ]
+    },
+    "background": {
+      "label": "Background",
+      "keys": []
+    },
+    "batch-ocr": {
+      "label": "Batch OCR",
+      "keys": []
+    },
+    "bates-numbering": {
+      "label": "Bates Numbering",
+      "keys": []
+    },
+    "callout": {
+      "label": "Callout",
+      "keys": []
+    },
+    "check-for-updates": {
+      "label": "Check for Updates",
+      "keys": []
+    },
+    "close": {
+      "label": "Close",
+      "keys": [
+        "Ctrl+W",
+        "Ctrl+F4"
+      ]
+    },
+    "collapse-ribbon": {
+      "label": "Collapse Ribbon",
+      "keys": [
+        "Ctrl+F1"
+      ]
+    },
+    "combine-files-into-pdf": {
+      "label": "Combine Files into PDF",
+      "keys": []
+    },
+    "command-palette": {
+      "label": "Command Palette",
+      "keys": [
+        "Ctrl+Shift+P"
+      ]
+    },
+    "comments-list": {
+      "label": "Comments List",
+      "keys": [
+        "Ctrl+Shift+C"
+      ]
+    },
+    "compact-ribbon": {
+      "label": "Compact Ribbon",
+      "keys": []
+    },
+    "compare-files": {
+      "label": "Compare Files",
+      "keys": []
+    },
+    "copy": {
+      "label": "Copy",
+      "keys": [
+        "Ctrl+C"
+      ]
+    },
+    "create-pdf-from-office-file": {
+      "label": "Create PDF from Office File",
+      "keys": []
+    },
+    "crop-pages": {
+      "label": "Crop Pages",
+      "keys": [
+        "Ctrl+Shift+T"
+      ]
+    },
+    "delete-comment": {
+      "label": "Delete Comment",
+      "keys": []
+    },
+    "delete-pages": {
+      "label": "Delete Pages",
+      "keys": [
+        "Ctrl+Shift+D"
+      ]
+    },
+    "delete-selected-objects": {
+      "label": "Delete Selected Objects",
+      "keys": []
+    },
+    "document-properties": {
+      "label": "Document Properties",
+      "keys": [
+        "Ctrl+D"
+      ]
+    },
+    "duplicate-pages": {
+      "label": "Duplicate Pages",
+      "keys": []
+    },
+    "edit-text-images": {
+      "label": "Edit Text & Images",
+      "keys": [
+        "Ctrl+Shift+E"
+      ]
+    },
+    "encrypt-with-password": {
+      "label": "Encrypt with Password",
+      "keys": []
+    },
+    "excel-workbook-tables": {
+      "label": "Excel Workbook (tables)",
+      "keys": []
+    },
+    "exit": {
+      "label": "Exit",
+      "keys": [
+        "Ctrl+Q"
+      ]
+    },
+    "export-image": {
+      "label": "Export Image",
+      "keys": []
+    },
+    "export-pdf": {
+      "label": "Export PDF",
+      "keys": []
+    },
+    "extract-fonts": {
+      "label": "Extract Fonts",
+      "keys": []
+    },
+    "extract-images": {
+      "label": "Extract Images",
+      "keys": []
+    },
+    "extract-pages": {
+      "label": "Extract Pages",
+      "keys": []
+    },
+    "find": {
+      "label": "Find",
+      "keys": [
+        "Ctrl+F"
+      ]
+    },
+    "find-next": {
+      "label": "Find Next",
+      "keys": [
+        "F3"
+      ]
+    },
+    "find-previous": {
+      "label": "Find Previous",
+      "keys": [
+        "Shift+F3"
+      ]
+    },
+    "find-text-to-redact": {
+      "label": "Find Text to Redact",
+      "keys": []
+    },
+    "first-page": {
+      "label": "First Page",
+      "keys": []
+    },
+    "fit-page": {
+      "label": "Fit Page",
+      "keys": [
+        "Ctrl+0"
+      ]
+    },
+    "fit-width": {
+      "label": "Fit Width",
+      "keys": [
+        "Ctrl+2"
+      ]
+    },
+    "flatten-all-comments": {
+      "label": "Flatten All Comments",
+      "keys": []
+    },
+    "forward": {
+      "label": "Forward",
+      "keys": [
+        "Alt+Right"
+      ]
+    },
+    "go-to-page": {
+      "label": "Go to Page",
+      "keys": [
+        "Ctrl+Shift+N"
+      ]
+    },
+    "hand-tool": {
+      "label": "Hand Tool",
+      "keys": [
+        "H"
+      ]
+    },
+    "header-footer": {
+      "label": "Header & Footer",
+      "keys": []
+    },
+    "help": {
+      "label": "Elanero Help",
+      "keys": [
+        "F1"
+      ]
+    },
+    "highlight": {
+      "label": "Highlight",
+      "keys": []
+    },
+    "html-web-page": {
+      "label": "HTML Web Page",
+      "keys": []
+    },
+    "insert-pages": {
+      "label": "Insert Pages",
+      "keys": [
+        "Ctrl+Shift+I"
+      ]
+    },
+    "jpeg-images": {
+      "label": "JPEG Images",
+      "keys": []
+    },
+    "keyboard-shortcuts": {
+      "label": "Keyboard Shortcuts",
+      "keys": []
+    },
+    "last-page": {
+      "label": "Last Page",
+      "keys": []
+    },
+    "line": {
+      "label": "Line",
+      "keys": []
+    },
+    "mark-whole-pages": {
+      "label": "Mark Whole Pages",
+      "keys": []
+    },
+    "markdown": {
+      "label": "Markdown",
+      "keys": []
+    },
+    "menu-bar": {
+      "label": "Menu Bar",
+      "keys": []
+    },
+    "new-window": {
+      "label": "New Window",
+      "keys": [
+        "Ctrl+N"
+      ]
+    },
+    "next-document": {
+      "label": "Next Document",
+      "keys": [
+        "Ctrl+Tab"
+      ]
+    },
+    "next-page": {
+      "label": "Next Page",
+      "keys": []
+    },
+    "next-pane": {
+      "label": "Next Pane",
+      "keys": [
+        "F6"
+      ]
+    },
+    "night-reading": {
+      "label": "Night Reading",
+      "keys": [
+        "Ctrl+Alt+N"
+      ]
+    },
+    "open": {
+      "label": "Open",
+      "keys": [
+        "Ctrl+O"
+      ]
+    },
+    "organize-pages": {
+      "label": "Organize Pages",
+      "keys": [
+        "Ctrl+Shift+O"
+      ]
+    },
+    "oval": {
+      "label": "Oval",
+      "keys": []
+    },
+    "page-labels": {
+      "label": "Page Labels",
+      "keys": []
+    },
+    "paste-comments": {
+      "label": "Paste Comments",
+      "keys": [
+        "Ctrl+V"
+      ]
+    },
+    "pdf-a-preflight": {
+      "label": "PDF/A Preflight",
+      "keys": []
+    },
+    "pen": {
+      "label": "Pen",
+      "keys": []
+    },
+    "place-signature": {
+      "label": "Place Signature",
+      "keys": []
+    },
+    "plain-text": {
+      "label": "Plain Text",
+      "keys": []
+    },
+    "png-images": {
+      "label": "PNG Images",
+      "keys": []
+    },
+    "polygon": {
+      "label": "Polygon",
+      "keys": []
+    },
+    "polyline": {
+      "label": "Polyline",
+      "keys": []
+    },
+    "preferences": {
+      "label": "Preferences",
+      "keys": [
+        "Ctrl+K"
+      ]
+    },
+    "previous-document": {
+      "label": "Previous Document",
+      "keys": [
+        "Ctrl+Shift+Tab"
+      ]
+    },
+    "previous-page": {
+      "label": "Previous Page",
+      "keys": []
+    },
+    "previous-pane": {
+      "label": "Previous Pane",
+      "keys": [
+        "Shift+F6"
+      ]
+    },
+    "print": {
+      "label": "Print",
+      "keys": [
+        "Ctrl+P"
+      ]
+    },
+    "properties-panel": {
+      "label": "Properties Panel",
+      "keys": [
+        "Ctrl+E"
+      ]
+    },
+    "recognize-text-ocr": {
+      "label": "Recognize Text (OCR)",
+      "keys": []
+    },
+    "rectangle": {
+      "label": "Rectangle",
+      "keys": []
+    },
+    "redact": {
+      "label": "Redact",
+      "keys": []
+    },
+    "redaction-properties": {
+      "label": "Redaction Properties",
+      "keys": []
+    },
+    "redo": {
+      "label": "Redo",
+      "keys": [
+        "Ctrl+Y",
+        "Ctrl+Shift+Z"
+      ]
+    },
+    "reduce-file-size": {
+      "label": "Reduce File Size",
+      "keys": []
+    },
+    "remove-background": {
+      "label": "Remove Background",
+      "keys": []
+    },
+    "remove-bates-numbers": {
+      "label": "Remove Bates Numbers",
+      "keys": []
+    },
+    "remove-header-footer": {
+      "label": "Remove Header & Footer",
+      "keys": []
+    },
+    "remove-security": {
+      "label": "Remove Security",
+      "keys": []
+    },
+    "remove-watermark": {
+      "label": "Remove Watermark",
+      "keys": []
+    },
+    "replace-image": {
+      "label": "Replace Image",
+      "keys": []
+    },
+    "replace-pages": {
+      "label": "Replace Pages",
+      "keys": []
+    },
+    "request-signatures": {
+      "label": "Request Signatures",
+      "keys": []
+    },
+    "rotate-pages-left": {
+      "label": "Rotate Pages Left",
+      "keys": [
+        "Ctrl+Shift+Left"
+      ]
+    },
+    "rotate-pages-right": {
+      "label": "Rotate Pages Right",
+      "keys": [
+        "Ctrl+Shift+Right"
+      ]
+    },
+    "rotate-view-clockwise": {
+      "label": "Rotate View Clockwise",
+      "keys": [
+        "Ctrl+Shift+="
+      ]
+    },
+    "rotate-view-counterclockwise": {
+      "label": "Rotate View Counterclockwise",
+      "keys": [
+        "Ctrl+Shift+-"
+      ]
+    },
+    "sanitize-document": {
+      "label": "Sanitize Document",
+      "keys": []
+    },
+    "save": {
+      "label": "Save",
+      "keys": [
+        "Ctrl+S"
+      ]
+    },
+    "save-as": {
+      "label": "Save As",
+      "keys": [
+        "Ctrl+Shift+S"
+      ]
+    },
+    "save-as-pdf-a": {
+      "label": "Save as PDF/A",
+      "keys": []
+    },
+    "select-all": {
+      "label": "Select All",
+      "keys": [
+        "Ctrl+A"
+      ]
+    },
+    "select-tool": {
+      "label": "Select Tool",
+      "keys": [
+        "V"
+      ]
+    },
+    "sign-document": {
+      "label": "Sign Document",
+      "keys": []
+    },
+    "single-page": {
+      "label": "Single Page",
+      "keys": []
+    },
+    "single-page-continuous": {
+      "label": "Single Page Continuous",
+      "keys": []
+    },
+    "space-usage": {
+      "label": "Space Usage",
+      "keys": []
+    },
+    "split-document": {
+      "label": "Split Document",
+      "keys": []
+    },
+    "squiggly": {
+      "label": "Squiggly",
+      "keys": []
+    },
+    "stamp": {
+      "label": "Stamp",
+      "keys": []
+    },
+    "sticky-note": {
+      "label": "Sticky Note",
+      "keys": [
+        "Ctrl+6"
+      ]
+    },
+    "strikethrough": {
+      "label": "Strikethrough",
+      "keys": []
+    },
+    "text-box": {
+      "label": "Text Box",
+      "keys": []
+    },
+    "tiff-image": {
+      "label": "TIFF Image",
+      "keys": []
+    },
+    "two-up-continuous": {
+      "label": "Two-Up Continuous",
+      "keys": []
+    },
+    "two-up-with-cover-page": {
+      "label": "Two-Up with Cover Page",
+      "keys": []
+    },
+    "underline": {
+      "label": "Underline",
+      "keys": []
+    },
+    "undo": {
+      "label": "Undo",
+      "keys": [
+        "Ctrl+Z"
+      ]
+    },
+    "update-background": {
+      "label": "Update Background",
+      "keys": []
+    },
+    "update-bates-numbers": {
+      "label": "Update Bates Numbers",
+      "keys": []
+    },
+    "update-header-footer": {
+      "label": "Update Header & Footer",
+      "keys": []
+    },
+    "update-watermark": {
+      "label": "Update Watermark",
+      "keys": []
+    },
+    "watermark": {
+      "label": "Watermark",
+      "keys": []
+    },
+    "word-document": {
+      "label": "Word Document",
+      "keys": []
+    },
+    "zoom-in": {
+      "label": "Zoom In",
+      "keys": [
+        "Ctrl++"
+      ]
+    },
+    "zoom-out": {
+      "label": "Zoom Out",
+      "keys": [
+        "Ctrl+-"
+      ]
+    }
+  }
+}

@@ -73,6 +73,14 @@ def test_web_alone_skips_the_desktop_ci(paths: list[str]) -> None:
     assert ci_changes.classify(paths) == {"app": False, "packaging": False}
 
 
+@pytest.mark.parametrize(
+    "paths", [["web/src/generated/shortcuts.json"], ["web\\src\\generated\\shortcuts.json"]]
+)
+def test_a_generated_web_file_runs_the_desktop_ci(paths: list[str]) -> None:
+    """The desktop generates these and tests them, so a hand edit must not skip the checks."""
+    assert ci_changes.classify(paths) == {"app": True, "packaging": False}
+
+
 def test_web_with_app_code_runs_the_desktop_ci() -> None:
     assert ci_changes.classify(["web/spike/README.md", "src/pdfeditor/app.py"]) == {
         "app": True,
