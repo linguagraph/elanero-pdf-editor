@@ -399,7 +399,8 @@ class MuPage:
         ink: tuple[tuple[Point, ...], ...] = ()
         if atype is AnnotationType.INK:
             ink = tuple(tuple(self._vpoint(p, m) for p in stroke) for stroke in raw)
-        elif atype.is_markup:
+        elif atype.is_markup or atype is AnnotationType.REDACT:
+            # A REDACT mark's corners are its /QuadPoints (one quad per line of a text mark).
             pts = [self._vpoint(v, m) for v in raw]
             quads = tuple(Quad(*pts[i : i + 4]) for i in range(0, len(pts) - 3, 4))
         else:
@@ -415,8 +416,10 @@ class MuPage:
         line_endings = (_line_end_name(ends[0]), _line_end_name(ends[1]))
         rect = annot.rect
         text_color = None
-        if atype is AnnotationType.FREE_TEXT:
+        if atype in (AnnotationType.FREE_TEXT, AnnotationType.REDACT):
+            # A redaction mark's overlay text colour is the fill colour of its /DA string.
             text_color = _freetext_color(self._doc.fz.xref_get_key(annot.xref, "DA")[1])
+        if atype is AnnotationType.FREE_TEXT:
             box = annots.callout_box(self._doc.fz, annot)
             if box is not None and len(vertices) >= 2:
                 rect = box

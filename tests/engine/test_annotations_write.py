@@ -605,3 +605,47 @@ def test_no_fill_removes_the_interior_colour_on_a_line(
     assert reopened.fill is None
     assert "/IC" not in raw
     again.close()
+
+
+# -- multi-line redaction marks (issue #165) ----------------------------------------------------
+# A text mark keeps one quad per line. Its quads and overlay colour must read back after save
+# and reopen, not just the bounding box.
+
+
+def _corners(quads) -> list[tuple[float, float]]:
+    return [(p.x, p.y) for q in quads for p in (q.ul, q.ur, q.ll, q.lr)]
+
+
+def test_two_line_redaction_mark_round_trips_quads_and_colour(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, path = _open(writable, fixture_pdf, tmp_path)
+    lines = (Quad.from_rect(Rect(100, 100, 220, 114)), Quad.from_rect(Rect(100, 130, 180, 144)))
+    mark = AnnotationModel(
+        AnnotationType.REDACT,
+        0,
+        Rect(100, 100, 220, 144),
+        quads=lines,
+        overlay_text="REDACTED",
+        text_color=RED,
+    )
+    stored = doc.page(0).add_annotation(mark)
+    assert _corners(stored.quads) == pytest.approx(_corners(lines))  # add
+    assert stored.text_color == RED
+
+    again, _ = _save_and_reopen(writable, doc, path, "/Redact")
+    reopened = next(a for a in again.page(0).annotations() if a.name == stored.name)
+    assert _corners(reopened.quads) == pytest.approx(_corners(lines))
+    assert reopened.text_color == RED
+    assert reopened.overlay_text == "REDACTED"
+    again.close()
+
+    # The saved /QuadPoints hold the two lines in PDF space (origin bottom-left).
+    with pikepdf.open(path) as pdf:
+        annot = next(a for a in pdf.pages[0].Annots if a.get("/Subtype") == "/Redact")
+        height = float(pdf.pages[0].MediaBox[3])
+        stored_points = [float(v) for v in annot.QuadPoints]
+    expected = []
+    for x, y in _corners(lines):
+        expected.extend([x, height - y])
+    assert stored_points == pytest.approx(expected)
