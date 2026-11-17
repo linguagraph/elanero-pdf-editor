@@ -117,9 +117,11 @@ def test_delete_rotate_duplicate_with_undo(window: MainWindow, copy_pdf, monkeyp
 
 def test_duplicate_is_independent_and_undoable(window: MainWindow, copy_pdf) -> None:
     """Issue #49: stamping a duplicate leaves the original alone, through undo and redo."""
+    from pdfeditor.actions import pages as page_actions
+    from pdfeditor.actions.base import snapshot
+    from pdfeditor.actions.pages import DuplicatePages
     from pdfeditor.model.geometry import Point
     from pdfeditor.model.pages import TextStamp
-    from pdfeditor.ui import page_ops
 
     view = window.open_path(copy_pdf("text_multipage"))
     session = view.session
@@ -130,8 +132,8 @@ def test_duplicate_is_independent_and_undoable(window: MainWindow, copy_pdf) -> 
             return [doc.page(i).text_page(with_chars=False).text for i in range(doc.page_count)]
 
     original = texts()
-    page_ops.duplicate_pages(session, [0])
-    page_ops.run(
+    page_actions.duplicate(session, DuplicatePages((0,)))
+    snapshot(
         session, "Stamp", lambda doc: doc.page(1).stamp_text(TextStamp("COPY", Point(72, 800)))
     )
     after = texts()
@@ -203,6 +205,23 @@ def test_extract_to_new_tab_and_files(window: MainWindow, copy_pdf, tmp_path: Pa
     d.separate.setChecked(True)
     written = window.organize.extract_pages(accepted(d), folder=tmp_path)
     assert [p.name for p in written] == [f"text_multipage_page{i}.pdf" for i in (1, 2, 3)]
+
+
+def test_extract_keeps_the_copy_when_the_delete_is_blocked(window: MainWindow, copy_pdf) -> None:
+    """A background task blocks the delete after extracting: the copy is still returned."""
+    view = window.open_path(copy_pdf("text_multipage"))
+    session = view.session
+    count = session.page_count
+    d = ExtractDialog(count, 0, [0], window)
+    d.range.custom.setChecked(True)
+    d.range.edit.setText("2-3")
+    d.delete_after.setChecked(True)
+    session.begin_task("OCR")
+    try:
+        (new_session,) = window.organize.extract_pages(accepted(d))
+    finally:
+        session.end_task("OCR")
+    assert new_session.page_count == 2 and session.page_count == count
 
 
 def test_replace_pages(window: MainWindow, copy_pdf) -> None:
