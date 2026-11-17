@@ -68,11 +68,9 @@ def execute_command(session: DocumentSession, command: Command) -> None:
     """Execute ``command``; raise :class:`Busy` if it didn't land.
 
     ``DocumentSession.execute`` drops the command silently when a task started after the
-    :func:`ensure_idle` check. The undo top is the only sign of that, so compare it.
+    :func:`ensure_idle` check, and reports that by its return value.
     """
-    before = session.undo_stack.top
-    session.execute(command)
-    if session.undo_stack.top is before:
+    if not session.execute(command):
         raise Busy(session.busy)
 
 

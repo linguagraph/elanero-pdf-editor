@@ -170,12 +170,19 @@ class DocumentSession:
         return self._refuse_while_busy()
 
     # -- editing --------------------------------------------------------------------------
-    def execute(self, command: Command) -> None:
+    def execute(self, command: Command) -> bool:
+        """Do ``command`` and push it on the undo stack. Returns False when it was refused
+        because a background task is running (a BLOCKED event is emitted), True otherwise.
+
+        True includes a command that merged into the previous undo step, so the caller can't
+        tell a merge from a new step by the return value, and doesn't need to.
+        """
         if self._refuse_while_busy():
-            return
+            return False
         with self.lock:
             self.undo_stack.push(command, self.document)
         self._emit(SessionEvent(EventKind.CHANGED, tuple(command.changes())))
+        return True
 
     def undo(self) -> bool:
         if self._refuse_while_busy():
