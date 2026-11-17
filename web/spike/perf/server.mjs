@@ -35,29 +35,45 @@ function body(filePath, acceptsGzip) {
   return { data: gzipCache.get(filePath), encoding: "gzip" };
 }
 
+function reply(res, status, text) {
+  res.writeHead(status, { "content-type": "text/plain" });
+  res.end(text);
+}
+
 export function createServer() {
   return http.createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    let rel = decodeURIComponent(url.pathname);
-    if (rel.endsWith("/")) rel += "index.html";
-    const filePath = path.join(ROOT, rel);
-    if (!filePath.startsWith(ROOT + path.sep) || !fs.existsSync(filePath)) {
-      res.writeHead(404, { "content-type": "text/plain" });
-      res.end("not found");
-      return;
+    // A malformed path (a bad % escape), a directory, or a read error must answer, not throw: an
+    // uncaught error in a request handler would take the whole server down.
+    try {
+      let rel;
+      try {
+        rel = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname);
+      } catch {
+        return reply(res, 400, "bad request");
+      }
+      if (rel.endsWith("/")) rel += "index.html";
+      const filePath = path.join(ROOT, rel);
+      if (!filePath.startsWith(ROOT + path.sep)) return reply(res, 404, "not found");
+      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        return reply(res, 404, "not found");
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      const accepts = String(req.headers["accept-encoding"] ?? "").includes("gzip");
+      const { data, encoding } = body(filePath, accepts);
+      const headers = {
+        "content-type": TYPES[ext] ?? "application/octet-stream",
+        "content-length": data.length,
+        "cache-control": "max-age=31536000, immutable",
+        vary: "Accept-Encoding",
+      };
+      if (encoding) headers["content-encoding"] = encoding;
+      res.writeHead(200, headers);
+      res.end(req.method === "HEAD" ? undefined : data);
+    } catch (err) {
+      console.error(`request failed: ${err instanceof Error ? err.message : err}`);
+      if (res.headersSent) res.destroy();
+      else reply(res, 500, "server error");
     }
-    const ext = path.extname(filePath).toLowerCase();
-    const accepts = String(req.headers["accept-encoding"] ?? "").includes("gzip");
-    const { data, encoding } = body(filePath, accepts);
-    const headers = {
-      "content-type": TYPES[ext] ?? "application/octet-stream",
-      "content-length": data.length,
-      "cache-control": "max-age=31536000, immutable",
-      vary: "Accept-Encoding",
-    };
-    if (encoding) headers["content-encoding"] = encoding;
-    res.writeHead(200, headers);
-    res.end(req.method === "HEAD" ? undefined : data);
   });
 }
 

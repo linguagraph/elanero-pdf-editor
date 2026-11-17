@@ -245,9 +245,9 @@ PERF_FONT_CHARS = "".join(chr(c) for c in range(0x20, 0x7F))  # printable ASCII,
 def _perf_photo(seed: int) -> bytes:
     """A photo-like JPEG (1200x800 RGB, quality 80): a seeded gradient plus mild noise.
 
-    Deterministic: the same seed gives the same bytes on every machine (Pillow's gradient is
+    Deterministic for a given Pillow version: the same seed gives the same bytes (the gradient is
     fixed, and the noise comes from ``random.Random(seed)``), so the sizes in the W0.2 report
-    are reproducible.
+    are reproducible from this lock.
     """
     rng = random.Random(seed)
     w, h = PERF_PHOTO_SIZE
@@ -274,6 +274,10 @@ def perf_mixed(pages: int) -> None:
     image, and three vector shapes (a rectangle, a Bezier curve, a filled polygon).
     """
     face = _build_face("Perf Sans", "Regular", 400, False, PERF_FONT_CHARS)
+    # fontTools stamps the build time into the font; pin it, and skip the random /ID on save, so
+    # two builds give the same bytes.
+    face["head"].created = 0
+    face["head"].modified = 0
     face_bytes = io.BytesIO()
     face.save(face_bytes)
     font = face_bytes.getvalue()
@@ -311,7 +315,7 @@ def perf_mixed(pages: int) -> None:
         )
         shape.finish(color=(0, 0.4, 0), fill=(0.6, 0.9, 0.6))
         shape.commit()
-    _save(doc, f"perf_mixed_{pages}.pdf")
+    _save(doc, f"perf_mixed_{pages}.pdf", no_new_id=True)
 
 
 SKEW_DEGREES = 4.0  # skewed_scan: counterclockwise as displayed, about the page center

@@ -154,6 +154,8 @@
         pages: jobOpen.data.pages,
         jobHeapBytes: jobOpen.data.heapBytes,
         jobMarks: { ...job.marks },
+        // The job worker's own fetches (transferSize 0 = served from the HTTP cache).
+        jobResources: jobReady.data.resources,
       };
       job.worker.terminate();
 

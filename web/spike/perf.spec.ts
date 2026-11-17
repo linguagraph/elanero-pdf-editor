@@ -1,16 +1,21 @@
-// W0.2 performance driver (spike-only). Opens perf/index.html for each fixture, once in a new
-// browser context (cold: empty HTTP cache) and once after a reload in that context (warm), five
-// times over. Writes out/perf-<env>[-<browser>].json: the raw numbers that perf/report.py turns into
-// the tables of docs/web/spikes/W0.2-results.md. Budgets are not asserted here: a missed budget is
-// a finding, so the job fails only when the harness itself cannot run.
+// W0.2 performance driver (spike-only). Opens perf/index.html for each fixture, five times over.
+// Each run uses a persistent profile in a fresh, empty directory: cold = the first load in it,
+// warm = a reload in the same profile, so the HTTP disk cache is used. (A browser.newContext()
+// profile did not keep the 18 MB PyMuPDF wheel across the reload: its transferSize was the full
+// 18 MB on every warm run, verified against a persistent profile where it was 0.)
+// Writes out/perf-<env>[-<browser>].json: the raw numbers that perf/report.py turns into the tables
+// of docs/web/spikes/W0.2-results.md. Budgets are not asserted here: a missed budget is a finding,
+// so the job fails only when the harness itself cannot run.
 //
 // Environment: PERF_ENV (ci | laptop), PERF_RUNS (default 5), PERF_FIXTURES (comma list; the
 // local-only scanned sample is skipped when it is not staged), PERF_CPU_THROTTLE (the mid-range
 // proxy, see throttle() below).
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, chromium, firefox, webkit, type BrowserContext, type Page } from "@playwright/test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
+const LAUNCHERS = { chromium, firefox, webkit } as const;
 
 const ENV = process.env.PERF_ENV ?? "local";
 const RUNS = Number(process.env.PERF_RUNS ?? 5);
@@ -139,9 +144,16 @@ for (const fixture of FIXTURES) {
       cpuThrottle: THROTTLE || null,
     };
 
+    const launcher = LAUNCHERS[browserName as keyof typeof LAUNCHERS];
     for (let run = 1; run <= RUNS; run++) {
-      const context = await browser.newContext();
-      const page = await context.newPage();
+      // A new, empty profile per run: the cold load really starts with an empty HTTP cache.
+      const profile = path.join(OUT, "profiles", `${browserName}-${fixture}-${run}`);
+      fs.rmSync(profile, { recursive: true, force: true });
+      fs.mkdirSync(profile, { recursive: true });
+      const context: BrowserContext = await launcher.launchPersistentContext(profile, {
+        headless: true,
+      });
+      const page = context.pages()[0] ?? (await context.newPage());
       const pageErrors: string[] = [];
       const consoleErrors: string[] = [];
       page.on("pageerror", (err) => pageErrors.push(err.message));
@@ -155,6 +167,7 @@ for (const fixture of FIXTURES) {
       const warm = await runScenario(page, fixture);
       const calibration = throttled ? await calibrate(page) : null;
       await context.close();
+      fs.rmSync(profile, { recursive: true, force: true });
 
       appendRun(file, header, {
         fixture,

@@ -165,6 +165,23 @@ def section_m4(report: dict) -> list[str]:
         return ["No M4 data.", ""]
     m4 = [r["warm"]["m4"] for r in runs]
     engine_heap = [r["warm"]["heap"].get("afterOpen") for r in runs]
+    # The job worker's own wheel transfer: 0 means its boot was served from the HTTP cache.
+    job_wheel = [
+        w
+        for w in (
+            next(
+                (
+                    x["transferSize"]
+                    for x in m.get("jobResources", [])
+                    if x["name"].startswith("pymupdf-")
+                ),
+                None,
+            )
+            for m in m4
+        )
+        if w is not None
+    ]
+    cached = sum(1 for w in job_wheel if w == 0)
     return [
         "Warm: the engine worker is ready, then a second worker boots and opens perf_mixed_200.",
         "",
@@ -177,8 +194,36 @@ def section_m4(report: dict) -> list[str]:
         f"{mib(median([m['jobHeapBytes'] for m in m4]))} |",
         f"| engine worker wasm heap after open (MiB) | "
         f"{mib(median([h for h in engine_heap if h]))} |",
+        f"| job worker wheel transfer, warm (bytes, median; 0 = cache) | "
+        f"{fmt(median(job_wheel))} ({cached} of {len(job_wheel)} runs) |",
         "",
     ]
+
+
+def wheel_bytes(phase: dict) -> float | None:
+    """transferSize of the PyMuPDF wheel in one scenario (0 means served from the HTTP cache)."""
+    for res in phase.get("resourcesCold", []):
+        if res["name"].startswith("pymupdf-"):
+            return res["transferSize"]
+    return None
+
+
+def section_cache(report: dict) -> list[str]:
+    """The cache check: a warm reload must serve the wheel from cache, or M3 is not warm."""
+    lines = [
+        "| Fixture | Cold wheel transfer (median bytes) | Warm wheel transfer (median bytes) | "
+        "Warm runs with the wheel from cache |",
+        "|---|---:|---:|---:|",
+    ]
+    for fixture in sorted({r["fixture"] for r in report["runs"]}):
+        group = [r for r in report["runs"] if r["fixture"] == fixture]
+        cold = [c for c in (wheel_bytes(r["cold"]) for r in group) if c is not None]
+        warm = [w for w in (wheel_bytes(r["warm"]) for r in group) if w is not None]
+        cached = sum(1 for w in warm if w == 0)
+        lines.append(
+            f"| {fixture} | {fmt(median(cold))} | {fmt(median(warm))} | {cached} of {len(warm)} |"
+        )
+    return [*lines, ""]
 
 
 def section_m5(report: dict) -> list[str]:
@@ -305,6 +350,7 @@ def main(out_dir: Path) -> int:
             continue
         lines += [*env_block(report), "#### M2 and M3: cold and warm start", ""]
         lines += section_m2_m3(report, full_gzip)
+        lines += ["#### Cache check (the PyMuPDF wheel)", "", *section_cache(report)]
         lines += ["#### M4: job worker", "", *section_m4(report)]
         lines += ["#### M5: render", "", *section_m5(report)]
         lines += ["#### M6 and M7: operations and memory", "", *section_m6_m7(report)]

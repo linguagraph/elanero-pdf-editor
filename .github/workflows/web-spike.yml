@@ -302,6 +302,7 @@ jobs:
           fi
           changed=$(git diff --name-only "$BASE" "$GITHUB_SHA" -- \
             web/spike/perf web/spike/perf.spec.ts web/spike/playwright.perf.config.ts \
+            web/spike/web_package.py scripts/make_fixtures.py \
             .github/workflows/web-spike.yml)
           if [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
