@@ -542,10 +542,10 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W2 Shared code made web-ready, #135**
 
 - [x] **W2.1** `pdfeditor.actions` layer (#159, #161, #162, #166, #167, #171, #173; #168 fixed in #172)
-- [ ] **W2.2** Platform capabilities
-- [ ] **W2.3** Bytes and storage
-- [ ] **W2.4** Injectable HTTP transport for translation
-- [ ] **W2.5** `core/jobs.py`: synchronous runner
+- [x] **W2.2** Platform capabilities (#175)
+- [x] **W2.3** Bytes and storage (#178)
+- [x] **W2.4** Injectable HTTP transport for translation (#177)
+- [x] **W2.5** `core/jobs.py`: synchronous runner (#176)
 - [ ] **W2.6** Web package build
 - [ ] **W2.7a** Pyodide test runner and `web-pytest` CI job
 - [ ] **W2.7b** Host checks for Pyodide runs (C1), priority modules
