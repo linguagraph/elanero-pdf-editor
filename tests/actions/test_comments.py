@@ -72,16 +72,10 @@ def find(session: DocumentSession, name: str, page: int = 0) -> AnnotationModel:
         return next(a for a in session.document.page(page).annotations() if a.name == name)
 
 
-TIGHT = 0.01  # points: the drift allowed for every comment type but squares
-# MuPDF grows a bordered square by half its border width on every write (add, update, and
-# re-creating a deleted comment on undo). Tracked in issue #163; squares get that slack and
-# nothing else does.
-SQUARE_SLACK_ISSUE = 163
+TIGHT = 0.01  # points: the drift allowed for every comment type
 
 
 def slack(model: AnnotationModel) -> float:
-    if model.type is AnnotationType.SQUARE:
-        return model.border_width + 0.5
     return TIGHT
 
 
@@ -231,10 +225,9 @@ def test_paste_keeps_an_off_page_comment_on_the_page(open_copy: Opener) -> None:
     result = comments.paste(s, PasteAnnotations((far,), 0))
     assert result.executed and result.label == "Paste Comment"
     pasted = find(s, result.value[0].name)
-    # 12 pt offset, then moved onto the page origin plus 20 pt. MuPDF grows a bordered square's
-    # rect by its border width, so the stored origin can be a point short of 20.
-    assert pasted.rect.x0 == pytest.approx(20, abs=1.5)
-    assert pasted.rect.y0 == pytest.approx(20, abs=1.5)
+    # 12 pt offset, then moved onto the page origin plus 20 pt.
+    assert pasted.rect.x0 == pytest.approx(20, abs=0.01)
+    assert pasted.rect.y0 == pytest.approx(20, abs=0.01)
     assert s.undo_stack.undo_label == "Paste Comment"
     assert s.undo()
     assert_same(state(s), before)
@@ -355,7 +348,6 @@ def test_restyle_color_on_a_text_box_changes_its_text(open_copy: Opener) -> None
     assert find(s, "fitz-A2").text_color == before.text_color
 
 
-@pytest.mark.xfail(strict=True, reason="engine keeps the fill: issue #164")
 def test_restyle_fill_to_none_clears_the_stored_fill(open_copy: Opener) -> None:
     s = open_copy("annotations")
     comments.restyle(s, restyle_args((ref("fitz-A3"),), "fill", Color(1, 1, 0), "Change Fill"))

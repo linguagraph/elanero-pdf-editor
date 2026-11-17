@@ -65,6 +65,10 @@ _FILL_TYPES = {
     AnnotationType.LINE,
     AnnotationType.POLYLINE,
 }
+# Squares and circles are written with /Rect itself (see ``_write_box``): MuPDF's set_rect()
+# grows their rect by a width it caches from the last appearance update, so every write moved
+# the shape outwards (issue #163).
+_EXACT_BOX_TYPES = {AnnotationType.SQUARE, AnnotationType.CIRCLE}
 WRITABLE_TYPES = frozenset(
     _RECT_TYPES
     | {
@@ -122,6 +126,14 @@ def _pdf_rect(geo: _Geo, r: Rect) -> tuple[float, float, float, float]:
     a = geo.pdf(Point(r.x0, r.y0))
     b = geo.pdf(Point(r.x1, r.y1))
     return (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+
+
+def _write_box(doc: pymupdf.Document, geo: _Geo, xref: int, model: AnnotationModel) -> None:
+    """Store a box annotation's visible rect as its /Rect, exactly.
+
+    Read-back is ``annot.rect``, which is /Rect, so the rect written is the rect read.
+    """
+    doc.xref_set_key(xref, "Rect", _nums(_pdf_rect(geo, model.rect)))
 
 
 def _write_callout(doc: pymupdf.Document, geo: _Geo, xref: int, model: AnnotationModel) -> None:
@@ -401,6 +413,9 @@ def add(page: MuPage, model: AnnotationModel) -> AnnotationModel:
     if model.is_callout:
         _write_callout(page._doc.fz, geo, annot.xref, model)
         annot = find(page, annot.xref)
+    if t in _EXACT_BOX_TYPES:
+        _write_box(page._doc.fz, geo, annot.xref, model)
+        annot = find(page, annot.xref)
     _apply_properties(page, annot, model)
     page._doc.mark_page_changed(page.index)
     return page._annot_model(find(page, annot.xref))
@@ -415,6 +430,9 @@ def update(page: MuPage, model: AnnotationModel) -> AnnotationModel:
     xref = annot.xref
     if t is AnnotationType.FREE_TEXT and model.is_callout:
         _write_callout(fz_doc, geo, xref, model)
+        annot = find(page, xref)
+    elif t in _EXACT_BOX_TYPES:
+        _write_box(fz_doc, geo, xref, model)
         annot = find(page, xref)
     elif t in _RECT_TYPES:
         if t is AnnotationType.FREE_TEXT and fz_doc.xref_get_key(xref, "CL")[0] != "null":
@@ -465,6 +483,10 @@ def _apply_properties(
         info["creationDate"] = _pdf_date(model.created or datetime.now().astimezone())
     info["modDate"] = _pdf_date(model.modified or datetime.now().astimezone())
     annot.set_info(info)
+    if not model.contents:
+        # set_info() skips empty strings, so an empty /Contents is written here (the old text would
+        # otherwise survive a cleared comment).
+        doc.xref_set_key(annot.xref, "Contents", pymupdf.get_pdf_str(""))
     if t is AnnotationType.REDACT:
         # PyMuPDF can only cross out a one-box appearance; a multi-line text mark (one quad
         # per line) would make update() fail, so those get plain boxes.
@@ -475,6 +497,9 @@ def _apply_properties(
         stroke = model.color.rgb() if model.color is not None else None
         if stroke is not None or fill is not None:
             annot.set_colors(stroke=stroke, fill=fill)
+        if t in _FILL_TYPES and model.fill is None:
+            # set_colors() leaves an unset fill alone, so "no fill" must remove /IC itself.
+            doc.xref_set_key(annot.xref, "IC", "null")
     if t is AnnotationType.FREE_TEXT:
         # MuPDF draws FreeText borders only via /BS; no color means no border.
         annot.set_border(width=model.border_width if model.color else 0)

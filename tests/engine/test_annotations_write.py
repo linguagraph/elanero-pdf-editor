@@ -463,3 +463,101 @@ def test_saved_unnamed_comments_stay_addressable(
             "/Square",
             "/Text",
         ]
+
+
+# -- box geometry, "no fill" and empty contents (issues #163, #164, #170) --------------------
+# A bordered square or circle must read back the rect it was written with, through add, update
+# and a delete-then-undo (re-creating the model). Each write is also saved, reopened, opened in
+# pikepdf and rendered in pypdfium2.
+
+BOX = Rect(100, 100, 200, 160)
+
+
+def _assert_rect(actual: Rect, expected: Rect) -> None:
+    got = (actual.x0, actual.y0, actual.x1, actual.y1)
+    assert got == pytest.approx((expected.x0, expected.y0, expected.x1, expected.y1), abs=0.01)
+
+
+def _save_and_reopen(engine: Engine, doc, path: Path, subtype: str):
+    """Save, check the file in pikepdf and pypdfium2, and reopen it with the engine.
+
+    Returns the reopened document and the saved annotation's entries as plain strings (the
+    pikepdf file is closed by the time the caller looks).
+    """
+    doc.save()
+    doc.close()
+    with pikepdf.open(path) as pdf:
+        annots = [a for a in pdf.pages[0].get("/Annots", []) if a.get("/Subtype") == subtype]
+        assert annots, "saved file lost the annotation"
+        raw = {str(key): str(value) for key, value in annots[0].items()}
+    pdoc = pdfium.PdfDocument(path)
+    assert len(pdoc) == 5  # text_multipage has five pages
+    pdoc[0].render(scale=1).to_pil()
+    pdoc.close()
+    return engine.open(path), raw
+
+
+@pytest.mark.parametrize(
+    "kind", [AnnotationType.SQUARE, AnnotationType.CIRCLE], ids=["square", "circle"]
+)
+def test_bordered_box_reads_back_the_rect_it_was_written_with(
+    writable: Engine, fixture_pdf, tmp_path: Path, kind: AnnotationType
+) -> None:
+    doc, path = _open(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    stored = page.add_annotation(AnnotationModel(kind, 0, BOX, color=RED, border_width=2))
+    _assert_rect(stored.rect, BOX)  # add
+    read = next(a for a in page.annotations() if a.name == stored.name)
+    _assert_rect(read.rect, BOX)
+
+    for _ in range(3):  # update: every write must leave the rect where it is
+        read = page.update_annotation(dataclasses.replace(read, color=BLUE))
+        _assert_rect(read.rect, BOX)
+    assert read.color == BLUE
+
+    page.delete_annotation(read.id, name=read.name)  # delete, then undo re-creates the model
+    recreated = page.add_annotation(dataclasses.replace(read, id=None))
+    _assert_rect(recreated.rect, BOX)
+    _assert_rect(page.update_annotation(dataclasses.replace(recreated, contents="again")).rect, BOX)
+
+    again, raw = _save_and_reopen(writable, doc, path, f"/{kind.value}")
+    reopened = next(a for a in again.page(0).annotations() if a.name == recreated.name)
+    _assert_rect(reopened.rect, BOX)
+    assert reopened.border_width == pytest.approx(2)
+    assert "/Rect" in raw
+    again.close()
+
+
+def test_no_fill_removes_the_interior_colour(writable: Engine, fixture_pdf, tmp_path: Path) -> None:
+    doc, path = _open(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    sq = page.add_annotation(AnnotationModel(AnnotationType.SQUARE, 0, BOX, color=RED, fill=BLUE))
+    assert sq.fill == BLUE
+    cleared = page.update_annotation(dataclasses.replace(sq, fill=None))
+    assert cleared.fill is None and cleared.color == RED
+    _assert_rect(cleared.rect, BOX)
+
+    again, raw = _save_and_reopen(writable, doc, path, "/Square")
+    reopened = next(a for a in again.page(0).annotations() if a.name == sq.name)
+    assert reopened.fill is None
+    assert "/IC" not in raw
+    again.close()
+
+
+def test_empty_contents_clear_the_stored_text(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, path = _open(writable, fixture_pdf, tmp_path)
+    page = doc.page(0)
+    sq = page.add_annotation(
+        AnnotationModel(AnnotationType.SQUARE, 0, BOX, color=RED, contents="Old text")
+    )
+    cleared = page.update_annotation(dataclasses.replace(sq, contents=""))
+    assert cleared.contents == ""
+    assert next(a for a in page.annotations() if a.name == sq.name).contents == ""
+
+    again, raw = _save_and_reopen(writable, doc, path, "/Square")
+    reopened = next(a for a in again.page(0).annotations() if a.name == sq.name)
+    assert reopened.contents == ""
+    assert raw.get("/Contents", "") == ""
+    again.close()
