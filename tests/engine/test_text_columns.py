@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import io
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.registry import get_engine
@@ -14,6 +12,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.objects import ObjectType, TextStyle, family_of
 from pdfeditor.model.text import Block, Char, FontFlags, Line, Span
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 
@@ -91,10 +90,9 @@ def test_edit_one_column_leaves_the_other(doc, tmp_path) -> None:
     again = page.replace_text(edited.key, "Бързо")
     assert again is not None and again.embedded_reused and not again.substituted
     out = doc.save(tmp_path / "edited.pdf")
-    with pikepdf.open(out) as pdf:
-        assert len(pdf.pages) == 1
-    text = pdfium.PdfDocument(out)[0].get_textpage().get_text_range()
-    assert "Бързо" in text and "Заключване на вратата" in text
+    record("page_count_pikepdf", out, pages=1)
+    record("text_contains_pdfium", out, page=0, text="Бързо")
+    record("text_contains_pdfium", out, page=0, text="Заключване на вратата")
 
 
 def test_unchanged_text_keeps_spaces_and_position(doc) -> None:

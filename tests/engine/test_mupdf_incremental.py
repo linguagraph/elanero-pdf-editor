@@ -11,14 +11,13 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
-import pikepdf
 import pymupdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.base import Document, SaveError, SaveOptions
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.metadata import Metadata
+from tests.hostcheck import record
 
 # The version in uv.lock. A pymupdf bump must re-check incremental_bytes (it calls
 # pymupdf._as_pdf_document, JM_embedded_clean, JM_ensure_identity and mupdf.pdf_save_document)
@@ -36,18 +35,8 @@ def _open_signed(source: Path | bytes) -> Document:
 
 def _roundtrip(data: bytes) -> None:
     """Every saved output must open in pikepdf and render in pypdfium2 (AGENTS round trip)."""
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        assert len(pdf.pages) == 1
-    doc = pdfium.PdfDocument(data)
-    try:
-        assert doc[0].render(scale=0.5).width > 0
-    finally:
-        doc.close()
-
-
-def _title(data: bytes) -> str:
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        return str(pdf.docinfo.get("/Title", ""))
+    record("page_count_pikepdf", data, pages=1)
+    record("render_width_pdfium", data, scale=0.5)
 
 
 def _byte_range(data: bytes) -> bytes:
@@ -77,7 +66,7 @@ def test_first_in_place_save_keeps_original_and_signature() -> None:
     assert data is not None
     assert data.startswith(original)
     assert _byte_range(data) == _byte_range(original)
-    assert _title(data) == "changed"
+    record("docinfo_title_pikepdf", data, title="changed")
     _roundtrip(data)
     assert SIGNED.read_bytes() == original  # the sample file itself is untouched
 
@@ -118,7 +107,7 @@ def test_bytes_opened_signed_document_works_the_same() -> None:
     data = doc.incremental_bytes(INCREMENTAL)
     assert data is not None
     assert data.startswith(original)
-    assert _title(data) == "from bytes"
+    record("docinfo_title_pikepdf", data, title="from bytes")
 
 
 def test_unsigned_document_has_no_in_place_bytes(fixture_pdf: Callable[[str], Path]) -> None:
@@ -209,4 +198,4 @@ def test_failure_before_the_writer_leaves_the_lineage_unspent(
     data = doc.incremental_bytes(INCREMENTAL)  # the writer never ran, so the update is still due
     assert data is not None
     assert data.startswith(original)
-    assert _title(data) == "before failure"
+    record("docinfo_title_pikepdf", data, title="before failure")

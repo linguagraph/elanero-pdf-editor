@@ -5,8 +5,6 @@ from __future__ import annotations
 import itertools
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.core.commands import SnapshotCommand
@@ -14,6 +12,7 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Document, Engine, EngineError, RenderRequest
 from pdfeditor.model.geometry import Matrix
 from pdfeditor.services.accessibility import Status, check
+from tests.hostcheck import record
 
 
 @pytest.fixture
@@ -34,38 +33,6 @@ def _texts(doc: Document) -> list[str]:
 
 def _collapse(types: list[str]) -> list[str]:
     return [t for t, _ in itertools.groupby(types)]
-
-
-def _check_marked_content(path: Path) -> int:
-    """Every MCID in the page content has a ParentTree entry pointing at an element that
-    claims it (on that page); returns how many MCIDs there are."""
-    total = 0
-    with pikepdf.open(path) as pdf:
-        root = pdf.Root.StructTreeRoot
-        assert pdf.Root.MarkInfo.Marked is True
-        nums = list(root.ParentTree.Nums)
-        tree = {int(nums[i]): nums[i + 1] for i in range(0, len(nums), 2)}
-        assert int(root.ParentTreeNextKey) == len(tree)
-        for page in pdf.pages:
-            mcids = [
-                int(operands[1].MCID)
-                for operands, op in pikepdf.parse_content_stream(page)
-                if str(op) == "BDC" and isinstance(operands[1], pikepdf.Dictionary)
-            ]
-            if not mcids:
-                assert "/StructParents" not in page.obj
-                continue
-            assert sorted(mcids) == list(range(len(mcids)))  # unique, from 0
-            parents = tree[int(page.obj.StructParents)]
-            assert len(parents) == len(mcids)
-            for mcid in mcids:
-                elem = parents[mcid]
-                kids = elem.K if isinstance(elem.K, pikepdf.Array) else [elem.K]
-                assert mcid in [int(k) for k in kids]
-                assert elem.Pg.objgen == page.obj.objgen
-                assert elem.P.S == "/Document"
-            total += len(mcids)
-    return total
 
 
 @pytest.mark.parametrize(
@@ -107,16 +74,11 @@ def test_auto_tag_round_trip(
         assert any(f.rule == "alt-text" and f.status is Status.FAILED for f in findings)
     reopened.close()
 
-    assert _check_marked_content(out) >= sum(counts.values())  # each element has an MCID
-    pd = pdfium.PdfDocument(out)
-    try:
-        assert len(pd) == len(texts)
-        for i in range(len(pd)):
-            pd[i].render(scale=0.5)
-        first_line = texts[0].split("\n", 1)[0]
-        assert first_line in pd[0].get_textpage().get_text_range()
-    finally:
-        pd.close()
+    record("marked_content_pikepdf", out, minimum=sum(counts.values()))  # each element has an MCID
+    record("page_count_pdfium", out, pages=len(texts))
+    for i in range(len(texts)):
+        record("render_pdfium", out, page=i, scale=0.5)
+    record("text_contains_pdfium", out, page=0, text=texts[0].split("\n", 1)[0])
 
 
 def test_auto_tag_other_layouts(tagger: Engine, fixture_pdf, tmp_path: Path) -> None:
@@ -129,8 +91,8 @@ def test_auto_tag_other_layouts(tagger: Engine, fixture_pdf, tmp_path: Path) -> 
         assert _texts(doc) == texts, name
         out = doc.save(tmp_path / f"{name}.pdf")
         doc.close()
-        assert _check_marked_content(out) > 0
-        pdfium.PdfDocument(out).close()
+        record("marked_content_pikepdf", out, minimum=1)
+        record("opens_pdfium", out)
 
 
 def test_refuses_tagged_and_empty(tagger: Engine, fixture_pdf) -> None:

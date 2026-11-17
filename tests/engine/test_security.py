@@ -5,12 +5,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.base import Engine, PasswordRequired, SaveOptions
 from pdfeditor.model.metadata import EncryptionMethod, Permissions, SecuritySettings
+from tests.hostcheck import record
 
 RESTRICTED = Permissions(print=False, modify=False, copy=False, annotate=True)
 
@@ -40,9 +39,8 @@ def test_encrypt_on_save(engine: Engine, fixture_pdf, tmp_path: Path) -> None:
     owner = engine.open(out, "boss")
     assert owner.has_owner_access()
     owner.close()
-    with pikepdf.open(out, password="open me") as pdf:
-        assert pdf.is_encrypted and len(pdf.pages) == 2
-    assert len(pdfium.PdfDocument(str(out), password="open me")) == 2
+    record("encrypted_pages_pikepdf", out, pages=2, password="open me")
+    record("page_count_pdfium", out, pages=2, password="open me")
 
 
 def test_aes128_without_user_password(engine: Engine, fixture_pdf, tmp_path: Path) -> None:
