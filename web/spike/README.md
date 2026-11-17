@@ -39,8 +39,8 @@ the host Python and the MuPDF tarball (URL, sha256 and directory). `package.json
 | Step | File | Where |
 |---|---|---|
 | Build the PyMuPDF wasm wheel (route 3) | `.github/workflows/web-spike.yml` | Linux only (CI) |
-| Stage wheel, package closure, sources, fixture | `run_engine_tests.mjs prepare` | Node |
-| Contract tests under Pyodide | `run_engine_tests.mjs run`, `pyodide_conftest.py` | Node |
+| Stage wheel, package closure, sources, fixture | `web/test/pyodide/run_engine_tests.mjs prepare` | Node |
+| Contract tests under Pyodide | `web/test/pyodide/run_engine_tests.mjs run`, `web/test/pyodide/pyodide_conftest.py` | Node |
 | Browser smoke (worker, Chromium) | `smoke/`, `smoke.spec.ts`, `playwright.config.ts` | Playwright |
 | Host check of the saved PDF | `verify_host.py` | CPython (pikepdf, pypdfium2) |
 
@@ -57,8 +57,8 @@ cd web/spike
 npm ci
 npx playwright install chromium            # browser for the smoke test
 
-node run_engine_tests.mjs prepare --wheel /path/to/pymupdf-1.28.2-*.whl
-node run_engine_tests.mjs run              # out/engine.xml, out/engine-summary.json, out/run.json
+node ../test/pyodide/run_engine_tests.mjs prepare --wheel /path/to/pymupdf-1.28.2-*.whl
+node ../test/pyodide/run_engine_tests.mjs run              # out/engine.xml, out/engine-summary.json, out/run.json
 npx playwright test                        # out/smoke.pdf, out/smoke-summary.json
 python verify_host.py out/smoke.pdf out/host-verify.json   # needs pikepdf and pypdfium2
 ```
@@ -79,7 +79,7 @@ harness itself cannot run pytest (exit code 2 or more from pytest).
 workflow refuses a `pypi` route whose `pypiWheel` fields are empty or whose Pyodide version does not
 match. The pinned wheel's sha256 was checked against the PyPI file.
 
-## Stub modules (`pyodide_conftest.py`)
+## Stub modules (`web/test/pyodide/pyodide_conftest.py`)
 
 The spike cannot run `pikepdf` or `pypdfium2` (C/C++ extensions with no Pyodide build), so the
 plugin puts lazy stubs for them in `sys.modules` before collection:

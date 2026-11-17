@@ -17,7 +17,7 @@ from pdfeditor.ui.view.document_view import annotation_tip_text
 from pdfeditor.ui.view.note_popup import NotePopup
 from pdfeditor.ui.view.text_editor import InlineTextEditor
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

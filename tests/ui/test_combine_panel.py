@@ -26,7 +26,7 @@ from pdfeditor.ui.main_window import MainWindow
 from tests.ui.test_a11y_u10 import unnamed
 from tests.ui.test_organize_ui import accepted
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 ACTIONS = Qt.DropAction.CopyAction | Qt.DropAction.MoveAction
 NONE = Qt.MouseButton.NoButton

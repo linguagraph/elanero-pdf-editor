@@ -18,7 +18,7 @@ from pdfeditor.ui.theme import Theme, apply_theme, current_colors
 from pdfeditor.ui.view.document_view import DocumentView
 from pdfeditor.ui.view.text_editor import InlineTextEditor
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

@@ -87,23 +87,27 @@ EXPECTED_IMPORT_FAILURES_WITHOUT: dict[str, frozenset[str]] = {
 }
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_web_modules_import_without_desktop_packages() -> None:
     modules = list(dict.fromkeys([*wp.web_modules(), "pdfeditor.engine.mupdf"]))
     failures = _import_failures(modules)
     assert failures == {}, failures
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_engine_open_path_needs_pillow() -> None:
     failures = _import_failures(["pdfeditor.engine.mupdf"], blocked=("PIL",))
     assert set(failures) == EXPECTED_IMPORT_FAILURES_WITHOUT["PIL"], failures
     assert "blocked for the web build: PIL" in failures["pdfeditor.engine.mupdf"]
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_engine_open_path_does_not_need_fonttools() -> None:
     failures = _import_failures(["pdfeditor.engine.mupdf"], blocked=("fontTools",))
     assert set(failures) == EXPECTED_IMPORT_FAILURES_WITHOUT["fontTools"], failures
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_guard_catches_a_module_that_imports_pikepdf(tmp_path: Path) -> None:
     # Negative control: the same check must fail on a leaky module and pass on a clean one.
     fake = tmp_path / "fakepkg"

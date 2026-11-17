@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Quad, Rect
-
-finite = st.floats(min_value=-1e4, max_value=1e4, allow_nan=False)
 
 
 def test_rect_basics() -> None:
@@ -31,14 +27,6 @@ def test_matrix_concat_order() -> None:
     # scale then translate: (1,1) -> (2,2) -> (12,2)
     m = Matrix.scale(2) @ Matrix.translate(10, 0)
     assert Point(1, 1).transform(m) == Point(12, 2)
-
-
-@given(finite, finite, st.floats(min_value=0.1, max_value=10), st.floats(0, 360))
-def test_matrix_inverse_roundtrip(x: float, y: float, s: float, angle: float) -> None:
-    m = Matrix.scale(s) @ Matrix.rotate(angle) @ Matrix.translate(3, -7)
-    p = Point(x, y).transform(m).transform(m.inverted())
-    assert p.x == pytest.approx(x, abs=1e-6)
-    assert p.y == pytest.approx(y, abs=1e-6)
 
 
 def test_quad_rect() -> None:

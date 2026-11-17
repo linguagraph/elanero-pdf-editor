@@ -16,7 +16,7 @@ from pdfeditor.ui import font_picker
 from pdfeditor.ui.dialogs.pages import WatermarkDialog
 from pdfeditor.ui.view.text_editor import _initial_font_ref
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def test_stamp_dialogs_keep_bold_standard_fonts(qtbot) -> None:

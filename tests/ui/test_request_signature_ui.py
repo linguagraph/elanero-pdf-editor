@@ -20,7 +20,7 @@ from pdfeditor.ui.dialogs.request_signature import RequestSignerDialog, valid_em
 from pdfeditor.ui.dialogs.sign import SignDialog
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 class StubDialog:

@@ -6,7 +6,7 @@ import pytest
 
 from pdfeditor.ui.jobs import Job
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def test_instant_job_delivers_result(qtbot) -> None:

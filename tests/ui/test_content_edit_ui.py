@@ -19,7 +19,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.tools import edit
 from pdfeditor.ui.view.text_editor import InlineTextEditor
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

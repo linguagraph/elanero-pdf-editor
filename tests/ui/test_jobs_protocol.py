@@ -8,7 +8,7 @@ from pdfeditor.core.inline_jobs import InlineJob
 from pdfeditor.core.jobs import JobContext
 from pdfeditor.ui.jobs import Job
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def test_desktop_job_satisfies_job_context() -> None:

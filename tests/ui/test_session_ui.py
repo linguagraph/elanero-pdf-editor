@@ -19,7 +19,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.panels.bookmarks import BookmarksPanel
 from pdfeditor.ui.panels.thumbnails import ThumbnailsPanel
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

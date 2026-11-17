@@ -16,7 +16,7 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.services.store_updates import InstallOutcome, InstallResult
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 class ScriptedBackend:

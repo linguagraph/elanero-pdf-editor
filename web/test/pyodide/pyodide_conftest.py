@@ -14,11 +14,12 @@ things:
    a host skip before any engine work is "host check not reached". Other skips are "skipped".
 3. ``tests/conftest.py`` imports ``pdfeditor.ui.settings`` (PySide6) in an autouse fixture. Qt
    does not exist in Pyodide, so a stub provides the one name it reads (``_SESSION_KEYS``).
-4. Writes a summary JSON to the path in ``SPIKE_ENGINE_SUMMARY``. The JUnit XML is pytest's own.
+4. Writes a summary JSON to the path in ``PYODIDE_SUMMARY``. The JUnit XML is pytest's own.
 """
 
 from __future__ import annotations
 
+import ast
 import importlib.abc
 import importlib.machinery
 import json
@@ -33,8 +34,12 @@ import pytest
 
 HOST_ONLY_TOP_LEVEL = ("pikepdf", "pypdfium2")
 HOST_PREFIX = "needs host-side verification"
-# web/spike/pyodide_conftest.py -> repo root is two levels up.
-ENGINE_DIR = str(Path(__file__).resolve().parents[2] / "src" / "pdfeditor" / "engine") + os.sep
+# web/test/pyodide/pyodide_conftest.py -> repo root is three levels up. The web run loads the
+# engine from the unpacked web wheel instead, so PYODIDE_ENGINE_DIR names that folder.
+ENGINE_DIR = (
+    os.environ.get("PYODIDE_ENGINE_DIR")
+    or str(Path(__file__).resolve().parents[3] / "src" / "pdfeditor" / "engine") + os.sep
+)
 
 
 def _host_skip(name: str) -> None:
@@ -212,6 +217,38 @@ def _set(nodeid: str, when: str, category: str, reason: str = "", message: str =
     }
 
 
+# Desktop-only tests must not be imported at all. A ``-m`` deselection runs after collection, and
+# collecting a module imports it, so a Qt module would fail the whole run here. This hook skips
+# them before import: the two desktop directories, and any module whose module-level pytestmark
+# names desktop_only (the same rule tests/unit/test_desktop_only_marker.py checks).
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DESKTOP_DIRS = (REPO_ROOT / "tests" / "ui", REPO_ROOT / "tests" / "benchmarks")
+
+
+def _names_desktop_only(path: Path) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets)
+            and any(
+                isinstance(n, ast.Attribute) and n.attr == "desktop_only"
+                for n in ast.walk(node.value)
+            )
+        ):
+            return True
+    return False
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    path = Path(collection_path).resolve()
+    if any(path == d or d in path.parents for d in DESKTOP_DIRS):
+        return True
+    if path.suffix == ".py" and path.name.startswith("test_") and _names_desktop_only(path):
+        return True
+    return None
+
+
 def pytest_collectreport(report: Any) -> None:
     if report.outcome == "skipped":
         _collect_skips.append({"module": report.nodeid, "reason": _skip_reason(report)})
@@ -237,7 +274,7 @@ def pytest_runtest_logreport(report: Any) -> None:
 
 
 def pytest_sessionfinish(session: pytest.Session) -> None:
-    path = os.environ.get("SPIKE_ENGINE_SUMMARY")
+    path = os.environ.get("PYODIDE_SUMMARY")
     if not path:
         return
     _MON.register_callback(_MON_TOOL, _MON.events.PY_RETURN, None)

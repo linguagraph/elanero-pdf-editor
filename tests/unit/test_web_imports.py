@@ -8,6 +8,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 GUARD = """
 import sys
 
@@ -47,6 +49,7 @@ def _run(body: str, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_engine_imports_without_ocr_helper_or_pikepdf() -> None:
     result = _run(
         """
@@ -59,6 +62,7 @@ def test_engine_imports_without_ocr_helper_or_pikepdf() -> None:
     assert "imported" in result.stdout
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_ocr_fails_loudly_when_helper_is_missing(fixture_pdf) -> None:
     result = _run(
         """
@@ -79,6 +83,7 @@ def test_ocr_fails_loudly_when_helper_is_missing(fixture_pdf) -> None:
     assert "ImportError" in result.stdout and "ocr_worker" in result.stdout
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_optimize_runs_without_pikepdf(fixture_pdf) -> None:
     result = _run(
         """

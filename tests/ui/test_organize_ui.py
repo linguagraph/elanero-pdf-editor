@@ -33,7 +33,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.organizer.organizer import MIME_PAGES, drop, insertion_slot
 from pdfeditor.ui.theme import current_colors
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

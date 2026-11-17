@@ -12,7 +12,10 @@ import pytest
 from pdfeditor import APP_DISPLAY_NAME
 from pdfeditor.services import file_association as fa
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows registry")
+pytestmark = [
+    pytest.mark.skipif(sys.platform != "win32", reason="Windows registry"),
+    pytest.mark.desktop_only,
+]
 
 LAUNCHER = fa.Launcher(r'"C:\Apps\Elanero.exe" "%1"', r"C:\Apps\Elanero.exe,0", "Elanero.exe")
 

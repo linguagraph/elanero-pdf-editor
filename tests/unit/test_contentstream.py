@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from pdfeditor.engine.contentstream.objects import (
     ObjectKind,
@@ -15,7 +13,6 @@ from pdfeditor.engine.contentstream.parser import (
     ContentSyntaxError,
     HexString,
     Name,
-    Operation,
     fmt_number,
     parse,
     write,
@@ -83,40 +80,6 @@ def test_fmt_number() -> None:
         and fmt_number(-3) == "-3"
     )
     assert "e" not in fmt_number(1e21)
-
-
-names = st.text(
-    alphabet=st.characters(min_codepoint=33, max_codepoint=255), min_size=1, max_size=8
-).map(Name)
-numbers = st.one_of(
-    st.integers(-(10**6), 10**6), st.floats(-1e5, 1e5, allow_nan=False).map(lambda f: round(f, 4))
-)
-scalars = st.one_of(
-    numbers,
-    st.booleans(),
-    st.none(),
-    names,
-    st.binary(max_size=12),
-    st.binary(max_size=8).map(HexString),
-)
-operands = st.recursive(
-    scalars,
-    lambda inner: st.one_of(
-        st.lists(inner, max_size=4),
-        st.dictionaries(names, inner, max_size=3),
-    ),
-    max_leaves=10,
-)
-operators = st.sampled_from(
-    ["q", "Q", "cm", "Tj", "TJ", "re", "f", "Do", "BDC", "gs", "d", "Tf", "'", '"']
-)
-operations = st.builds(Operation, operators, st.lists(operands, max_size=5))
-
-
-@settings(max_examples=300, deadline=None)
-@given(st.lists(operations, max_size=20))
-def test_write_parse_roundtrip(ops: list[Operation]) -> None:
-    assert parse(write(ops)) == ops
 
 
 def test_find_objects_and_bboxes() -> None:

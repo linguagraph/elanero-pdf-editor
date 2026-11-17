@@ -26,7 +26,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.translate_controller import recipient_of
 from pdfeditor.ui.view.document_view import DocumentView
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 class Fake:

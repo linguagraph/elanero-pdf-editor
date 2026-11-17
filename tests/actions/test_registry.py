@@ -277,6 +277,7 @@ def test_actions_refuse_while_a_task_runs(open_copy: Opener, name: str) -> None:
     assert not s.undo_stack.can_undo
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_importing_the_package_does_not_load_qt() -> None:
     code = (
         "import sys, pdfeditor.actions;"

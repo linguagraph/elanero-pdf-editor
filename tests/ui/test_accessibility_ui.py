@@ -9,7 +9,7 @@ from pdfeditor.services.accessibility import Status
 from pdfeditor.ui.jobs import wait_for
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

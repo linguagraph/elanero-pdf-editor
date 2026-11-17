@@ -7,7 +7,7 @@ from pdfeditor.core.layout import LayoutMode
 from pdfeditor.ui.view.document_view import FitMode
 from tests.ui.conftest import wait_rendered
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def _distinct_colors(image, samples: int = 400) -> int:

@@ -1,11 +1,13 @@
-// W0.1 spike (spike-only, never imported by the app).
+// W0.1 spike (spike-only, never imported by the app). Moved here from web/spike in W2.7a; its
+// inputs and outputs stay under web/spike (dist/, out/, versions.json, node_modules/), so the
+// spike's audit, perf and smoke tooling is unchanged.
 //
-//   node run_engine_tests.mjs prepare --wheel <pymupdf-wasm.whl>
+//   node web/test/pyodide/run_engine_tests.mjs prepare --wheel <pymupdf-wasm.whl>
 //       Stages what both test runs need under web/spike/dist/: the PyMuPDF wheel (dist/packages),
 //       the Pyodide package closure (the only network use in the spike; each file is checked against the
 //       sha256 in pyodide-lock.json), the generated fixture the browser smoke test opens, and the
 //       pdfeditor sources the browser worker imports.
-//   node run_engine_tests.mjs run
+//   node web/test/pyodide/run_engine_tests.mjs run
 //       Runs tests/engine under Pyodide in Node. Nothing is fetched at this point: packages come
 //       from dist/packages, and the CDN is pointed at a dead port so a missing file fails loudly.
 //
@@ -15,14 +17,16 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(HERE, "..", "..");
-const DIST = path.join(HERE, "dist");
-const OUT = path.join(HERE, "out");
+const REPO = path.resolve(HERE, "..", "..", "..");
+// The spike folder: its versions.json, package.json and node_modules are the single source.
+const SPIKE = path.resolve(HERE, "..", "..", "spike");
+const DIST = path.join(SPIKE, "dist");
+const OUT = path.join(SPIKE, "out");
 const PACKAGES = path.join(DIST, "packages");
-const VERSIONS = JSON.parse(fs.readFileSync(path.join(HERE, "versions.json"), "utf8"));
+const VERSIONS = JSON.parse(fs.readFileSync(path.join(SPIKE, "versions.json"), "utf8"));
 const CDN = `https://cdn.jsdelivr.net/pyodide/v${VERSIONS.pyodide}/full/`;
 const FIXTURE = "text_multipage.pdf";
 
@@ -32,9 +36,9 @@ const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 // package supplies the runtime and the lockfile), so both must be bumped together: this check
 // fails when they drift, and when the installed package is not the pinned one.
 function checkPyodideVersion() {
-  const declared = JSON.parse(fs.readFileSync(path.join(HERE, "package.json"), "utf8"));
+  const declared = JSON.parse(fs.readFileSync(path.join(SPIKE, "package.json"), "utf8"));
   const installed = JSON.parse(
-    fs.readFileSync(path.join(HERE, "node_modules", "pyodide", "package.json"), "utf8"),
+    fs.readFileSync(path.join(SPIKE, "node_modules", "pyodide", "package.json"), "utf8"),
   );
   const pins = [
     ["package.json devDependencies.pyodide", declared.devDependencies?.pyodide],
@@ -51,7 +55,7 @@ function checkPyodideVersion() {
 
 function lockfile() {
   return JSON.parse(
-    fs.readFileSync(path.join(HERE, "node_modules", "pyodide", "pyodide-lock.json"), "utf8"),
+    fs.readFileSync(path.join(SPIKE, "node_modules", "pyodide", "pyodide-lock.json"), "utf8"),
   );
 }
 
@@ -127,7 +131,7 @@ export async function prepare(wheelPath) {
   const lock = lockfile();
   const names = closure(lock, VERSIONS.packageRoots);
   fs.copyFileSync(
-    path.join(HERE, "node_modules", "pyodide", "pyodide-lock.json"),
+    path.join(SPIKE, "node_modules", "pyodide", "pyodide-lock.json"),
     path.join(PACKAGES, "pyodide-lock.json"),
   );
   for (const name of names) {
@@ -150,7 +154,11 @@ async function run() {
   const wheel = path.join(PACKAGES, JSON.parse(fs.readFileSync(wheelInfo, "utf8")).file);
   fs.mkdirSync(OUT, { recursive: true });
 
-  const { loadPyodide } = await import("pyodide");
+  // A bare "pyodide" would resolve from this folder, which has no node_modules; load the package
+  // the spike installed (web/spike/package.json is the only one).
+  const { loadPyodide } = await import(
+    pathToFileURL(path.join(SPIKE, "node_modules", "pyodide", "pyodide.mjs")).href
+  );
   const stdoutLog = [];
   const pyodide = await loadPyodide({
     packageCacheDir: PACKAGES,
@@ -200,8 +208,8 @@ async function run() {
 const PY_RUN = `
 import json, os, sys, time
 sys.dont_write_bytecode = True
-sys.path[:0] = ["/repo/web/spike", "/repo/src"]
-os.environ["SPIKE_ENGINE_SUMMARY"] = "/out/engine-summary.json"
+sys.path[:0] = ["/repo/web/test/pyodide", "/repo/src"]
+os.environ["PYODIDE_SUMMARY"] = "/out/engine-summary.json"
 import pymupdf
 import pytest
 

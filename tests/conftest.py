@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -15,7 +16,12 @@ FIXTURES = ROOT / "tests" / "fixtures" / "generated"
 @pytest.fixture(autouse=True)
 def _no_session_translation_keys() -> None:
     """Where DPAPI isn't available (Linux), keys live in a process-wide dict for the run.
-    Clear it so one test's key can't leak into the next."""
+    Clear it so one test's key can't leak into the next.
+
+    The dict lives in ``pdfeditor.ui.settings``, which imports Qt. Without Qt (the Pyodide run)
+    no session keys can exist, so there is nothing to clear."""
+    if importlib.util.find_spec("PySide6") is None:
+        return
     from pdfeditor.ui import settings as settings_module
 
     settings_module._SESSION_KEYS.clear()

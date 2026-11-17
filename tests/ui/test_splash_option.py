@@ -14,7 +14,7 @@ from pdfeditor.ui import branding
 from pdfeditor.ui.dialogs.preferences import PreferencesDialog
 from pdfeditor.ui.settings import AppSettings
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 def fresh(path: Path) -> AppSettings:

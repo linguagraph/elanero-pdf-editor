@@ -17,7 +17,7 @@ from pdfeditor.ui.dialogs.redaction import (
 )
 from pdfeditor.ui.main_window import MainWindow
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

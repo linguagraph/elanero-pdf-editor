@@ -15,6 +15,7 @@ from pdfeditor.ui.settings import AppSettings
 pytestmark = [
     pytest.mark.gui,
     pytest.mark.skipif("eng" not in installed_languages(), reason="English OCR data missing"),
+    pytest.mark.desktop_only,
 ]
 
 

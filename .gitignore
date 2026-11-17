@@ -34,5 +34,9 @@ web/spike/node_modules/
 web/spike/out/
 web/spike/dist/
 
+# The W2.7a Pyodide test run (web/test/pyodide): the runner's own packages cache and outputs
+web/test/pyodide/dist/
+web/test/pyodide/out/
+
 # Local pytest run logs (serial vs -n auto comparisons; never committed)
 .pytest-xdist-logs/

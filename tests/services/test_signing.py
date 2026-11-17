@@ -39,6 +39,8 @@ from pdfeditor.services.signing import (
     sign_file,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 FIXED_TIME = dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=dt.UTC)
 REAL_SIGNED = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"

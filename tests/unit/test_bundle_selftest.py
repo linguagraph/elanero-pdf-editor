@@ -8,6 +8,8 @@ import pytest
 
 from pdfeditor.bundle import data_path, is_frozen
 
+pytestmark = pytest.mark.desktop_only
+
 
 def test_bundled_data_is_found() -> None:
     assert data_path("selftest.pdf").read_bytes().startswith(b"%PDF-")

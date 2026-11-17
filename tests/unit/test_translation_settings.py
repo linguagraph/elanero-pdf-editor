@@ -15,6 +15,8 @@ from pdfeditor.core.secrets import SecretError
 from pdfeditor.ui import settings as settings_module
 from pdfeditor.ui.settings import AppSettings
 
+pytestmark = pytest.mark.desktop_only
+
 KEY = "sk-test-DEEPL-KEY-1234:fx"
 
 

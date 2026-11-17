@@ -17,7 +17,7 @@ from pdfeditor.ui.theme import Theme, apply_theme, current_colors
 from pdfeditor.ui.view import motion
 from pdfeditor.ui.view.document_view import DocumentView, FitMode
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

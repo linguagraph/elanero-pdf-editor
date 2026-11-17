@@ -14,6 +14,8 @@ from pdfeditor.model.geometry import Matrix
 from pdfeditor.services.compare import diff_regions
 from pdfeditor.services.pdfa import convert_to_pdfa, preflight, validate_with_verapdf
 
+pytestmark = pytest.mark.desktop_only
+
 ENGINE = get_engine()
 FONTS = ENGINE.standard_font_program
 

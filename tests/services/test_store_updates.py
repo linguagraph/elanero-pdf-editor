@@ -21,6 +21,8 @@ from pdfeditor.services.store_updates import (
     store_page_url,
 )
 
+pytestmark = pytest.mark.desktop_only
+
 
 class FakeBackend:
     def __init__(self, pending: int = 0, result: InstallResult | None = None) -> None:

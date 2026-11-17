@@ -20,7 +20,7 @@ from pdfeditor.model.geometry import Matrix
 from pdfeditor.services.search import SearchQuery, search_document
 from pdfeditor.services.text import TextIndexCache
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.desktop_only]
 
 
 @pytest.fixture

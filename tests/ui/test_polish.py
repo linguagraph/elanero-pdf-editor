@@ -16,7 +16,7 @@ from pdfeditor.ui.i18n import available_languages, install_translators
 from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.shortcuts import CommandPalette, ShortcutManager, ShortcutsDialog
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

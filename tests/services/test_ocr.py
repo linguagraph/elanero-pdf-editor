@@ -24,10 +24,13 @@ from pdfeditor.services.ocr import (
 ENGINE = get_engine()
 LOREM_START = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
 
-pytestmark = pytest.mark.skipif(
-    "eng" not in installed_languages(),
-    reason="English OCR data not installed (scripts/fetch_tessdata.py)",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        "eng" not in installed_languages(),
+        reason="English OCR data not installed (scripts/fetch_tessdata.py)",
+    ),
+    pytest.mark.desktop_only,
+]
 
 
 def similarity(a: str, b: str) -> float:

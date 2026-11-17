@@ -28,6 +28,8 @@ from pdfeditor.ui.style.tokens import (
 )
 from pdfeditor.ui.theme import Theme, ThemeManager, apply_theme, theme_manager
 
+pytestmark = pytest.mark.desktop_only
+
 # Default, the user's Windows green, and accents that are hard to read on one scheme or both.
 ACCENTS = [None, "#00b25a", "#ffd700", "#00ffff", "#0000ff", "#ffffff", "#000000", "#808080"]
 

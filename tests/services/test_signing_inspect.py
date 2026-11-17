@@ -34,6 +34,8 @@ from pdfeditor.services.signing import (
 from pdfeditor.services.signing.inspect import _placement, _time_source
 from tests.services import test_signing as signing_tests
 
+pytestmark = pytest.mark.desktop_only
+
 local_tsa = signing_tests.local_tsa  # the pytest fixture, borrowed from the signing tests
 
 ENGINE = get_engine()

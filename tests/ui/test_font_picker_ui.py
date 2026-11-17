@@ -21,7 +21,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.settings import AppSettings
 from pdfeditor.ui.view.text_editor import InlineTextEditor, TextStyleBar
 
-pytestmark = pytest.mark.gui
+pytestmark = [pytest.mark.gui, pytest.mark.desktop_only]
 
 
 @pytest.fixture

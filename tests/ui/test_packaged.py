@@ -10,6 +10,8 @@ import pytest
 from pdfeditor import bundle
 from pdfeditor.core import paths
 
+pytestmark = pytest.mark.desktop_only
+
 FAMILY = "SGNSolutions.Elanero-PDFEditor_abc123"
 
 

@@ -2,7 +2,7 @@
 //
 //   node audit/run_audit.mjs           (from web/spike, after audit/scan.py and the W0.1 prepare step)
 //
-// Uses the W0.1 runner's setup (dist/packages from `run_engine_tests.mjs prepare`, the CDN pointed
+// Uses the W0.1 runner's setup (dist/packages from `web/test/pyodide/run_engine_tests.mjs prepare`, the CDN pointed
 // at a dead port, the repo mounted at /repo for fixtures) and loads the PyMuPDF wheel, fontTools
 // and Pillow. numpy is not loaded: the app doesn't use it. audit.py does the work inside Pyodide.
 //
@@ -31,7 +31,7 @@ function requireFile(file, hint) {
   return file;
 }
 
-// Same pin check as run_engine_tests.mjs: the runtime must be the pinned one.
+// Same pin check as web/test/pyodide/run_engine_tests.mjs: the runtime must be the pinned one.
 function checkPyodideVersion() {
   const declared = JSON.parse(fs.readFileSync(path.join(HERE, "package.json"), "utf8"));
   const installed = JSON.parse(
@@ -66,7 +66,7 @@ async function runPass({ patch = false, tiff = null }, shared) {
   pyodide.FS.writeFile("/audit/input.json", fs.readFileSync(shared.input));
 
   await pyodide.loadPackage(["fonttools", "pillow"]);
-  // The wheel path is relative to the working directory (see run_engine_tests.mjs).
+  // The wheel path is relative to the working directory (see web/test/pyodide/run_engine_tests.mjs).
   await pyodide.loadPackage(path.relative(process.cwd(), shared.wheel).split(path.sep).join("/"));
   const loadMs = Math.round(performance.now() - started);
 

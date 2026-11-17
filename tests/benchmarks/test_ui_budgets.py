@@ -21,7 +21,7 @@ from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.theme import Theme, apply_theme
 from tests.ui.conftest import isolated_settings, no_animations  # noqa: F401 - autouse here too
 
-pytestmark = [pytest.mark.slow, pytest.mark.gui]
+pytestmark = [pytest.mark.slow, pytest.mark.gui, pytest.mark.desktop_only]
 
 # Budgets in ms, about 2.5x the baseline (median of 3 sessions on a Windows 11 dev machine,
 # offscreen, Python 3.11, recorded in PLAN.md U11) for slower CI runners.
