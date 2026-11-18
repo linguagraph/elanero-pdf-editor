@@ -12,7 +12,9 @@ One definition of a pass, used by every fuzz test:
 from __future__ import annotations
 
 import json
+import sys
 import threading
+import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -70,6 +72,15 @@ def run_bounded(func: Callable[[], T], seconds: float = CASE_SECONDS) -> T:
             outcome["value"] = func()
         except BaseException as exc:  # re-raised below on the test's thread
             outcome["error"] = exc
+
+    if sys.platform == "emscripten":
+        # Pyodide has no threads. The call runs inline, so a hang cannot be cut short; the
+        # elapsed time is checked afterwards instead, which still fails a case over the bound.
+        started = time.monotonic()
+        value: T = func()
+        elapsed = time.monotonic() - started
+        assert elapsed <= seconds, f"reply took {elapsed:.1f} s, over the {seconds} s bound"
+        return value
 
     thread = threading.Thread(target=target, daemon=True)
     thread.start()
