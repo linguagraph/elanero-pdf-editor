@@ -13,6 +13,79 @@ Every release ships three ways from the same source tag:
 The portable exe and the installer are unsigned until we have a code-signing certificate
 (PLAN.md Phase 17 and Phase 18 S10).
 
+## Release checklist
+
+Follow these in order for each release. A step that says *not yet automated* has no command
+yet: do it by hand as described, and don't invent one. The detailed Store steps are below.
+
+1. **Version.** Use one `X.Y.Z` everywhere. These must all print it:
+
+   ```sh
+   grep -n '^version = ' pyproject.toml
+   grep -n '__version__ = ' src/pdfeditor/__init__.py
+   grep -n '"version": "' web/app/package.json web/app/package-lock.json | head -3
+   grep -n 'APP_VERSION =' web/app/src/version.ts
+   ```
+
+   The lockfile has the version at the top and under `packages[""]`; edit both. The tag is
+   `vX.Y.Z`, and the `version` job in `release.yml` fails if it doesn't match `__version__`.
+2. **What's new.** There is no CHANGELOG file. The changelog is the "What's new in this version"
+   section of `packaging/store/listing-en.md`, updated in the same PR. Pass:
+   `uv run python scripts/store_listing.py` exits 0. The "must differ from the last tag" check
+   runs in `release.yml` once the tag exists.
+3. **Desktop checks.** Pass: every command exits 0.
+
+   ```sh
+   uv run ruff check . && uv run ruff format --check .
+   uv run lint-imports && uv run mypy
+   QT_QPA_PLATFORM=offscreen uv run pytest
+   ```
+
+4. **Web checks.** In `web/app`, after `npm ci`. Pass: every command exits 0.
+
+   ```sh
+   npm run typecheck && npm run lint && npm run format:check && npm run test
+   npm run build && npx playwright test
+   ```
+
+   `npm run build` writes `web/app/dist`. The first `npx playwright test` needs
+   `npx playwright install chromium`.
+5. **Desktop exe and self-test.** Run `uv run python scripts/build_exe.py --test`. Pass: it
+   prints `built ... (N MB)` with N at most 150, and the self-test report ends with
+   `RESULT: OK`. Note N in the release PR.
+6. **Web package.** Run `python scripts/build_web_wheel.py` (stdlib only; the command web-pytest
+   runs). Pass: it exits 0, writes `dist/web/pdfeditor-web.zip` and `dist/web/manifest.json`,
+   and its size check passes.
+7. **Web pytest (manual run).** Run `gh workflow run web-pytest.yml --ref main`, then watch it with
+   `gh run watch`. Pass: the `web-pytest` job is green. It isn't a required check, so a failure
+   doesn't block the merge; fix it or record why it can wait, and note the run URL in the release PR.
+8. **CI on main.** The PR's CI is green, and the last nightly run on `main` is too:
+   `gh run list --workflow ci.yml --branch main --limit 5` (the nightly is a `schedule` run).
+9. **Tag.** From the merged release commit on `main`:
+   `git tag -a vX.Y.Z -m "Elanero X.Y.Z" && git push origin vX.Y.Z`. Pass: `release.yml` starts
+   and its `version` job is green.
+10. **Build, test and GitHub release (automated).** `release.yml` runs `ci` (the full test run and
+    the only app build), then `github-release`, which attaches `Elanero.exe` and
+    `pdfeditor-X.Y.Z-setup.exe`. Pass: release `vX.Y.Z` exists with both files. Re-run only a failed
+    job.
+11. **Store (approval).** `microsoft-store` waits in the `microsoft-store` environment. Read the
+    What's New text, then approve it in Actions. Pass: the job uploads and submits the MSIX.
+    The local MSIX and App Certification Kit checks are steps 5 and 6 under "Making a release".
+12. **Web deploy.** *Not yet automated (see W9.2).* `docs.yml` publishes only the landing page and
+    the user guide. `scripts/build_site.py` doesn't build the web app yet.
+13. **Cache busting.** *Not yet automated (see W9.2).* Asset names aren't versioned yet.
+14. **Post-release check.** Pass for each:
+    - Download: `gh release download vX.Y.Z --pattern Elanero.exe --dir $env:TEMP\elanero-check`
+    - Self-test: `& $env:TEMP\elanero-check\Elanero.exe --self-test --self-test-report $env:TEMP\st.txt`,
+      then read the report: it must end with `RESULT: OK`.
+    - Web app: *not yet automated (see W9.2).* Until it's deployed, check the site at
+      https://linguagraph.github.io/elanero-pdf-editor/ (landing page and guide).
+15. **Rollback.** Never force-push, and never move or delete a pushed tag: tags are the public
+    source for the AGPL. To undo a bad change, run `git revert <sha>` on a branch, open a PR, and
+    merge it like any other. Ship the fix as a new version and tag, since the Store needs a higher
+    version. The Store job can't replace a submission still in certification, so wait for that
+    to finish. Web rollback: *not yet automated (see W9.2)*; until then, ship the fix as a release.
+
 ## One-time setup
 
 - **Windows SDK:** provides `makeappx`, `makepri`, `signtool` and the App Certification Kit
@@ -76,8 +149,8 @@ Its secrets live only in that environment: `MSIX_IDENTITY_JSON` (the content of
 (issue #88). Renew the client secret in Entra ID before it expires and update
 `MSSTORE_CLIENT_SECRET`. The manual steps below still apply when the workflow can't be used.
 
-1. **Version.** Set `__version__` in `src/pdfeditor/__init__.py` (and `pyproject.toml`). The
-   Store version is `X.Y.Z.0`, and each upload must be higher than the last.
+1. **Version.** Set every version as the Release checklist's step 1 lists. The Store version is
+   `X.Y.Z.0`, and each upload must be higher than the last.
 2. **Checks.** The PR's CI is green. The last nightly run on `main` should be too: it runs what
    pull requests skip, and it tests the merged code together.
 3. **Tag.** Tag the release commit and push the tag, so every shipped build has public source

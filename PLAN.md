@@ -629,7 +629,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W9.3** User guide: "Web version" page
 - [ ] **W9.4** `PRIVACY.md` and landing page
 - [ ] **W9.5** `AGENTS.md`: web commands and rules
-- [ ] **W9.6** Release checklist in `RELEASING.md`
+- [ ] **W9.6** Release checklist in `RELEASING.md` _(partial: checklist written and its commands verified; web cache busting, web deploy and web rollback are not yet automated, pending W9.2)_
 
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.
