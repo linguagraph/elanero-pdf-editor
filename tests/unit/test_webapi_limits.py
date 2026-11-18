@@ -92,3 +92,58 @@ def test_the_default_limits_are_the_documented_values() -> None:
     assert limits.FILE_WARN_BYTES == 200 * 1024 * 1024
     assert limits.FILE_REFUSE_BYTES == 1024**3
     assert limits.MAX_PAGES == 5000
+
+
+def _engine_pages(path: Any) -> int:
+    doc = get_engine().open(path)
+    try:
+        return int(doc.page_count)
+    finally:
+        doc.close()
+
+
+def test_exactly_max_pages_opens(monkeypatch: pytest.MonkeyPatch, fixture_pdf: Any) -> None:
+    path = fixture_pdf("text_multipage")
+    pages = _engine_pages(path)
+    monkeypatch.setattr(limits, "MAX_PAGES", pages)
+    reply = open_bytes(path.read_bytes())
+    assert reply["ok"] is True, reply
+    assert reply["result"]["pages"] == pages
+
+
+def test_size_exactly_at_the_warn_limit_has_no_warning(
+    monkeypatch: pytest.MonkeyPatch, fixture_pdf: Any
+) -> None:
+    data = fixture_pdf("text_multipage").read_bytes()
+    monkeypatch.setattr(limits, "FILE_WARN_BYTES", len(data))
+    reply = open_bytes(data)
+    assert reply["ok"] is True, reply
+    assert reply["result"]["warning"] is None
+
+
+def test_size_one_over_the_warn_limit_warns(
+    monkeypatch: pytest.MonkeyPatch, fixture_pdf: Any
+) -> None:
+    data = fixture_pdf("text_multipage").read_bytes()
+    monkeypatch.setattr(limits, "FILE_WARN_BYTES", len(data) - 1)
+    reply = open_bytes(data)
+    assert reply["result"]["warning"] is not None
+
+
+def test_size_exactly_at_the_refuse_limit_is_accepted(
+    monkeypatch: pytest.MonkeyPatch, fixture_pdf: Any
+) -> None:
+    data = fixture_pdf("text_multipage").read_bytes()
+    monkeypatch.setattr(limits, "FILE_REFUSE_BYTES", len(data))
+    reply = open_bytes(data)
+    assert reply["ok"] is True, reply
+
+
+def test_size_one_over_the_refuse_limit_is_too_large(
+    monkeypatch: pytest.MonkeyPatch, fixture_pdf: Any
+) -> None:
+    data = fixture_pdf("text_multipage").read_bytes()
+    monkeypatch.setattr(limits, "FILE_REFUSE_BYTES", len(data) - 1)
+    reply = open_bytes(data)
+    assert reply["error"]["code"] == FILE_TOO_LARGE
+    assert reply["error"]["details"] == {"max_bytes": len(data) - 1, "size": len(data)}

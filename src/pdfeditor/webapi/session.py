@@ -2,7 +2,10 @@
 
 The limits are read from :mod:`pdfeditor.webapi.limits` at call time, so tests can change them.
 The open password is kept by the registry only while the document is open; it never goes into a
-reply, a log or an error message.
+reply, a log or an error message. The engine also keeps the password it authenticated with, for
+the life of the open document, because MuPDF needs it to re-read the file.
+Page revisions and page labels are not in ``session.pages`` yet; they come with the render and
+structure calls (W1.2 section 12), so the reply carries only sizes and rotation for now.
 """
 
 from __future__ import annotations
@@ -49,17 +52,27 @@ def open_document(params: dto.OpenParams) -> dto.OpenResult:
             raise RpcFailure(PASSWORD_REQUIRED, "the file is password protected") from None
         raise RpcFailure(WRONG_PASSWORD, "the password is wrong") from None
     session.name_hint = params.name
-    with session.lock:
-        pages = session.document.page_count
-    if pages > limits.MAX_PAGES:
-        session.close()
-        raise RpcFailure(
-            TOO_MANY_PAGES,
-            "the file has too many pages for the browser",
-            {"max_pages": limits.MAX_PAGES, "pages": pages},
-        )
-    handle = REGISTRY.open(session, params.password)
-    return dto.OpenResult(handle=handle, info=_info(session), pages=pages, warning=warning)
+    handle: str | None = None
+    try:
+        with session.lock:
+            pages = session.document.page_count
+        if pages > limits.MAX_PAGES:
+            raise RpcFailure(
+                TOO_MANY_PAGES,
+                "the file has too many pages for the browser",
+                {"max_pages": limits.MAX_PAGES, "pages": pages},
+            )
+        handle = REGISTRY.open(session, params.password)
+        info = _info(session)
+    except BaseException:
+        # A document that is open in the engine must not outlive a failed call: close it
+        # through the registry when it was registered (which also drops the password).
+        if handle is not None:
+            REGISTRY.close(handle)
+        else:
+            session.close()
+        raise
+    return dto.OpenResult(handle=handle, info=info, pages=pages, warning=warning)
 
 
 def close_document(params: dto.HandleParams) -> dto.Empty:

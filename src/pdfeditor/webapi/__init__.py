@@ -77,8 +77,9 @@ def _load(request_json: str) -> object:
 
 
 def _is_id(value: object) -> bool:
-    # An integer; bool is an int subclass, so it is excluded by type.
-    return type(value) is int
+    # An integer within the JSON-safe range (W1.2 section 6); bool is an int subclass, so it is
+    # excluded by type.
+    return type(value) is int and abs(value) <= dto.MAX_SAFE_INT
 
 
 def _reject_constant(name: str) -> object:

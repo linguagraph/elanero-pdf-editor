@@ -145,3 +145,10 @@ def test_a_crashing_handler_becomes_internal_without_a_traceback(
     assert "Traceback" not in reply_json
     assert "secret internal detail" not in reply_json
     assert out == []
+
+
+def test_request_id_must_be_within_the_json_safe_range() -> None:
+    reply, _ = _reply(_request("hello", {}, request_id=2**53))
+    assert reply["error"]["code"] == INVALID_REQUEST
+    reply, _ = _reply(_request("hello", {}, request_id=2**53 - 1))
+    assert reply["ok"] is True

@@ -15,16 +15,20 @@ from typing import Any
 
 import pytest
 
+from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Capabilities
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model import platform as model_platform
-from pdfeditor.webapi import dispatch
+from pdfeditor.webapi import dispatch, limits
+from pdfeditor.webapi import session as webapi_session
 from pdfeditor.webapi.dto import PlatformFlags
 from pdfeditor.webapi.errors import (
+    INTERNAL,
     INVALID_ARGS,
     NO_DOCUMENT,
     OPEN_FAILED,
     PASSWORD_REQUIRED,
+    TOO_MANY_PAGES,
     WRONG_PASSWORD,
 )
 from pdfeditor.webapi.platform import WEB_PLATFORM, configure_web
@@ -187,3 +191,53 @@ def _engine_count(path: Path) -> int:
         return int(doc.page_count)
     finally:
         doc.close()
+
+
+@pytest.fixture
+def close_probe(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Records every DocumentSession.close, so a leaked document shows up as a missing call."""
+    calls: list[int] = []
+    original = DocumentSession.close
+
+    def probe(self: DocumentSession) -> None:
+        calls.append(id(self))
+        original(self)
+
+    monkeypatch.setattr(DocumentSession, "close", probe)
+    return calls
+
+
+def test_a_failure_after_registration_closes_the_document(
+    web: None, fixture_pdf: Any, close_probe: list[int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(session: DocumentSession) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(webapi_session, "_info", boom)
+    reply = open_bytes(fixture_pdf("text_multipage").read_bytes())
+    assert reply["error"]["code"] == INTERNAL
+    assert len(close_probe) == 1
+    assert len(REGISTRY) == 0
+
+
+def test_a_failure_before_registration_closes_the_document(
+    web: None, fixture_pdf: Any, close_probe: list[int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(params: object) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(REGISTRY, "open", boom)
+    reply = open_bytes(fixture_pdf("text_multipage").read_bytes())
+    assert reply["error"]["code"] == INTERNAL
+    assert len(close_probe) == 1
+    assert len(REGISTRY) == 0
+
+
+def test_too_many_pages_closes_the_document(
+    web: None, fixture_pdf: Any, close_probe: list[int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(limits, "MAX_PAGES", 1)
+    reply = open_bytes(fixture_pdf("text_multipage").read_bytes())
+    assert reply["error"]["code"] == TOO_MANY_PAGES
+    assert len(close_probe) == 1
+    assert len(REGISTRY) == 0
