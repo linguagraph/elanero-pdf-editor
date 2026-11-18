@@ -276,6 +276,22 @@ export interface RenderPageParams {
   annotations: boolean;
 }
 
+/** ``render.tile`` (W1.4 section 13): the ``render.page`` fields plus one grid tile. */
+export interface RenderTileParams {
+  handle: string;
+  page: number;
+  revision: number;
+  scale_milli: number;
+  rotation: number;
+  annotations: boolean;
+  /** 0-based column of the tile in the page's device-pixel grid */
+  tile_x: number;
+  /** 0-based row */
+  tile_y: number;
+  /** tile edge in device pixels; W1.4 section 4 fixes it at 1024 */
+  tile_px: number;
+}
+
 export interface RunParams {
   handle: string;
   /** a stable action name (W1.3 "Names") */
@@ -391,6 +407,7 @@ export interface Methods {
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
+  'render.tile': { params: RenderTileParams; result: PageImage; deadline: 'render' };
   'save.save_bytes': { params: SaveParams; result: SaveResult; deadline: 'io' };
   'session.capabilities': { params: HandleParams; result: CapabilitiesResult; deadline: 'instant' };
   'session.close': { params: HandleParams; result: Empty; deadline: 'instant' };
@@ -415,6 +432,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
   'render.page': 'render',
+  'render.tile': 'render',
   'save.save_bytes': 'io',
   'session.capabilities': 'instant',
   'session.close': 'instant',
@@ -444,6 +462,7 @@ export const RESULT_DECODERS: {
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
   'render.page': decodePageImage,
+  'render.tile': decodePageImage,
   'save.save_bytes': decodeSaveResult,
   'session.capabilities': decodeCapabilitiesResult,
   'session.close': decodeEmpty,
@@ -857,6 +876,26 @@ export function decodeRenderPageParams(
     scale_milli: expectInteger(field(o, 'scale_milli', path), `${path}.scale_milli`),
     rotation: expectInteger(field(o, 'rotation', path), `${path}.rotation`),
     annotations: expectBoolean(field(o, 'annotations', path), `${path}.annotations`),
+  };
+}
+
+export function decodeRenderTileParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): RenderTileParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'page', 'revision', 'scale_milli', 'rotation', 'annotations', 'tile_x', 'tile_y', 'tile_px'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    page: expectInteger(field(o, 'page', path), `${path}.page`),
+    revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
+    scale_milli: expectInteger(field(o, 'scale_milli', path), `${path}.scale_milli`),
+    rotation: expectInteger(field(o, 'rotation', path), `${path}.rotation`),
+    annotations: expectBoolean(field(o, 'annotations', path), `${path}.annotations`),
+    tile_x: expectInteger(field(o, 'tile_x', path), `${path}.tile_x`),
+    tile_y: expectInteger(field(o, 'tile_y', path), `${path}.tile_y`),
+    tile_px: expectInteger(field(o, 'tile_px', path), `${path}.tile_px`),
   };
 }
 
