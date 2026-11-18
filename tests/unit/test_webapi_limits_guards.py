@@ -264,19 +264,22 @@ def test_a_search_stops_at_the_hit_limit_and_names_the_next_slice(
 def test_the_save_limit_is_inclusive(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Two saves of the same document are not byte-stable (W3.6), so the size is read back from
+    # the refusal itself rather than assumed from an earlier save.
     handle = open_fixture(fixture_pdf, "text_multipage")
-    reply, _ = save(handle, "copy")
-    size = ok(reply)["size"]
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size)
-    reply, out = save(handle, "copy")
-    assert ok(reply)["size"] == size
-    assert len(out) == 1
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
-    reply, out = save(handle, "copy")
-    err = error(reply)
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", 1)
+    err = error(save(handle, "copy")[0])
     assert err["code"] == FILE_TOO_LARGE
-    assert err["details"] == {"max_bytes": size - 1, "size": size}
-    assert out == []
+    size = err["details"]["size"]
+    assert err["details"] == {"max_bytes": 1, "size": size}
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
+    err = error(save(handle, "copy")[0])
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"]["max_bytes"] == size - 1
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", err["details"]["size"])
+    reply, out = save(handle, "copy")
+    assert ok(reply)["size"] == len(out[0])
+    assert len(out) == 1
 
 
 # -- job bytes (jobs.prepare and jobs.apply) --------------------------------------------------
