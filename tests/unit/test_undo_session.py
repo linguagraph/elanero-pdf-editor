@@ -5,7 +5,6 @@ import shutil
 import sys
 from pathlib import Path
 
-import pikepdf
 import pytest
 
 from pdfeditor.core.autosave import Autosaver, RecoveryStore, _pid_alive
@@ -21,6 +20,7 @@ from pdfeditor.core.commands import (
 from pdfeditor.core.session import DocumentSession, EventKind, SessionEvent
 from pdfeditor.engine.base import Document, SaveError
 from pdfeditor.model.outline import Destination, OutlineItem
+from tests.hostcheck import record
 
 
 class Counter(Command):
@@ -209,8 +209,7 @@ def test_save_after_snapshot_undo(session: DocumentSession) -> None:
     session.execute(SnapshotCommand("Delete page", _delete_last_page, session.snapshots))
     path = session.save()
     assert not session.is_dirty
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == 5
+    record("page_count_pikepdf", path, pages=5)
 
 
 def test_save_as_and_errors(session: DocumentSession, tmp_path: Path, fixture_pdf) -> None:
@@ -223,6 +222,7 @@ def test_save_as_and_errors(session: DocumentSession, tmp_path: Path, fixture_pd
 
 
 def test_signed_documents_save_incrementally(fixture_pdf, tmp_path: Path) -> None:
+    import pikepdf  # host-only builder: the signed catalog is written with pikepdf
     import pymupdf  # build a document whose catalog says it's signed
 
     src = pymupdf.open(fixture_pdf("images"))
@@ -287,6 +287,7 @@ def test_recovery_entries_from_dead_process(tmp_path: Path, fixture_pdf) -> None
 
 def test_required_full_save_overrides_incremental(fixture_pdf, tmp_path: Path) -> None:
     """After redaction a signed file must be rewritten, not appended to."""
+    import pikepdf  # host-only builder: the signed catalog is written with pikepdf
     import pymupdf
 
     src = pymupdf.open(fixture_pdf("images"))

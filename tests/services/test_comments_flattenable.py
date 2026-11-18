@@ -5,7 +5,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-import pikepdf
 import pytest
 
 from pdfeditor.core.session import DocumentSession
@@ -15,7 +14,10 @@ from pdfeditor.services.comments import flattenable
 @pytest.fixture
 def mixed_pdf(fixture_pdf, tmp_path: Path) -> Path:
     """The ``annotations`` fixture (six comments) plus a link and a popup on page 1, a hidden
-    comment, and a second page that holds only a link."""
+    comment, and a second page that holds only a link. Built with pikepdf, so it is host-only
+    (the import stays here, not at module level, so the module imports under Pyodide)."""
+    import pikepdf
+
     path = tmp_path / "mixed.pdf"
     shutil.copy2(fixture_pdf("annotations"), path)
     with pikepdf.open(path, allow_overwriting_input=True) as pdf:

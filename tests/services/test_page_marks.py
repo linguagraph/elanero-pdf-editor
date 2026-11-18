@@ -6,8 +6,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.engine.registry import get_engine
@@ -30,6 +28,7 @@ from pdfeditor.services.stamping import (
     watermark_from_settings,
     watermark_settings,
 )
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 pytestmark = pytest.mark.skipif(not ENGINE.capabilities.page_marks, reason="no page marks")
@@ -45,21 +44,8 @@ def path(fixture_pdf, tmp_path: Path) -> Path:
 def _save_reopen(doc, path: Path):
     doc.save()
     doc.close()
-    with pikepdf.open(path) as pdf:  # opens in an independent implementation
-        assert len(pdf.pages) == 5
+    record("page_count_pikepdf", path, pages=5)  # opens in an independent implementation
     return ENGINE.open(path)
-
-
-def _pdfium_texts(path: Path) -> list[str]:
-    pd = pdfium.PdfDocument(path)
-    try:
-        out = []
-        for page in pd:
-            page.render(scale=0.3)
-            out.append(page.get_textpage().get_text_range())
-        return out
-    finally:
-        pd.close()
 
 
 def test_settings_round_trip() -> None:
@@ -113,8 +99,7 @@ def test_header_footer_update_and_remove_round_trip(path: Path) -> None:
     info = find_marks(ENGINE, doc)[MarkKind.HEADER_FOOTER]
     assert info.pages == [0, 1, 2, 3, 4]
     assert header_footer_from_settings(info.settings) == new
-    texts = _pdfium_texts(path)
-    assert all(t.count("NEW-FOOTER") == 1 and "OLD-HEADER" not in t for t in texts)
+    record("page_text_pdfium", path, page=None, absent=["OLD-HEADER"], once=["NEW-FOOTER"])
 
     assert remove_marks(ENGINE, doc, [MarkKind.HEADER_FOOTER]) == 5
     doc = _save_reopen(doc, path)
@@ -123,7 +108,7 @@ def test_header_footer_update_and_remove_round_trip(path: Path) -> None:
         text = doc.page(index).text_page(with_chars=False).text
         assert "NEW-FOOTER" not in text and f"Page {index + 1} heading" in text
     doc.close()
-    assert all("NEW-FOOTER" not in t and "needle" in t for t in _pdfium_texts(path))
+    record("page_text_pdfium", path, page=None, absent=["NEW-FOOTER"], present=["needle"])
 
 
 def test_bates_header_watermark_and_background_are_independent(path: Path) -> None:
@@ -164,5 +149,4 @@ def test_bates_header_watermark_and_background_are_independent(path: Path) -> No
     bounds = content_bounds(doc, 3)
     assert bounds is not None and bounds.width < doc.page(3).rect.width - 50  # untinted again
     doc.close()
-    texts = _pdfium_texts(path)
-    assert "DOC000002" not in texts[1] and texts[1].count("WM-TWO") == 1
+    record("page_text_pdfium", path, page=1, absent=["DOC000002"], once=["WM-TWO"])

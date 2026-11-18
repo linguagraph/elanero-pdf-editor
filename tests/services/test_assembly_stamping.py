@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import io
 import shutil
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -32,6 +29,7 @@ from pdfeditor.services.stamping import (
     expand,
     trimmed_rect,
 )
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 
@@ -61,8 +59,7 @@ def test_merge_pdfs_images_and_bookmarks(fixture_pdf, png: Path) -> None:
     assert roots[1].dest.page_index == 2 and roots[2].dest.page_index == 3
     data = doc.to_bytes()
     doc.close()
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        assert len(pdf.pages) == 4
+    record("page_count_pikepdf", data, pages=4)
 
 
 def test_split_plans(fixture_pdf) -> None:
@@ -102,8 +99,7 @@ def test_write_split_and_extract(fixture_pdf, tmp_path: Path) -> None:
         "book_Chapter 2.pdf",
         "book_Chapter 3.pdf",
     ]
-    with pikepdf.open(written[2]) as pdf:
-        assert len(pdf.pages) == 2
+    record("page_count_pikepdf", written[2], pages=2)
     part = extract(ENGINE, doc, [5, 0])
     assert part.page_count == 2
     part.close()
@@ -215,13 +211,7 @@ def test_duplicated_page_stamped_alone_round_trip(fixture_pdf, tmp_path: Path) -
         assert len(kinds[0]) == len(kinds[1]) == 1 and kinds[0] != kinds[1] and not kinds[2]
     doc.close()
 
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == 3
-    pd = pdfium.PdfDocument(path)
-    try:
-        pdfium_texts = [pd[i].get_textpage().get_text_range() for i in range(len(pd))]
-        assert "FOOT" not in pdfium_texts[0] and "FOOT 2" in pdfium_texts[1]
-        assert "DRAFT" in pdfium_texts[0] and "DRAFT" not in pdfium_texts[1]
-        assert pd[1].render(scale=0.5).to_pil().size[0] > 0
-    finally:
-        pd.close()
+    record("page_count_pikepdf", path, pages=3)
+    record("page_text_pdfium", path, page=0, absent=["FOOT"], present=["DRAFT"])
+    record("page_text_pdfium", path, page=1, absent=["DRAFT"], present=["FOOT 2"])
+    record("page_render_width_pdfium", path, page=1, scale=0.5)

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -12,6 +10,7 @@ from pdfeditor.core.jobs import Cancelled, CancelToken
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.services.assembly import MergeSource, describe_source, merge
 from pdfeditor.services.pages import move_order
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 
@@ -90,10 +89,8 @@ def test_merged_file_round_trips(fixture_pdf, tmp_path: Path) -> None:
             assert again.page_count == 3
         finally:
             again.close()
-    with pikepdf.open(out) as pdf:
-        assert len(pdf.pages) == 3
-    rendered = pdfium.PdfDocument(str(out))[0].render(scale=0.5).to_pil().convert("L")
-    assert rendered.getextrema() != (255, 255)  # not blank
+    record("page_count_pikepdf", out, pages=3)
+    record("first_page_not_blank_pdfium", out)
 
 
 def test_move_order() -> None:
