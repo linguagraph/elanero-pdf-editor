@@ -618,7 +618,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers
 - [ ] **W8.2** Visual golden tests for rendering
 - [ ] **W8.3** Performance tests in CI
-- [ ] **W8.4** Fuzz and robustness tests
+- [x] **W8.4** Fuzz and robustness tests
 - [ ] **W8.5** Accessibility checks
 - [ ] **W8.6** Security review
 

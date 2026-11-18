@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +18,7 @@ from pdfeditor.webapi import actions, dto, jobs, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 from pdfeditor.webapi.events import events_for
+from pdfeditor.webapi.limits import MAX_JSON_DEPTH
 
 log = logging.getLogger(__name__)
 
@@ -91,10 +93,37 @@ def dispatch(
     return json.dumps(reply, allow_nan=False, separators=(",", ":")), out
 
 
+# Escape pairs, quotes and brackets: the only characters the depth scan needs to see.
+_JSON_TOKEN = re.compile(r'\\.|["\[\]{}]', re.DOTALL)
+
+
+def _check_depth(request_json: str) -> None:
+    """Refuse a request nested deeper than MAX_JSON_DEPTH, before the decoder recurses into it.
+
+    An iterative scan (no recursion), so it cannot itself overflow. Brackets inside strings do
+    not count, and a backslash escapes the character after it.
+    """
+    depth = 0
+    in_string = False
+    for match in _JSON_TOKEN.finditer(request_json):
+        token = match.group()
+        if token == '"':
+            in_string = not in_string
+        elif in_string or token.startswith("\\"):
+            continue
+        elif token in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise RpcFailure(INVALID_REQUEST, "the request is nested too deeply")
+        elif token in "]}":
+            depth -= 1
+
+
 def _load(request_json: str) -> object:
+    _check_depth(request_json)
     try:
         return json.loads(request_json, parse_constant=_reject_constant)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:  # a second line: nesting the scan let through
         raise RpcFailure(INVALID_REQUEST, "the request is not valid JSON") from exc
 
 

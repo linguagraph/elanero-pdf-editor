@@ -23,6 +23,11 @@ MAX_RENDER_PIXELS = 64_000_000  # per page image: 64 MP, the W1.1 print and expo
 MAX_RENDER_SCALE_MILLI = 256_000  # device scale 256: zoom 64 (W1.4 MAX_ZOOM) x 96/72 x DPR 3
 MAX_TILE_PIXELS = 16_000_000  # per tile of render.tile: the W1.1 section 7 per-tile ceiling
 
+# Nesting depth of a request's JSON, counted before parsing. Far above any real request (the
+# deepest is a few levels) and far below what the JSON decoder can recurse through: a deeper
+# request would overflow the wasm stack under Pyodide, which is fatal rather than an exception.
+MAX_JSON_DEPTH = 256
+
 # Jobs (W1.1 section 7, W1.2 section 13). A job gets a copy of the document, so its bytes are
 # held to the same size as an open file; the worker runs one job at a time.
 MAX_JOB_BYTES = FILE_REFUSE_BYTES  # a document copy or a job result above this is refused
