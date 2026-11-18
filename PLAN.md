@@ -558,7 +558,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W3.2** `webapi.session`: open from bytes, close, info
 - [x] **W3.3** `webapi.render`: render tiles to RGBA
 - [x] **W3.4** `webapi.text`: text layer and search
-- [ ] **W3.5** `webapi.actions`: named actions, undo, redo _(partial: actions.run/undo/redo/available with changed/state in the result and structure_version done; the reply envelope's events (changed, state on content changes; closed on session.close) and session.open state done; the saved event and save.mark_saved done (tested); pending: a state event for the busy flag of jobs.prepare/abort, and state sent only with content changes, not on every field change; blocked is the BUSY error, not an event)_
+- [ ] **W3.5** `webapi.actions`: named actions, undo, redo _(partial: actions.run/undo/redo/available with changed/state in the result and structure_version done; the reply envelope's events (changed, state on content changes; closed on session.close) and session.open state done; the saved event and save.mark_saved done (tested); the busy-flag state event of jobs.prepare/abort done (tested); pending: state sent only with content changes, not on every field change; blocked is the BUSY error, not an event)_
 - [x] **W3.6** `webapi.save`: save_bytes, full or incremental
 - [x] **W3.7** `webapi.jobs` and job worker protocol _(complete; print's partial notices (W1.2 section 17.4) are tracked under W6.5)_
 - [x] **W3.8** TypeScript RPC client with generated types
@@ -579,7 +579,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W5 Viewer and navigation, #138**
 
-- [ ] **W5.1a** Document view: virtualised page list
+- [ ] **W5.1a** Document view: virtualised page list _(partial: a continuous single-column list, placeholders, the virtualised window, render queue, page cache and zoom are built and tested with a fake engine client (Vitest); pending: single and fit layouts, the scaled scroll space above 8 million px, the layout vectors, and the engine-backed render, which needs an engine session per tab (not wired yet) and the staged engine assets, so it is not verified here)_
 - [ ] **W5.1b** HiDPI tiles, render cache and prefetch
 - [ ] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
 - [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers
