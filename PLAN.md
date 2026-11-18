@@ -575,7 +575,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W4.4b** Toasts, job progress, loading screen, not-responding dialog
 - [ ] **W4.5** Preferences dialog
 - [ ] **W4.6** PWA: manifest and service worker
-- [ ] **W4.7** Message catalogue (i18n) and RPC error mapping
+- [ ] **W4.7** Message catalogue (i18n) and RPC error mapping _(partial: English catalogue in `web/app/src/i18n/en.ts` with lookup and interpolation, and the RPC error mapping in `web/app/src/rpc/errors.ts`, with tests; the `Intl.PluralRules` formatter and the per-language JSON files are pending)_
 
 **W5 Viewer and navigation, #138**
 
