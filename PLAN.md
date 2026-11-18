@@ -618,7 +618,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers
 - [ ] **W8.2** Visual golden tests for rendering
 - [ ] **W8.3** Performance tests in CI
-- [ ] **W8.4** Fuzz and robustness tests
+- [ ] **W8.4** Fuzz and robustness tests _(partial: envelope and render/text fuzz pass; open fuzz fails 27 cases because two engine errors on damaged files return INTERNAL instead of OPEN_FAILED: "bad xref" in info() and the page-count RuntimeError in open_document)_
 - [ ] **W8.5** Accessibility checks
 - [ ] **W8.6** Security review
 

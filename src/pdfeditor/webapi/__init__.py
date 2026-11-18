@@ -94,7 +94,7 @@ def dispatch(
 def _load(request_json: str) -> object:
     try:
         return json.loads(request_json, parse_constant=_reject_constant)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:  # nesting past the decoder's limit is a bad request
         raise RpcFailure(INVALID_REQUEST, "the request is not valid JSON") from exc
 
 
