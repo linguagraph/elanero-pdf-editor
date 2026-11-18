@@ -16,6 +16,7 @@ Pyodide runs have no pikepdf or pypdfium2, and none of these tests needs them.
 
 from __future__ import annotations
 
+import functools
 import json
 import random
 import re
@@ -26,6 +27,7 @@ import pytest
 
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import METHODS, dispatch
+from pdfeditor.webapi.errors import OPEN_FAILED
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.unit.robustness_helpers import check_reply, run_bounded
@@ -153,11 +155,9 @@ def test_fuzz_open_mutated_fixtures_short(web: None, fixture_pdf: Any, name: str
 
     A failure names the fixture and index in its message.
 
-    Known failure (engine bug, not fixed here): outline with random.Random('w84:outline:1')
-    (245 bytes) opens with INTERNAL, RuntimeError "code=7: Invalid number of pages", raised by
-    pymupdf page_count inside engine/mupdf/document.py open_document. It should be OPEN_FAILED.
-    Also seen: annotations index 3, hybrid_xref index 28, rotated_pages 20, vector_art 5, and
-    other indexes with the same message."""
+    Regression: the damaged outline case below used to return INTERNAL; it is OPEN_FAILED
+    now (see test_robust_damaged_open_reproducers). Other mutations are checked the same way.
+    """
     _open_cases(_fixture_bytes(fixture_pdf, name), name, SHORT_MUTATIONS)
 
 
@@ -165,11 +165,9 @@ def test_fuzz_open_mutated_fixtures_short(web: None, fixture_pdf: Any, name: str
 def test_fuzz_open_truncated_fixtures_short(web: None, fixture_pdf: Any, name: str) -> None:
     """Reproduce one case: the first N bytes of the fixture, opened with session.open.
 
-    Known failure (engine bug, not fixed here): text_multipage.pdf cut to its first 51 bytes
-    opens with INTERNAL, ValueError "bad xref", raised by pymupdf xref_get_key in
-    engine/mupdf/document.py info(), which session.open calls after the engine has opened the
-    file. It should be OPEN_FAILED. 78 truncation offsets over the fixtures do this in the
-    default run (for example 51 and 192 bytes of text_multipage)."""
+    Regression: text_multipage cut to 51 bytes used to return INTERNAL; it is OPEN_FAILED now
+    (see test_robust_damaged_open_reproducers). Other truncations are checked the same way.
+    """
     data = _fixture_bytes(fixture_pdf, name)
     _truncation_cases(data, name, max(1, len(data) // SHORT_TRUNCATIONS))
 
@@ -422,3 +420,31 @@ def _robust_random_render_and_text(fixture_pdf: Any, count: int, seed: str) -> N
                 _page_call("text.layer", params, label)
     finally:
         REGISTRY.close(handle)
+
+
+def test_robust_damaged_open_reproducers(web: None, fixture_pdf: Any) -> None:
+    """Regression for two damaged files that used to open as INTERNAL instead of OPEN_FAILED.
+
+    1. text_multipage.pdf cut to its first 51 bytes: the engine accepted it, then the catalog
+       read failed with pymupdf's ValueError "bad xref".
+    2. outline with mutate(bytes, random.Random('w84:outline:1')) (245 bytes): the page count
+       failed with RuntimeError "code=7: Invalid number of pages" while the document opened.
+    Both must give OPEN_FAILED through session.open. The desktop open does not read the catalog,
+    so it still opens these files; only the web open, which reads the document info, fails.
+    """
+
+    truncated = _fixture_bytes(fixture_pdf, "text_multipage")[:51]
+    damaged = mutate(_fixture_bytes(fixture_pdf, "outline"), random.Random("w84:outline:1"))
+    for data in (truncated, damaged):
+        request = json.dumps(
+            {
+                "v": 1,
+                "id": 1,
+                "method": "session.open",
+                "params": {"name": "case.pdf", "data": {"$bin": 0}, "password": None},
+            }
+        )
+        reply_json, _ = run_bounded(functools.partial(dispatch, request, [data]))
+        reply = check_reply(reply_json, "damaged open reproducer")
+        assert reply["ok"] is False, reply
+        assert reply["error"]["code"] == OPEN_FAILED, reply

@@ -153,21 +153,37 @@ def _authenticate(fz: pymupdf.Document, password: str | PasswordCallback | None)
     raise PasswordRequired("document is password protected")
 
 
+_DAMAGED_MESSAGE = "the file is too damaged to read"
+# What MuPDF raises for damage: PyMuPDF maps some errors to RuntimeError or ValueError and
+# others (a bad object, a syntax error) to its FzErrorBase classes.
+_MUPDF_OPEN_ERRORS: tuple[type[BaseException], ...] = (
+    RuntimeError,
+    ValueError,
+    pymupdf.mupdf.FzErrorBase,
+)
+
+
 def open_document(source: Path | bytes, password: str | PasswordCallback | None) -> MuDocument:
     fz = _open_fz(source)
     try:
         used = _authenticate(fz, password)
+        path = source.resolve() if isinstance(source, Path) else None
+        if fz.is_repaired:
+            log.warning("document was repaired on open: %s", path or "<bytes>")
+        # Only a signed document needs an original to append its in-place update to (see
+        # incremental_bytes). A document opened from bytes keeps those bytes for that, and only
+        # then.
+        signed = (fz.get_sigflags() or 0) > 0
+        kept = source if isinstance(source, bytes) and signed else None
+        return MuDocument(fz, path, used, source_bytes=kept, lineage=signed)
     except PasswordRequired:
         fz.close()
         raise
-    path = source.resolve() if isinstance(source, Path) else None
-    if fz.is_repaired:
-        log.warning("document was repaired on open: %s", path or "<bytes>")
-    # Only a signed document needs an original to append its in-place update to (see
-    # incremental_bytes). A document opened from bytes keeps those bytes for that, and only then.
-    signed = (fz.get_sigflags() or 0) > 0
-    kept = source if isinstance(source, bytes) and signed else None
-    return MuDocument(fz, path, used, source_bytes=kept, lineage=signed)
+    except _MUPDF_OPEN_ERRORS as exc:
+        # Damage that the open itself accepted (a bad page tree, a bad xref) surfaces here. Any
+        # other error is a bug and is not caught.
+        fz.close()
+        raise OpenError(_DAMAGED_MESSAGE) from exc
 
 
 class MuDocument:
@@ -293,6 +309,13 @@ class MuDocument:
         return page
 
     def info(self) -> DocumentInfo:
+        # A damaged catalog passes the open and fails here, so it is an open failure too.
+        try:
+            return self._read_info()
+        except _MUPDF_OPEN_ERRORS as exc:
+            raise OpenError(_DAMAGED_MESSAGE) from exc
+
+    def _read_info(self) -> DocumentInfo:
         fz = self._fz
         meta = fz.metadata or {}
         size = None
