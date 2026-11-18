@@ -566,7 +566,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W4 Front-end shell, #137**
 
-- [ ] **W4.1** Project scaffold in `web/`
+- [x] **W4.1** Project scaffold in `web/` (#198)
 - [ ] **W4.2a** Layout grid, breakpoints, side rails and panel frames
 - [ ] **W4.2b** Start page, tabs, recent files
 - [ ] **W4.3a** Command registry, ribbon and app menu
