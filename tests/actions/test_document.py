@@ -12,8 +12,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.actions import REGISTRY, document, run
@@ -26,6 +24,7 @@ from pdfeditor.model.metadata import Metadata
 from pdfeditor.model.outline import Destination, OutlineItem
 from pdfeditor.services.comments import flattenable
 from tests.actions.conftest import Opener
+from tests.hostcheck import record
 
 # One minimal value per action; the Busy test in test_registry.py runs each one.
 BUSY_CASES: dict[str, object] = {
@@ -72,14 +71,9 @@ def close(session: DocumentSession) -> None:
 
 def assert_reads_everywhere(path: Path, pages: int) -> None:
     """The saved file opens in pikepdf and renders page 1 in pypdfium2."""
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == pages
-    pd = pdfium.PdfDocument(path)
-    try:
-        assert len(pd) == pages
-        assert pd[0].render(scale=0.5).to_pil().size[0] > 0
-    finally:
-        pd.close()
+    record("page_count_pikepdf", path, pages=pages)
+    record("page_count_pdfium", path, pages=pages)
+    record("render_first_page_pdfium", path)
 
 
 def ref(name: str, page: int = 0) -> AnnotRef:
@@ -117,8 +111,7 @@ def test_set_metadata_round_trip(open_copy: Opener, tmp_path: Path) -> None:
         assert metadata_of(reopened).title == "Saved title"
     finally:
         close(reopened)
-    with pikepdf.open(out) as pdf:
-        assert str(pdf.docinfo["/Title"]) == "Saved title"
+    record("docinfo_title_pikepdf", out, title="Saved title")
     assert_reads_everywhere(out, s.page_count)
 
 
@@ -153,21 +146,6 @@ def test_set_outline_with_a_custom_label(open_copy: Opener) -> None:
     assert s.undo()
 
 
-def pikepdf_outline(pdf: pikepdf.Pdf) -> list[tuple[int, str]]:
-    """(level, title) of every bookmark, walked by hand through /First and /Next."""
-    out: list[tuple[int, str]] = []
-
-    def walk(node: pikepdf.Object, level: int) -> None:
-        child = node.get("/First")
-        while child is not None:
-            out.append((level, str(child.Title)))
-            walk(child, level + 1)
-            child = child.get("/Next")
-
-    walk(pdf.Root.Outlines, 1)
-    return out
-
-
 def test_set_outline_round_trip(open_copy: Opener, tmp_path: Path) -> None:
     s = open_copy("text_multipage")
     last = Destination(s.page_count - 1)
@@ -184,8 +162,7 @@ def test_set_outline_round_trip(open_copy: Opener, tmp_path: Path) -> None:
         assert levels == [(1, "Start"), (1, "Appendix"), (2, "Glossary")]
     finally:
         close(reopened)
-    with pikepdf.open(out) as pdf:
-        assert pikepdf_outline(pdf) == [(1, "Start"), (1, "Appendix"), (2, "Glossary")]
+    record("outline_pikepdf", out, expected=[[1, "Start"], [1, "Appendix"], [2, "Glossary"]])
     assert_reads_everywhere(out, s.page_count)
 
 

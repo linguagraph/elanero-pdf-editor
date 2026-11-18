@@ -6,6 +6,7 @@ not only in MuPDF.
 
 from __future__ import annotations
 
+import base64
 import copy
 import io
 from dataclasses import replace
@@ -13,10 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
-from PIL import Image, ImageChops
+from PIL import Image
 
 from pdfeditor.actions import REGISTRY, marks, run
 from pdfeditor.actions.base import NotSupported
@@ -36,6 +35,7 @@ from pdfeditor.services.stamping import (
     watermark_from_settings,
 )
 from tests.actions.conftest import Opener
+from tests.hostcheck import record
 
 # One minimal value per action; the Busy test in test_registry.py runs each one.
 BUSY_CASES: dict[str, object] = {
@@ -98,14 +98,9 @@ def bates_spec() -> HeaderFooter:
 
 def assert_reads_everywhere(path: Path, pages: int) -> None:
     """The saved file opens in pikepdf and renders page 1 in pypdfium2."""
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == pages
-    pd = pdfium.PdfDocument(path)
-    try:
-        assert len(pd) == pages
-        assert pd[0].render(scale=0.5).to_pil().size[0] > 0
-    finally:
-        pd.close()
+    record("page_count_pikepdf", path, pages=pages)
+    record("page_count_pdfium", path, pages=pages)
+    record("render_first_page_pdfium", path)
 
 
 def close(session: DocumentSession) -> None:
@@ -388,23 +383,8 @@ def test_image_watermark_is_drawn_on_the_page(
     assert images_on_page_one() == before + 1
     out = s.save(tmp_path / "drawn.pdf")
     original = fixture_pdf("text_multipage")
-    with_mark = _render_first_page(out)
-    without = _render_first_page(original)
-    assert with_mark.size == without.size
-    w, h = with_mark.size
-    centre = (int(w * 0.3), int(h * 0.3), int(w * 0.7), int(h * 0.7))
-    changed = ImageChops.difference(
-        without.crop(centre).convert("RGB"), with_mark.crop(centre).convert("RGB")
-    )
-    assert changed.getbbox() is not None
-
-
-def _render_first_page(path: Path) -> Image.Image:
-    pd = pdfium.PdfDocument(path)
-    try:
-        return pd[0].render(scale=1).to_pil().convert("RGB")
-    finally:
-        pd.close()
+    reference = base64.b64encode(original.read_bytes()).decode("ascii")
+    record("watermark_drawn_pdfium", out, reference=reference)
 
 
 def test_round_trip_background(open_copy: Opener, tmp_path: Path) -> None:

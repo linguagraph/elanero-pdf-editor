@@ -12,8 +12,6 @@ import shutil
 from pathlib import Path
 from xml.etree.ElementTree import ParseError
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.actions import comments
@@ -45,6 +43,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.services.xfdf import export_xfdf
 from tests.actions.conftest import Opener, pretend_signed
+from tests.hostcheck import record
 
 # One minimal value per action; the Busy test in test_registry.py runs each one.
 BUSY_CASES: dict[str, object] = {
@@ -129,14 +128,9 @@ def assert_same(actual: list[tuple[object, ...]], expected: list[tuple[object, .
 
 def assert_reads_everywhere(path: Path, pages: int) -> None:
     """The saved file opens in pikepdf and renders page 1 in pypdfium2."""
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == pages
-    pd = pdfium.PdfDocument(path)
-    try:
-        assert len(pd) == pages
-        assert pd[0].render(scale=0.5).to_pil().size[0] > 0
-    finally:
-        pd.close()
+    record("page_count_pikepdf", path, pages=pages)
+    record("page_count_pdfium", path, pages=pages)
+    record("render_first_page_pdfium", path)
 
 
 def reopen(path: Path) -> DocumentSession:
@@ -480,9 +474,7 @@ def test_undo_redo_cycles_keep_the_restored_comment_addressable(
     assert edited.name.startswith("pdfeditor-") and not is_synthetic_name(edited.name)
     assert_reads_everywhere(path, reopened.page_count)
     close(reopened)
-    with pikepdf.open(path) as pdf:
-        nm = [str(x.NM) for x in pdf.pages[0].Annots if x.get("/NM") is not None]
-    assert not any(n.startswith("#") for n in nm)
+    record("no_prefixed_names_pikepdf", path, prefix="#")
 
 
 def test_undo_redo_of_a_delete_with_a_reply_keeps_both_linked(open_copy: Opener) -> None:
@@ -526,9 +518,7 @@ def test_xfdf_round_trip_of_unnamed_comments_writes_no_backend_names(
 
     out = tmp_path / "imported.pdf"
     dst.save(out)  # the open_copy session is closed by its fixture
-    with pikepdf.open(out) as pdf:
-        nm = [str(x.NM) for pg in pdf.pages for x in pg.get("/Annots", []) if x.get("/NM")]
-    assert nm and not any(n.startswith("#") for n in nm)
+    record("names_present_none_prefixed_pikepdf", out, prefix="#")
     assert_reads_everywhere(out, 2)
 
 
@@ -628,12 +618,7 @@ def test_full_save_gives_every_comment_a_real_name_in_the_file(
     s = open_copy("annotations_unnamed")
     out = tmp_path / "named.pdf"
     s.save(out)
-    with pikepdf.open(out) as pdf:
-        annots = [a for a in pdf.pages[0].Annots if a.get("/Subtype") != "/Popup"]
-        nm = [str(a.NM) for a in annots if a.get("/NM") is not None]
-        assert len(nm) == len(annots) == 3
-        assert not any(n.startswith("#") for n in nm)
-        assert len(set(nm)) == 3
+    record("comment_names_unique_pikepdf", out, count=3, avoid_prefix="#")
     assert_reads_everywhere(out, s.page_count)
 
 
@@ -657,15 +642,16 @@ def test_incremental_save_adds_no_names(open_copy: Opener, monkeypatch: pytest.M
     before = s.path.read_bytes()
     s.save()
     assert s.path.read_bytes().startswith(before)  # appended, not rewritten
-    with pikepdf.open(s.path) as pdf:
-        annots = [a for a in pdf.pages[0].Annots if a.get("/Subtype") != "/Popup"]
-        assert all(a.get("/NM") is None for a in annots)
+    record("comments_lack_names_pikepdf", s.path)
     with s.lock:
         assert all(a.name.startswith("#") for a in s.document.page(0).annotations())
 
 
 def test_literal_hash_name_from_a_file_stays_addressable(fixture_pdf, tmp_path: Path) -> None:
     """A file whose /NM is literally "#123" keeps that name: find() checks /NM first."""
+    # Host-only: the fixture is made by rewriting a copy with pikepdf, which the Pyodide run lacks.
+    import pikepdf
+
     path = tmp_path / "literal.pdf"
     shutil.copy2(fixture_pdf("annotations_unnamed"), path)
     with pikepdf.open(path, allow_overwriting_input=True) as pdf:
@@ -863,7 +849,5 @@ def test_round_trip_comment_edits(open_copy: Opener, tmp_path: Path) -> None:
         kept_on_page = len(names)
     finally:
         close(reopened)
-    with pikepdf.open(out) as pdf:
-        annots = [a for a in pdf.pages[0].obj.get("/Annots", []) if a.get("/Subtype") != "/Popup"]
-    assert len(annots) == kept_on_page
+    record("comment_count_pikepdf", out, count=kept_on_page)
     assert_reads_everywhere(out, s.page_count)
