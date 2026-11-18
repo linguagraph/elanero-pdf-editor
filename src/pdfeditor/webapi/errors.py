@@ -94,7 +94,6 @@ UNUSED_CODES: frozenset[str] = frozenset(
         REFUSED,
         BUSY,
         STALE_OBJECT,
-        STALE_CURSOR,
         STALE_JOB,
         CANCELLED,
         IMAGE_TOO_LARGE,
