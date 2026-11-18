@@ -22,7 +22,6 @@ from pdfeditor.core.commands.snapshot import SnapshotStore
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Document, Engine, PasswordCallback, SaveError, SaveOptions
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
-from pdfeditor.model.metadata import EncryptionMethod
 
 log = logging.getLogger(__name__)
 _ids = itertools.count(1)
@@ -275,14 +274,17 @@ class DocumentSession:
     def _garbage_level(self) -> int:
         return 4 if self.require_full_save else 3
 
-    def save_bytes(self, mode: Literal["in_place", "copy"] = "in_place") -> SaveBytes:
+    def save_bytes(
+        self, mode: Literal["in_place", "copy"] = "in_place", *, password: str | None = None
+    ) -> SaveBytes:
         """The document as bytes, for a caller that writes the file itself (the web).
 
         ``"copy"`` is always a full rewrite, as Save As. ``"in_place"`` makes the same decision
         as :meth:`save` over the document's own file: a signed document gets an incremental
         update that keeps its signatures, and it raises SaveError when that can't be made,
         rather than falling back to a rewrite that would break the signatures. The bytes are
-        opened again before they're returned; a failed check raises SaveError.
+        opened again before they're returned, with ``password`` for an encrypted document; a
+        failed check raises SaveError, so unverified bytes are never returned.
 
         This is a read: it clears neither ``require_full_save`` nor the clean state, sets no file
         stamp and emits no SAVED. A caller that has written the bytes to a file decides that.
@@ -313,18 +315,15 @@ class DocumentSession:
                 options = SaveOptions(incremental=False, garbage=self._garbage_level())
                 doc.prepare_full_save(options)  # the same preparation as save()
                 data = doc.to_bytes(options)
-            self._verify_bytes(data, doc.page_count)
+            self._verify_bytes(data, doc.page_count, password)
         log.info("saved %d bytes%s", len(data), " (incremental)" if incremental else "")
         return SaveBytes(data=data, incremental=incremental)
 
-    def _verify_bytes(self, data: bytes, pages: int) -> None:
-        """Open the bytes again and compare the page count. An encrypted document would need its
-        password, which the session doesn't keep, so only the page count is checked for it
-        (the engine's own save check still covers it)."""
-        if self.document.info().encryption is not EncryptionMethod.NONE:
-            return
+    def _verify_bytes(self, data: bytes, pages: int, password: str | None) -> None:
+        """Open the bytes again and compare the page count. An encrypted document is opened with
+        the password its caller holds; if that fails, the bytes are refused, never returned."""
         try:
-            reopened = self.engine.open(data)
+            reopened = self.engine.open(data, password)
         except Exception as exc:
             raise SaveError(f"saved bytes cannot be reopened: {exc}") from exc
         try:

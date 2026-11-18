@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pdfeditor.webapi import actions, dto, render, session, text
+from pdfeditor.webapi import actions, dto, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 
@@ -53,6 +53,7 @@ METHODS: dict[str, Method] = {
     "actions.undo": Method(dto.HandleParams, actions.undo),
     "actions.redo": Method(dto.HandleParams, actions.redo),
     "actions.available": Method(dto.HandleParams, actions.available),
+    "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
 }
 
 

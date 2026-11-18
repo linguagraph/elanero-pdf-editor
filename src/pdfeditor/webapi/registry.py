@@ -43,6 +43,14 @@ class DocumentRegistry:
             raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
         return entry.session
 
+    def password(self, handle: str) -> str | None:
+        """The open password of a document, for the engine to reopen what it saves. The caller
+        must not put it in a reply, a log or an error."""
+        entry = self._entries.get(handle)
+        if entry is None or entry.session.closed:
+            raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
+        return entry.password
+
     def close(self, handle: str) -> None:
         """Forget the handle and its password first, then close the document."""
         entry = self._entries.pop(handle, None)
