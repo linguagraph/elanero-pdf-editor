@@ -331,7 +331,8 @@ def test_a_job_result_over_the_limit_is_refused_and_nothing_is_applied(
     assert err["details"] == {"max_bytes": 100, "size": 101}
     doc_session = REGISTRY.get(handle)
     assert doc_session.busy == "document.sanitize"  # still prepared, not applied
-    assert ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]})) == {}
+    aborted = ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]}))
+    assert aborted["state"]["busy"] == ""
     assert doc_session.busy == ""
 
 

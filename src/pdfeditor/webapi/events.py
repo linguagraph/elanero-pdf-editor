@@ -69,8 +69,10 @@ def events_for(
 
     A call that changed content gives a ``changed`` event (its change list and the new revision
     of each page as strings, and ``structure_version`` in ``state``) and then a ``state`` event.
-    ``session.close`` gives ``closed``. A read-only call gives none. Failures carry no events:
-    the error envelope is unchanged, and a refused edit is reported by its BUSY error.
+    ``session.close`` gives ``closed``. A job call that changed the busy flag (jobs.prepare of a
+    mutating job, jobs.abort that ended one) gives ``state`` alone. A read-only call gives none.
+    Failures carry no events: the error envelope is unchanged, and a refused edit is reported by
+    its BUSY error.
     Bytes in an event are appended to ``out``, the reply's buffers.
     """
     handle = getattr(params, "handle", None)
@@ -78,6 +80,11 @@ def events_for(
         return []
     if method == "session.close":
         return [{"kind": "closed", "handle": handle}]
+    if isinstance(result, dto.JobPrepareResult | dto.JobAbortResult):
+        # A job call gives a state event only when it changed the busy flag (its state is set).
+        if result.state is None:
+            return []
+        return [{"kind": "state", "handle": handle, "state": to_json(result.state, out)}]
     if isinstance(result, dto.MarkSavedResult):
         # Only a call that cleared the flag says so; a clean document gives no event.
         if not result.saved:

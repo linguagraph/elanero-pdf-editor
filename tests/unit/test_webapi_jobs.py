@@ -212,7 +212,7 @@ def test_a_later_prepare_forgets_an_unapplied_read_only_job(web: None, fixture_p
     first, _ = prepare(handle, "reduce_size", {"preset": "screen"})
     second, _ = prepare(handle, "reduce_size", {"preset": "print"})
     assert error(apply(handle, first["token"]))["code"] == STALE_JOB
-    assert ok(call("jobs.abort", {"handle": handle, "token": second["token"]})) == {}
+    assert ok(call("jobs.abort", {"handle": handle, "token": second["token"]})) == {"state": None}
 
 
 def test_a_prepare_refuses_while_a_mutating_job_is_prepared(web: None, fixture_pdf: Any) -> None:
@@ -227,7 +227,8 @@ def test_a_prepare_refuses_while_a_mutating_job_is_prepared(web: None, fixture_p
     )
     assert err["code"] == BUSY
     assert err["details"] == {"task": SANITIZE}
-    assert ok(call("jobs.abort", {"handle": handle, "token": mutating["token"]})) == {}
+    state = ok(call("jobs.abort", {"handle": handle, "token": mutating["token"]}))["state"]
+    assert state["busy"] == ""
 
 
 def test_an_encrypted_document_gives_a_decrypted_copy_and_no_password(
@@ -348,7 +349,8 @@ def test_a_cancelled_mutating_job_is_aborted_and_leaves_the_document_alone(
     reply, _ = run_job("action", sanitize_args(), copy, cancel=token)
     assert error(reply)["code"] == CANCELLED
     assert session.busy == SANITIZE  # still prepared until the client aborts it
-    assert ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]})) == {}
+    state = ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]}))["state"]
+    assert state["busy"] == ""
     assert session.busy == ""
     assert session.structure_version == before
     assert session.undo_stack.can_undo is False
@@ -360,8 +362,9 @@ def test_abort_is_idempotent_and_an_unknown_token_is_stale(web: None, fixture_pd
     handle = open_data(fixture_pdf("images").read_bytes())
     session = REGISTRY.get(handle)
     prepared, _ = prepare(handle, "action", sanitize_args())
-    assert ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]})) == {}
-    assert ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]})) == {}
+    state = ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]}))["state"]
+    assert state["busy"] == ""
+    assert ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]})) == {"state": None}
     assert session.busy == ""
     assert error(call("jobs.abort", {"handle": handle, "token": UNKNOWN_TOKEN}))["code"] == (
         STALE_JOB
@@ -375,7 +378,10 @@ def test_a_mutating_apply_needs_its_document(web: None, fixture_pdf: Any) -> Non
     err = error(apply(handle, prepared["token"], None, SANITIZE_LABEL))
     assert err["code"] == INVALID_ARGS
     assert err["details"]["path"] == "params.document"
-    assert ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]})) == {}
+    assert (
+        ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]}))["state"]["busy"]
+        == ""
+    )
 
 
 # -- errors -----------------------------------------------------------------------------------

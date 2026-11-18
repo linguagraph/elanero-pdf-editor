@@ -8,15 +8,17 @@ has no events. The helpers are the ones of the actions tests.
 
 from __future__ import annotations
 
+import ast
 import json
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from pdfeditor.model import platform as model_platform
-from pdfeditor.webapi import dispatch
-from pdfeditor.webapi.errors import BUSY, NO_DOCUMENT, STALE_OBJECT
+from pdfeditor.webapi import dispatch, jobs
+from pdfeditor.webapi.errors import BUSY, NO_DOCUMENT, REFUSED, STALE_OBJECT
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.unit.test_webapi_actions import (
@@ -31,6 +33,7 @@ from tests.unit.test_webapi_actions import (
     rotate,
     undo,
 )
+from tests.unit.test_webapi_jobs import SANITIZE, open_data, sanitize_args
 
 
 @pytest.fixture
@@ -40,6 +43,7 @@ def web() -> Iterator[None]:
     try:
         yield
     finally:
+        jobs.PREPARED.clear()
         REGISTRY.close_all()
         model_platform.configure(previous)
 
@@ -260,3 +264,103 @@ def test_read_only_calls_after_a_save_emit_no_saved_event(web: None, fixture_pdf
         ok(reply)
         assert reply["events"] == [], method
     assert REGISTRY.get(handle).is_dirty is True
+
+
+# -- the busy flag of the jobs calls (W3.5) -------------------------------------------------------
+
+
+def prepare_job(handle: str, job: str, args: dict[str, Any]) -> dict[str, Any]:
+    return call("jobs.prepare", {"handle": handle, "job": job, "args": args})
+
+
+def test_a_mutating_prepare_gives_a_busy_state_event(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes())
+    reply = prepare_job(handle, "action", sanitize_args())
+    result = ok(reply)
+    assert result["mutating"] is True
+    assert [event["kind"] for event in reply["events"]] == ["state"]
+    state = reply["events"][0]
+    assert state["handle"] == handle
+    assert state["state"]["busy"] == SANITIZE
+    assert state["state"] == result["state"]  # the same DTO as the result's own field
+    assert REGISTRY.get(handle).busy == SANITIZE
+    assert ok(call("jobs.abort", {"handle": handle, "token": result["token"]}))["state"]
+
+
+def test_a_read_only_prepare_gives_no_state_event(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes())
+    reply = prepare_job(handle, "reduce_size", {"preset": "screen"})
+    result = ok(reply)
+    assert result["mutating"] is False
+    assert reply["events"] == []
+    assert result["state"] is None
+    assert REGISTRY.get(handle).busy == ""
+    token = result["token"]
+    assert ok(call("jobs.abort", {"handle": handle, "token": token}))["state"] is None
+
+
+def test_aborting_a_mutating_job_gives_a_clear_busy_state_event(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes())
+    token = ok(prepare_job(handle, "action", sanitize_args()))["token"]
+    reply = call("jobs.abort", {"handle": handle, "token": token})
+    assert ok(reply)["state"]["busy"] == ""
+    assert [event["kind"] for event in reply["events"]] == ["state"]
+    assert reply["events"][0]["handle"] == handle
+    assert reply["events"][0]["state"]["busy"] == ""
+    assert reply["events"][0]["state"] == ok(reply)["state"]
+    assert REGISTRY.get(handle).busy == ""
+
+
+def test_a_repeated_abort_gives_no_event(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes())
+    token = ok(prepare_job(handle, "action", sanitize_args()))["token"]
+    ok(call("jobs.abort", {"handle": handle, "token": token}))
+    reply = call("jobs.abort", {"handle": handle, "token": token})
+    assert ok(reply) == {"state": None}
+    assert reply["events"] == []
+
+
+def test_a_refused_prepare_on_an_encrypted_document_gives_no_event(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    session = REGISTRY.get(handle)
+    before = (
+        session.busy,
+        session.undo_stack.can_undo,
+        session.structure_version,
+        session.is_dirty,
+    )
+    reply = prepare_job(handle, "action", sanitize_args())
+    assert error(reply)["code"] == REFUSED
+    assert "events" not in reply  # a failure keeps the error envelope
+    assert len(jobs.PREPARED) == 0
+    assert (
+        session.busy,
+        session.undo_stack.can_undo,
+        session.structure_version,
+        session.is_dirty,
+    ) == before
+
+
+def test_the_job_event_modules_import_no_pikepdf_or_pypdfium2_at_module_level() -> None:
+    # The web worker runs these modules in Pyodide, where those packages are not installed.
+    root = Path(__file__).resolve().parents[2]
+    for rel in (
+        "src/pdfeditor/webapi/events.py",
+        "src/pdfeditor/webapi/jobs.py",
+        "tests/unit/test_webapi_events.py",
+    ):
+        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            else:
+                continue
+            for name in names:
+                top = name.split(".")[0]
+                assert top not in {"pikepdf", "pypdfium2"}, (rel, name)
