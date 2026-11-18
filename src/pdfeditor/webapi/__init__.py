@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from pdfeditor.webapi import actions, dto, render, save, session, text
+from pdfeditor.webapi import actions, dto, jobs, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 
@@ -54,11 +54,19 @@ METHODS: dict[str, Method] = {
     "actions.redo": Method(dto.HandleParams, actions.redo),
     "actions.available": Method(dto.HandleParams, actions.available),
     "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
+    "jobs.prepare": Method(dto.JobPrepareParams, jobs.prepare, takes_buffers=True),
+    "jobs.apply": Method(dto.JobApplyParams, jobs.apply),
+    "jobs.abort": Method(dto.JobAbortParams, jobs.abort),
 }
 
 
-def dispatch(request_json: str, buffers: list[bytes]) -> tuple[str, list[bytes]]:
+def dispatch(
+    request_json: str, buffers: list[bytes], methods: Mapping[str, Method] = METHODS
+) -> tuple[str, list[bytes]]:
     """Handle one request. Returns the reply JSON and the reply's buffers, in ``$bin`` order.
+
+    ``methods`` is the table of this worker: the engine's by default, the job worker's own in
+    :mod:`pdfeditor.webapi.jobworker`.
 
     Never raises: a malformed envelope, an unknown method, bad arguments, a document error or a
     bug all come back as a failure reply (``"ok": false`` with ``error``).
@@ -68,7 +76,7 @@ def dispatch(request_json: str, buffers: list[bytes]) -> tuple[str, list[bytes]]
         data = _load(request_json)
         if isinstance(data, dict) and _is_id(data.get("id")):
             request_id = data["id"]  # echoed even in a failure about the rest of the envelope
-        reply, out = _run(data, buffers)
+        reply, out = _run(data, buffers, methods)
     except Exception as exc:  # every failure becomes a reply; the worker must not die of one
         failure = failure_for(exc)
         reply = {
@@ -98,7 +106,9 @@ def _reject_constant(name: str) -> object:
     raise ValueError(f"{name} is not allowed in JSON")
 
 
-def _run(data: object, buffers: list[bytes]) -> tuple[dict[str, object], list[bytes]]:
+def _run(
+    data: object, buffers: list[bytes], methods: Mapping[str, Method]
+) -> tuple[dict[str, object], list[bytes]]:
     if not isinstance(data, dict) or set(data) != _ENVELOPE_KEYS:
         raise RpcFailure(INVALID_REQUEST, "the request needs exactly v, id, method and params")
     version = data["v"]
@@ -114,7 +124,7 @@ def _run(data: object, buffers: list[bytes]) -> tuple[dict[str, object], list[by
         raise RpcFailure(INVALID_REQUEST, "id must be an integer and method a string")
     if not isinstance(params, dict):
         raise RpcFailure(INVALID_REQUEST, "params must be an object")
-    method = METHODS.get(method_name)
+    method = methods.get(method_name)
     if method is None:
         raise RpcFailure(INVALID_REQUEST, "unknown method")
 

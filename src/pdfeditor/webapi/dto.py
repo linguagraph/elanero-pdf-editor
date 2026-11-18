@@ -306,6 +306,85 @@ class AvailableResult:
     names: tuple[str, ...]  # the actions whose capabilities hold on this document and platform
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobPrepareParams:
+    handle: str
+    job: str  # a job type name (W1.2 section 13), such as "action" or "reduce_size"
+    args: JsonObject  # the job's arguments, converted by the job type
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobPrepareResult:
+    token: str  # the job id: single-use, given back to jobs.apply or jobs.abort
+    label: str  # the task label of a mutating job (its busy label); the job type name otherwise
+    mutating: bool  # True when the document is read-only until the job is applied or aborted
+    document: bytes  # a copy of the document, for the job worker; decrypted when the source is
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobApplyParams:
+    handle: str
+    token: str
+    document: bytes | None  # the job's result document; required for a mutating job
+    label: str  # the undo label of the step (the job's result label)
+    require_full_save: bool  # a flag the job reports; ORed into the session, never cleared
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobApplyResult:
+    applied: bool  # False for a read-only job, whose result never touches the session
+    changed: ChangedDto | None
+    state: DocStateDto
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobAbortParams:
+    handle: str
+    token: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobRunParams:
+    job: str
+    args: JsonObject
+    document: bytes  # the copy from jobs.prepare (always readable without a password)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FileDto:
+    name: str
+    mime: str
+    data: bytes
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobRunResult:
+    kind: str  # "document" (a mutating job, applied with jobs.apply) or "files" (read-only)
+    label: str  # the undo label of the step; "" for a read-only job
+    require_full_save: bool
+    document: bytes | None  # the result document of a mutating job
+    files: tuple[FileDto, ...]  # the outputs of a read-only job
+    value: object  # the job's own result, converted as in section 6
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ActionJobArgs:
+    name: str  # a long-running action (W1.3 "long"); its arguments are converted by its dataclass
+    args: JsonObject
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ReduceSizeArgs:
+    preset: str  # a key of the size presets: "screen", "ebook", "print" or "lossless"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ReduceSizeValue:
+    before: int
+    after: int
+    notes: tuple[str, ...]
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 

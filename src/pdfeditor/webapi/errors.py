@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from pdfeditor.actions.base import ActionError, Busy, NotSupported, Refused, StaleObject
+from pdfeditor.core.jobs import Cancelled
 from pdfeditor.engine.base import (
     EngineError,
     OpenError,
@@ -87,13 +88,12 @@ ALL_CODES: tuple[str, ...] = (
     INTERNAL,
 )
 
-# Declared by W1.2 but not raised yet. Each is raised by a later group (jobs, fonts and
-# translation calls), so the tests check this list against the codes the code can raise and
-# nothing else. REFUSED, BUSY and STALE_OBJECT are raised by the actions calls (W3.5).
+# Declared by W1.2 but not raised yet. Each is raised by a later group (fonts and translation
+# calls), so the tests check this list against the codes the code can raise and nothing else.
+# REFUSED, BUSY and STALE_OBJECT are raised by the actions calls (W3.5); STALE_JOB and CANCELLED
+# by the jobs calls (W3.7).
 UNUSED_CODES: frozenset[str] = frozenset(
     {
-        STALE_JOB,
-        CANCELLED,
         IMAGE_TOO_LARGE,
         INVALID_FONT,
         FONT_NOT_EMBEDDABLE,
@@ -127,6 +127,7 @@ _MAPPING: tuple[tuple[type[BaseException], str], ...] = (
     (SaveError, SAVE_FAILED),
     (UnsupportedFeature, NOT_SUPPORTED),
     (Refused, REFUSED),
+    (Cancelled, CANCELLED),
     (Busy, BUSY),
     (StaleObject, STALE_OBJECT),
     (NotSupported, NOT_SUPPORTED),
