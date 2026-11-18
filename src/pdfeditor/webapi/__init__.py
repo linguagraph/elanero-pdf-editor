@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pdfeditor.webapi import dto, session, text
+from pdfeditor.webapi import dto, render, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 
@@ -45,6 +45,7 @@ METHODS: dict[str, Method] = {
     "text.layer": Method(dto.PageParams, text.text_layer),
     "text.extract": Method(dto.ExtractParams, text.extract),
     "text.search": Method(dto.SearchParams, text.search),
+    "render.page": Method(dto.RenderPageParams, render.render_page),
 }
 
 

@@ -96,7 +96,6 @@ UNUSED_CODES: frozenset[str] = frozenset(
         STALE_OBJECT,
         STALE_JOB,
         CANCELLED,
-        RENDER_TOO_LARGE,
         IMAGE_TOO_LARGE,
         INVALID_FONT,
         FONT_NOT_EMBEDDABLE,
