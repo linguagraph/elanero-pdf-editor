@@ -1,0 +1,146 @@
+// Main-thread side of the workers. It holds no PDF logic: it creates a worker, relays requests
+// and replies, and forwards stage events. Nothing here starts a worker at import time.
+import { CallError, EngineLoadError } from './errors';
+import type { CallResult } from './loader';
+import type { ErrorMessage, ReplyMessage, Stage, WorkerOutbound } from './protocol';
+
+export interface StartOptions {
+  // Absolute or same-origin URL of the worker module (engine.worker.ts or jobworker.ts, built).
+  workerUrl: string;
+  // Same-origin folder holding pyodide.mjs, the PyMuPDF wheel and pdfeditor-web.zip.
+  assetBaseUrl: string;
+}
+
+export interface WorkerClient {
+  call(request: string, buffer?: ArrayBuffer): Promise<CallResult>;
+  onStage(listener: (stage: Stage) => void): () => void;
+  terminate(): void;
+}
+
+export function startEngine(options: StartOptions): WorkerClient {
+  return startWorker(options);
+}
+
+// Starts the job worker. The app calls this only when a job is requested, never at startup.
+export function startJobWorker(options: StartOptions): WorkerClient {
+  return startWorker(options);
+}
+
+// The same origin as the page, so the page's CSP governs the worker (W1.1 section 10).
+function sameOrigin(url: string): string {
+  const resolved = new URL(url, globalThis.location.href);
+  if (resolved.origin !== globalThis.location.origin) {
+    throw new Error(`${url} is not on this origin`);
+  }
+  return resolved.href;
+}
+
+function toError(error: ErrorMessage['error']): Error {
+  return error.stage === undefined
+    ? new CallError(error.message)
+    : new EngineLoadError(error.stage, error.message);
+}
+
+interface Waiter {
+  resolve(result: CallResult): void;
+  reject(error: Error): void;
+}
+
+function startWorker(options: StartOptions): WorkerClient {
+  const workerUrl = sameOrigin(options.workerUrl);
+  const assetBase = sameOrigin(options.assetBaseUrl);
+
+  // A blob URL whose only body is an import of the same-origin module. A worker made from a
+  // blob: URL takes its creator's CSP, so the page policy applies inside it.
+  const blobUrl = URL.createObjectURL(
+    new Blob([`import "${workerUrl}";`], { type: 'text/javascript' }),
+  );
+  const worker = new Worker(blobUrl, { type: 'module' });
+
+  let blobRevoked = false;
+  const revokeBlob = (): void => {
+    if (blobRevoked) return;
+    blobRevoked = true;
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const pending = new Map<number, Waiter>();
+  const stageListeners = new Set<(stage: Stage) => void>();
+  let nextId = 1;
+  let closed = false;
+
+  const failAll = (error: Error): void => {
+    for (const waiter of pending.values()) waiter.reject(error);
+    pending.clear();
+  };
+
+  worker.addEventListener('message', (event: MessageEvent<WorkerOutbound>) => {
+    // The first message means the module has loaded, so the blob is no longer needed.
+    revokeBlob();
+    const data = event.data;
+    if ('kind' in data) {
+      for (const listener of stageListeners) listener(data.stage);
+      return;
+    }
+    const waiter = pending.get(data.id);
+    if (waiter === undefined) return;
+    pending.delete(data.id);
+    if ('error' in data) {
+      waiter.reject(toError(data.error));
+    } else {
+      const reply = data as ReplyMessage;
+      waiter.resolve(
+        reply.buffer === undefined
+          ? { reply: reply.reply }
+          : { reply: reply.reply, buffer: reply.buffer },
+      );
+    }
+  });
+
+  worker.addEventListener('error', (event: ErrorEvent) => {
+    failAll(new CallError(`the worker failed: ${event.message || 'unknown error'}`));
+  });
+
+  worker.addEventListener('messageerror', () => {
+    failAll(new CallError('the worker sent a message that could not be read'));
+  });
+
+  worker.postMessage({ kind: 'init', baseUrl: assetBase });
+
+  return {
+    call(request, buffer) {
+      if (closed) return Promise.reject(new CallError('the worker has been terminated'));
+      const id = nextId++;
+      return new Promise<CallResult>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        const message = { id, method: 'dispatch', request };
+        try {
+          if (buffer === undefined) {
+            worker.postMessage(message);
+          } else {
+            worker.postMessage({ ...message, buffer }, [buffer]);
+          }
+        } catch (error) {
+          pending.delete(id);
+          reject(error instanceof Error ? error : new CallError(String(error)));
+        }
+      });
+    },
+
+    onStage(listener) {
+      stageListeners.add(listener);
+      return () => {
+        stageListeners.delete(listener);
+      };
+    },
+
+    terminate() {
+      if (closed) return;
+      closed = true;
+      worker.terminate();
+      revokeBlob();
+      failAll(new CallError('the worker has been terminated'));
+      stageListeners.clear();
+    },
+  };
+}
