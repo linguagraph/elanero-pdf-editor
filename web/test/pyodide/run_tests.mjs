@@ -30,6 +30,13 @@ import {
   sha256,
 } from "./packages.mjs";
 
+function requireEnvFile(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set`);
+  if (!fs.existsSync(value)) throw new Error(`${name}=${value} does not exist`);
+  return path.resolve(value);
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..", "..", "..");
 const DIST = path.join(HERE, "dist");
