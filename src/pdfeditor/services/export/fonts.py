@@ -13,9 +13,6 @@ import io
 import uuid
 from collections.abc import Sequence
 
-from fontTools.ttLib import TTFont
-from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
-
 from pdfeditor.engine.base import Document
 from pdfeditor.model.fonts import BITMAP_ONLY as _BITMAP_ONLY
 from pdfeditor.model.fonts import RESTRICTED as _RESTRICTED
@@ -58,6 +55,8 @@ STYLES = ("Regular", "Bold", "Italic", "BoldItalic")
 
 def font_style(program: bytes) -> tuple[str, str] | None:
     """(family, style) of an embeddable TrueType program, else None."""
+    from fontTools.ttLib import TTFont  # lazy: the web build ships without fontTools
+
     try:
         font = TTFont(io.BytesIO(program), lazy=True)
         if not set(font.keys()) >= _REQUIRED or not font.getBestCmap():
@@ -78,6 +77,9 @@ def font_style(program: bytes) -> tuple[str, str] | None:
 def for_windows(program: bytes) -> bytes:
     """The program with the Windows-platform names and Unicode cmap Windows needs to load it.
     PDF subsets often carry only Macintosh/Unicode-platform names, or none but the family."""
+    from fontTools.ttLib import TTFont
+    from fontTools.ttLib.tables._c_m_a_p import CmapSubtable  # lazy: see font_style
+
     font = TTFont(io.BytesIO(program))
     names = font["name"]
     windows = {(r.nameID) for r in names.names if r.platformID == 3}
@@ -130,6 +132,8 @@ def embeddable_fonts(doc: Document, pages: Sequence[int]) -> dict[str, dict[str,
 
 
 def _coverage(program: bytes) -> int:
+    from fontTools.ttLib import TTFont  # lazy: see font_style
+
     return len(TTFont(io.BytesIO(program), lazy=True).getBestCmap() or {})
 
 
