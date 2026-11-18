@@ -31,6 +31,7 @@ function fakePyodide({ protocol = WEBAPI_PROTOCOL, log = [] }: FakeOptions = {})
     }),
     runPythonAsync: vi.fn(async (code: string) => {
       if (code.includes('zipfile')) log.push('unpack');
+      else if (code.includes('import pymupdf')) log.push('import pymupdf');
       else if (code.includes('_pdfeditor_call')) log.push('adapter');
       return undefined;
     }),
@@ -91,6 +92,7 @@ describe('loadEngine', () => {
     expect(pyodide.loadPackage).toHaveBeenCalledWith(`${BASE}${PYMUPDF_WHEEL_FILE}`);
     expect(log).toEqual([
       `loadPackage ${BASE}${PYMUPDF_WHEEL_FILE}`,
+      'import pymupdf',
       `fetch ${BASE}pdfeditor-web.zip`,
       'writeFile /home/pyodide/pdfeditor-web.zip',
       'unpack',
@@ -125,6 +127,25 @@ describe('loadEngine', () => {
     expect(error).toBeInstanceOf(EngineLoadError);
     expect((error as EngineLoadError).stage).toBe('packages');
     expect((error as EngineLoadError).message).toBe('network down');
+    expect(stages).toEqual(['pyodide', 'packages']);
+  });
+
+  it('fails with stage packages when the wheel loads but PyMuPDF does not import', async () => {
+    // Pyodide logs a wheel it cannot fetch and resolves anyway; the import is the real check.
+    const stages: Stage[] = [];
+    const { pyodide } = fakePyodide();
+    pyodide.runPythonAsync = vi.fn(async (code: string) => {
+      if (code.includes('import pymupdf')) throw new Error('No module named pymupdf');
+      return undefined;
+    });
+    const error = await loadEngine(
+      options({
+        onStage: (stage) => stages.push(stage),
+        importPyodide: async () => ({ loadPyodide: async () => pyodide }),
+      }),
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(EngineLoadError);
+    expect((error as EngineLoadError).stage).toBe('packages');
     expect(stages).toEqual(['pyodide', 'packages']);
   });
 

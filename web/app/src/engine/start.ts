@@ -35,6 +35,32 @@ function sameOrigin(url: string): string {
   return resolved.href;
 }
 
+// The page's CSP requires Trusted Types for scripts (csp.ts), so a worker URL must be a
+// TrustedScriptURL. The policy accepts only the blob: URL made above and nothing else. Without
+// Trusted Types (jsdom, older browsers) the plain string is used.
+let workerUrlPolicy: { createScriptURL(input: string): unknown } | undefined;
+
+// The Worker constructor takes the TrustedScriptURL that this returns. TypeScript's DOM types do
+// not declare that type, so the object is typed as the string it stands for.
+function workerScriptUrl(url: string): string {
+  const factory = (globalThis as { trustedTypes?: TrustedTypesFactory }).trustedTypes;
+  if (factory === undefined) return url;
+  workerUrlPolicy ??= factory.createPolicy('elanero-worker-url', {
+    createScriptURL(input: string) {
+      if (!input.startsWith('blob:')) throw new TypeError('the worker URL is not a blob URL');
+      return input;
+    },
+  });
+  return workerUrlPolicy.createScriptURL(url) as unknown as string;
+}
+
+interface TrustedTypesFactory {
+  createPolicy(
+    name: string,
+    rules: { createScriptURL(input: string): string },
+  ): { createScriptURL(input: string): unknown };
+}
+
 function toError(error: ErrorMessage['error']): Error {
   return error.stage === undefined
     ? new CallError(error.message)
@@ -55,7 +81,7 @@ function startWorker(options: StartOptions): WorkerClient {
   const blobUrl = URL.createObjectURL(
     new Blob([`import "${workerUrl}";`], { type: 'text/javascript' }),
   );
-  const worker = new Worker(blobUrl, { type: 'module' });
+  const worker = new Worker(workerScriptUrl(blobUrl), { type: 'module' });
 
   let blobRevoked = false;
   const revokeBlob = (): void => {

@@ -17,46 +17,18 @@
 // Writes out/pytest.xml, out/pytest-summary.json and out/run.json under web/test/pyodide/out.
 // Exit status: 1 when any test fails or errors (or none is collected), 2 when the harness fails.
 
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(HERE, "..", "..", "..");
-// web/spike holds the one versions.json and the one package.json (with node_modules).
-const SPIKE = path.resolve(HERE, "..", "..", "spike");
-const DIST = path.join(HERE, "dist");
-const PACKAGES = path.join(DIST, "packages");
-const OUT = path.join(HERE, "out");
-const VERSIONS = JSON.parse(fs.readFileSync(path.join(SPIKE, "versions.json"), "utf8"));
-const CDN = `https://cdn.jsdelivr.net/pyodide/v${VERSIONS.pyodide}/full/`;
-// The same roots as the spike. hypothesis and PyYAML are not in them: the modules that import them
-// are desktop-only or skip without yaml (tests/unit/test_user_guide.py), so the web run never does.
-const PACKAGE_ROOTS = VERSIONS.packageRoots;
-const MARK_EXPRESSION = "not desktop_only and not slow and not network";
-const WEB_ZIP_IN_PYODIDE = "/home/pyodide/pdfeditor-web.zip";
-const WEB_ROOT = "/home/pyodide";
-
-const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
-
-function checkPyodideVersion() {
-  const declared = JSON.parse(fs.readFileSync(path.join(SPIKE, "package.json"), "utf8"));
-  const installed = JSON.parse(
-    fs.readFileSync(path.join(SPIKE, "node_modules", "pyodide", "package.json"), "utf8"),
-  );
-  const pins = [
-    ["web/spike/package.json devDependencies.pyodide", declared.devDependencies?.pyodide],
-    ["web/spike/node_modules/pyodide", installed.version],
-  ];
-  for (const [where, version] of pins) {
-    if (version !== VERSIONS.pyodide) {
-      throw new Error(
-        `${where} is ${version}, versions.json says ${VERSIONS.pyodide}: bump both together, then npm ci`,
-      );
-    }
-  }
-}
+import {
+  SPIKE,
+  VERSIONS,
+  checkPyodideVersion,
+  closure,
+  fetchVerified,
+  lockfile,
+  sha256,
+} from "./packages.mjs";
 
 function requireEnvFile(name) {
   const value = process.env[name];
@@ -65,36 +37,17 @@ function requireEnvFile(name) {
   return path.resolve(value);
 }
 
-function lockfile() {
-  return JSON.parse(
-    fs.readFileSync(path.join(SPIKE, "node_modules", "pyodide", "pyodide-lock.json"), "utf8"),
-  );
-}
-
-// Every package the roots need, transitively, as the lockfile records it.
-function closure(lock, roots) {
-  const seen = new Set();
-  const todo = [...roots];
-  while (todo.length > 0) {
-    const name = todo.pop();
-    if (seen.has(name)) continue;
-    const pkg = lock.packages[name];
-    if (!pkg) throw new Error(`${name} is not in pyodide-lock.json`);
-    seen.add(name);
-    todo.push(...(pkg.depends ?? []));
-  }
-  return [...seen].sort();
-}
-
-async function fetchVerified(name, pkg, dest) {
-  if (fs.existsSync(dest) && sha256(fs.readFileSync(dest)) === pkg.sha256) return "cached";
-  const res = await fetch(CDN + pkg.file_name);
-  if (!res.ok) throw new Error(`GET ${CDN}${pkg.file_name}: HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (sha256(buf) !== pkg.sha256) throw new Error(`sha256 mismatch for ${name} (${pkg.file_name})`);
-  fs.writeFileSync(dest, buf);
-  return "downloaded";
-}
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, "..", "..", "..");
+const DIST = path.join(HERE, "dist");
+const PACKAGES = path.join(DIST, "packages");
+const OUT = path.join(HERE, "out");
+// The same roots as the spike. hypothesis and PyYAML are not in them: the modules that import them
+// are desktop-only or skip without yaml (tests/unit/test_user_guide.py), so the web run never does.
+const PACKAGE_ROOTS = VERSIONS.packageRoots;
+const MARK_EXPRESSION = "not desktop_only and not slow and not network";
+const WEB_ZIP_IN_PYODIDE = "/home/pyodide/pdfeditor-web.zip";
+const WEB_ROOT = "/home/pyodide";
 
 // The Python that runs inside Pyodide. Returns JSON for the Node side to record.
 const PY_RUN = `
