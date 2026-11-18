@@ -264,19 +264,22 @@ def test_a_search_stops_at_the_hit_limit_and_names_the_next_slice(
 def test_the_save_limit_is_inclusive(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Two saves of the same document are not byte-stable (W3.6), so the size is read back from
+    # the refusal itself rather than assumed from an earlier save.
     handle = open_fixture(fixture_pdf, "text_multipage")
-    reply, _ = save(handle, "copy")
-    size = ok(reply)["size"]
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size)
-    reply, out = save(handle, "copy")
-    assert ok(reply)["size"] == size
-    assert len(out) == 1
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
-    reply, out = save(handle, "copy")
-    err = error(reply)
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", 1)
+    err = error(save(handle, "copy")[0])
     assert err["code"] == FILE_TOO_LARGE
-    assert err["details"] == {"max_bytes": size - 1, "size": size}
-    assert out == []
+    size = err["details"]["size"]
+    assert err["details"] == {"max_bytes": 1, "size": size}
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
+    err = error(save(handle, "copy")[0])
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"]["max_bytes"] == size - 1
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", err["details"]["size"])
+    reply, out = save(handle, "copy")
+    assert ok(reply)["size"] == len(out[0])
+    assert len(out) == 1
 
 
 # -- job bytes (jobs.prepare and jobs.apply) --------------------------------------------------
@@ -285,23 +288,25 @@ def test_the_save_limit_is_inclusive(
 def test_the_job_limit_is_inclusive_at_prepare(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The job's bytes are not byte-stable between prepares (as for save), so the size is read
+    # back from the refusal rather than assumed from an earlier prepare.
     handle = open_fixture(fixture_pdf, "images")
-    reply, out = call_raw(
-        "jobs.prepare", {"handle": handle, "job": "reduce_size", "args": {"preset": "ebook"}}
-    )
-    size = len(out[ok(reply)["document"]["$bin"]])
-    jobs.PREPARED.clear()
-    monkeypatch.setattr(limits, "MAX_JOB_BYTES", size)
-    assert "token" in ok(
-        call("jobs.prepare", {"handle": handle, "job": "reduce_size", "args": {"preset": "ebook"}})
-    )
-    jobs.PREPARED.clear()
+
+    def prepare() -> dict[str, Any]:
+        return call(
+            "jobs.prepare", {"handle": handle, "job": "reduce_size", "args": {"preset": "ebook"}}
+        )
+
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", 1)
+    err = error(prepare())
+    assert err["code"] == FILE_TOO_LARGE
+    size = err["details"]["size"]
     monkeypatch.setattr(limits, "MAX_JOB_BYTES", size - 1)
-    err = error(
-        call("jobs.prepare", {"handle": handle, "job": "reduce_size", "args": {"preset": "ebook"}})
-    )
+    err = error(prepare())
     assert err["code"] == FILE_TOO_LARGE
     assert err["details"] == {"max_bytes": size - 1, "size": size}
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", err["details"]["size"])
+    assert "token" in ok(prepare())
 
 
 def test_a_job_result_over_the_limit_is_refused_and_nothing_is_applied(

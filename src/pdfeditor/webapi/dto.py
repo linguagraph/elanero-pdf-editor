@@ -214,6 +214,21 @@ class RenderPageParams:
     annotations: bool  # draw comments into the image (W1.4 section 4)
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class RenderTileParams:
+    """``render.tile`` (W1.4 section 13): the ``render.page`` fields plus one grid tile."""
+
+    handle: str
+    page: int
+    revision: int
+    scale_milli: int
+    rotation: int
+    annotations: bool
+    tile_x: int  # 0-based column of the tile in the page's device-pixel grid
+    tile_y: int  # 0-based row
+    tile_px: int  # tile edge in device pixels; W1.4 section 4 fixes it at 1024
+
+
 class SaveMode(Enum):
     """W1.1 section 4: ``in_place`` keeps signatures (incremental when signed); ``copy`` is a full
     rewrite, as Save As."""
