@@ -12,7 +12,6 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from fontTools.ttLib import TTFont
 from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
@@ -105,6 +104,8 @@ _PLAIN_STYLES = {"regular", "normal", "roman", "book", "plain"}
 def embedded_font_name(program: bytes) -> str | None:
     """``"Segoe UI-Bold"`` from a TrueType/OpenType program's name table (legacy family, the
     name Word and other apps look fonts up by); None if the program can't be read."""
+    from fontTools.ttLib import TTFont  # lazy: the web build ships without fontTools
+
     try:
         names = TTFont(io.BytesIO(program), lazy=True)["name"]
         family = names.getDebugName(1)
