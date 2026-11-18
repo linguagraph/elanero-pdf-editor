@@ -12,10 +12,12 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Iterator
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from pdfeditor.core.session import DocumentSession
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs, limits, session
 from pdfeditor.webapi.errors import (
@@ -264,25 +266,22 @@ def test_a_search_stops_at_the_hit_limit_and_names_the_next_slice(
 def test_the_save_limit_is_inclusive(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Two saves of the same document are not byte-stable (W3.6), so the size is read back from
-    # the refusal itself rather than assumed from an earlier save.
+    # The core's output size varies slightly between saves of one document (W3.6, and under
+    # Pyodide), so the boundary is checked on a fixed-size stub rather than on real saves.
     handle = open_fixture(fixture_pdf, "text_multipage")
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", 1)
-    err = error(save(handle, "copy")[0])
-    assert err["code"] == FILE_TOO_LARGE
-    size = err["details"]["size"]
-    assert err["details"] == {"max_bytes": 1, "size": size}
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
-    err = error(save(handle, "copy")[0])
-    assert err["code"] == FILE_TOO_LARGE
-    assert err["details"]["max_bytes"] == size - 1
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", err["details"]["size"])
+    size = 4096
+    stub = SimpleNamespace(data=b"x" * size, incremental=False)
+    monkeypatch.setattr(DocumentSession, "save_bytes", lambda self, mode, password=None: stub)
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size)
     reply, out = save(handle, "copy")
-    assert ok(reply)["size"] == len(out[0])
+    assert ok(reply)["size"] == size
     assert len(out) == 1
-
-
-# -- job bytes (jobs.prepare and jobs.apply) --------------------------------------------------
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
+    reply, out = save(handle, "copy")
+    err = error(reply)
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"] == {"max_bytes": size - 1, "size": size}
+    assert out == []
 
 
 def test_the_job_limit_is_inclusive_at_prepare(
