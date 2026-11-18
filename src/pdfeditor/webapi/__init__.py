@@ -54,7 +54,7 @@ def dispatch(request_json: str, buffers: list[bytes]) -> tuple[str, list[bytes]]
     request_id: object = None
     try:
         data = _load(request_json)
-        if isinstance(data, dict) and isinstance(data.get("id"), str):
+        if isinstance(data, dict) and _is_id(data.get("id")):
             request_id = data["id"]  # echoed even in a failure about the rest of the envelope
         reply, out = _run(data, buffers)
     except Exception as exc:  # every failure becomes a reply; the worker must not die of one
@@ -76,6 +76,11 @@ def _load(request_json: str) -> object:
         raise RpcFailure(INVALID_REQUEST, "the request is not valid JSON") from exc
 
 
+def _is_id(value: object) -> bool:
+    # An integer; bool is an int subclass, so it is excluded by type.
+    return type(value) is int
+
+
 def _reject_constant(name: str) -> object:
     raise ValueError(f"{name} is not allowed in JSON")
 
@@ -92,8 +97,8 @@ def _run(data: object, buffers: list[bytes]) -> tuple[dict[str, object], list[by
     request_id = data["id"]
     method_name = data["method"]
     params = data["params"]
-    if not isinstance(request_id, str) or not isinstance(method_name, str):
-        raise RpcFailure(INVALID_REQUEST, "id and method must be strings")
+    if not _is_id(request_id) or not isinstance(method_name, str):
+        raise RpcFailure(INVALID_REQUEST, "id must be an integer and method a string")
     if not isinstance(params, dict):
         raise RpcFailure(INVALID_REQUEST, "params must be an object")
     method = METHODS.get(method_name)

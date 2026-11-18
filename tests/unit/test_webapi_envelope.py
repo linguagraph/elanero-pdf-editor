@@ -41,7 +41,7 @@ def echo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(METHODS, "two", Method(TwoBuffers, lambda p: p))
 
 
-def _request(method: str, params: object, *, request_id: str = "7", version: object = 1) -> str:
+def _request(method: str, params: object, *, request_id: object = 7, version: object = 1) -> str:
     return json.dumps({"v": version, "id": request_id, "method": method, "params": params})
 
 
@@ -54,7 +54,7 @@ def test_hello_round_trip() -> None:
     reply, out = _reply(_request("hello", {}))
     assert reply == {
         "v": 1,
-        "id": "7",
+        "id": 7,
         "ok": True,
         "result": {"protocol": 1, "engine": "mupdf", "platform": "web"},
     }
@@ -62,8 +62,8 @@ def test_hello_round_trip() -> None:
 
 
 def test_reply_echoes_the_request_id() -> None:
-    reply, _ = _reply(_request("hello", {}, request_id="abc-42"))
-    assert reply["id"] == "abc-42"
+    reply, _ = _reply(_request("hello", {}, request_id=42))
+    assert reply["id"] == 42
 
 
 def test_bytes_round_trip_through_buffers(echo: None) -> None:
@@ -100,7 +100,7 @@ def test_unknown_method_is_invalid_request() -> None:
 
 def test_wrong_version_is_protocol_mismatch_and_keeps_the_id() -> None:
     reply, _ = _reply(_request("hello", {}, version=2))
-    assert reply["id"] == "7"
+    assert reply["id"] == 7
     assert reply["error"]["code"] == PROTOCOL_MISMATCH
 
 
@@ -115,11 +115,13 @@ def test_version_must_be_an_integer(version: object) -> None:
     [
         "not json",
         "[]",
-        json.dumps({"v": 1, "id": "1", "method": "hello"}),  # no params
-        json.dumps({"v": 1, "id": "1", "method": "hello", "params": {}, "extra": 1}),
-        json.dumps({"v": 1, "id": 1, "method": "hello", "params": {}}),  # id must be a string
-        json.dumps({"v": 1, "id": "1", "method": "hello", "params": []}),
-        '{"v": 1, "id": "1", "method": "hello", "params": {"x": NaN}}',
+        json.dumps({"v": 1, "id": 1, "method": "hello"}),  # no params
+        json.dumps({"v": 1, "id": 1, "method": "hello", "params": {}, "extra": 1}),
+        json.dumps({"v": 1, "id": "1", "method": "hello", "params": {}}),  # id must be an integer
+        json.dumps({"v": 1, "id": True, "method": "hello", "params": {}}),
+        json.dumps({"v": 1, "id": 1.5, "method": "hello", "params": {}}),
+        json.dumps({"v": 1, "id": 1, "method": "hello", "params": []}),
+        '{"v": 1, "id": 1, "method": "hello", "params": {"x": NaN}}',
     ],
 )
 def test_malformed_envelope_is_invalid_request(raw: str) -> None:

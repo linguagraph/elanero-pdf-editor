@@ -27,7 +27,7 @@ def open_bytes(data: bytes) -> dict[str, Any]:
     request = json.dumps(
         {
             "v": 1,
-            "id": "t",
+            "id": 1,
             "method": "session.open",
             "params": {"name": "a.pdf", "data": {"$bin": 0}, "password": None},
         }

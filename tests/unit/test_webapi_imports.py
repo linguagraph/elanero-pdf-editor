@@ -36,7 +36,7 @@ def test_a_session_call_runs_without_qt_or_desktop_packages(fixture_pdf) -> None
         configure_web()
         data = Path(sys.argv[1]).read_bytes()
         request = json.dumps({
-            "v": 1, "id": "1", "method": "session.open",
+            "v": 1, "id": 1, "method": "session.open",
             "params": {"name": "a.pdf", "data": {"$bin": 0}, "password": None},
         })
         reply_json, _ = dispatch(request, [data])

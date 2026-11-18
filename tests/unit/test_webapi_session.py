@@ -43,7 +43,7 @@ def web() -> Iterator[None]:
 
 
 def call(method: str, params: dict[str, Any], buffers: list[bytes] | None = None) -> dict[str, Any]:
-    request = json.dumps({"v": 1, "id": "t", "method": method, "params": params})
+    request = json.dumps({"v": 1, "id": 1, "method": method, "params": params})
     reply_json, out = dispatch(request, buffers or [])
     assert out == []  # no call here returns bytes
     return json.loads(reply_json)
@@ -121,7 +121,7 @@ def test_configure_web_is_idempotent(web: None) -> None:
 def test_close_then_every_call_is_no_document(web: None, fixture_pdf: Any) -> None:
     handle = handle_of(open_bytes(fixture_pdf("text_multipage").read_bytes()))
     closed = call("session.close", {"handle": handle})
-    assert closed == {"v": 1, "id": "t", "ok": True, "result": {}}
+    assert closed == {"v": 1, "id": 1, "ok": True, "result": {}}
     for method, params in [
         ("session.info", {"handle": handle}),
         ("session.pages", {"handle": handle}),
@@ -169,7 +169,7 @@ def test_unlock_owner_gains_owner_access_without_echoing_the_password(
 ) -> None:
     handle = handle_of(open_bytes(fixture_pdf("encrypted").read_bytes(), "user"))
     good = call("session.unlock_owner", {"handle": handle, "password": "owner"})
-    assert good == {"v": 1, "id": "t", "ok": True, "result": {"unlocked": True}}
+    assert good == {"v": 1, "id": 1, "ok": True, "result": {"unlocked": True}}
     bad = call("session.unlock_owner", {"handle": handle, "password": "nope-nope"})
     assert bad["result"] == {"unlocked": False}
     assert "nope-nope" not in json.dumps(bad)
