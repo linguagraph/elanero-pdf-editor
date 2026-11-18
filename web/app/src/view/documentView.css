@@ -1,0 +1,89 @@
+/* The document view (W5.1a). Colours and spacing come from the theme tokens (W4.4a). The page box
+   and its canvas are sized from the layout in CSS pixels (set on the elements, not in this file). */
+
+.doc-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--color-window);
+  color: var(--color-text);
+}
+
+.doc-view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.doc-view-toolbar button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.doc-view-toolbar button:disabled {
+  color: var(--color-text-disabled);
+}
+
+.doc-view-toolbar button:focus-visible,
+.doc-view-scroll:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.doc-view-zoom {
+  min-width: 4em;
+  text-align: center;
+  font-size: var(--font-size-small);
+}
+
+.doc-view-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-surface-alt);
+}
+
+.doc-view-content {
+  position: relative;
+}
+
+.doc-view-status {
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.doc-page {
+  position: absolute;
+  background: #fff;
+  box-shadow:
+    0 1px 1px rgb(0 0 0 / 12%),
+    0 2px 3px rgb(0 0 0 / 8%);
+}
+
+.doc-page-placeholder,
+.doc-page-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.doc-page-error {
+  position: absolute;
+  left: var(--space-2);
+  top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface);
+  color: var(--color-danger);
+  font-size: var(--font-size-small);
+}

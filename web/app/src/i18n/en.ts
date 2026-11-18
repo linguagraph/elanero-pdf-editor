@@ -257,6 +257,18 @@ export const EN = {
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
   'open.engineNotConnected': 'The PDF engine is not connected yet, so {name} cannot be shown.',
 
+  // Document view: page list, zoom and render states (W5.1a, W1.4).
+  'view.label': 'Document',
+  'view.pages': 'Pages',
+  'view.loading': 'Loading pages…',
+  'view.loadFailed': 'The pages could not be read. Try opening the file again.',
+  'view.zoomLabel': 'Zoom',
+  'view.zoomOut': 'Zoom out',
+  'view.zoomIn': 'Zoom in',
+  'view.zoomPercent': '{percent}%',
+  'view.pageNumber': 'Page {page} of {total}',
+  'view.renderFailed': 'This page could not be drawn.',
+
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',
   'update.reload': 'Reload',

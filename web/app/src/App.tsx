@@ -15,6 +15,8 @@ import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
+import { useTabSession } from './engine/engineConnection';
+import { DocumentView } from './view/DocumentView';
 import { APP_VERSION } from './version';
 import './app.css';
 
@@ -39,6 +41,8 @@ export function App() {
     'open-recent': () => docs.showStartPage(),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
+  const activeId = docs.tabs.activeId;
+  const session = useTabSession(activeId);
   return (
     <AppFrame
       header={
@@ -69,6 +73,9 @@ export function App() {
             onRecent={(name) => docs.openPicker(name)}
             onFiles={docs.openFiles}
           />
+        ) : null}
+        {!showStart && activeId !== null && session !== null ? (
+          <DocumentView key={activeId} rpc={session.rpc} handle={session.handle} />
         ) : null}
         <h1>{t('app.name')}</h1>
         <p>{t('app.version', { version: APP_VERSION })}</p>
