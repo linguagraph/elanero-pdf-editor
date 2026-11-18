@@ -86,6 +86,11 @@ jobs:
         if: needs.changes.outputs.web == 'true'
         working-directory: web/app
         run: npm run format:check
+      - uses: astral-sh/setup-uv@v3
+        if: needs.changes.outputs.web == 'true'
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
       - name: Unit tests
         if: needs.changes.outputs.web == 'true'
         working-directory: web/app
