@@ -13,11 +13,14 @@ from pdfeditor.webapi.errors import NO_DOCUMENT, RpcFailure
 
 
 class _Entry:
-    __slots__ = ("password", "session")
+    __slots__ = ("password", "saved", "session")
 
     def __init__(self, session: DocumentSession, password: str | None) -> None:
         self.session = session
         self.password = password
+        # The document state the last save_bytes wrote (see jobs.document_fingerprint); None until
+        # the document is saved through the web. save.mark_saved compares against it.
+        self.saved: tuple[object, ...] | None = None
 
 
 class DocumentRegistry:
@@ -50,6 +53,17 @@ class DocumentRegistry:
         if entry is None or entry.session.closed:
             raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
         return entry.password
+
+    def note_saved(self, handle: str, fingerprint: tuple[object, ...]) -> None:
+        """Record the state that a save wrote, so that a later mark_saved can tell whether the
+        document has changed since."""
+        entry = self._entries.get(handle)
+        if entry is not None:
+            entry.saved = fingerprint
+
+    def saved_fingerprint(self, handle: str) -> tuple[object, ...] | None:
+        entry = self._entries.get(handle)
+        return None if entry is None else entry.saved
 
     def close(self, handle: str) -> None:
         """Forget the handle and its password first, then close the document."""

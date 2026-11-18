@@ -16,7 +16,7 @@ import pytest
 
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch
-from pdfeditor.webapi.errors import BUSY, NO_DOCUMENT
+from pdfeditor.webapi.errors import BUSY, NO_DOCUMENT, STALE_OBJECT
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.unit.test_webapi_actions import (
@@ -186,3 +186,77 @@ def test_events_are_json_with_string_revision_keys(web: None, fixture_pdf: Any) 
     assert all(isinstance(key, str) for key in changed["revisions"])
     pages = int(ok(call("session.info", {"handle": handle}))["page_count"])
     assert set(changed["revisions"]) == {str(i) for i in range(pages)}
+
+
+# -- save.mark_saved (W1.2 sections 4, 7 and 12; W3.5) ------------------------------------------
+
+
+def save_copy(handle: str) -> None:
+    """Write the document the way the front end does (its bytes are not needed here)."""
+    ok(call("save.save_bytes", {"handle": handle, "mode": "copy"}))
+
+
+def mark_saved(handle: str) -> dict[str, Any]:
+    return call("save.mark_saved", {"handle": handle})
+
+
+def test_mark_saved_after_a_save_clears_dirty_and_gives_a_saved_event(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    save_copy(handle)
+    reply = mark_saved(handle)
+    result = ok(reply)
+    assert result["saved"] is True
+    assert result["state"]["dirty"] is False
+    assert reply["events"][0] == {"kind": "saved", "handle": handle}
+    assert [event["kind"] for event in reply["events"]] == ["saved", "state"]
+    assert reply["events"][1]["state"] == result["state"]
+    assert REGISTRY.get(handle).is_dirty is False
+
+
+def test_a_second_mark_saved_is_a_no_op_with_no_event(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    save_copy(handle)
+    ok(mark_saved(handle))
+    reply = mark_saved(handle)
+    result = ok(reply)
+    assert result["saved"] is False
+    assert result["state"]["dirty"] is False
+    assert reply["events"] == []
+
+
+def test_an_edit_after_the_save_makes_mark_saved_refuse(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    save_copy(handle)
+    ok(rotate(handle))  # the front end holds the bytes of the save, which are now out of date
+    reply = mark_saved(handle)
+    assert error(reply)["code"] == STALE_OBJECT
+    assert "events" not in reply
+    assert REGISTRY.get(handle).is_dirty is True
+    # A save of the new state makes the call succeed again.
+    save_copy(handle)
+    assert ok(mark_saved(handle))["state"]["dirty"] is False
+
+
+def test_mark_saved_on_a_document_never_saved_through_the_web_is_refused(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    assert error(mark_saved(handle))["code"] == STALE_OBJECT
+    assert REGISTRY.get(handle).is_dirty is True
+
+
+def test_read_only_calls_after_a_save_emit_no_saved_event(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    save_copy(handle)
+    for method in ("session.info", "session.pages", "session.capabilities", "actions.available"):
+        reply = call(method, {"handle": handle})
+        ok(reply)
+        assert reply["events"] == [], method
+    assert REGISTRY.get(handle).is_dirty is True

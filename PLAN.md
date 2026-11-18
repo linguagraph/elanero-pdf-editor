@@ -558,7 +558,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W3.2** `webapi.session`: open from bytes, close, info
 - [x] **W3.3** `webapi.render`: render tiles to RGBA
 - [x] **W3.4** `webapi.text`: text layer and search
-- [ ] **W3.5** `webapi.actions`: named actions, undo, redo _(partial: actions.run/undo/redo/available with changed/state in the result and structure_version done; the reply envelope's events (changed, state on content changes; closed on session.close) and session.open state done; pending: the saved event (mark_saved is W3.6), a state event for the busy flag of jobs.prepare/abort, and state sent only with content changes, not on every field change; blocked is the BUSY error, not an event)_
+- [ ] **W3.5** `webapi.actions`: named actions, undo, redo _(partial: actions.run/undo/redo/available with changed/state in the result and structure_version done; the reply envelope's events (changed, state on content changes; closed on session.close) and session.open state done; the saved event and save.mark_saved done (tested); pending: a state event for the busy flag of jobs.prepare/abort, and state sent only with content changes, not on every field change; blocked is the BUSY error, not an event)_
 - [x] **W3.6** `webapi.save`: save_bytes, full or incremental
 - [x] **W3.7** `webapi.jobs` and job worker protocol _(complete; print's partial notices (W1.2 section 17.4) are tracked under W6.5)_
 - [x] **W3.8** TypeScript RPC client with generated types
