@@ -225,6 +225,21 @@ export const EN = {
   'engine.restart.body':
     'The engine will restart and reopen your documents from their last autosave. Changes made since then and the undo history will be lost.',
   'engine.restart.confirm': 'Restart engine',
+  'engine.lost.intro': 'If you restart, this is lost:',
+  'engine.lost.autosave': 'The changes made since the last autosave',
+  'engine.lost.undo': 'The undo history',
+
+  // Start-up screen, toasts and job progress (W1.6 section 10, W4.4b).
+  'loading.title': 'Elanero is starting',
+  'loading.stages.label': 'Start-up progress',
+  'loading.stage.done': 'done',
+  'loading.stage.current': 'in progress',
+  'toast.region': 'Notifications',
+  'toast.dismiss': 'Dismiss',
+  'toast.dismissNamed': 'Dismiss: {text}',
+  'job.cancel': 'Cancel',
+  'job.working': 'Working',
+  'job.percent': '{percent}% done',
 
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',
