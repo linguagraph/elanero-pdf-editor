@@ -626,7 +626,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 - [ ] **W9.1** CI: build wheels and front end _(partial: ci_changes.py skips desktop CI for web-only PRs and the docs workflow ignores docs/web; web build jobs pending)_
 - [ ] **W9.2** Deploy to GitHub Pages under `/app/`
-- [ ] **W9.3** User guide: "Web version" page
+- [ ] **W9.3** User guide: "Web version" page _(partial: the page is written and its claims are checked against main; pending: the desktop guide pages are not yet updated for the web, and the parity table lists features that are not built yet)_
 - [ ] **W9.4** `PRIVACY.md` and landing page _(partial: the web version section of `PRIVACY.md` and the landing page's web app link are written and checked against the code; the desktop section is carried over unchanged and not re-verified here; the `app/` link resolves only once W9.2 deploys the app)_
 - [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: the "Web version" section covers the web commands, rules, web-pytest rules and web package rule, each verified against the repo; pending: the third-party licence list for Pyodide (MPL-2.0) and the npm packages, which does not exist yet)_
 - [ ] **W9.6** Release checklist in `RELEASING.md` _(partial: checklist written and its commands verified; web cache busting, web deploy and web rollback are not yet automated, pending W9.2)_
