@@ -554,7 +554,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W3 Engine worker and RPC, #136**
 
 - [ ] **W3.1** Worker bootstrap: load pinned Pyodide and wheels
-  _(partial: loader, workers and start helpers with unit tests done; real in-browser load verified by the Playwright e2e (`web/app/e2e`): stages in order, hello, job-worker globals removed, blocked wheel fails at `packages`; progress screen, document load during packages, Pyodide snapshot and job worker after page 1 pending)_
+  _(partial: loader, workers and start helpers with unit tests done; real in-browser load verified by the Playwright e2e (`web/app/e2e`): stages in order, hello, job-worker globals removed, blocked wheel fails at `packages`. The app now starts the engine after first paint, drives the loading screen from its stages (Retry on failure) and opens files through `session.open` with the password prompt and `session.close` on tab close; the Playwright ready check needs staged assets. Pending: document load during packages, Pyodide snapshot, job worker start after page 1)_
 - [x] **W3.2** `webapi.session`: open from bytes, close, info
 - [x] **W3.3** `webapi.render`: render tiles to RGBA
 - [x] **W3.4** `webapi.text`: text layer and search

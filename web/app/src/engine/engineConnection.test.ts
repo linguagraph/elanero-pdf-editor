@@ -1,5 +1,211 @@
-import { describe, expect, it } from 'vitest';
-import { type EngineSession, getTabSession, setTabSession } from './engineConnection';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEngineLoadStore, type LoadState } from '../feedback/engineLoad';
+import type { CallResult } from './loader';
+import {
+  createEngineConnection,
+  type EngineSession,
+  getTabSession,
+  setTabSession,
+} from './engineConnection';
+import type { Stage } from './protocol';
+import type { StartOptions, WorkerClient } from './start';
+
+interface PendingCall {
+  readonly request: string;
+  resolve(result: CallResult): void;
+  reject(error: Error): void;
+}
+
+// A worker stand-in: the test emits stage events and answers or fails each call.
+class FakeWorker implements WorkerClient {
+  private listener: ((stage: Stage) => void) | undefined;
+  readonly pending: PendingCall[] = [];
+  readonly terminate = vi.fn<() => void>();
+
+  call(request: string): Promise<CallResult> {
+    return new Promise<CallResult>((resolve, reject) => {
+      this.pending.push({ request, resolve, reject });
+    });
+  }
+
+  onStage(listener: (stage: Stage) => void): () => void {
+    this.listener = listener;
+    return () => {
+      this.listener = undefined;
+    };
+  }
+
+  stage(stage: Stage): void {
+    this.listener?.(stage);
+  }
+
+  // Answers the hello call the way the loaded engine does.
+  answerHello(): void {
+    const call = this.pending.shift();
+    if (call === undefined) throw new Error('no call to answer');
+    const id = (JSON.parse(call.request) as { id: number }).id;
+    const reply = {
+      v: 1,
+      id,
+      ok: true,
+      result: { protocol: 1, engine: 'test', platform: 'web' },
+      events: [],
+    };
+    call.resolve({ reply: JSON.stringify(reply) });
+  }
+}
+
+const BOOT: StartOptions = {
+  workerUrl: 'https://app.example/engine.js',
+  assetBaseUrl: 'https://app.example/engine-assets/',
+};
+
+// Lets the promise chain of a settled call run.
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+describe('engine connection', () => {
+  let workers: FakeWorker[];
+  let startWorker: ReturnType<typeof vi.fn<(options: StartOptions) => WorkerClient>>;
+
+  beforeEach(() => {
+    workers = [];
+    startWorker = vi.fn(() => {
+      const worker = new FakeWorker();
+      workers.push(worker);
+      return worker;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('starts the engine with the boot options and passes each stage to the loading store', async () => {
+    const store = createEngineLoadStore();
+    const states: LoadState[] = [];
+    store.subscribe(() => states.push(store.getState()));
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+
+    engine.start();
+    expect(startWorker).toHaveBeenCalledWith(BOOT);
+    const worker = workers[0]!;
+    worker.stage('packages');
+    worker.stage('engine');
+    worker.stage('ready');
+    worker.answerHello();
+    await settle();
+
+    expect(states).toEqual([
+      { status: 'loading', stage: 'pyodide' },
+      { status: 'loading', stage: 'packages' },
+      { status: 'loading', stage: 'engine' },
+      { status: 'ready' },
+    ]);
+    expect(engine.client()).toBeDefined();
+  });
+
+  it('has no client until the engine answers hello, and sends hello first', () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    workers[0]!.stage('pyodide');
+    expect(engine.client()).toBeUndefined();
+    expect(workers[0]!.pending).toHaveLength(1);
+    expect(workers[0]!.pending[0]!.request).toContain('"method":"hello"');
+  });
+
+  it('shows the stage that failed and gives no client', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    workers[0]!.stage('pyodide');
+    workers[0]!.stage('packages');
+    workers[0]!.pending[0]!.reject(new Error('wheel blocked'));
+    await settle();
+
+    expect(store.getState()).toEqual({ status: 'failed', stage: 'packages' });
+    expect(engine.client()).toBeUndefined();
+  });
+
+  it('counts a failure before any stage event as the first stage', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    workers[0]!.pending[0]!.reject(new Error('the worker script did not load'));
+    await settle();
+    expect(store.getState()).toEqual({ status: 'failed', stage: 'pyodide' });
+    expect(engine.client()).toBeUndefined();
+  });
+
+  it('reports a worker the browser refuses to start as a pyodide failure', () => {
+    const store = createEngineLoadStore();
+    const refused = vi.fn((): WorkerClient => {
+      throw new Error('Worker is not defined');
+    });
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker: refused });
+    engine.start();
+    expect(store.getState()).toEqual({ status: 'failed', stage: 'pyodide' });
+    expect(engine.client()).toBeUndefined();
+  });
+
+  it('retry starts the engine again and terminates the failed worker', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    workers[0]!.stage('pyodide');
+    workers[0]!.pending[0]!.reject(new Error('down'));
+    await settle();
+    expect(store.getState()).toEqual({ status: 'failed', stage: 'pyodide' });
+
+    store.retry();
+    expect(startWorker).toHaveBeenCalledTimes(2);
+    expect(workers[0]!.terminate).toHaveBeenCalledTimes(1);
+    expect(store.getState()).toEqual({ status: 'loading', stage: 'pyodide' });
+
+    workers[1]!.stage('ready');
+    workers[1]!.answerHello();
+    await settle();
+    expect(store.getState()).toEqual({ status: 'ready' });
+    expect(engine.client()).toBeDefined();
+  });
+
+  it('ignores events from a worker that a restart has replaced', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    const old = workers[0]!;
+    engine.start();
+    old.stage('ready');
+    old.pending[0]?.reject(new Error('late failure'));
+    await settle();
+    expect(store.getState()).toEqual({ status: 'loading', stage: 'pyodide' });
+    expect(engine.client()).toBeUndefined();
+  });
+
+  it('lets retry work again after a dispose and a new start (StrictMode remount)', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    engine.dispose();
+    engine.start();
+    workers[1]!.pending[0]!.reject(new Error('down'));
+    await settle();
+    expect(store.getState()).toEqual({ status: 'failed', stage: 'pyodide' });
+    store.retry();
+    expect(startWorker).toHaveBeenCalledTimes(3);
+  });
+
+  it('stops the worker on dispose, and retry then does nothing', () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    engine.dispose();
+    expect(workers[0]!.terminate).toHaveBeenCalledTimes(1);
+    expect(engine.client()).toBeUndefined();
+    store.retry();
+    expect(startWorker).toHaveBeenCalledTimes(1);
+  });
+});
 
 const session: EngineSession = {
   rpc: { call: () => Promise.reject(new Error('not used')) } as unknown as EngineSession['rpc'],

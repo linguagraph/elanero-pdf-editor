@@ -2,9 +2,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
+import type { EngineClient } from '../engine/engineConnection';
+import { fakeEngine, type FakeEngine } from '../engine/testEngine';
 import { toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RECENT_STORAGE_KEY } from '../recent/recentFiles';
+import { RpcError } from '../rpc/client';
+import { passwordPrompt } from './passwordRequest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,16 +20,53 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
   });
 }
 
+interface Recorded {
+  readonly method: string;
+  readonly params: Record<string, unknown>;
+}
+
+// A fake engine client. A file whose name starts with "locked" is protected: it needs the password
+// "secret". A file whose name starts with "refused" fails to open. Every call is recorded.
+function engineClient(): { client: EngineClient; calls: Recorded[] } {
+  const calls: Recorded[] = [];
+  let opened = 0;
+  const call = vi.fn(async (method: string, params: Record<string, unknown>) => {
+    calls.push({ method, params });
+    if (method === 'session.close') return {};
+    if (method !== 'session.open') throw new Error(`unexpected ${method}`);
+    const name = String(params['name']);
+    if (name.startsWith('refused')) throw new RpcError('OPEN_FAILED', 'damaged');
+    if (name.startsWith('locked')) {
+      if (params['password'] === null) throw new RpcError('PASSWORD_REQUIRED', 'protected');
+      if (params['password'] !== 'secret') throw new RpcError('WRONG_PASSWORD', 'wrong');
+    }
+    opened += 1;
+    return {
+      handle: `doc-${opened}`,
+      info: { encrypted: false, has_signatures: false, page_count: 3, title: '' },
+      pages: 3,
+      warning: null,
+      state: {},
+    };
+  });
+  return { client: { call } as unknown as EngineClient, calls };
+}
+
 let host: HTMLDivElement;
 let root: Root;
+let engine: FakeEngine;
+let calls: Recorded[];
 
 beforeEach(() => {
   window.localStorage.clear();
+  const scripted = engineClient();
+  calls = scripted.calls;
+  engine = fakeEngine(scripted.client);
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
   act(() => {
-    root.render(<App />);
+    root.render(<App engine={engine} />);
   });
 });
 
@@ -36,6 +77,7 @@ afterEach(() => {
   });
   host.remove();
   window.localStorage.clear();
+  passwordPrompt.answer(null);
   const queue = toasts.getState();
   for (const toast of [...queue.visible, ...queue.queued]) toasts.dismiss(toast.id);
 });
@@ -54,12 +96,53 @@ function dropFiles(files: File[]): void {
   });
 }
 
+// Waits for the engine's answers to reach the screen. Reading a file and the engine's reply are
+// asynchronous, so the check runs again after each short pause until it holds or the tries run out.
+async function until(check: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 200 && !check(); attempt++) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+  }
+}
+
 function buttonNamed(text: string): HTMLButtonElement {
   const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent?.trim() === text || button.getAttribute('aria-label') === text,
   );
   if (found === undefined) throw new Error(`no button ${text}`);
   return found;
+}
+
+// The password dialog is in a portal on document.body, so its buttons are looked up there.
+function dialogButton(text: string): HTMLButtonElement {
+  const found = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent?.trim() === text,
+  );
+  if (found === undefined) throw new Error(`no dialog button ${text}`);
+  return found;
+}
+
+function passwordInput(): HTMLInputElement | null {
+  return document.querySelector<HTMLInputElement>('input[type="password"]');
+}
+
+function typePassword(value: string): void {
+  const input = passwordInput();
+  if (input === null) throw new Error('no password field');
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  act(() => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function submitPassword(): void {
+  const form = passwordInput()?.form;
+  if (form === null || form === undefined) throw new Error('no password form');
+  act(() => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
 }
 
 function tabNames(): string[] {
@@ -73,6 +156,17 @@ function errorToasts(): string[] {
     .getState()
     .visible.filter((toast) => toast.kind === 'error')
     .map((toast) => toast.text);
+}
+
+function infoToasts(): string[] {
+  return toasts
+    .getState()
+    .visible.filter((toast) => toast.kind === 'info')
+    .map((toast) => toast.text);
+}
+
+function openCalls(): Recorded[] {
+  return calls.filter((call) => call.method === 'session.open');
 }
 
 describe('start page', () => {
@@ -106,38 +200,54 @@ describe('start page', () => {
     expect(document.getElementById(describedBy)?.textContent).toBe(t('start.drop'));
   });
 
-  it('adds a tab for a dropped PDF', () => {
+  it('opens a dropped PDF through session.open and adds its tab', async () => {
     dropFiles([pdf('report.pdf')]);
+    await until(() => tabNames().length === 1);
     expect(tabNames()).toEqual(['report.pdf']);
+    expect(openCalls()).toHaveLength(1);
+    expect(openCalls()[0]?.params).toMatchObject({ name: 'report.pdf', password: null });
     expect(host.querySelector('.start-page')).toBeNull();
   });
 
   it('shows an error toast for a dropped file that is not a PDF, and opens no tab', () => {
     dropFiles([new File(['hello'], 'notes.txt', { type: 'text/plain' })]);
     expect(tabNames()).toEqual([]);
+    expect(calls).toEqual([]);
     expect(errorToasts()).toEqual([t('open.notPdf', { name: 'notes.txt' })]);
   });
 
-  it('accepts a PDF by its name when the browser gives no type', () => {
+  it('accepts a PDF by its name when the browser gives no type', async () => {
     dropFiles([new File(['%PDF'], 'scan.PDF')]);
+    await until(() => tabNames().length === 1);
     expect(tabNames()).toEqual(['scan.PDF']);
   });
 
-  it('tells the user the engine is not connected yet, and keeps the file in its tab', () => {
+  it('does not call the engine before it is ready, and says so', () => {
+    const notReady = fakeEngine();
+    act(() => {
+      root.render(<App engine={notReady} />);
+    });
     dropFiles([pdf('report.pdf')]);
-    const infos = toasts
-      .getState()
-      .visible.filter((toast) => toast.kind === 'info')
-      .map((toast) => toast.text);
-    expect(infos).toEqual([t('open.engineNotConnected', { name: 'report.pdf' })]);
+    expect(tabNames()).toEqual([]);
+    expect(infoToasts()).toEqual([t('open.engineNotReady')]);
+    expect(calls).toEqual([]);
   });
 
-  it('lists the recent files newest first, and a click asks for the file again', () => {
+  it('shows the engine error as a toast and opens no tab', async () => {
+    dropFiles([pdf('refused.pdf')]);
+    await until(() => errorToasts().length === 1);
+    expect(tabNames()).toEqual([]);
+    expect(errorToasts()).toEqual([t('error.OPEN_FAILED')]);
+  });
+
+  it('lists the recent files newest first, and a click asks for the file again', async () => {
     dropFiles([pdf('first.pdf')]);
+    await until(() => tabNames().length === 1);
     act(() => {
       buttonNamed(t('tabs.close', { name: 'first.pdf' })).click();
     });
     dropFiles([pdf('second.pdf')]);
+    await until(() => tabNames().length === 1);
     act(() => {
       buttonNamed(t('tabs.close', { name: 'second.pdf' })).click();
     });
@@ -156,8 +266,9 @@ describe('start page', () => {
     );
   });
 
-  it('keeps only names and times in storage, never the file content', () => {
+  it('keeps only names and times in storage, never the file content', async () => {
     dropFiles([pdf('contract.pdf', '%PDF-1.7 SECRET-PAGE-TEXT')]);
+    await until(() => window.localStorage.getItem(RECENT_STORAGE_KEY) !== null);
     const stored = window.localStorage.getItem(RECENT_STORAGE_KEY) ?? '';
     expect(stored).toContain('contract.pdf');
     expect(stored).not.toContain('SECRET-PAGE-TEXT');
@@ -167,14 +278,60 @@ describe('start page', () => {
   });
 });
 
+describe('password prompt', () => {
+  it('asks once, opens with the password, and stores nothing', async () => {
+    dropFiles([pdf('locked.pdf')]);
+    await until(() => passwordInput() !== null);
+    expect(document.querySelector('.overlay-dialog')?.textContent).toContain('locked.pdf');
+    typePassword('secret');
+    submitPassword();
+    await until(() => tabNames().length === 1);
+
+    expect(tabNames()).toEqual(['locked.pdf']);
+    expect(openCalls().map((call) => call.params['password'])).toEqual([null, 'secret']);
+    expect(passwordInput()).toBeNull();
+    expect(JSON.stringify({ ...window.localStorage })).not.toContain('secret');
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it('a cancelled prompt opens no tab and calls the engine once', async () => {
+    dropFiles([pdf('locked.pdf')]);
+    await until(() => passwordInput() !== null);
+    act(() => {
+      dialogButton(t('action.cancel')).click();
+    });
+    await until(() => passwordInput() === null);
+    expect(tabNames()).toEqual([]);
+    expect(openCalls()).toHaveLength(1);
+    expect(errorToasts()).toEqual([]);
+  });
+
+  it('a wrong password is reported once, and the prompt does not come back', async () => {
+    dropFiles([pdf('locked.pdf')]);
+    await until(() => passwordInput() !== null);
+    typePassword('nope');
+    submitPassword();
+    await until(() => errorToasts().length === 1);
+
+    expect(errorToasts()).toEqual([t('error.WRONG_PASSWORD')]);
+    expect(openCalls()).toHaveLength(2);
+    expect(passwordInput()).toBeNull();
+    expect(tabNames()).toEqual([]);
+  });
+});
+
 describe('document tabs', () => {
-  it('closes a tab and brings the start page back when none are left', () => {
+  it('closes a tab with session.close for its handle, and brings the start page back', async () => {
     dropFiles([pdf('a.pdf'), pdf('b.pdf')]);
+    await until(() => tabNames().length === 2);
     expect(tabNames()).toEqual(['a.pdf', 'b.pdf']);
     act(() => {
       buttonNamed(t('tabs.close', { name: 'b.pdf' })).click();
     });
     expect(tabNames()).toEqual(['a.pdf']);
+    expect(calls.filter((call) => call.method === 'session.close')).toEqual([
+      { method: 'session.close', params: { handle: 'doc-2' } },
+    ]);
     act(() => {
       buttonNamed(t('tabs.close', { name: 'a.pdf' })).click();
     });
@@ -182,8 +339,9 @@ describe('document tabs', () => {
     expect(host.querySelector('.start-page')).not.toBeNull();
   });
 
-  it('moves between tabs with the arrow keys', () => {
+  it('moves between tabs with the arrow keys', async () => {
     dropFiles([pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')]);
+    await until(() => tabNames().length === 3);
     const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
     expect(tabs[2]?.getAttribute('aria-selected')).toBe('true');
     act(() => {
