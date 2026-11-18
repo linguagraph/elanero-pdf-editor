@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import io
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -18,6 +16,7 @@ from pdfeditor.services.optimize import (
     reduce_size,
     with_images,
 )
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 
@@ -53,9 +52,8 @@ def test_presets_shrink_in_order(heavy, fixture_pdf) -> None:
         result = reduce_size(heavy, p.options, before=on_disk)
         assert result.before == on_disk and result.after == len(result.data)
         sizes[p.key] = result.after
-        pdfium.PdfDocument(result.data)  # independent reader accepts it
-        with pikepdf.open(io.BytesIO(result.data)) as pdf:
-            assert len(pdf.pages) == 1
+        record("opens_pdfium", result.data)  # independent reader accepts it
+        record("page_count_pikepdf", result.data, pages=1)
     assert sizes["screen"] < sizes["ebook"] < sizes["print"] < sizes["lossless"] < on_disk
     assert sizes["ebook"] < on_disk / 20
     # images are downsampled to the target resolution (4 inches wide on the page)
@@ -92,6 +90,10 @@ def test_grayscale_and_thumbnails(heavy) -> None:
 def test_linearize(heavy) -> None:
     opts = ReduceOptions(OptimizeOptions(image_dpi=72, jpeg_quality=50), linearize=True)
     result = reduce_size(heavy, opts)
+    # Host-only: reduce_size linearizes with pikepdf (services/optimize.py), so the web build
+    # never produces these bytes. The check could not be reached there, so the test stays here.
+    import pikepdf
+
     with pikepdf.open(io.BytesIO(result.data)) as pdf:
         assert pdf.is_linearized
     assert result.notes == []
@@ -102,6 +104,10 @@ def test_encrypted_stays_encrypted_and_skips_linearize(fixture_pdf) -> None:
     result = reduce_size(doc, ReduceOptions(linearize=True))
     doc.close()
     assert any("encrypted" in n for n in result.notes)
+    # Host-only: the linearize path above needs pikepdf to reach this point in the web build
+    # (_is_encrypted in services/optimize.py), so the password check stays host-only too.
+    import pikepdf
+
     with pytest.raises(pikepdf.PasswordError):
         pikepdf.open(io.BytesIO(result.data))
     ENGINE.open(result.data, "user").close()

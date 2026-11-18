@@ -955,3 +955,152 @@ def _watermark_drawn_pdfium(data: bytes, reference: str) -> None:
         without.crop(centre).convert("RGB"), with_mark.crop(centre).convert("RGB")
     )
     assert changed.getbbox() is not None
+
+
+# -- unit and service checks (tests/unit/, tests/services/) ----------------------------------------
+
+
+@host_check("pages_nonempty_pikepdf")
+def _pages_nonempty_pikepdf(data: bytes) -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert len(pdf.pages) > 0
+
+
+@host_check("pages_nonempty_pdfium")
+def _pages_nonempty_pdfium(data: bytes) -> None:
+    import pypdfium2 as pdfium
+
+    doc = pdfium.PdfDocument(data)
+    assert len(doc) > 0
+    doc.close()
+
+
+@host_check("refuses_without_password_pikepdf")
+def _refuses_without_password_pikepdf(data: bytes) -> None:
+    """Opening without a password raises pikepdf's PasswordError."""
+    import pikepdf
+
+    try:
+        pikepdf.open(io.BytesIO(data))
+    except pikepdf.PasswordError:
+        return
+    raise AssertionError("opened without a password")
+
+
+@host_check("annot_names_pikepdf")
+def _annot_names_pikepdf(data: bytes, prefix: str) -> None:
+    """Every annotation on any page (links and popups aside) has a /NM; at least one name
+    starts with ``prefix``."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [
+            annot
+            for page in pdf.pages
+            for annot in page.get("/Annots", [])
+            if str(annot.get("/Subtype", "")) not in ("/Link", "/Popup")
+        ]
+        names = [str(annot.get("/NM", "")) for annot in annots]
+    assert names, "the fixture has annotations"
+    assert all(names), "every annotation has a name in the saved bytes"
+    assert any(name.startswith(prefix) for name in names)
+
+
+def _pdfium_page_texts(data: bytes) -> list[str]:
+    """Text of every page, as PDFium reads it; each page is rendered first, as the callers did."""
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        out = []
+        for page in pd:
+            page.render(scale=0.3)
+            out.append(page.get_textpage().get_text_range())
+        return out
+    finally:
+        pd.close()
+
+
+@host_check("page_text_pdfium")
+def _page_text_pdfium(
+    data: bytes,
+    page: int | None,
+    absent: list[str] | None = None,
+    once: list[str] | None = None,
+    present: list[str] | None = None,
+) -> None:
+    """Text of ``page`` (every page when None) lacks each ``absent`` string, holds each ``once``
+    string exactly once, and holds each ``present`` string."""
+    texts = _pdfium_page_texts(data)
+    selected = texts if page is None else [texts[page]]
+    for text in selected:
+        for needle in absent or []:
+            assert needle not in text
+        for needle in once or []:
+            assert text.count(needle) == 1
+        for needle in present or []:
+            assert needle in text
+
+
+@host_check("page_render_width_pdfium")
+def _page_render_width_pdfium(data: bytes, page: int, scale: float) -> None:
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        assert pd[page].render(scale=scale).to_pil().size[0] > 0
+    finally:
+        pd.close()
+
+
+@host_check("first_page_not_blank_pdfium")
+def _first_page_not_blank_pdfium(data: bytes) -> None:
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        rendered = pd[0].render(scale=0.5).to_pil().convert("L")
+    finally:
+        pd.close()
+    assert rendered.getextrema() != (255, 255)  # not blank
+
+
+@host_check("perf_page_one_pikepdf")
+def _perf_page_one_pikepdf(data: bytes) -> None:
+    """Page 1 has one DCT photo of 1200 x 800, a base-14 font, an embedded TrueType font, and
+    text set in two fonts (the W0.2 perf fixture shape)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        page = pdf.pages[0]
+        xobjects = page.Resources.get("/XObject", {})
+        images = [
+            obj
+            for obj in xobjects.values()
+            if obj.get("/Subtype") == "/Image" and obj.get("/Filter") == "/DCTDecode"
+        ]
+        assert len(images) == 1
+        assert (int(images[0].Width), int(images[0].Height)) == (1200, 800)
+
+        fonts = page.Resources.Font
+        assert len(fonts) >= 2
+        base14 = [
+            f for f in fonts.values() if f.get("/Subtype") == "/Type1" and "/FontFile" not in f
+        ]
+        assert base14, "expected a base-14 font"
+
+        embedded = []
+        for font in fonts.values():
+            if font.get("/Subtype") == "/Type0":
+                descendant = font.DescendantFonts[0]
+                if "/FontFile2" in descendant.FontDescriptor:
+                    embedded.append(font)
+        assert embedded, "expected an embedded TrueType font"
+
+        used = set()
+        for operands, operator in pikepdf.parse_content_stream(page):
+            if operator == pikepdf.Operator("Tf"):
+                used.add(str(operands[0]))
+        assert len(used) >= 2, f"expected text in two fonts, saw {sorted(used)}"

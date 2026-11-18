@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image, ImageDraw
 
@@ -20,6 +18,7 @@ from pdfeditor.services.compare import (
     diff_words,
     write_report,
 )
+from tests.hostcheck import record
 
 ENGINE = get_engine()
 
@@ -108,14 +107,12 @@ def test_report(docs, tmp_path) -> None:
     old, new = docs
     result = compare(old, new)
     out = write_report(ENGINE, old, new, result, tmp_path / "report.pdf", "v1.pdf", "v2.pdf")
-    with pikepdf.open(out) as pdf:
-        pages = len(pdf.pages)
     # summary + (old, new) for the 2 changed pairs + the deleted page + the inserted page
-    assert pages == 1 + 2 * 2 + 1 + 1
+    record("page_count_pikepdf", out, pages=1 + 2 * 2 + 1 + 1)
     report = ENGINE.open(out)
     summary = report.page(0).text_page(with_chars=False).text
     assert "Comparison report" in summary and "v1.pdf" in summary and "heading" in summary
     boxes = [a for a in report.page(1).annotations() if a.type is AnnotationType.SQUARE]
     assert boxes and boxes[0].color is not None and boxes[0].color.r > 0.8  # old side: red
     report.close()
-    pdfium.PdfDocument(str(out))
+    record("opens_pdfium", out)

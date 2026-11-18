@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import io
 import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.core.commands.document_cmds import SetMetadataCommand
 from pdfeditor.core.session import DocumentSession, EventKind, SessionEvent
 from pdfeditor.engine.base import SaveError
 from pdfeditor.model.metadata import Metadata
+from tests.hostcheck import record
 
 SIGNED = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"
 ONCE_MESSAGE = "can't be saved in place"
@@ -23,13 +21,8 @@ ONCE_MESSAGE = "can't be saved in place"
 
 def _roundtrip(data: bytes, pages: int) -> None:
     """Saved bytes must open in pikepdf and render in pypdfium2 (AGENTS round trip)."""
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        assert len(pdf.pages) == pages
-    doc = pdfium.PdfDocument(data)
-    try:
-        assert doc[0].render(scale=0.5).width > 0
-    finally:
-        doc.close()
+    record("page_count_pikepdf", data, pages=pages)
+    record("render_width_pdfium", data, scale=0.5)
 
 
 def _byte_range(data: bytes) -> bytes:
@@ -178,18 +171,8 @@ def test_save_to_file_still_sets_clean_and_emits_saved(tmp_path: Path) -> None:
 def test_copy_names_unnamed_annotations_as_save_does(fixture_pdf: Callable[[str], Path]) -> None:
     session = DocumentSession.open(fixture_pdf("annotations_unnamed"))
     result = session.save_bytes("copy")
-    with pikepdf.open(io.BytesIO(result.data)) as pdf:
-        # Links and popups are never named: the engine doesn't list them as annotations.
-        annots = [
-            annot
-            for page in pdf.pages
-            for annot in page.get("/Annots", [])
-            if str(annot.get("/Subtype", "")) not in ("/Link", "/Popup")
-        ]
-        names = [str(annot.get("/NM", "")) for annot in annots]
-    assert names, "the fixture has annotations"
-    assert all(names), "every annotation has a name in the saved bytes"
-    assert any(name.startswith("pdfeditor-") for name in names)
+    # Links and popups are never named: the engine doesn't list them as annotations.
+    record("annot_names_pikepdf", result.data, prefix="pdfeditor-")
     session.close()
 
 
