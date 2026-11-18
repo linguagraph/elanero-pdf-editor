@@ -287,24 +287,27 @@ def test_the_save_limit_is_inclusive(
 def test_the_job_limit_is_inclusive_at_prepare(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The job's bytes are not byte-stable between prepares (as for save), so the size is read
-    # back from the refusal rather than assumed from an earlier prepare.
+    # The job's document bytes are not byte-stable between prepares (as for save, and under
+    # Pyodide), so the boundary is checked on a fixed-size stub of the engine's to_bytes rather
+    # than on real prepares.
     handle = open_fixture(fixture_pdf, "images")
+    size = 4096
+    document = REGISTRY.get(handle).document
+    monkeypatch.setattr(document, "to_bytes", lambda options=None: b"x" * size)
 
     def prepare() -> dict[str, Any]:
         return call(
             "jobs.prepare", {"handle": handle, "job": "reduce_size", "args": {"preset": "ebook"}}
         )
 
-    monkeypatch.setattr(limits, "MAX_JOB_BYTES", 1)
-    err = error(prepare())
-    assert err["code"] == FILE_TOO_LARGE
-    size = err["details"]["size"]
+    # One less than the stub's size: refused, and nothing is left prepared.
     monkeypatch.setattr(limits, "MAX_JOB_BYTES", size - 1)
     err = error(prepare())
     assert err["code"] == FILE_TOO_LARGE
     assert err["details"] == {"max_bytes": size - 1, "size": size}
-    monkeypatch.setattr(limits, "MAX_JOB_BYTES", err["details"]["size"])
+    assert list(jobs.PREPARED.pending()) == []
+    # Equal to the stub's size: accepted.
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", size)
     assert "token" in ok(prepare())
 
 
