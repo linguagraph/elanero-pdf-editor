@@ -255,7 +255,13 @@ export const EN = {
   'tabs.close': 'Close {name}',
   'tabs.unsaved': 'Unsaved changes',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
-  'open.engineNotConnected': 'The PDF engine is not connected yet, so {name} cannot be shown.',
+  'open.engineNotReady':
+    'The PDF engine is not ready yet. Wait for it to start, then open the file again.',
+  'open.largeFile': '{name} is large, so opening and editing may be slow.',
+  'password.title': 'Password required',
+  'password.body': '{name} is protected. Enter its password to open it. The password is not saved.',
+  'password.label': 'Password',
+  'action.cancel': 'Cancel',
 
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',

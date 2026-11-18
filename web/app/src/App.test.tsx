@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import { App } from './App';
 import { APP_VERSION } from './version';
+import { fakeEngine } from './engine/testEngine';
 
 describe('App', () => {
   it('renders the app name and the version', () => {
@@ -12,7 +13,7 @@ describe('App', () => {
     const root = createRoot(host);
     try {
       act(() => {
-        root.render(<App />);
+        root.render(<App engine={fakeEngine()} />);
       });
       expect(host.querySelector('h1')?.textContent).toBe('Elanero');
       expect(host.textContent).toContain(APP_VERSION);

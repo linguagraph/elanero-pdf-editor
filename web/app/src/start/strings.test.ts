@@ -26,6 +26,7 @@ describe('start page, tabs and document strings go through t()', () => {
         'tabs/DocumentTabs.tsx',
         'documents/OpenInput.tsx',
         'documents/useDocuments.ts',
+        'documents/PasswordPrompt.tsx',
       ]),
     );
   });

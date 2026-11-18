@@ -38,8 +38,8 @@ function render(state: TabState, onSelect = vi.fn(), onClose = vi.fn()) {
   return { onSelect, onClose };
 }
 
-function pdf(name: string): File {
-  return new File(['%PDF-1.4'], name, { type: 'application/pdf' });
+function pdf(name: string) {
+  return { name, handle: `handle-${name}`, pages: 1 };
 }
 
 function threeTabs(): TabState {

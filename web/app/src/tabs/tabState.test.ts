@@ -9,7 +9,7 @@ import {
   type TabState,
 } from './tabState';
 
-const pdf = (name: string) => new File(['%PDF-1.4'], name, { type: 'application/pdf' });
+const pdf = (name: string) => ({ name, handle: `handle-${name}`, pages: 1 });
 
 function withThree(): TabState {
   let state = addTab(EMPTY_TABS, pdf('a.pdf'));
@@ -23,7 +23,8 @@ describe('tab state', () => {
     expect(state.tabs.map((tab) => tab.name)).toEqual(['a.pdf']);
     expect(state.activeId).toBe(state.tabs[0]?.id);
     expect(state.tabs[0]?.dirty).toBe(false);
-    expect(state.tabs[0]?.file.name).toBe('a.pdf');
+    expect(state.tabs[0]?.handle).toBe('handle-a.pdf');
+    expect(state.tabs[0]?.pages).toBe(1);
   });
 
   it('gives every tab its own id, even after a close', () => {

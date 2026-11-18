@@ -1,9 +1,10 @@
-// The document state the app shell reads (W4.2b): the tabs, the recent files and the start page.
-// Opening a file stores it in a tab and records its name. The engine is not started by this
-// module yet, so the page says so in a toast instead of opening the document (see the open
-// toast below). Everything the user reads comes through t().
+// The document state the app shell reads (W4.2b, W3.1): the tabs, the recent files and the start
+// page. A chosen PDF is opened through the engine's session.open; its tab is added only when the
+// engine has opened it. Closing a tab calls session.close. Everything the user reads comes
+// through t().
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { toasts } from '../feedback/toasts';
+import type { EngineConnection } from '../engine/engineConnection';
+import { reportRpcError, toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { addRecentFile, readRecentFiles, type RecentFile } from '../recent/recentFiles';
 import {
@@ -14,6 +15,8 @@ import {
   hasDirtyTab,
   type TabState,
 } from '../tabs/tabState';
+import { asRpcError, openFile } from './openFile';
+import { passwordPrompt } from './passwordRequest';
 import { guardUnload } from './unloadGuard';
 
 // A file counts as a PDF by its type, or by its name when the browser gives no type.
@@ -36,7 +39,7 @@ export interface Documents {
   closeTab(id: number): void;
 }
 
-export function useDocuments(): Documents {
+export function useDocuments(engine: EngineConnection): Documents {
   const [tabs, setTabs] = useState<TabState>(EMPTY_TABS);
   const [recent, setRecent] = useState<RecentFile[]>(() => readRecentFiles());
   const [showStart, setShowStart] = useState(false);
@@ -47,25 +50,45 @@ export function useDocuments(): Documents {
   // Warn before the page closes while a document has unsaved changes.
   useEffect(() => (dirty ? guardUnload(window) : undefined), [dirty]);
 
-  const openFiles = useCallback((files: readonly File[]) => {
-    const pdfs = files.filter(isPdfFile);
-    const others = files.filter((file) => !isPdfFile(file));
-    if (others.length > 0) {
-      toasts.push('error', t('open.notPdf', { name: others[0]?.name ?? '' }));
-    }
-    if (pdfs.length === 0) return;
-    let latest: RecentFile[] | null = null;
-    for (const file of pdfs) {
-      setTabs((state) => addTab(state, file));
-      latest = addRecentFile(file.name);
-      // The engine is not started by the app yet, so the document is kept in its tab and the user
-      // is told why it is not shown.
-      toasts.push('info', t('open.engineNotConnected', { name: file.name }));
-    }
-    if (latest !== null) setRecent(latest);
-    setShowStart(false);
-    setPickHint(null);
-  }, []);
+  // The files are opened one after another: each may ask for a password, and the dialog shows one
+  // request at a time.
+  const openAll = useCallback(
+    async (pdfs: readonly File[]) => {
+      const client = engine.client();
+      if (client === undefined) {
+        toasts.push('info', t('open.engineNotReady'));
+        return;
+      }
+      for (const file of pdfs) {
+        const outcome = await openFile(client, file, (name) => passwordPrompt.ask(name));
+        if (outcome.status === 'cancelled') continue;
+        if (outcome.status === 'failed') {
+          reportRpcError(toasts, outcome.error);
+          continue;
+        }
+        const { handle, pages, warning } = outcome.result;
+        if (warning !== null) toasts.push('info', t('open.largeFile', { name: file.name }));
+        setTabs((state) => addTab(state, { name: file.name, handle, pages }));
+        setRecent(addRecentFile(file.name));
+        setShowStart(false);
+        setPickHint(null);
+      }
+    },
+    [engine],
+  );
+
+  const openFiles = useCallback(
+    (files: readonly File[]) => {
+      const pdfs = files.filter(isPdfFile);
+      const others = files.filter((file) => !isPdfFile(file));
+      if (others.length > 0) {
+        toasts.push('error', t('open.notPdf', { name: others[0]?.name ?? '' }));
+      }
+      if (pdfs.length === 0) return;
+      void openAll(pdfs);
+    },
+    [openAll],
+  );
 
   const openPicker = useCallback((hintName?: string) => {
     setPickHint(hintName ?? null);
@@ -82,9 +105,19 @@ export function useDocuments(): Documents {
     setShowStart(false);
   }, []);
 
-  const closeTab = useCallback((id: number) => {
-    setTabs((state) => closeTabState(state, id));
-  }, []);
+  const closeTab = useCallback(
+    (id: number) => {
+      const tab = tabs.tabs.find((candidate) => candidate.id === id);
+      setTabs((state) => closeTabState(state, id));
+      if (tab === undefined) return;
+      const client = engine.client();
+      if (client === undefined) return;
+      client.call('session.close', { handle: tab.handle }).catch((error: unknown) => {
+        reportRpcError(toasts, asRpcError(error));
+      });
+    },
+    [tabs, engine],
+  );
 
   return {
     tabs,
