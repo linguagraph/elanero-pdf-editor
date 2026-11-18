@@ -13,8 +13,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -45,6 +43,7 @@ from pdfeditor.model.objects import (
     TextStyle,
 )
 from tests.actions.conftest import Opener
+from tests.hostcheck import record
 
 # The registry's Busy test calls each action with these args (see test_registry.py). The values
 # only have to type-check: the Busy check runs first.
@@ -102,34 +101,10 @@ def reopened(path: Path) -> Iterator[Document]:
             doc.close()
 
 
-def pdfium_text(path: Path) -> str:
-    pd = pdfium.PdfDocument(path)
-    try:
-        return pd[0].get_textpage().get_text_range()
-    finally:
-        pd.close()
-
-
-def pdfium_pixel(path: Path, x: int, y: int) -> tuple[int, int, int]:
-    """Pixel of page 0 rendered at 72 dpi, so pixel (x, y) is visible-space point (x, y)."""
-    pd = pdfium.PdfDocument(path)
-    try:
-        image = pd[0].render(scale=1).to_pil().convert("RGB")
-        r, g, b = image.getpixel((x, y))
-        return int(r), int(g), int(b)
-    finally:
-        pd.close()
-
-
 def assert_opens_everywhere(path: Path) -> None:
     """The saved file opens in pikepdf and page 0 renders in pypdfium2."""
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) >= 1
-    pd = pdfium.PdfDocument(path)
-    try:
-        pd[0].render(scale=1).to_pil()
-    finally:
-        pd.close()
+    record("pages_at_least_pikepdf", path, minimum=1)
+    record("render_pdfium", path, page=0, scale=1)
 
 
 # -- labels, results and undo --------------------------------------------------------------
@@ -408,7 +383,7 @@ def test_round_trip_transform(open_copy: Opener, tmp_path: Path) -> None:
     with reopened(out) as doc:
         (moved,) = (o for o in doc.page(0).content_objects() if o.text.startswith("A second"))
     assert moved.bbox.y0 == pytest.approx(origin.y0 + 100, abs=4)
-    assert "A second paragraph" in pdfium_text(out)
+    record("text_contains_pdfium", out, page=0, text="A second paragraph")
 
 
 def test_round_trip_replace_text(open_copy: Opener, tmp_path: Path) -> None:
@@ -417,7 +392,7 @@ def test_round_trip_replace_text(open_copy: Opener, tmp_path: Path) -> None:
     content.replace_text(s, ReplaceText(body, "Edited paragraph."))
     out = s.save(tmp_path / "replaced.pdf")
     assert_opens_everywhere(out)
-    assert "Edited paragraph." in pdfium_text(out)
+    record("text_contains_pdfium", out, page=0, text="Edited paragraph.")
     with reopened(out) as doc:
         found = [o.text for o in doc.page(0).content_objects() if o.type is ObjectType.TEXT]
     assert any("Edited paragraph." in t for t in found)
@@ -430,7 +405,7 @@ def test_round_trip_add_text(open_copy: Opener, tmp_path: Path) -> None:
     )
     out = s.save(tmp_path / "added_text.pdf")
     assert_opens_everywhere(out)
-    assert "Round trip text box" in pdfium_text(out)
+    record("text_contains_pdfium", out, page=0, text="Round trip text box")
     with reopened(out) as doc:
         found = [o.text for o in doc.page(0).content_objects() if o.type is ObjectType.TEXT]
     assert any(t.startswith("Round trip text box") for t in found)
@@ -441,8 +416,7 @@ def test_round_trip_add_image(open_copy: Opener, tmp_path: Path) -> None:
     content.add_image(s, AddImage(0, Rect(100, 100, 200, 200), png((0, 200, 0))))
     out = s.save(tmp_path / "added_image.pdf")
     assert_opens_everywhere(out)
-    r, g, b = pdfium_pixel(out, 150, 150)
-    assert g > 150 and r < 80 and b < 80
+    record("pixel_green_pdfium", out, page=0, x=150, y=150)
     with reopened(out) as doc:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.IMAGE) == 1
 
@@ -456,8 +430,7 @@ def test_round_trip_add_shape(open_copy: Opener, tmp_path: Path) -> None:
     )
     out = s.save(tmp_path / "added_shape.pdf")
     assert_opens_everywhere(out)
-    r, g, b = pdfium_pixel(out, 150, 530)
-    assert r > 200 and g < 80 and b < 80
+    record("pixel_red_pdfium", out, page=0, x=150, y=530)
     with reopened(out) as doc:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.PATH) == 1
 
@@ -468,8 +441,7 @@ def test_round_trip_replace_image(open_copy: Opener, tmp_path: Path) -> None:
     content.replace_image(s, ReplaceImage(image, png((0, 200, 0))))
     out = s.save(tmp_path / "replaced_image.pdf")
     assert_opens_everywhere(out)
-    r, g, b = pdfium_pixel(out, 480, 130)
-    assert g > 150 and r < 80 and b < 80
+    record("pixel_green_pdfium", out, page=0, x=480, y=130)
     with reopened(out) as doc:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.IMAGE) == 1
 
@@ -480,7 +452,7 @@ def test_round_trip_delete(open_copy: Opener, tmp_path: Path) -> None:
     content.delete(s, DeleteObjects((heading,)))
     out = s.save(tmp_path / "deleted.pdf")
     assert_opens_everywhere(out)
-    assert "Mixed content heading" not in pdfium_text(out)
+    record("text_lacks_pdfium", out, page=0, text="Mixed content heading")
     with reopened(out) as doc:
         found = [o.text for o in doc.page(0).content_objects() if o.type is ObjectType.TEXT]
     assert len(found) == 2 and not any(t.startswith("Mixed content") for t in found)

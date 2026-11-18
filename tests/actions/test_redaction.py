@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.actions import run
@@ -28,6 +26,7 @@ from pdfeditor.model.redaction import MarkRef, RedactionArea
 from pdfeditor.services.redaction import MarkStyle, find_sensitive, mark_for_area
 from pdfeditor.services.text import PageTextIndex
 from tests.actions.conftest import Opener, pretend_signed
+from tests.hostcheck import record
 
 BUSY_CASES = {
     "redaction.mark": MarkForRedaction((RedactionArea(0, Rect(0, 0, 10, 10)),)),
@@ -83,28 +82,6 @@ def _mark_hits(session: DocumentSession, patterns: list[str]) -> tuple[MarkRef, 
     hits = _hits(session, patterns)
     result = run(session, "redaction.mark", MarkForRedaction(tuple(map(_area, hits)), STYLE))
     return result.value
-
-
-def _streams_mention(path: Path, needle: bytes) -> bool:
-    """Any decoded stream holds ``needle`` as a literal or hex string (independent of MuPDF)."""
-    with pikepdf.open(path) as pdf:
-        for obj in pdf.objects:
-            if isinstance(obj, pikepdf.Stream):
-                try:
-                    data = obj.read_bytes().lower()
-                except pikepdf.PdfError:
-                    continue
-                if needle.lower() in data or needle.hex().encode() in data:
-                    return True
-    return False
-
-
-def _pdfium_text(path: Path) -> str:
-    pd = pdfium.PdfDocument(path)
-    try:
-        return "\n".join(page.get_textpage().get_text_range() for page in pd)
-    finally:
-        pd.close()
 
 
 # -- redaction.mark ------------------------------------------------------------------------
@@ -295,7 +272,7 @@ def test_selective_apply_of_an_unnamed_mark_applies_it(open_copy: Opener) -> Non
     assert "Sensitive" not in _text(s, page=1)
     s.save()
     assert b"Sensitive" not in s.path.read_bytes()
-    assert "Sensitive" not in _pdfium_text(s.path)
+    record("doc_text_lacks_pdfium", s.path, text="Sensitive")
 
 
 def test_apply_with_a_ref_made_before_a_full_save_still_applies(open_copy: Opener) -> None:
@@ -350,7 +327,8 @@ def test_in_place_save_after_apply_keeps_no_redacted_text(
     s.save()  # in place
     data = s.path.read_bytes()
     assert data.count(b"%%EOF") == 1
-    assert secret not in data and not _streams_mention(s.path, secret)
+    assert secret not in data
+    record("streams_lack_pikepdf", s.path, needle=secret.decode())
 
     # Control: without the flag, the engine itself refuses the incremental save (MuPDF reports
     # that a document changed by redaction can't be saved incrementally), so the file is left
@@ -377,22 +355,18 @@ def test_redacted_image_area_is_one_colour_after_save(open_copy: Opener, tmp_pat
     assert result.value.ok and result.value.images_checked >= 1
 
     out = s.save(tmp_path / "image.pdf")
-    render = pdfium.PdfDocument(out)[0].render(scale=1).to_pil().convert("RGB")
-    inside = render.crop((66, 96, 244, 194))  # within the mark, clear of its edges
-    colours = inside.getcolors(maxcolors=16)
-    assert colours is not None and len(colours) == 1, colours
-    assert all(abs(c - e) <= 8 for c, e in zip(colours[0][1], (51, 102, 153), strict=True))
+    # within the mark, clear of its edges: one colour, close to the mark's (51, 102, 153)
+    record(
+        "crop_one_colour_pdfium",
+        out,
+        page=0,
+        box=[66, 96, 244, 194],
+        expected=[51, 102, 153],
+        tolerance=8,
+    )
 
-    with pikepdf.open(out) as pdf:  # the image under the mark is removed or blanked
-        resources = pdf.pages[0].obj.get("/Resources", {})
-        for xobject in resources.get("/XObject", {}).values():
-            if xobject.get("/Subtype") != "/Image":
-                continue
-            picture = pikepdf.PdfImage(xobject).as_pil_image().convert("RGB")
-            cut = round(picture.width * (250 - 60) / (400 - 60)) - 2
-            under = picture.crop((2, 2, cut, picture.height - 2))
-            found = under.getcolors(maxcolors=16)
-            assert found is not None and len(found) == 1, found
+    # the image under the mark is removed or blanked
+    record("image_under_mark_one_colour_pikepdf", out, mark_x1=250, image_x0=60, image_x1=400)
 
 
 def test_applied_file_leaks_nothing(open_copy: Opener, tmp_path: Path) -> None:
@@ -415,14 +389,12 @@ def test_applied_file_leaks_nothing(open_copy: Opener, tmp_path: Path) -> None:
             check.document.close()
     assert "jane.example" not in mupdf_text and "123-45-6789" not in mupdf_text
 
-    with pikepdf.open(out) as pdf:
-        assert len(pdf.pages) == 1
-    for secret in (b"jane.example@example.com", b"123-45-6789"):
-        assert not _streams_mention(out, secret), secret
+    record("page_count_pikepdf", out, pages=1)
+    for secret in ("jane.example@example.com", "123-45-6789"):
+        record("streams_lack_pikepdf", out, needle=secret)
     assert b"jane.example" not in out.read_bytes()
 
-    pdfium_text = _pdfium_text(out)
-    assert "jane.example" not in pdfium_text and "123-45-6789" not in pdfium_text
-    assert "Public paragraph that must survive." in pdfium_text
-    rendered = pdfium.PdfDocument(out)[0].render(scale=1).to_pil()
-    assert rendered.width > 0 and rendered.height > 0
+    record("doc_text_lacks_pdfium", out, text="jane.example")
+    record("doc_text_lacks_pdfium", out, text="123-45-6789")
+    record("doc_text_contains_pdfium", out, text="Public paragraph that must survive.")
+    record("render_size_pdfium", out, page=0, scale=1)

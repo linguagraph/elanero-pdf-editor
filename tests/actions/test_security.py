@@ -10,8 +10,6 @@ import shutil
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.actions import run
@@ -22,6 +20,7 @@ from pdfeditor.engine.base import SaveError
 from pdfeditor.model.metadata import EncryptionMethod, Permissions, SecuritySettings
 from pdfeditor.model.redaction import SanitizeOptions
 from tests.actions.conftest import Opener, pretend_signed
+from tests.hostcheck import record
 
 BUSY_CASES = {
     "security.set": SetSecurity(SecuritySettings()),
@@ -90,11 +89,9 @@ def test_sanitized_file_is_clean_in_every_reader(open_copy: Opener, tmp_path: Pa
         assert not s.document.info().has_javascript
     out = s.save(tmp_path / "clean.pdf")
 
-    with pikepdf.open(out) as pdf:
-        assert "/Title" not in pdf.docinfo
+    record("docinfo_lacks_key_pikepdf", out, key="/Title")
     assert b"app.alert" not in out.read_bytes()
-    rendered = pdfium.PdfDocument(out)[0].render(scale=1).to_pil()
-    assert rendered.width > 0 and rendered.height > 0
+    record("render_size_pdfium", out, page=0, scale=1)
 
 
 # -- security.set --------------------------------------------------------------------------
@@ -113,9 +110,8 @@ def test_set_security_queues_encryption_until_save(open_copy: Opener, tmp_path: 
     run(s, "security.set", SetSecurity(settings))
     out = s.save(tmp_path / "locked.pdf")
     assert _pending(s) is None
-    with pikepdf.open(out, password="open me") as pdf:
-        assert pdf.is_encrypted and len(pdf.pages) == 2
-    assert len(pdfium.PdfDocument(str(out), password="open me")) == 2
+    record("encrypted_pages_pikepdf", out, pages=2, password="open me")
+    record("page_count_pdfium", out, pages=2, password="open me")
 
 
 def test_set_security_needs_the_owner_password(open_encrypted: OpenEncrypted) -> None:
@@ -142,9 +138,8 @@ def test_remove_security_needs_the_owner_password(
     assert result.label == "Remove Security"
 
     out = s.save(tmp_path / "open.pdf")
-    with pikepdf.open(out) as pdf:  # opens without any password now
-        assert not pdf.is_encrypted
-    assert "Secret content" in pdfium.PdfDocument(out)[0].get_textpage().get_text_range()
+    record("not_encrypted_pikepdf", out)  # opens without any password now
+    record("text_contains_pdfium", out, page=0, text="Secret content")
 
 
 def test_remove_security_on_a_plain_document_is_refused(open_copy: Opener) -> None:

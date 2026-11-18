@@ -739,3 +739,219 @@ def _page_looks_same_pdfium(data: bytes, source: str, index: int) -> None:
     (base64 of the bytes the edit started from)."""
     before = _page_look_pdfium(base64.b64decode(source), index)
     assert _page_look_pdfium(data, index) == before
+
+
+# -- action-module checks (tests/actions/) ---------------------------------------------------------
+
+
+@host_check("pages_at_least_pikepdf")
+def _pages_at_least_pikepdf(data: bytes, minimum: int) -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert len(pdf.pages) >= minimum
+
+
+def _pixel_pdfium(data: bytes, page: int, x: int, y: int) -> tuple[int, int, int]:
+    """Pixel (x, y) of ``page`` rendered at 72 dpi, so it is the visible-space point (x, y)."""
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        image = pd[page].render(scale=1).to_pil().convert("RGB")
+        r, g, b = image.getpixel((x, y))
+        return int(r), int(g), int(b)
+    finally:
+        pd.close()
+
+
+@host_check("pixel_green_pdfium")
+def _pixel_green_pdfium(data: bytes, page: int, x: int, y: int) -> None:
+    r, g, b = _pixel_pdfium(data, page, x, y)
+    assert g > 150 and r < 80 and b < 80
+
+
+@host_check("pixel_red_pdfium")
+def _pixel_red_pdfium(data: bytes, page: int, x: int, y: int) -> None:
+    r, g, b = _pixel_pdfium(data, page, x, y)
+    assert r > 200 and g < 80 and b < 80
+
+
+@host_check("crop_box_size_pikepdf")
+def _crop_box_size_pikepdf(data: bytes, width: float, height: float) -> None:
+    """The first page's CropBox is ``width`` x ``height`` (pytest.approx with abs=0.5)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        box = [float(v) for v in pdf.pages[0].obj.CropBox]
+    assert math.isclose(box[2] - box[0], width, rel_tol=1e-6, abs_tol=0.5)
+    assert math.isclose(box[3] - box[1], height, rel_tol=1e-6, abs_tol=0.5)
+
+
+@host_check("rotation_pikepdf")
+def _rotation_pikepdf(data: bytes, page: int, degrees: int) -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert int(pdf.pages[page].obj.get("/Rotate", 0)) == degrees
+
+
+@host_check("catalog_has_key_pikepdf")
+def _catalog_has_key_pikepdf(data: bytes, key: str) -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert key in pdf.Root
+
+
+@host_check("docinfo_lacks_key_pikepdf")
+def _docinfo_lacks_key_pikepdf(data: bytes, key: str) -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert key not in pdf.docinfo
+
+
+@host_check("outline_pikepdf")
+def _outline_pikepdf(data: bytes, expected: list[list[Any]]) -> None:
+    """(level, title) of every bookmark, walked by hand through /First and /Next."""
+    import pikepdf
+
+    out: list[tuple[int, str]] = []
+
+    def walk(node: Any, level: int) -> None:
+        child = node.get("/First")
+        while child is not None:
+            out.append((level, str(child.Title)))
+            walk(child, level + 1)
+            child = child.get("/Next")
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        walk(pdf.Root.Outlines, 1)
+    assert out == [(int(level), title) for level, title in expected]
+
+
+@host_check("render_size_pdfium")
+def _render_size_pdfium(data: bytes, page: int, scale: float) -> None:
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        rendered = pd[page].render(scale=scale).to_pil()
+        assert rendered.width > 0 and rendered.height > 0
+    finally:
+        pd.close()
+
+
+@host_check("not_encrypted_pikepdf")
+def _not_encrypted_pikepdf(data: bytes) -> None:
+    """Opens with no password, and is not encrypted."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert not pdf.is_encrypted
+
+
+@host_check("comment_count_pikepdf")
+def _comment_count_pikepdf(data: bytes, count: int, page: int = 0) -> None:
+    """Page ``page`` has ``count`` comments (its annotations other than popups)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = pdf.pages[page].obj.get("/Annots", [])
+        assert len([a for a in annots if a.get("/Subtype") != "/Popup"]) == count
+
+
+@host_check("comment_names_unique_pikepdf")
+def _comment_names_unique_pikepdf(data: bytes, count: int, avoid_prefix: str) -> None:
+    """Every comment on page 0 has a /NM; there are ``count`` distinct names, and none starts
+    with ``avoid_prefix``."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for a in pdf.pages[0].Annots if a.get("/Subtype") != "/Popup"]
+        nm = [str(a.NM) for a in annots if a.get("/NM") is not None]
+    assert len(nm) == len(annots) == count
+    assert not any(n.startswith(avoid_prefix) for n in nm)
+    assert len(set(nm)) == count
+
+
+@host_check("comments_lack_names_pikepdf")
+def _comments_lack_names_pikepdf(data: bytes) -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for a in pdf.pages[0].Annots if a.get("/Subtype") != "/Popup"]
+        assert all(a.get("/NM") is None for a in annots)
+
+
+@host_check("names_present_none_prefixed_pikepdf")
+def _names_present_none_prefixed_pikepdf(data: bytes, prefix: str) -> None:
+    """Some annotation on any page has a /NM, and none of those names starts with ``prefix``."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        nm = [str(x.NM) for pg in pdf.pages for x in pg.get("/Annots", []) if x.get("/NM")]
+    assert nm and not any(n.startswith(prefix) for n in nm)
+
+
+@host_check("crop_one_colour_pdfium")
+def _crop_one_colour_pdfium(
+    data: bytes, page: int, box: list[int], expected: list[int], tolerance: int
+) -> None:
+    """The render of ``page``, cropped to ``box``, holds one colour within ``tolerance`` of
+    ``expected`` on each channel."""
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data)
+    try:
+        render = pd[page].render(scale=1).to_pil().convert("RGB")
+    finally:
+        pd.close()
+    colours = render.crop(tuple(box)).getcolors(maxcolors=16)
+    assert colours is not None and len(colours) == 1, colours
+    assert all(abs(c - e) <= tolerance for c, e in zip(colours[0][1], expected, strict=True))
+
+
+@host_check("image_under_mark_one_colour_pikepdf")
+def _image_under_mark_one_colour_pikepdf(
+    data: bytes, mark_x1: float, image_x0: float, image_x1: float
+) -> None:
+    """Each image of page 0 is one colour left of the mark's right edge, less a 2 px margin."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        resources = pdf.pages[0].obj.get("/Resources", {})
+        for xobject in resources.get("/XObject", {}).values():
+            if xobject.get("/Subtype") != "/Image":
+                continue
+            picture = pikepdf.PdfImage(xobject).as_pil_image().convert("RGB")
+            cut = round(picture.width * (mark_x1 - image_x0) / (image_x1 - image_x0)) - 2
+            under = picture.crop((2, 2, cut, picture.height - 2))
+            found = under.getcolors(maxcolors=16)
+            assert found is not None and len(found) == 1, found
+
+
+@host_check("watermark_drawn_pdfium")
+def _watermark_drawn_pdfium(data: bytes, reference: str) -> None:
+    """Page 0 of ``data`` differs from the same page of ``reference`` (base64) in its centre
+    part, and both pages have the same size."""
+    import pypdfium2 as pdfium
+    from PIL import ImageChops
+
+    def first_page(src: bytes) -> Any:
+        pd = pdfium.PdfDocument(src)
+        try:
+            return pd[0].render(scale=1).to_pil().convert("RGB")
+        finally:
+            pd.close()
+
+    with_mark = first_page(data)
+    without = first_page(base64.b64decode(reference))
+    assert with_mark.size == without.size
+    w, h = with_mark.size
+    centre = (int(w * 0.3), int(h * 0.3), int(w * 0.7), int(h * 0.7))
+    changed = ImageChops.difference(
+        without.crop(centre).convert("RGB"), with_mark.crop(centre).convert("RGB")
+    )
+    assert changed.getbbox() is not None
