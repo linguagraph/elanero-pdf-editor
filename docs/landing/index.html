@@ -12,6 +12,11 @@
   <meta property="og:description" content="A free, open-source PDF editor for Windows that works on your own computer: edit, review, organize, redact, OCR, convert and sign.">
   <meta property="og:url" content="https://linguagraph.github.io/elanero-pdf-editor/">
   <meta property="og:image" content="https://linguagraph.github.io/elanero-pdf-editor/guide/images/elanero-opened-pdf-signing.png">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://api.mymemory.translated.net https://api.cognitive.microsofttranslator.com https://libretranslate.com; img-src 'self' blob: data:; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; require-trusted-types-for 'script'"
+  >
+  <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#082f3f">
   <link rel="icon" href="assets/favicon.ico">
   <link rel="stylesheet" href="landing.css">
@@ -50,6 +55,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
             Download for Windows
           </a>
+          <a class="btn btn-ghost" href="app/">Open the web version</a>
           <a class="btn btn-ghost" href="guide/">User guide</a>
           <a class="btn btn-ghost" href="https://github.com/linguagraph/elanero-pdf-editor">View on GitHub</a>
         </div>
@@ -331,6 +337,7 @@
         <a href="https://github.com/linguagraph/elanero-pdf-editor/blob/main/LICENSE">AGPL-3.0-or-later</a>.
       </p>
       <nav aria-label="Footer">
+        <a href="app/">Web version</a>
         <a href="guide/">User guide</a>
         <a href="https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md">Privacy</a>
         <a href="https://github.com/linguagraph/elanero-pdf-editor">GitHub</a>
