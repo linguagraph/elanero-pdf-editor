@@ -15,6 +15,7 @@ import sys
 import zlib
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pymupdf
 from PIL import Image, ImageChops, ImageDraw
@@ -745,6 +746,109 @@ def annotations_unnamed() -> None:
     _save(doc, "annotations_unnamed.pdf")
 
 
+# The pikepdf builders below are copies of the test helpers they replace (tests/engine/
+# test_shared_objects.py), so the bytes match what those tests built. pikepdf runs only on the
+# host, so each import stays inside its function; the tests load the output with fixture_pdf().
+
+
+def _pikepdf_content(pdf: Any, text: str) -> Any:
+    ops = f"BT /F1 24 Tf 72 700 Td ({text}) Tj ET q 100 0 0 100 72 400 cm /Im1 Do Q"
+    return pdf.make_stream(ops.encode())
+
+
+def _shared_objects(share: str) -> None:
+    """Two pages that share ``share``: their content (stream and array), one resource
+    dictionary (with indirect category dictionaries) or one annotation (and the /Annots array
+    listing it). Font and image are always shared."""
+    import pikepdf
+    from pikepdf import Array, Dictionary, Name, String
+
+    pdf = pikepdf.new()
+    font = pdf.make_indirect(
+        Dictionary(
+            Type=Name.Font,
+            Subtype=Name.Type1,
+            BaseFont=Name.Helvetica,
+            Encoding=Name.WinAnsiEncoding,
+        )
+    )
+    image = pdf.make_stream(
+        bytes(4 * (x ^ y) for y in range(8) for x in range(8)),
+        Type=Name.XObject,
+        Subtype=Name.Image,
+        Width=8,
+        Height=8,
+        ColorSpace=Name.DeviceGray,
+        BitsPerComponent=8,
+    )
+
+    def resources() -> Dictionary:
+        return Dictionary(Font=Dictionary(F1=font), XObject=Dictionary(Im1=image))
+
+    shared_resources = pdf.make_indirect(
+        Dictionary(
+            Font=pdf.make_indirect(Dictionary(F1=font)),
+            XObject=pdf.make_indirect(Dictionary(Im1=image)),
+        )
+    )
+    # an indirect array holding one stream: stamps append to the array, edits rewrite the stream
+    shared_contents = pdf.make_indirect(Array([_pikepdf_content(pdf, "Shared words")]))
+    annot = pdf.make_indirect(
+        Dictionary(
+            Type=Name.Annot,
+            Subtype=Name.Square,
+            Rect=[300, 300, 400, 400],
+            C=[1, 0, 0],
+            NM=String("shared-square"),
+            AP=Dictionary(
+                N=pdf.make_stream(
+                    b"1 0 0 RG 4 w 2 2 96 96 re S",
+                    Type=Name.XObject,
+                    Subtype=Name.Form,
+                    BBox=[0, 0, 100, 100],
+                )
+            ),
+        )
+    )
+    shared_annots = pdf.make_indirect(Array([annot]))  # adding to it would add to both pages
+    for n in range(2):
+        page = Dictionary(
+            Type=Name.Page,
+            MediaBox=[0, 0, 612, 792],
+            Contents=shared_contents
+            if share == "contents"
+            else _pikepdf_content(pdf, f"Page {n + 1} words"),
+            Resources=shared_resources if share == "resources" else resources(),
+        )
+        if share == "annotation":
+            page.Annots = shared_annots
+        pdf.pages.append(pikepdf.Page(pdf.make_indirect(page)))
+    if share == "annotation":
+        annot.P = pdf.pages[0].obj
+    pdf.save(OUT / f"shared_objects_{share}.pdf")
+
+
+def shared_objects_listed_twice() -> None:
+    """A page tree naming the same page object twice (as MuPDF's select used to make)."""
+    import pikepdf
+    from pikepdf import Array, Dictionary, Name
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(300, 300))
+    page = pdf.pages[0].obj
+    page.Contents = _pikepdf_content(pdf, "Twice")
+    page.Resources = Dictionary(
+        Font=Dictionary(
+            F1=pdf.make_indirect(
+                Dictionary(Type=Name.Font, Subtype=Name.Type1, BaseFont=Name.Helvetica)
+            )
+        )
+    )
+    pdf.Root.Pages.Kids = Array([page, page])
+    pdf.Root.Pages.Count = 2
+    pdf.save(OUT / "shared_objects_listed_twice.pdf")
+
+
 GENERATORS: dict[str, Callable[[], None]] = {
     "print_to_pdf": print_to_pdf,
     "letter_spacing": letter_spacing,
@@ -775,6 +879,8 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "perf_mixed_10": lambda: perf_mixed(10),
     "perf_mixed_200": lambda: perf_mixed(200),
     "perf_mixed_1000": lambda: perf_mixed(1000),
+    "shared_objects_annotation": lambda: _shared_objects("annotation"),
+    "shared_objects_listed_twice": shared_objects_listed_twice,
 }
 
 
