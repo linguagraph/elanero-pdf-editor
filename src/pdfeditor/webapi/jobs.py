@@ -15,18 +15,39 @@ same code. Nothing here imports PyMuPDF.
 
 from __future__ import annotations
 
+import math
 import secrets
+import tempfile
 from collections import deque
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS, SnapshotCommand
+from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.jobs import JobContext
 from pdfeditor.core.session import DocumentSession
+from pdfeditor.engine.base import Document, PasswordRequired
+from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
 from pdfeditor.model.metadata import EncryptionMethod
+from pdfeditor.services.assembly import (
+    SUPPORTED_SUFFIXES,
+    MergeSource,
+    SplitMode,
+    merge,
+    plan_split,
+    safe_name,
+    subset_size,
+    write_split,
+)
+from pdfeditor.services.compare import CompareOptions
+from pdfeditor.services.compare import compare as compare_documents
+from pdfeditor.services.export import TextFormat, export_document
+from pdfeditor.services.export.images import ImageFormat, PageImageOptions, export_pages
 from pdfeditor.services.optimize import PRESETS, ReduceOptions, preset, reduce_size
+from pdfeditor.services.optimize import audit as space_audit
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.actions import _Events
 from pdfeditor.webapi.dto import BufferTable, from_json
@@ -35,6 +56,7 @@ from pdfeditor.webapi.errors import (
     FILE_TOO_LARGE,
     INVALID_ARGS,
     REFUSED,
+    RENDER_TOO_LARGE,
     STALE_JOB,
     STALE_OBJECT,
     RpcFailure,
@@ -64,10 +86,13 @@ class JobOutput:
     require_full_save: bool = False
     value: object = None  # the job's own result, for the report
     files: tuple[dto.FileDto, ...] = ()
+    kind: str = ""  # the result kind (W1.2 section 13); "" takes the default of the job type
+    name: str = ""  # the file name of a new_document result
 
 
 ConvertFn = Callable[[object, BufferTable], Any]
-RunFn = Callable[[DocumentSession, Any, JobContext], JobOutput]
+# The session is the job worker's copy of the document; None for a job type that takes none.
+RunFn = Callable[[DocumentSession | None, Any, JobContext], JobOutput]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +103,8 @@ class JobType:
     convert: ConvertFn
     # Does the work on the job worker's copy of the document, under the copy's lock.
     run: RunFn
+    # False for a job that takes no document (merge has no handle: its sources are in args).
+    takes_document: bool = True
 
 
 # -- the job types of the first slice --------------------------------------------------------
@@ -99,13 +126,20 @@ def _convert_action(data: object, buffers: BufferTable) -> ActionJob:
     return ActionJob(action.name, typed)
 
 
-def _run_action(session: DocumentSession, job: ActionJob, ctx: JobContext) -> JobOutput:
+def _session(session: DocumentSession | None) -> DocumentSession:
+    # run_job opens the document for every job type that takes one (JobType.takes_document).
+    assert session is not None
+    return session
+
+
+def _run_action(session: DocumentSession | None, job: ActionJob, ctx: JobContext) -> JobOutput:
+    owner = _session(session)
     ctx.token.check()  # a cancel that came before the step ends the job here
-    with session.lock:
-        outcome = layer.run(session, job.name, job.args)
+    with owner.lock:
+        outcome = layer.run(owner, job.name, job.args)
         ctx.token.check()
-        document = session.document.to_bytes(SNAPSHOT_OPTIONS)
-        flag = session.require_full_save
+        document = owner.document.to_bytes(SNAPSHOT_OPTIONS)
+        flag = owner.require_full_save
     return JobOutput(
         label=outcome.label,
         document=document,
@@ -121,10 +155,13 @@ def _convert_reduce(data: object, buffers: BufferTable) -> dto.ReduceSizeArgs:
     return args
 
 
-def _run_reduce(session: DocumentSession, args: dto.ReduceSizeArgs, ctx: JobContext) -> JobOutput:
+def _run_reduce(
+    session: DocumentSession | None, args: dto.ReduceSizeArgs, ctx: JobContext
+) -> JobOutput:
+    owner = _session(session)
     options: ReduceOptions = preset(args.preset).options
-    with session.lock:
-        result = reduce_size(session.document, options, token=ctx.token, progress=ctx.progress)
+    with owner.lock:
+        result = reduce_size(owner.document, options, token=ctx.token, progress=ctx.progress)
     return JobOutput(
         files=(dto.FileDto(name="reduced.pdf", mime="application/pdf", data=result.data),),
         value=dto.ReduceSizeValue(
@@ -133,9 +170,295 @@ def _run_reduce(session: DocumentSession, args: dto.ReduceSizeArgs, ctx: JobCont
     )
 
 
+# -- the read-only job types of W3.7 --------------------------------------------------------------
+
+_MIME = {
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".html": "text/html",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".tif": "image/tiff",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+TEXT_FORMATS = {
+    "txt": TextFormat.TEXT,
+    "md": TextFormat.MARKDOWN,
+    "html": TextFormat.HTML,
+    "docx": TextFormat.WORD,  # written in pure Python (zipfile); no LibreOffice involved
+}
+IMAGE_FORMATS = {"png": ImageFormat.PNG, "jpeg": ImageFormat.JPEG, "tiff": ImageFormat.TIFF}
+# W1.4 section 11: print renders at 150 dpi, with 300 dpi as the option. Export and print share it.
+IMAGE_DPI = (150, 300)
+
+
+def _mime_of(name: str) -> str:
+    return _MIME.get(Path(name).suffix.lower(), "application/octet-stream")
+
+
+def _collect(folder: Path) -> tuple[dto.FileDto, ...]:
+    """Every file written under the folder, named by its path relative to it (the download name)."""
+    return tuple(
+        dto.FileDto(
+            name=path.relative_to(folder).as_posix(),
+            mime=_mime_of(path.name),
+            data=path.read_bytes(),
+        )
+        for path in sorted(folder.rglob("*"))
+        if path.is_file()
+    )
+
+
+def _check_pages(pages: Sequence[int], count: int, path: str) -> None:
+    for index in pages:
+        if not 0 <= index < count:
+            raise RpcFailure(INVALID_ARGS, f"{path}: no such page", {"path": path})
+
+
+def _pages_arg(pages: tuple[int, ...] | None, count: int, path: str) -> list[int]:
+    """The 0-based pages a job works on. None means every page."""
+    if pages is None:
+        return list(range(count))
+    if not pages:
+        raise RpcFailure(INVALID_ARGS, f"{path}: no pages", {"path": path})
+    _check_pages(pages, count, path)
+    return list(pages)
+
+
+def _check_render_size(document: Document, pages: Sequence[int], dpi: int) -> None:
+    """Refuses a page that would render above the pixel ceiling, as render.page does."""
+    for index in pages:
+        rect = document.page(index).rect
+        pixels = math.ceil(rect.width * dpi / 72) * math.ceil(rect.height * dpi / 72)
+        if pixels > limits.MAX_RENDER_PIXELS:
+            raise RpcFailure(
+                RENDER_TOO_LARGE,
+                "a page is too large to render at this resolution",
+                {"max_pixels": limits.MAX_RENDER_PIXELS, "pixels": pixels},
+            )
+
+
+def _convert_audit(data: object, buffers: BufferTable) -> dto.AuditArgs:
+    args: dto.AuditArgs = from_json(dto.AuditArgs, data, buffers, "args")
+    return args
+
+
+def _run_audit(session: DocumentSession | None, args: dto.AuditArgs, ctx: JobContext) -> JobOutput:
+    owner = _session(session)
+    ctx.token.check()
+    with owner.lock:
+        usage = space_audit(owner.document)
+    ctx.token.check()
+    value = dto.AuditValue(
+        total=usage.total,
+        categories=tuple(
+            dto.SpaceCategoryDto(name=name, size=size) for name, size in usage.categories.items()
+        ),
+    )
+    return JobOutput(kind="report", value=value)
+
+
+def _convert_export(data: object, buffers: BufferTable) -> dto.ExportArgs:
+    args: dto.ExportArgs = from_json(dto.ExportArgs, data, buffers, "args")
+    if args.format not in TEXT_FORMATS and args.format not in IMAGE_FORMATS:
+        raise RpcFailure(INVALID_ARGS, "args.format: no such format", {"path": "args.format"})
+    if args.format in IMAGE_FORMATS and args.dpi not in IMAGE_DPI:
+        raise RpcFailure(INVALID_ARGS, "args.dpi: must be 150 or 300", {"path": "args.dpi"})
+    return args
+
+
+def _run_export(
+    session: DocumentSession | None, args: dto.ExportArgs, ctx: JobContext
+) -> JobOutput:
+    owner = _session(session)
+    with owner.lock, tempfile.TemporaryDirectory() as folder:
+        doc = owner.document
+        pages = _pages_arg(args.pages, doc.page_count, "args.pages")
+        target = Path(folder, "export")
+        if args.format in TEXT_FORMATS:
+            export_document(
+                doc,
+                pages,
+                target,
+                TEXT_FORMATS[args.format],
+                token=ctx.token,
+                progress=ctx.progress,
+            )
+        else:
+            _check_render_size(doc, pages, args.dpi)
+            options = PageImageOptions(
+                format=IMAGE_FORMATS[args.format], dpi=args.dpi, annotations=args.annotations
+            )
+            export_pages(doc, pages, target, options, token=ctx.token, progress=ctx.progress)
+        files = _collect(Path(folder))
+    return JobOutput(files=files)
+
+
+def _convert_split(data: object, buffers: BufferTable) -> dto.SplitArgs:
+    args: dto.SplitArgs = from_json(dto.SplitArgs, data, buffers, "args")
+    if args.pages_per_file < 1:
+        raise RpcFailure(
+            INVALID_ARGS,
+            "args.pages_per_file: must be 1 or more",
+            {"path": "args.pages_per_file"},
+        )
+    if args.mode is SplitMode.MAX_SIZE and args.max_bytes <= 0:
+        raise RpcFailure(
+            INVALID_ARGS, "args.max_bytes: must be more than 0", {"path": "args.max_bytes"}
+        )
+    return args
+
+
+def _run_split(session: DocumentSession | None, args: dto.SplitArgs, ctx: JobContext) -> JobOutput:
+    owner = _session(session)
+    with owner.lock, tempfile.TemporaryDirectory() as folder:
+        doc = owner.document
+        if args.mode is SplitMode.RANGES:
+            for part in args.ranges:
+                _check_pages(part, doc.page_count, "args.ranges")
+
+        def size_of(pages: list[int]) -> int:
+            return subset_size(owner.engine, doc, pages)
+
+        plan = plan_split(doc, args.mode, args.pages_per_file, args.ranges, args.max_bytes, size_of)
+        # The parts are written into the folder and read back: write_split is the desktop's code.
+        write_split(owner.engine, doc, plan, Path(folder), "split", ctx.token, ctx.progress)
+        files = _collect(Path(folder))
+    return JobOutput(files=files)
+
+
+def _convert_merge(data: object, buffers: BufferTable) -> dto.MergeArgs:
+    args: dto.MergeArgs = from_json(dto.MergeArgs, data, buffers, "args")
+    if not args.sources:
+        raise RpcFailure(INVALID_ARGS, "args.sources: no sources", {"path": "args.sources"})
+    total = 0
+    for index, source in enumerate(args.sources):
+        if Path(source.name).suffix.lower() not in SUPPORTED_SUFFIXES:
+            path = f"args.sources[{index}].name"
+            raise RpcFailure(INVALID_ARGS, f"{path}: not a PDF or image file", {"path": path})
+        total += len(source.data)
+    if total > limits.MAX_JOB_BYTES:
+        raise RpcFailure(
+            FILE_TOO_LARGE,
+            "the sources are too large for a job",
+            {"max_bytes": limits.MAX_JOB_BYTES, "size": total},
+        )
+    return args
+
+
+def _run_merge(session: DocumentSession | None, args: dto.MergeArgs, ctx: JobContext) -> JobOutput:
+    # No document: the sources are written to a folder and merged by the desktop's merge service.
+    # The result is a new document (W1.2 section 13), never a change to an open one.
+    ctx.token.check()
+    engine = get_engine(DEFAULT_ENGINE)
+    with ENGINE_LOCK, tempfile.TemporaryDirectory() as folder:
+        sources: list[MergeSource] = []
+        for index, item in enumerate(args.sources):
+            suffix = Path(item.name).suffix.lower()
+            path = Path(folder, str(index), safe_name(Path(item.name).stem) + suffix)
+            path.parent.mkdir(parents=True)
+            path.write_bytes(item.data)
+            pages = None if item.pages is None else list(item.pages)
+            sources.append(MergeSource(path, pages))
+        try:
+            merged = merge(engine, sources, args.bookmarks, ctx.token, ctx.progress)
+        except PasswordRequired as exc:
+            raise RpcFailure(
+                REFUSED, "a source is encrypted", {"reason": "encrypted_source"}
+            ) from exc
+        try:
+            data = merged.to_bytes()
+        finally:
+            merged.close()
+    return JobOutput(kind="new_document", document=data, name="merged.pdf")
+
+
+def _convert_compare(data: object, buffers: BufferTable) -> dto.CompareArgs:
+    args: dto.CompareArgs = from_json(dto.CompareArgs, data, buffers, "args")
+    return args
+
+
+def _run_compare(
+    session: DocumentSession | None, args: dto.CompareArgs, ctx: JobContext
+) -> JobOutput:
+    owner = _session(session)
+    ctx.token.check()
+    with owner.lock:
+        try:
+            newer = owner.engine.open(args.other, None)
+        except PasswordRequired as exc:
+            raise RpcFailure(
+                REFUSED, "the newer document is encrypted", {"reason": "encrypted_source"}
+            ) from exc
+        try:
+            result = compare_documents(
+                owner.document,
+                newer,
+                CompareOptions(text=args.text, visual=args.visual),
+                token=ctx.token,
+                progress=ctx.progress,
+            )
+        finally:
+            newer.close()
+    value = dto.CompareValue(
+        identical=result.identical,
+        pairs=tuple((a, b) for a, b in result.pairs),
+        changes=tuple(
+            dto.CompareChangeDto(
+                kind=change.kind.value,
+                page_a=change.page_a,
+                page_b=change.page_b,
+                summary=change.summary,
+            )
+            for change in result.changes
+        ),
+    )
+    return JobOutput(kind="report", value=value)
+
+
+def _convert_print(data: object, buffers: BufferTable) -> dto.PrintArgs:
+    args: dto.PrintArgs = from_json(dto.PrintArgs, data, buffers, "args")
+    if args.dpi not in IMAGE_DPI:
+        raise RpcFailure(INVALID_ARGS, "args.dpi: must be 150 or 300", {"path": "args.dpi"})
+    return args
+
+
+def _run_print(session: DocumentSession | None, args: dto.PrintArgs, ctx: JobContext) -> JobOutput:
+    owner = _session(session)
+    files: list[dto.FileDto] = []
+    with owner.lock, tempfile.TemporaryDirectory() as folder:
+        doc = owner.document
+        pages = _pages_arg(args.pages, doc.page_count, "args.pages")
+        _check_render_size(doc, pages, args.dpi)
+        width = len(str(max(pages) + 1)) if pages else 1
+        target = Path(folder, "page.png")
+        options = PageImageOptions(
+            format=ImageFormat.PNG, dpi=args.dpi, annotations=args.annotations
+        )
+        for n, index in enumerate(pages):
+            ctx.token.check()
+            export_pages(doc, [index], target, options, token=ctx.token)
+            files.append(
+                dto.FileDto(
+                    name=f"page-{index + 1:0{width}d}.png",
+                    mime="image/png",
+                    data=target.read_bytes(),
+                )
+            )
+            ctx.progress(n + 1, len(pages))
+    return JobOutput(files=tuple(files))
+
+
 JOB_TYPES: dict[str, JobType] = {
     "action": JobType("action", True, _convert_action, _run_action),
     "reduce_size": JobType("reduce_size", False, _convert_reduce, _run_reduce),
+    "audit": JobType("audit", False, _convert_audit, _run_audit),
+    "export": JobType("export", False, _convert_export, _run_export),
+    "split": JobType("split", False, _convert_split, _run_split),
+    "merge": JobType("merge", False, _convert_merge, _run_merge, takes_document=False),
+    "compare": JobType("compare", False, _convert_compare, _run_compare),
+    "print_pages": JobType("print_pages", False, _convert_print, _run_print),
 }
 
 
@@ -232,6 +555,12 @@ def _forget_unusable() -> None:
 def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepareResult:
     session = REGISTRY.get(params.handle)
     kind = job_type(params.job)
+    if not kind.takes_document:
+        raise RpcFailure(
+            INVALID_ARGS,
+            "params.job: this job takes no document; run it with job.run",
+            {"path": "params.job"},
+        )
     typed = kind.convert(params.args, buffers)
     label = typed.name if isinstance(typed, ActionJob) else kind.name
     _forget_unusable()

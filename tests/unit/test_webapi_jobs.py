@@ -393,7 +393,7 @@ def test_an_unknown_handle_is_no_document(web: None) -> None:
 @pytest.mark.parametrize(
     ("job", "args", "path"),
     [
-        ("print_pages", {}, "params.job"),  # not a job type of the first slice
+        ("no_such_job", {}, "params.job"),  # not a job type
         ("action", {}, "args.name"),  # a missing field
         ("action", {"name": 5, "args": {}}, "args.name"),  # a wrong type
         ("action", {"name": "no.such.action", "args": {}}, "args.name"),
@@ -421,7 +421,7 @@ def test_the_job_worker_refuses_an_unknown_job_type(web: None, fixture_pdf: Any)
     _, copy = prepare(
         open_data(fixture_pdf("images").read_bytes()), "reduce_size", {"preset": "ebook"}
     )
-    err = error(run_job("print_pages", {}, copy)[0])
+    err = error(run_job("no_such_job", {}, copy)[0])
     assert err["code"] == INVALID_ARGS
     assert err["details"]["path"] == "params.job"
 

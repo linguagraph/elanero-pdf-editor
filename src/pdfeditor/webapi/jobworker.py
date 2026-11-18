@@ -25,7 +25,13 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.webapi import Method, dto, jobs, limits
 from pdfeditor.webapi import dispatch as dispatch_envelope
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable
-from pdfeditor.webapi.errors import CANCELLED, FILE_TOO_LARGE, RpcFailure, failure_for
+from pdfeditor.webapi.errors import (
+    CANCELLED,
+    FILE_TOO_LARGE,
+    INVALID_ARGS,
+    RpcFailure,
+    failure_for,
+)
 from pdfeditor.webapi.platform import WEB_SNAPSHOT_BUDGET
 
 PROGRESS_INTERVAL_S = 0.1  # W1.2 section 8: at most one notice per 100 ms per job
@@ -59,19 +65,35 @@ def run_job(
 ) -> dto.JobRunResult:
     job_type = jobs.job_type(params.job)
     typed = job_type.convert(params.args, buffers)
-    if len(params.document) > limits.MAX_JOB_BYTES:
-        raise RpcFailure(
-            FILE_TOO_LARGE,
-            "the document is too large for a job",
-            {"max_bytes": limits.MAX_JOB_BYTES, "size": len(params.document)},
-        )
-    # The copy is opened here and closed at the end: nothing of it outlives the job.
-    # The copy is decrypted by jobs.prepare, so the job worker never holds a password (W1.2 16.1).
-    session = DocumentSession.open(params.document, None, snapshot_budget=WEB_SNAPSHOT_BUDGET)
-    try:
-        output = _execute(session, job_type, typed, request_id, notify, cancel)
-    finally:
-        session.close()
+    if job_type.takes_document:
+        if params.document is None:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "params.document is required for this job",
+                {"path": "params.document"},
+            )
+        if len(params.document) > limits.MAX_JOB_BYTES:
+            raise RpcFailure(
+                FILE_TOO_LARGE,
+                "the document is too large for a job",
+                {"max_bytes": limits.MAX_JOB_BYTES, "size": len(params.document)},
+            )
+        # The copy is opened here and closed at the end: nothing of it outlives the job.
+        # The copy is decrypted by jobs.prepare, so the job worker never holds a password
+        # (W1.2 16.1).
+        session = DocumentSession.open(params.document, None, snapshot_budget=WEB_SNAPSHOT_BUDGET)
+        try:
+            output = _execute(session, job_type, typed, request_id, notify, cancel)
+        finally:
+            session.close()
+    else:
+        if params.document is not None:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "params.document: this job takes no document",
+                {"path": "params.document"},
+            )
+        output = _execute(None, job_type, typed, request_id, notify, cancel)
     size = len(output.document or b"") + sum(len(item.data) for item in output.files)
     if size > limits.MAX_JOB_BYTES:
         raise RpcFailure(
@@ -79,18 +101,20 @@ def run_job(
             "the job's result is too large for the browser",
             {"max_bytes": limits.MAX_JOB_BYTES, "size": size},
         )
+    kind = output.kind or ("document" if job_type.mutating else "files")
     return dto.JobRunResult(
-        kind="document" if job_type.mutating else "files",
+        kind=kind,
         label=output.label,
         require_full_save=output.require_full_save,
         document=output.document,
         files=output.files,
         value=output.value,
+        name=output.name,
     )
 
 
 def _execute(
-    session: DocumentSession,
+    session: DocumentSession | None,
     job_type: jobs.JobType,
     typed: Any,
     request_id: object,

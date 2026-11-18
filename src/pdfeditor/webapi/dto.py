@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum, IntFlag
 from typing import Any, NoReturn, Union, get_args, get_origin
 
+from pdfeditor.services.assembly import SplitMode
 from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
 
 # W1.2 section 3: bumped on any change that is not purely additive to an existing message.
@@ -363,7 +364,9 @@ class JobAbortParams:
 class JobRunParams:
     job: str
     args: JsonObject
-    document: bytes  # the copy from jobs.prepare (always readable without a password)
+    # The copy from jobs.prepare (always readable without a password). None for a job that takes
+    # no document: merge has no handle, its sources are in args.
+    document: bytes | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -375,12 +378,15 @@ class FileDto:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class JobRunResult:
-    kind: str  # "document" (a mutating job, applied with jobs.apply) or "files" (read-only)
+    # "document" (a mutating job, applied with jobs.apply), "files" (read-only outputs),
+    # "new_document" (merge, opened as a new tab) or "report" (audit and compare: the value only)
+    kind: str
     label: str  # the undo label of the step; "" for a read-only job
     require_full_save: bool
-    document: bytes | None  # the result document of a mutating job
+    document: bytes | None  # the result document of a mutating job or a new_document
     files: tuple[FileDto, ...]  # the outputs of a read-only job
     value: object  # the job's own result, converted as in section 6
+    name: str  # the file name of a new_document; "" otherwise
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -399,6 +405,81 @@ class ReduceSizeValue:
     before: int
     after: int
     notes: tuple[str, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AuditArgs:
+    """The space audit takes no options: it reads the whole document."""
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SpaceCategoryDto:
+    name: str  # a category of the space audit, such as "images" or "fonts"
+    size: int  # its stored (compressed) bytes
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AuditValue:
+    total: int  # the stored bytes of the whole document
+    categories: tuple[SpaceCategoryDto, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExportArgs:
+    format: str  # text: "txt", "md", "html" or "docx"; images: "png", "jpeg" or "tiff"
+    pages: tuple[int, ...] | None = None  # 0-based; None: every page
+    dpi: int = 150  # images only: 150 (default) or 300 (W1.4 section 11)
+    annotations: bool = True  # images only: draw the comments too
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitArgs:
+    mode: SplitMode  # the split modes of the services, by their value
+    pages_per_file: int = 1  # mode "pages"
+    ranges: tuple[tuple[int, ...], ...] = ()  # mode "ranges": the 0-based pages of each part
+    max_bytes: int = 0  # mode "size": the largest part, in bytes
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MergeSourceArgs:
+    name: str  # the file name with its extension: the extension decides PDF or image
+    data: bytes
+    pages: tuple[int, ...] | None = None  # 0-based; None: every page (PDF sources only)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MergeArgs:
+    sources: tuple[MergeSourceArgs, ...]
+    bookmarks: bool = True  # each source gets a top-level bookmark, as in Combine
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CompareArgs:
+    other: bytes  # the newer document; the job's document is the older one
+    text: bool = True
+    visual: bool = True  # pixel differences where the text is the same
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CompareChangeDto:
+    kind: str  # the services' change kind, such as "inserted", "deleted" or "visual"
+    page_a: int | None  # 0-based page of the older document; None: only in the newer one
+    page_b: int | None  # 0-based page of the newer document; None: only in the older one
+    summary: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CompareValue:
+    identical: bool
+    pairs: tuple[tuple[int | None, int | None], ...]  # aligned pages (older, newer)
+    changes: tuple[CompareChangeDto, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PrintArgs:
+    pages: tuple[int, ...] | None = None  # 0-based; None: every page
+    dpi: int = 150  # 150 (default) or 300 (W1.4 section 11)
+    annotations: bool = True  # include the comments
 
 
 class BufferTable:
