@@ -46,6 +46,18 @@ export function ToastRegion({ store = toasts }: { store?: ToastStore }) {
           role={toast.kind === 'error' ? 'alert' : 'status'}
         >
           <span className="toast-text">{toast.text}</span>
+          {toast.action === undefined ? null : (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                toast.action?.run();
+                store.dismiss(toast.id);
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
           <button
             type="button"
             className="toast-dismiss"

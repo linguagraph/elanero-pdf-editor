@@ -108,4 +108,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
+  // The engine worker is an ES module: the page starts it by importing its URL from a blob: worker
+  // (engine/start.ts), and an IIFE bundle would not run that way under the page CSP.
+  worker: { format: 'es' },
 });

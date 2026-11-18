@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../App';
+import { fakeEngine } from '../engine/testEngine';
 import { t } from '../i18n/t';
 import { THEME_STORAGE_KEY } from '../theme/theme';
 import { PREFS_STORAGE_KEY, readPreferences } from './store';
@@ -24,7 +25,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   act(() => {
-    root.render(<App />);
+    root.render(<App engine={fakeEngine()} />);
   });
 });
 

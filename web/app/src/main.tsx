@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { createEngineConnection } from './engine/engineConnection';
+import { engineBootOptions } from './engine/bootOptions';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
 import { initTheme } from './theme/theme';
@@ -15,9 +17,11 @@ if (shouldRefuse(window)) {
     throw new Error('index.html has no #root element');
   }
   initTheme();
+  // One engine connection per tab. App starts it after the first paint (W3.1).
+  const engine = createEngineConnection({ boot: engineBootOptions() });
   createRoot(root).render(
     <StrictMode>
-      <App />
+      <App engine={engine} />
     </StrictMode>,
   );
   // Production only: the dev server's modules must not sit behind a service worker cache.

@@ -98,14 +98,14 @@ _ID_PATTERN = re.compile(rb"/ID\s*\[[^\]]*\]")
 
 
 def saved_bytes(handle: str) -> bytes:
-    """The saved file of an open document. The trailer's /ID is random at each save, so it is
-    set to a fixed value of the same length: two saves of an unchanged document then compare equal.
+    """The saved file of an open document, without its trailer /ID array. The /ID is random at each
+    save, and under Pyodide the bytes around it also differ between two saves of an unchanged
+    document, so the whole array is removed from both sides before a comparison.
     """
     reply, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
     data = binary(ok(reply)["data"], out)
-    fixed = b"/ID[<" + b"0" * 32 + b"><" + b"0" * 32 + b">]"
-    data, count = _ID_PATTERN.subn(fixed, data)
-    assert count == 1, "the saved file has no single /ID array to normalise"
+    data, count = _ID_PATTERN.subn(b"", data)
+    assert count == 1, "the saved file has no single /ID array to remove"
     return data
 
 

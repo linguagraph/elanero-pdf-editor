@@ -241,6 +241,11 @@ export const EN = {
   'engine.lost.intro': 'If you restart, this is lost:',
   'engine.lost.autosave': 'The changes made since the last autosave',
   'engine.lost.undo': 'The undo history',
+  'engine.restart.done': 'The engine restarted. Lost: {items}.',
+  'engine.restart.lost': 'Could not reopen {names}. Lost: {items}.',
+  'engine.restart.failed':
+    'The engine could not be restarted. The current engine is still running.',
+  'engine.restart.unavailable': 'The engine is not running, so there is nothing to restart.',
 
   // Start-up screen, toasts and job progress (W1.6 section 10, W4.4b).
   'loading.title': 'Elanero is starting',
@@ -250,9 +255,11 @@ export const EN = {
   'toast.region': 'Notifications',
   'toast.dismiss': 'Dismiss',
   'toast.dismissNamed': 'Dismiss: {text}',
+  'toast.undo': 'Undo',
   'job.cancel': 'Cancel',
   'job.working': 'Working',
   'job.percent': '{percent}% done',
+  'job.done': 'Done: {label}',
 
   // Start page, document tabs and opening files (W1.6 section 3, W4.2b).
   'start.heading': 'Open a PDF',
@@ -266,7 +273,13 @@ export const EN = {
   'tabs.close': 'Close {name}',
   'tabs.unsaved': 'Unsaved changes',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
-  'open.engineNotConnected': 'The PDF engine is not connected yet, so {name} cannot be shown.',
+  'open.engineNotReady':
+    'The PDF engine is not ready yet. Wait for it to start, then open the file again.',
+  'open.largeFile': '{name} is large, so opening and editing may be slow.',
+  'password.title': 'Password required',
+  'password.body': '{name} is protected. Enter its password to open it. The password is not saved.',
+  'password.label': 'Password',
+  'action.cancel': 'Cancel',
 
   // Document view: page list, zoom and render states (W5.1a, W1.4).
   'view.label': 'Document',

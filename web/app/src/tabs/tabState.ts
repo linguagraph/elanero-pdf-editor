@@ -1,12 +1,21 @@
-// The document tabs as plain data (W1.6 section 3, W4.2b). A tab holds the File the user chose, in
-// memory only: nothing here is written to storage, and the File is released when the tab closes.
-// The engine does not open these files yet; that wiring comes with the RPC session.
+// The document tabs as plain data (W1.6 section 3, W4.2b). A tab holds the engine handle of its
+// open document and the page count the engine reported. The File itself is not kept: its bytes
+// went to the engine when the document opened, and nothing here is written to storage.
 
 export interface DocumentTab {
   readonly id: number;
   readonly name: string;
   readonly dirty: boolean;
-  readonly file: File;
+  // The opaque handle session.open returned (W1.2 section 12). Every later call names it.
+  readonly handle: string;
+  readonly pages: number;
+}
+
+// A document the engine has opened, as the tab needs it.
+export interface OpenedTab {
+  readonly name: string;
+  readonly handle: string;
+  readonly pages: number;
 }
 
 export interface TabState {
@@ -18,8 +27,14 @@ export interface TabState {
 export const EMPTY_TABS: TabState = { tabs: [], activeId: null, nextId: 1 };
 
 // Adds a tab at the end and makes it the active one.
-export function addTab(state: TabState, file: File): TabState {
-  const tab: DocumentTab = { id: state.nextId, name: file.name, dirty: false, file };
+export function addTab(state: TabState, opened: OpenedTab): TabState {
+  const tab: DocumentTab = {
+    id: state.nextId,
+    name: opened.name,
+    dirty: false,
+    handle: opened.handle,
+    pages: opened.pages,
+  };
   return { tabs: [...state.tabs, tab], activeId: tab.id, nextId: state.nextId + 1 };
 }
 

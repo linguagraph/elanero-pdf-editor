@@ -14,6 +14,19 @@ export interface Toast {
   readonly kind: ToastKind;
   // Already translated: the caller passes text from t(), so this file holds no English.
   readonly text: string;
+  // An optional button after the text. Only the caller that can really undo a change passes one.
+  readonly action?: ToastAction;
+}
+
+// A button on a toast. The label is already translated. Running the action closes the toast.
+export interface ToastAction {
+  readonly label: string;
+  readonly run: () => void;
+}
+
+// The Undo action for a toast about a change the caller can reverse (W1.6 section 10).
+export function undoAction(run: () => void): ToastAction {
+  return { label: t('toast.undo'), run };
 }
 
 export interface ToastQueue {
@@ -51,7 +64,7 @@ export function removeToast(queue: ToastQueue, id: number, limit = VISIBLE_TOAST
 export interface ToastStore {
   getState(): ToastQueue;
   subscribe(listener: () => void): () => void;
-  push(kind: ToastKind, text: string): number;
+  push(kind: ToastKind, text: string, action?: ToastAction): number;
   dismiss(id: number): void;
 }
 
@@ -73,9 +86,10 @@ export function createToastStore(): ToastStore {
         listeners.delete(listener);
       };
     },
-    push(kind, text) {
+    push(kind, text, action) {
       const id = nextId++;
-      update(enqueueToast(state, { id, kind, text }));
+      const toast: Toast = action === undefined ? { id, kind, text } : { id, kind, text, action };
+      update(enqueueToast(state, toast));
       return id;
     },
     dismiss(id) {
