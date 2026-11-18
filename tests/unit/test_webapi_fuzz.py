@@ -27,7 +27,7 @@ import pytest
 
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import METHODS, dispatch
-from pdfeditor.webapi.errors import OPEN_FAILED
+from pdfeditor.webapi.errors import INVALID_ARGS, INVALID_REQUEST, OPEN_FAILED
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.unit.robustness_helpers import check_reply, run_bounded
@@ -448,3 +448,27 @@ def test_robust_damaged_open_reproducers(web: None, fixture_pdf: Any) -> None:
         reply = check_reply(reply_json, "damaged open reproducer")
         assert reply["ok"] is False, reply
         assert reply["error"]["code"] == OPEN_FAILED, reply
+
+
+def test_robust_fifty_thousand_levels_refused_before_parsing(web: None) -> None:
+    """Regression: 50,000 nested levels overflowed the wasm stack in json.loads under Pyodide,
+    which is fatal. The depth scan refuses them first, with INVALID_REQUEST, and nothing raises.
+
+    Reproducer: '{"v":1,"id":1,"method":"hello","params":{"x":' + '[' * 50000 + ']' * 50000 + '}}'
+    """
+    text = '{"v":1,"id":1,"method":"hello","params":{"x":' + "[" * 50000 + "]" * 50000 + "}}"
+    reply_json, _ = run_bounded(functools.partial(dispatch, text, []))
+    reply = check_reply(reply_json, "50,000 levels")
+    assert reply["ok"] is False, reply
+    assert reply["error"]["code"] == INVALID_REQUEST, reply
+
+
+def test_robust_200_levels_still_parse(web: None) -> None:
+    """A 200-level request (under MAX_JSON_DEPTH) is parsed: it reaches the params check and
+    fails there as an unknown field, not as a JSON or depth error."""
+    text = '{"v":1,"id":1,"method":"hello","params":{"x":' + "[" * 200 + "]" * 200 + "}}"
+    reply_json, _ = run_bounded(functools.partial(dispatch, text, []))
+    reply = check_reply(reply_json, "200 levels")
+    assert reply["ok"] is False, reply
+    assert reply["error"]["code"] == INVALID_ARGS, reply
+    assert reply["error"]["message"] == "params.x: unknown field", reply
