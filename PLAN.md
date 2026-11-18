@@ -549,7 +549,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W2.6** Web package build (#183)
 - [x] **W2.7a** Pyodide test runner and `web-pytest` CI job (#184, #185, #187; the browser run passes on `main`, 914 tests)
 - [x] **W2.7b** Host checks for Pyodide runs (C1), priority modules (#186, #188; skip budget set from the real run)
-- [ ] **W2.7c** Host checks: remaining host-only modules _(partial: 177 → 54 host-only skips; #189 engine (except test_shared_objects), #190 test_shared_objects (1 of 34), #191 actions; still to do: unit and services modules (about 50 skips, batch in progress); the 33 test_shared_objects fixtures need pikepdf-built fixtures generated ahead of time; budgets to lower after the next real run)_
+- [ ] **W2.7c** Host checks: remaining host-only modules _(partial: measured on main (web-pytest run 44258903859): 177 → 44 host-only skips in 10 modules, 1047 passed, 0 failed; merged: #189, #190, #191, #193; still host-only: 33 in tests/engine/test_shared_objects.py, whose fixtures are built with pikepdf and need generating ahead of time, and 11 in other modules with pikepdf-built fixtures or the linearize path)_
 
 **W3 Engine worker and RPC, #136**
 
