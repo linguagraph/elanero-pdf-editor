@@ -1,0 +1,179 @@
+import { useId, useState, type FormEvent } from 'react';
+import { Checkbox, Radio, RadioGroup, TextField, Label, Input } from 'react-aria-components';
+import { t } from '../i18n/t';
+import type { MessageId } from '../i18n/en';
+import { Overlay } from '../layout/Overlay';
+import {
+  applyTheme,
+  isThemeChoice,
+  readStoredTheme,
+  THEME_CHOICES,
+  type ThemeChoice,
+} from '../theme/theme';
+import {
+  AUTHOR_NAME_MAX_LENGTH,
+  readPreferences,
+  writePreferences,
+  ZOOM_CHOICES,
+  type LanguageChoice,
+  type Preferences,
+  type ZoomChoice,
+} from './store';
+import './preferences.css';
+
+export interface PreferencesDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const THEME_LABELS: Readonly<Record<ThemeChoice, MessageId>> = {
+  system: 'prefs.theme.system',
+  light: 'prefs.theme.light',
+  dark: 'prefs.theme.dark',
+};
+
+const ZOOM_LABELS: Readonly<Record<ZoomChoice, MessageId>> = {
+  fitWidth: 'prefs.zoom.fitWidth',
+  fitPage: 'prefs.zoom.fitPage',
+  actual: 'prefs.zoom.actual',
+};
+
+const LANGUAGE_LABELS: Readonly<Record<LanguageChoice, MessageId>> = {
+  en: 'prefs.language.english',
+};
+
+// Preferences (W1.6 section 9, W4.5). Changes are drafts until Apply. The theme is the exception:
+// it previews at once through the theme module, and Cancel, Escape or a tap outside puts back the
+// saved one. The sections follow the desktop PreferencesDialog where they apply on the web.
+export function PreferencesDialog({ isOpen, onClose }: PreferencesDialogProps) {
+  const cancel = () => {
+    applyTheme(readStoredTheme());
+    onClose();
+  };
+  return (
+    <Overlay isOpen={isOpen} onClose={cancel} title={t('prefs.title')} showCloseButton={false}>
+      <PreferencesForm onApply={onClose} onCancel={cancel} />
+    </Overlay>
+  );
+}
+
+interface PreferencesFormProps {
+  onApply: () => void;
+  onCancel: () => void;
+}
+
+// Mounted only while the dialog is open (the overlay renders nothing when closed), so every open
+// starts from the saved preferences.
+function PreferencesForm({ onApply, onCancel }: PreferencesFormProps) {
+  const [draft, setDraft] = useState<Preferences>(readPreferences);
+  const ids = useId();
+
+  const update = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    setDraft((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const chooseTheme = (theme: ThemeChoice) => {
+    applyTheme(theme);
+    update('theme', theme);
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    writePreferences(draft);
+    onApply();
+  };
+
+  return (
+    <form className="prefs" onSubmit={submit}>
+      <section className="prefs-section" aria-labelledby={`${ids}-general`}>
+        <h3 id={`${ids}-general`} className="prefs-heading">
+          {t('prefs.section.general')}
+        </h3>
+        <label className="prefs-field" htmlFor={`${ids}-language`}>
+          <span className="prefs-label">{t('prefs.language.label')}</span>
+          <select
+            id={`${ids}-language`}
+            className="prefs-select"
+            value={draft.language}
+            onChange={(event) => update('language', event.target.value as LanguageChoice)}
+          >
+            {(Object.keys(LANGUAGE_LABELS) as LanguageChoice[]).map((code) => (
+              <option key={code} value={code}>
+                {t(LANGUAGE_LABELS[code])}
+              </option>
+            ))}
+          </select>
+          <span className="prefs-hint">{t('prefs.language.hint')}</span>
+        </label>
+        <TextField
+          className="prefs-field"
+          value={draft.authorName}
+          onChange={(value) => update('authorName', value.slice(0, AUTHOR_NAME_MAX_LENGTH))}
+        >
+          <Label className="prefs-label">{t('prefs.authorName.label')}</Label>
+          <Input className="prefs-input" maxLength={AUTHOR_NAME_MAX_LENGTH} />
+          <span className="prefs-hint">{t('prefs.authorName.hint')}</span>
+        </TextField>
+      </section>
+
+      <section className="prefs-section" aria-labelledby={`${ids}-appearance`}>
+        <h3 id={`${ids}-appearance`} className="prefs-heading">
+          {t('prefs.section.appearance')}
+        </h3>
+        <RadioGroup
+          className="prefs-group"
+          value={draft.theme}
+          onChange={(value) => {
+            if (isThemeChoice(value)) chooseTheme(value);
+          }}
+        >
+          <Label className="prefs-label">{t('prefs.theme.label')}</Label>
+          {THEME_CHOICES.map((choice) => (
+            <Radio key={choice} value={choice} className="prefs-option">
+              {t(THEME_LABELS[choice])}
+            </Radio>
+          ))}
+        </RadioGroup>
+        <Checkbox
+          className="prefs-option"
+          isSelected={draft.reduceMotion}
+          onChange={(selected) => update('reduceMotion', selected)}
+        >
+          {t('prefs.reduceMotion.label')}
+        </Checkbox>
+        <span className="prefs-hint">{t('prefs.reduceMotion.hint')}</span>
+      </section>
+
+      <section className="prefs-section" aria-labelledby={`${ids}-viewing`}>
+        <h3 id={`${ids}-viewing`} className="prefs-heading">
+          {t('prefs.section.viewing')}
+        </h3>
+        <label className="prefs-field" htmlFor={`${ids}-zoom`}>
+          <span className="prefs-label">{t('prefs.zoom.label')}</span>
+          <select
+            id={`${ids}-zoom`}
+            className="prefs-select"
+            value={draft.defaultZoom}
+            onChange={(event) => update('defaultZoom', event.target.value as ZoomChoice)}
+          >
+            {ZOOM_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {t(ZOOM_LABELS[choice])}
+              </option>
+            ))}
+          </select>
+          <span className="prefs-hint">{t('prefs.zoom.hint')}</span>
+        </label>
+      </section>
+
+      <div className="overlay-actions">
+        <button type="button" className="overlay-close" onClick={onCancel}>
+          {t('prefs.cancel')}
+        </button>
+        <button type="submit" className="overlay-close prefs-apply">
+          {t('prefs.apply')}
+        </button>
+      </div>
+    </form>
+  );
+}
