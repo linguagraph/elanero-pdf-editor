@@ -561,7 +561,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W3.5** `webapi.actions`: named actions, undo, redo _(partial: actions.run/undo/redo/available with changed/state in the result and structure_version done; the general W1.2 section 7 events in the dispatch envelope and session.open state pending)_
 - [x] **W3.6** `webapi.save`: save_bytes, full or incremental
 - [ ] **W3.7** `webapi.jobs` and job worker protocol _(partial: `jobs.prepare`, `job.run`, `jobs.apply` and `jobs.abort` with single-use tokens, begin/end task, the `SnapshotCommand` apply, cancel and stale checks done, with the `action` (mutating) and `reduce_size` (read-only) job types; encrypted documents get a decrypted scratch copy for read-only jobs, and mutating jobs on them are refused (`REFUSED`, `encrypted_mutating_job`) until the owner-password question is decided; `audit`, `compare`, `split`, `merge`, `export` and `print_pages` pending)_
-- [ ] **W3.8** TypeScript RPC client with generated types
+- [x] **W3.8** TypeScript RPC client with generated types
 - [ ] **W3.9** Resource limits and guarded errors
 
 **W4 Front-end shell, #137**
