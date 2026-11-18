@@ -345,6 +345,9 @@ class JobPrepareResult:
     label: str  # the task label of a mutating job (its busy label); the job type name otherwise
     mutating: bool  # True when the document is read-only until the job is applied or aborted
     document: bytes  # a copy of the document, for the job worker; decrypted when the source is
+    # The document state after the busy flag changed (a mutating job began its task); None for a
+    # read-only job, whose prepare leaves the flag alone (W3.5).
+    state: DocStateDto | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -367,6 +370,13 @@ class JobApplyResult:
 class JobAbortParams:
     handle: str
     token: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class JobAbortResult:
+    # The document state after a mutating job's task ended; None when the flag did not change
+    # (a read-only job, or a repeated abort), so no state event is sent (W3.5).
+    state: DocStateDto | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
