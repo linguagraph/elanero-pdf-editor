@@ -16,6 +16,7 @@ from typing import Any
 from pdfeditor.webapi import actions, dto, jobs, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
+from pdfeditor.webapi.events import events_for
 
 log = logging.getLogger(__name__)
 
@@ -138,10 +139,15 @@ def _run(
         result = method.handler(typed)
 
     out: list[bytes] = []
+    result_json = to_json(result, out)
+    # The events are built from the same DTOs as the result's changed and state fields (W1.2
+    # section 7); a read-only call gets an empty list.
+    events = events_for(method_name, typed, result, out)
     reply: dict[str, object] = {
         "v": PROTOCOL_VERSION,
         "id": request_id,
         "ok": True,
-        "result": to_json(result, out),
+        "result": result_json,
+        "events": events,
     }
     return reply, out

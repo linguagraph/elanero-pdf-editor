@@ -93,6 +93,7 @@ describe('reply validators', () => {
         info: DOC_INFO,
         pages: 2,
         warning: null,
+        state: DOC_STATE,
       }),
     ).toMatchObject({ handle: 'h1', pages: 2, warning: null });
     expect(
@@ -150,7 +151,13 @@ describe('reply validators', () => {
       decodeResult('hello', { protocol: true, engine: 'mupdf', platform: 'web' }),
     ).toThrow('result.protocol');
     expect(() =>
-      decodeResult('session.open', { handle: 'h', info: DOC_INFO, pages: 1.5, warning: null }),
+      decodeResult('session.open', {
+        handle: 'h',
+        info: DOC_INFO,
+        pages: 1.5,
+        warning: null,
+        state: DOC_STATE,
+      }),
     ).toThrow('result.pages');
   });
 

@@ -28,7 +28,7 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.metadata import EncryptionMethod
 from pdfeditor.services.optimize import PRESETS, ReduceOptions, preset, reduce_size
 from pdfeditor.webapi import dto, limits
-from pdfeditor.webapi.actions import _changed, _Events, _state
+from pdfeditor.webapi.actions import _Events
 from pdfeditor.webapi.dto import BufferTable, from_json
 from pdfeditor.webapi.errors import (
     BUSY,
@@ -39,6 +39,7 @@ from pdfeditor.webapi.errors import (
     STALE_OBJECT,
     RpcFailure,
 )
+from pdfeditor.webapi.events import changed_of, state_of
 from pdfeditor.webapi.registry import REGISTRY
 
 # How many ended tokens are remembered, so that a repeated jobs.abort is a no-op (idempotent)
@@ -330,8 +331,8 @@ def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
                 if params.require_full_save:
                     session.require_full_save = True  # ORed in, never cleared (W1.3 section 2)
                 applied = True
-            changed = _changed(session, events.changes)
-            state = _state(session)
+            changed = changed_of(session, events.changes)
+            state = state_of(session)
     finally:
         unsubscribe()
     return dto.JobApplyResult(applied=applied, changed=changed, state=state)

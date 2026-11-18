@@ -57,6 +57,7 @@ def test_hello_round_trip() -> None:
         "id": 7,
         "ok": True,
         "result": {"protocol": 1, "engine": "mupdf", "platform": "web"},
+        "events": [],
     }
     assert out == []
 
