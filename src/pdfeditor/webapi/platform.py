@@ -7,9 +7,10 @@ Nothing else decides "this is the web" for these questions: features read the fl
 from __future__ import annotations
 
 from pdfeditor.model.platform import PlatformCapabilities, configure
+from pdfeditor.webapi.limits import SNAPSHOT_BUDGET_BYTES
 
-# Undo snapshots live in the worker's memory file system (W1.1 section 7).
-WEB_SNAPSHOT_BUDGET = 512 * 1024 * 1024
+# Undo snapshots live in the worker's memory file system; the budget is in webapi.limits.
+WEB_SNAPSHOT_BUDGET = SNAPSHOT_BUDGET_BYTES
 
 # Pillow's name for the TIFF writer's compression. Deflate aborts the Pyodide runtime on a
 # failed write (docs/web/spikes/W0.4-results.md), so the web build uses LZW.

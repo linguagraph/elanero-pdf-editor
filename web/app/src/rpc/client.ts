@@ -72,6 +72,29 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// The text a wasm or Pyodide out-of-memory failure carries in the worker's error message. The
+// worker reports such a failure as text, not as a reply, so it is matched on the message (W1.2
+// section 4, OUT_OF_MEMORY). A Python MemoryError inside a call arrives as a reply and needs none
+// of this. "Memory access out of bounds" is left out: it is a corrupted heap, not a full one.
+const OUT_OF_MEMORY_TEXT =
+  /out of memory|could not allocate memory|maximum memory size exceeded|cannot enlarge memory|memoryerror|\bOOM\b/i;
+
+export function isOutOfMemoryMessage(message: string): boolean {
+  return OUT_OF_MEMORY_TEXT.test(message);
+}
+
+// A rejection of the worker channel. Out-of-memory gets its own code so the UI can offer a restart
+// (W1.1 section 1); it is never restarted here, because that loses the undo history.
+function workerFailure(method: string, error: unknown): RpcError {
+  const message = messageOf(error);
+  if (isOutOfMemoryMessage(message)) {
+    return new RpcError('OUT_OF_MEMORY', `the engine ran out of memory during ${method}`, {
+      method,
+    });
+  }
+  return new RpcError('INTERNAL', `the engine worker failed: ${message}`);
+}
+
 function cancelled(method: string): RpcError {
   return new RpcError('CANCELLED', `${method} was cancelled`, { method });
 }
@@ -234,10 +257,7 @@ export class RpcClient {
               reject(toRpcError(method, error));
             }
           }),
-        (error: unknown) =>
-          settle(() =>
-            reject(new RpcError('INTERNAL', `the engine worker failed: ${messageOf(error)}`)),
-          ),
+        (error: unknown) => settle(() => reject(workerFailure(method, error))),
       );
     });
   }

@@ -26,3 +26,7 @@ MAX_RENDER_SCALE_MILLI = 256_000  # device scale 256: zoom 64 (W1.4 MAX_ZOOM) x 
 # held to the same size as an open file; the worker runs one job at a time.
 MAX_JOB_BYTES = FILE_REFUSE_BYTES  # a document copy or a job result above this is refused
 MAX_PREPARED_JOBS = 1  # prepared jobs (begun or waiting for their run) per engine worker
+
+# Undo snapshots live in the worker's memory file system (W1.1 section 7). Past this budget the
+# oldest snapshots are dropped and the undo history shortens (W2.3); nothing is refused.
+SNAPSHOT_BUDGET_BYTES = 512 * 1024 * 1024

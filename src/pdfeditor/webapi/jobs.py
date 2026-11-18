@@ -291,6 +291,14 @@ def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
             "params.document is required for a mutating job",
             {"path": "params.document"},
         )
+    if params.document is not None and len(params.document) > limits.MAX_JOB_BYTES:
+        # Refused before the token is spent or the task ends: the job stays prepared, and the
+        # caller ends it with jobs.abort (which also ends the task), as for any failed apply.
+        raise RpcFailure(
+            FILE_TOO_LARGE,
+            "the job's result is too large for the browser",
+            {"max_bytes": limits.MAX_JOB_BYTES, "size": len(params.document)},
+        )
     session = REGISTRY.get(params.handle)
     PREPARED.end(params.token)  # single-use: the token is spent whatever happens next
     events = _Events()
