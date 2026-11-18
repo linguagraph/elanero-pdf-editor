@@ -30,3 +30,25 @@ body {
 .app-main a {
   color: var(--color-accent-text);
 }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  margin-bottom: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+}
+
+.update-banner button {
+  font: inherit;
+  padding: 4px 12px;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}

@@ -1,7 +1,18 @@
+import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { CSP_POLICY } from './src/csp.ts';
+import {
+  appCacheName,
+  buildIdSource,
+  buildManifest,
+  renderServiceWorker,
+  type PrecacheFile,
+} from './src/pwa/build.ts';
+import { APP_VERSION } from './src/version.ts';
 
 // The source link in the About page points at the exact build. If git is missing (for
 // example in a source-only archive) the link still renders, pointing at "unknown".
@@ -43,8 +54,53 @@ function devRelaxedCsp(): Plugin {
   };
 }
 
+// The PWA build step (W4.6). The manifest is generated from the design tokens. After Vite has
+// written the output, every file in it is hashed, the build id is derived from those hashes, and
+// dist/sw.js is filled in with the cache name and the file list. The worker then refuses any file
+// whose SHA-256 differs, so its cache holds exactly what this build produced.
+const SW_FILE = 'sw.js';
+
+function serviceWorkerBuild(commit: string): Plugin {
+  let outDir = '';
+  return {
+    name: 'elanero-pwa',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'manifest.webmanifest',
+        source: `${JSON.stringify(buildManifest(), null, 2)}\n`,
+      });
+    },
+    async closeBundle() {
+      const relatives = (await readdir(outDir, { recursive: true })).map((path) =>
+        path.split(/[\\/]/).join('/'),
+      );
+      const files: PrecacheFile[] = [];
+      for (const relative of relatives) {
+        if (relative === SW_FILE) continue;
+        const absolute = join(outDir, relative);
+        if (!(await stat(absolute)).isFile()) continue;
+        const digest = createHash('sha256')
+          .update(await readFile(absolute))
+          .digest('hex');
+        files.push({ path: relative, sha256: digest });
+      }
+      files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      const buildId = createHash('sha256').update(buildIdSource(files)).digest('hex').slice(0, 12);
+      const cacheName = appCacheName(APP_VERSION, buildId);
+      const swPath = join(outDir, SW_FILE);
+      const source = await readFile(swPath, 'utf8');
+      await writeFile(swPath, renderServiceWorker(source, { cacheName, commit, files }));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), devRelaxedCsp()],
+  plugins: [react(), devRelaxedCsp(), serviceWorkerBuild(gitCommit())],
   define: {
     __APP_COMMIT__: JSON.stringify(gitCommit()),
   },

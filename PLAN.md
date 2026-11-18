@@ -574,7 +574,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W4.4a** Theme (generated CSS variables, light/dark, icons, brand) _(partial: generated tokens.css, light/dark/system switch, inline SVG icons and brand name done and tested; pending: forced-colours block, brand image assets from data/branding, and the plan's Python source (`scripts/make_web_tokens.py` from `ui/style/tokens.py`), which was replaced by a TypeScript token module as the task asked)
 - [ ] **W4.4b** Toasts, job progress, loading screen, not-responding dialog
 - [ ] **W4.5** Preferences dialog
-- [ ] **W4.6** PWA: manifest and service worker
+- [ ] **W4.6** PWA: manifest and service worker _(partial: web app manifest from the design tokens with icons from data/branding; service worker public/sw.js with a content-versioned cache and a SHA-256 check of every precached file; offline reload and the update prompt, tested with Vitest and e2e/pwa.spec.ts; pending: the File Handling API, and the Pyodide and wheel precache is only exercised once scripts/stage_engine_assets.mjs has staged the engine assets)_
 - [ ] **W4.7** Message catalogue (i18n) and RPC error mapping _(partial: English catalogue in `web/app/src/i18n/en.ts` with lookup and interpolation, and the RPC error mapping in `web/app/src/rpc/errors.ts`, with tests; the `Intl.PluralRules` formatter and the per-language JSON files are pending)_
 
 **W5 Viewer and navigation, #138**
