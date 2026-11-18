@@ -23,6 +23,13 @@ body {
   font-weight: 600;
 }
 
+/* The top bar logo: the 32 px icon from data/branding. The wordmark text replaces it if it fails. */
+.brand-logo {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+
 .app-main {
   padding: var(--space-4);
 }

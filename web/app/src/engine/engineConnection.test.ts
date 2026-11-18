@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEngineLoadStore, type LoadState } from '../feedback/engineLoad';
 import type { CallResult } from './loader';
-import { createEngineConnection } from './engineConnection';
+import {
+  createEngineConnection,
+  type EngineSession,
+  getTabSession,
+  setTabSession,
+} from './engineConnection';
 import type { Stage } from './protocol';
 import type { StartOptions, WorkerClient } from './start';
 
@@ -199,5 +204,24 @@ describe('engine connection', () => {
     expect(engine.client()).toBeUndefined();
     store.retry();
     expect(startWorker).toHaveBeenCalledTimes(1);
+  });
+});
+
+const session: EngineSession = {
+  rpc: { call: () => Promise.reject(new Error('not used')) } as unknown as EngineSession['rpc'],
+  handle: 'doc-1',
+};
+
+describe('tab engine sessions', () => {
+  it('gives no session to a tab until one is set', () => {
+    expect(getTabSession(101)).toBeNull();
+  });
+
+  it('keeps the session per tab and forgets it when cleared', () => {
+    setTabSession(101, session);
+    expect(getTabSession(101)).toBe(session);
+    expect(getTabSession(102)).toBeNull();
+    setTabSession(101, null);
+    expect(getTabSession(101)).toBeNull();
   });
 });

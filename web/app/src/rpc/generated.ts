@@ -146,6 +146,10 @@ export interface JobAbortParams {
   token: string;
 }
 
+export interface JobAbortResult {
+  state: DocStateDto | null;
+}
+
 export interface JobApplyParams {
   handle: string;
   token: string;
@@ -181,6 +185,7 @@ export interface JobPrepareResult {
   mutating: boolean;
   /** a copy of the document, for the job worker; decrypted when the source is */
   document: ArrayBuffer;
+  state: DocStateDto | null;
 }
 
 /**
@@ -414,7 +419,7 @@ export interface Methods {
   'actions.run': { params: RunParams; result: RunResult; deadline: 'action' };
   'actions.undo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
-  'jobs.abort': { params: JobAbortParams; result: Empty; deadline: 'instant' };
+  'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
@@ -471,7 +476,7 @@ export const RESULT_DECODERS: {
   'actions.run': decodeRunResult,
   'actions.undo': decodeHistoryResult,
   'hello': decodeHelloResult,
-  'jobs.abort': decodeEmpty,
+  'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
   'render.page': decodePageImage,
@@ -671,6 +676,18 @@ export function decodeJobAbortParams(
   };
 }
 
+export function decodeJobAbortResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): JobAbortResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['state'], path);
+  return {
+    state: orNull(field(o, 'state', path), `${path}.state`, (v1, p1) => decodeDocStateDto(v1, ctx, p1)),
+  };
+}
+
 export function decodeJobApplyParams(
   value: unknown,
   ctx: DecodeContext,
@@ -721,12 +738,13 @@ export function decodeJobPrepareResult(
   path: string,
 ): JobPrepareResult {
   const o = expectObject(value, path);
-  checkKeys(o, ['token', 'label', 'mutating', 'document'], path);
+  checkKeys(o, ['token', 'label', 'mutating', 'document', 'state'], path);
   return {
     token: expectString(field(o, 'token', path), `${path}.token`),
     label: expectString(field(o, 'label', path), `${path}.label`),
     mutating: expectBoolean(field(o, 'mutating', path), `${path}.mutating`),
     document: takeBinary(field(o, 'document', path), ctx, `${path}.document`),
+    state: orNull(field(o, 'state', path), `${path}.state`, (v1, p1) => decodeDocStateDto(v1, ctx, p1)),
   };
 }
 

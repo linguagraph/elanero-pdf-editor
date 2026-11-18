@@ -173,9 +173,10 @@ dependencies with licenses that conflict with AGPL, and record every new runtime
   GitHub deletes the branch. Only a code owner's approval counts (ruleset on `main`). Commit
   messages and PR bodies follow the repo's attribution settings.
 - The required checks are CI's `changes`, `checks`, `test-windows`, `build`, `web` and
-  `web-tests`. They report on every PR (skipped counts as passed), so a docs-only PR isn't
-  blocked. Don't rename those jobs, and don't give another workflow a job with one of those
-  names, without updating the ruleset.
+  `web-tests / web-pytest` (the web-pytest job, called by CI's `web-tests` job). They always
+  report on every PR (a skipped one counts as passed; `web-tests / web-pytest` runs and skips
+  its steps without web changes), so a docs-only PR isn't blocked. Don't rename those jobs, and
+  don't give another workflow a job with one of those names, without updating the ruleset.
 - After each phase is merged, build the executable from the updated `main`:
   `uv run python scripts/build_exe.py --test` (writes `dist/Elanero.exe`, must end with
   `RESULT: OK`), and report the size and self-test result.

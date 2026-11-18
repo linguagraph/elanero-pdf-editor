@@ -10,6 +10,7 @@ export const EN = {
   // App shell and About.
   'app.name': 'Elanero',
   'app.version': 'Version {version}',
+  'brand.logoAlt': 'Elanero logo',
   'about.title': 'About Elanero',
   'about.licence': 'Licence: AGPL-3.0-or-later',
   'about.source': 'Source code',
@@ -262,6 +263,18 @@ export const EN = {
   'password.body': '{name} is protected. Enter its password to open it. The password is not saved.',
   'password.label': 'Password',
   'action.cancel': 'Cancel',
+
+  // Document view: page list, zoom and render states (W5.1a, W1.4).
+  'view.label': 'Document',
+  'view.pages': 'Pages',
+  'view.loading': 'Loading pages…',
+  'view.loadFailed': 'The pages could not be read. Try opening the file again.',
+  'view.zoomLabel': 'Zoom',
+  'view.zoomOut': 'Zoom out',
+  'view.zoomIn': 'Zoom in',
+  'view.zoomPercent': '{percent}%',
+  'view.pageNumber': 'Page {page} of {total}',
+  'view.renderFailed': 'This page could not be drawn.',
 
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',

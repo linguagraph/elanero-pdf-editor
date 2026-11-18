@@ -568,6 +568,7 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
     if len(pending) >= limits.MAX_PREPARED_JOBS:
         # One job at a time per engine worker (W1.1 section 1): the pending one names the task.
         raise RpcFailure(BUSY, "a job is already prepared", {"task": pending[0][1].label})
+    state: dto.DocStateDto | None = None
     with session.lock:
         if kind.mutating and session.busy:
             raise RpcFailure(BUSY, "a task is working on the document", {"task": session.busy})
@@ -600,6 +601,7 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
         fingerprint = document_fingerprint(session)
         if kind.mutating:
             session.begin_task(label)
+            state = state_of(session)  # the busy flag changed: the front end must hear of it
     token = PREPARED.new_token()
     PREPARED.add(
         token,
@@ -610,7 +612,9 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
             fingerprint,
         ),
     )
-    return dto.JobPrepareResult(token=token, label=label, mutating=kind.mutating, document=data)
+    return dto.JobPrepareResult(
+        token=token, label=label, mutating=kind.mutating, document=data, state=state
+    )
 
 
 def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
@@ -667,15 +671,17 @@ def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
     return dto.JobApplyResult(applied=applied, changed=changed, state=state)
 
 
-def abort(params: dto.JobAbortParams) -> dto.Empty:
+def abort(params: dto.JobAbortParams) -> dto.JobAbortResult:
     entry = PREPARED.find(params.token, params.handle)
     if entry is None:
         if PREPARED.was_ended(params.token):
-            return dto.Empty()  # already ended: a repeated abort does nothing
+            return dto.JobAbortResult(state=None)  # already ended: a repeated abort does nothing
         raise RpcFailure(STALE_JOB, "no prepared job has this token")
     PREPARED.end(params.token)
+    state: dto.DocStateDto | None = None
     if entry.mutating and params.handle in REGISTRY:
         session = REGISTRY.get(params.handle)
         with session.lock:
             session.end_task(entry.label)
-    return dto.Empty()
+            state = state_of(session)
+    return dto.JobAbortResult(state=state)
