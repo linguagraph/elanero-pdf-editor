@@ -122,6 +122,9 @@ def _ids(name: str) -> set[str]:
 # --- the page's contract -------------------------------------------------------------------
 
 
+PENDING_WEB_DEPLOY = {"app/"}
+
+
 def test_every_relative_link_and_resource_resolves() -> None:
     """A link to a page or file that doesn't exist would be a 404 on the live site."""
     problems = []
@@ -135,6 +138,10 @@ def test_every_relative_link_and_resource_resolves() -> None:
             if (tag == "a" or _is_canonical(tag, attrs)) and _is_absolute(url):
                 continue
             if url.startswith("#"):
+                continue
+            # The web app is published by W9.2. Until then this link is expected to 404 on the
+            # live site, and only this one link is exempt: every other relative link is checked.
+            if url in PENDING_WEB_DEPLOY:
                 continue
             problem = _local_problem(url)
             if problem:
