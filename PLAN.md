@@ -554,8 +554,14 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W3 Engine worker and RPC, #136**
 
 - [ ] **W3.1** Worker bootstrap: load pinned Pyodide and wheels
+<<<<<<< HEAD
 - [ ] **W3.2** `webapi.session`: open from bytes, close, info
 - [ ] **W3.3** `webapi.render`: render tiles to RGBA _(partial: `render.page` (whole page at a device scale, with revision, rotation and annotations, RGBA transferred as a buffer, pixel and scale limits) done; `render.tile` pending)_
+=======
+  _(partial: loader, workers and start helpers with unit tests done; real in-browser Pyodide load and the progress screen pending)_
+- [x] **W3.2** `webapi.session`: open from bytes, close, info
+- [ ] **W3.3** `webapi.render`: render tiles to RGBA
+>>>>>>> origin/main
 - [ ] **W3.4** `webapi.text`: text layer and search
 - [ ] **W3.5** `webapi.actions`: named actions, undo, redo
 - [ ] **W3.6** `webapi.save`: save_bytes, full or incremental
