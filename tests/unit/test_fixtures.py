@@ -9,7 +9,12 @@ import pytest
 from tests.conftest import FIXTURES
 from tests.hostcheck import record
 
-PLAIN = sorted(p for p in FIXTURES.glob("*.pdf") if p.stem not in {"encrypted", "broken_xref"})
+# "damaged_pubsec_filter" is refused by pikepdf on purpose (an unsupported encryption filter).
+PLAIN = sorted(
+    p
+    for p in FIXTURES.glob("*.pdf")
+    if p.stem not in {"encrypted", "broken_xref", "damaged_pubsec_filter"}
+)
 
 
 @pytest.mark.parametrize("path", PLAIN, ids=lambda p: p.stem)

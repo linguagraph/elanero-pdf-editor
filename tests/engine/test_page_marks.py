@@ -137,51 +137,10 @@ def test_removed_watermark_picture_leaves_the_file(marks: Engine, tmp_path: Path
 
 
 # -- other tools' marks -------------------------------------------------------------------------
-def _acrobat_like(path: Path) -> None:
-    """A page with an Acrobat-style watermark (an artifact drawing a form XObject whose piece
-    info names it), a word processor's running header (a plain pagination artifact) and
-    body text. Built with pikepdf, so the test using it is host-only."""
-    import pikepdf
-
-    pdf = pikepdf.new()
-    pdf.add_blank_page(page_size=(300, 300))
-    page = pdf.pages[0]
-    font = pdf.make_indirect(
-        pikepdf.Dictionary(
-            Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica
-        )
-    )
-    form = pikepdf.Stream(pdf, b"BT /F1 20 Tf 0 0 Td (ACRO-WM) Tj ET")
-    form.Type = pikepdf.Name.XObject
-    form.Subtype = pikepdf.Name.Form
-    form.BBox = [0, 0, 200, 40]
-    form.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
-    form.PieceInfo = pikepdf.Dictionary(
-        ADBE_CompoundType=pikepdf.Dictionary(
-            LastModified=pikepdf.String("D:20240101000000"), Private=pikepdf.Name.Watermark
-        )
-    )
-    page.Resources = pikepdf.Dictionary(
-        Font=pikepdf.Dictionary(F1=font),
-        XObject=pikepdf.Dictionary(Fm0=pdf.make_indirect(form)),
-        Properties=pikepdf.Dictionary(
-            MC0=pikepdf.Dictionary(Type=pikepdf.Name.Pagination, Subtype=pikepdf.Name.Header)
-        ),
-    )
-    page.Contents = pdf.make_stream(
-        b"/Artifact /MC0 BDC BT /F1 10 Tf 20 280 Td (Running header) Tj ET EMC\n"
-        b"BT /F1 12 Tf 20 150 Td (Body text) Tj ET\n"
-        b"/Artifact <</Subtype /Watermark /Type /Pagination >>BDC "
-        b"q 1 0 0 1 50 60 cm /Fm0 Do Q EMC\n"
-    )
-    pdf.save(path)
-
-
 def test_acrobat_marks_are_found_and_removed_others_left_alone(
-    marks: Engine, tmp_path: Path
+    marks: Engine, fixture_pdf, tmp_path: Path
 ) -> None:
-    path = tmp_path / "acrobat.pdf"
-    _acrobat_like(path)
+    path = _copy(fixture_pdf, tmp_path, "page_marks_acrobat_like")
     doc = marks.open(path)
     page = doc.page(0)
     assert page.page_marks() == [PageMark(MarkKind.WATERMARK, "", foreign=True)]

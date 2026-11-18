@@ -3,31 +3,11 @@
 from __future__ import annotations
 
 import random
-import re
 from pathlib import Path
 
 import pytest
 
 from pdfeditor.engine.base import Engine, OpenError
-
-
-def _with_encrypt_filter(src: Path, out: Path, handler: str) -> Path:
-    """A copy whose trailer names an /Encrypt dictionary with ``handler`` as its /Filter.
-
-    Built with pikepdf (the rewrite), so the test that uses it is host-only.
-    """
-    import pikepdf
-
-    with pikepdf.open(src) as pdf:
-        pdf.save(out, object_stream_mode=pikepdf.ObjectStreamMode.disable)
-    raw = out.read_bytes()
-    n = max(int(m) for m in re.findall(rb"(\d+) 0 obj", raw)) + 1
-    obj = f"{n} 0 obj\n<< /Filter /{handler} /V 4 /R 4 >>\nendobj\n".encode()
-    at = raw.rindex(b"\nxref") + 1  # before the classic xref section (not "startxref")
-    raw = raw[:at] + obj + raw[at:]
-    raw = re.sub(rb"trailer\s*<<", b"trailer << /Encrypt %d 0 R" % n, raw, count=1)
-    out.write_bytes(raw)
-    return out
 
 
 def test_truncated_file_is_repaired(engine: Engine, fixture_pdf, tmp_path: Path) -> None:
@@ -59,8 +39,8 @@ def test_unreadable_files(engine: Engine, tmp_path: Path, content: bytes, messag
         engine.open(path)
 
 
-def test_certificate_security_is_refused(engine: Engine, fixture_pdf, tmp_path: Path) -> None:
-    path = _with_encrypt_filter(fixture_pdf("report"), tmp_path / "pubsec.pdf", "Adobe.PubSec")
+def test_certificate_security_is_refused(engine: Engine, fixture_pdf) -> None:
+    path = fixture_pdf("damaged_pubsec_filter")
     with pytest.raises(OpenError, match=r"Adobe.PubSec"):
         engine.open(path)
 

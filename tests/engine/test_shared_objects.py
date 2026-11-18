@@ -286,11 +286,10 @@ def test_editing_one_page_leaves_a_sharing_page_alone(
     _assert_unshared(unsaved)
 
 
-def test_shared_annotation_keeps_its_id_on_the_edited_page(engine: Engine, tmp_path: Path) -> None:
-    # Host-only: the fixture is built with pikepdf (_shared_pdf), which the Pyodide run lacks.
+def test_shared_annotation_keeps_its_id_on_the_edited_page(engine: Engine, fixture_pdf) -> None:
     if not engine.capabilities.annotations_write:
         pytest.skip("engine lacks annotations_write")
-    doc = engine.open(_shared_pdf(tmp_path / "shared.pdf", "annotation").read_bytes())
+    doc = engine.open(fixture_pdf("shared_objects_annotation").read_bytes())
     try:
         shared = doc.page(0).annotations()[0]
         assert doc.page(1).annotations()[0].id == shared.id
@@ -305,31 +304,11 @@ def test_shared_annotation_keeps_its_id_on_the_edited_page(engine: Engine, tmp_p
         doc.close()
 
 
-def test_page_object_listed_twice_is_split(engine: Engine, tmp_path: Path) -> None:
+def test_page_object_listed_twice_is_split(engine: Engine, fixture_pdf) -> None:
     """A page tree naming the same page object twice (as MuPDF's select used to make)."""
-    # Host-only: the fixture is built with pikepdf, which the Pyodide run lacks.
-    import pikepdf
-    from pikepdf import Array, Dictionary, Name
-
     if not engine.capabilities.page_ops:
         pytest.skip("engine lacks page_ops")
-    path = tmp_path / "twice.pdf"
-    pdf = pikepdf.new()
-    pdf.add_blank_page(page_size=(300, 300))
-    page = pdf.pages[0].obj
-    page.Contents = _content(pdf, "Twice")
-    page.Resources = Dictionary(
-        Font=Dictionary(
-            F1=pdf.make_indirect(
-                Dictionary(Type=Name.Font, Subtype=Name.Type1, BaseFont=Name.Helvetica)
-            )
-        )
-    )
-    pdf.Root.Pages.Kids = Array([page, page])
-    pdf.Root.Pages.Count = 2
-    pdf.save(path)
-
-    doc = engine.open(path.read_bytes())
+    doc = engine.open(fixture_pdf("shared_objects_listed_twice").read_bytes())
     try:
         assert doc.page_count == 2
         doc.page(1).stamp_text(TextStamp("ONLY HERE", Point(20, 40), 12))
