@@ -567,7 +567,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W4 Front-end shell, #137**
 
 - [x] **W4.1** Project scaffold in `web/` (#198)
-- [ ] **W4.2a** Layout grid, breakpoints, side rails and panel frames
+- [ ] **W4.2a** Layout grid, breakpoints, side rails and panel frames _(partial: layout frame, breakpoint helper, Panel, Overlay, tokens and Vitest scan pass; Playwright width checks pass against the production build; `npx playwright test` as a whole fails 3 engine-load specs because the staged Pyodide assets (`public/engine-assets`) are absent here, and the staging script is not in the repo)_
 - [ ] **W4.2b** Start page, tabs, recent files
 - [ ] **W4.3a** Command registry, ribbon and app menu
 - [ ] **W4.3b** Command palette and shortcuts

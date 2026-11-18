@@ -21,5 +21,8 @@ function productionCsp(): Plugin {
 export default defineConfig({
   root: APP_ROOT,
   plugins: [productionCsp()],
+  // The app's About page reads this build-time constant; the test server has no git commit to
+  // report, so it gets a fixed placeholder.
+  define: { __APP_COMMIT__: JSON.stringify('test') },
   server: { hmr: false, fs: { allow: [APP_ROOT] } },
 });

@@ -29,6 +29,11 @@
   --font-size-small: 12px;
   --font-size-body: 14px;
   --font-size-title: 20px;
+  --breakpoint-wide: 1280px;
+  --breakpoint-medium: 1024px;
+  --breakpoint-tablet: 768px;
+  --layout-rail-width: 48px;
+  --layout-panel-width: 280px;
 }
 
 @media (prefers-color-scheme: dark) {
