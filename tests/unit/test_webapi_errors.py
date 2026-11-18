@@ -4,9 +4,12 @@ specific class first, and INTERNAL for anything unexpected without a traceback i
 from __future__ import annotations
 
 import logging
+import re
+from pathlib import Path
 
 import pytest
 
+from pdfeditor import webapi
 from pdfeditor.engine.base import (
     EngineError,
     OpenError,
@@ -84,3 +87,23 @@ def test_an_rpc_failure_is_returned_as_it_is() -> None:
 def test_declared_codes_are_unique_and_unused_codes_are_declared() -> None:
     assert len(ALL_CODES) == len(set(ALL_CODES))
     assert set(ALL_CODES) >= UNUSED_CODES
+
+
+def test_every_code_is_tested_or_listed_as_unused() -> None:
+    """A code the calls can raise must be named by a web test; a code listed as unused must not
+    be raised anywhere in the webapi package (only errors.py names it)."""
+    tests_dir = Path(__file__).parent
+    tests = "\n".join(p.read_text(encoding="utf-8") for p in tests_dir.glob("test_webapi_*.py"))
+    package = Path(webapi.__file__).parent
+    sources = "\n".join(
+        p.read_text(encoding="utf-8") for p in package.glob("*.py") if p.name != "errors.py"
+    )
+    for code in ALL_CODES:
+        named = re.search(rf"\b{code}\b", tests) is not None
+        raised = re.search(rf"\b{code}\b", sources) is not None
+        if code in UNUSED_CODES:
+            assert not raised, f"{code} is listed as unused but the webapi package raises it"
+        else:
+            # Mapped from an exception class (OUT_OF_MEMORY, NOT_SUPPORTED, ...) counts as raised
+            # by errors.py itself, so the test names it and it is covered there.
+            assert named, f"{code} is raised but no web test names it"

@@ -38,6 +38,76 @@ class HelloResult:
     platform: str  # "web" in the browser, "desktop" on the host
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class OpenParams:
+    name: str  # the file name, shown in messages; never used to read the file
+    data: bytes  # the whole file
+    password: str | None  # null when the file has none; used once, then kept while open
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class DocInfo:
+    encrypted: bool
+    has_signatures: bool
+    page_count: int
+    title: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class OpenResult:
+    handle: str  # opaque; every later call on the document names it
+    info: DocInfo
+    pages: int
+    warning: str | None  # set above the warning size (W1.1 section 7)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class HandleParams:
+    handle: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageSize:
+    width: float  # points, visible space (after /Rotate and the CropBox)
+    height: float
+    rotation: int  # the page's /Rotate, in degrees
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PagesResult:
+    pages: tuple[PageSize, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PlatformFlags:
+    # The fields of model.platform.PlatformCapabilities; a test keeps the two in step.
+    linearize: bool
+    ocr: bool
+    signing: bool
+    system_fonts: bool
+    office_import: bool
+    threads: bool
+    pdfa: bool
+    tiff_compression: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CapabilitiesResult:
+    engine: dict[str, bool]  # engine.base.Capabilities, one flag per name
+    platform: PlatformFlags
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class UnlockParams:
+    handle: str
+    password: str  # an owner password; never echoed
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class UnlockResult:
+    unlocked: bool
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 

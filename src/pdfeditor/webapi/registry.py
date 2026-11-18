@@ -27,6 +27,9 @@ class DocumentRegistry:
     def __contains__(self, handle: object) -> bool:
         return handle in self._entries
 
+    def __len__(self) -> int:
+        return len(self._entries)
+
     def open(self, session: DocumentSession, password: str | None) -> str:
         handle = secrets.token_hex(16)
         while handle in self._entries:  # a collision is practically impossible; never reuse one
@@ -47,6 +50,10 @@ class DocumentRegistry:
             raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
         entry.password = None
         entry.session.close()
+
+    def close_all(self) -> None:
+        for handle in list(self._entries):
+            self.close(handle)
 
     def passwords_kept(self) -> int:
         """How many open documents hold a password (for tests and the memory report)."""

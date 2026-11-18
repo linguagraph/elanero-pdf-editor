@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pdfeditor.webapi import dto
+from pdfeditor.webapi import dto, session
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 
@@ -36,6 +36,12 @@ def _hello(params: dto.Empty) -> dto.HelloResult:
 
 METHODS: dict[str, Method] = {
     "hello": Method(dto.Empty, _hello),
+    "session.open": Method(dto.OpenParams, session.open_document),
+    "session.close": Method(dto.HandleParams, session.close_document),
+    "session.info": Method(dto.HandleParams, session.document_info),
+    "session.pages": Method(dto.HandleParams, session.document_pages),
+    "session.capabilities": Method(dto.HandleParams, session.document_capabilities),
+    "session.unlock_owner": Method(dto.UnlockParams, session.unlock_owner),
 }
 
 
