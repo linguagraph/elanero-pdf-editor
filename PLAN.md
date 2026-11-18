@@ -569,7 +569,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W4.1** Project scaffold in `web/` (#198)
 - [ ] **W4.2a** Layout grid, breakpoints, side rails and panel frames _(partial: layout frame, breakpoint helper, Panel, Overlay, tokens and Vitest scan pass; Playwright width checks pass against the production build; `npx playwright test` as a whole fails 3 engine-load specs because the staged Pyodide assets (`public/engine-assets`) are absent here, and the staging script is not in the repo)_
 - [ ] **W4.2b** Start page, tabs, recent files
-- [ ] **W4.3a** Command registry, ribbon and app menu
+- [ ] **W4.3a** Command registry, ribbon and app menu _(partial: registry in `web/app/src/commands/` with the desktop action ids and shortcuts read from `web/src/generated/shortcuts.json`; the seven-tab ribbon with arrow-key navigation and aria-disabled commands, and the ☰ app menu, both driven by the registry, with tests; pending: group overflow, compact and collapsed modes, the quick-access buttons, the "Search tools" box and "?" help button, mounting the ribbon in `App`)
 - [ ] **W4.3b** Command palette and shortcuts
 - [ ] **W4.4a** Theme (generated CSS variables, light/dark, icons, brand) _(partial: generated tokens.css, light/dark/system switch, inline SVG icons and brand name done and tested; pending: forced-colours block, brand image assets from data/branding, and the plan's Python source (`scripts/make_web_tokens.py` from `ui/style/tokens.py`), which was replaced by a TypeScript token module as the task asked)
 - [ ] **W4.4b** Toasts, job progress, loading screen, not-responding dialog
