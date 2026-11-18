@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
+import { registerAppServiceWorker } from './pwa/register';
 import { initTheme } from './theme/theme';
 import './theme/tokens.css';
 
@@ -19,4 +20,8 @@ if (shouldRefuse(window)) {
       <App />
     </StrictMode>,
   );
+  // Production only: the dev server's modules must not sit behind a service worker cache.
+  if (import.meta.env.PROD) {
+    void registerAppServiceWorker();
+  }
 }

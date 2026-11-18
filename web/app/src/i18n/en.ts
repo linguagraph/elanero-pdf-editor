@@ -202,6 +202,10 @@ export const EN = {
     'The engine will restart and reopen your documents from their last autosave. Changes made since then and the undo history will be lost.',
   'engine.restart.confirm': 'Restart engine',
 
+  // Update prompt for a new app version (W4.6).
+  'update.ready': 'A new version of Elanero is ready.',
+  'update.reload': 'Reload',
+
   // Recommended-action labels (see src/rpc/errors.ts).
   'action.retry': 'Try again',
   'action.dismiss': 'OK',
