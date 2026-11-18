@@ -57,10 +57,11 @@ def _matches(path: str, patterns: Iterable[str]) -> bool:
 
 
 def classify(paths: Iterable[str]) -> dict[str, bool]:
-    """``app``: run the checks, tests and build. ``packaging``: also the install tests."""
+    """``app``: run the checks, tests and build. ``packaging``: also the install tests.
+    ``web``: run the web gate (the web app checks and web-pytest)."""
     changed = [path.replace("\\", "/") for path in paths if path.strip()]
     if not changed:
-        return {"app": True, "packaging": True}
+        return {"app": True, "packaging": True, "web": True}
     listing = [path for path in changed if fnmatch(path, STORE_LISTING)]
     code = [
         path
@@ -72,6 +73,7 @@ def classify(paths: Iterable[str]) -> dict[str, bool]:
     return {
         "app": bool(code or listing),
         "packaging": any(_matches(path, PACKAGING) for path in code),
+        "web": any(_matches(path, WEB) for path in changed),
     }
 
 

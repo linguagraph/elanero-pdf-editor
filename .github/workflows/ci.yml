@@ -25,6 +25,7 @@ jobs:
     outputs:
       app: ${{ steps.classify.outputs.app }}
       packaging: ${{ steps.classify.outputs.packaging }}
+      web: ${{ steps.classify.outputs.web }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,6 +52,55 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run lint-imports
       - run: uv run mypy
+
+  web:
+    # The web gate (Phase W), a required check. It always reports: without web changes every step
+    # is skipped and the job passes. It runs the web app's checks, not Playwright (that needs
+    # staged assets). The Python tests under Pyodide are web-tests below.
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the pinned Node version
+        id: versions
+        if: needs.changes.outputs.web == 'true'
+        run: echo "node=$(jq -r .node web/spike/versions.json)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node
+        if: needs.changes.outputs.web == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+      - name: Install the npm packages (exact, from the lockfile)
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web/app
+        run: npm ci
+      - name: Typecheck
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web/app
+        run: npm run typecheck
+      - name: Lint
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web/app
+        run: npm run lint
+      - name: Format check
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web/app
+        run: npm run format:check
+      - name: Unit tests
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web/app
+        run: npm test
+      - name: Build
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web/app
+        run: npm run build
+
+  web-tests:
+    # The web-pytest run (web-pytest.yml, reusable). Skipped, which counts as passed, without web
+    # changes. Its check is named "web-tests / web-pytest" when it runs.
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    uses: ./.github/workflows/web-pytest.yml
 
   test-windows:
     needs: [changes, checks]

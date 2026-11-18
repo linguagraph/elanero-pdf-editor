@@ -172,9 +172,10 @@ dependencies with licenses that conflict with AGPL, and record every new runtime
   auto-merge (squash). It merges once the owner approves and the required CI checks pass, and
   GitHub deletes the branch. Only a code owner's approval counts (ruleset on `main`). Commit
   messages and PR bodies follow the repo's attribution settings.
-- The required checks are CI's `changes`, `checks`, `test-windows` and `build`. They report on
-  every PR (skipped counts as passed), so a docs-only PR isn't blocked. Don't rename those jobs,
-  and don't give another workflow a job with one of those names, without updating the ruleset.
+- The required checks are CI's `changes`, `checks`, `test-windows`, `build`, `web` and
+  `web-tests`. They report on every PR (skipped counts as passed), so a docs-only PR isn't
+  blocked. Don't rename those jobs, and don't give another workflow a job with one of those
+  names, without updating the ruleset.
 - After each phase is merged, build the executable from the updated `main`:
   `uv run python scripts/build_exe.py --test` (writes `dist/Elanero.exe`, must end with
   `RESULT: OK`), and report the size and self-test result.
