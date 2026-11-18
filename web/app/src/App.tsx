@@ -10,13 +10,15 @@ import { NotRespondingHost } from './feedback/NotRespondingHost';
 import { JobProgressHost } from './feedback/JobProgressHost';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
-import { BRAND } from './theme/tokens';
+import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
+import { useTabSession } from './engine/engineConnection';
+import { DocumentView } from './view/DocumentView';
 import { APP_VERSION } from './version';
 import './app.css';
 
@@ -41,11 +43,13 @@ export function App() {
     'open-recent': () => docs.showStartPage(),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
+  const activeId = docs.tabs.activeId;
+  const session = useTabSession(activeId);
   return (
     <AppFrame
       header={
         <div className="app-header">
-          <span className="brand">{BRAND.name}</span>
+          <BrandMark />
           <button
             type="button"
             onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
@@ -73,6 +77,9 @@ export function App() {
             onRecent={(name) => docs.openPicker(name)}
             onFiles={docs.openFiles}
           />
+        ) : null}
+        {!showStart && activeId !== null && session !== null ? (
+          <DocumentView key={activeId} rpc={session.rpc} handle={session.handle} />
         ) : null}
         <h1>{t('app.name')}</h1>
         <p>{t('app.version', { version: APP_VERSION })}</p>
