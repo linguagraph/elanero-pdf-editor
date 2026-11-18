@@ -32,6 +32,7 @@ BLOCKED = (
     "pdfeditor.services.pdfa",
     "pikepdf",
     "PySide6",
+    "shiboken6",
     "pyhanko",
     "pkcs11",
     "numpy",
