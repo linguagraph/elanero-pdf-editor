@@ -8,6 +8,7 @@ from __future__ import annotations
 FILE_WARN_BYTES = 200 * 1024 * 1024  # above this, the open reply carries a warning
 FILE_REFUSE_BYTES = 1024**3  # above this, the open fails with FILE_TOO_LARGE
 MAX_PAGES = 5000  # more pages than this, the open fails with TOO_MANY_PAGES
+MAX_SAVE_BYTES = FILE_REFUSE_BYTES  # a saved file above this fails with FILE_TOO_LARGE (W1.1 §7)
 
 # Text calls (W1.4 section 13, W1.2 section 9). W1.4 gives the page count of a slice but no size
 # for the query or the reply; those two are documented caps chosen here.

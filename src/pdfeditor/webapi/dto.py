@@ -213,6 +213,29 @@ class RenderPageParams:
     annotations: bool  # draw comments into the image (W1.4 section 4)
 
 
+class SaveMode(Enum):
+    """W1.1 section 4: ``in_place`` keeps signatures (incremental when signed); ``copy`` is a full
+    rewrite, as Save As."""
+
+    IN_PLACE = "in_place"
+    COPY = "copy"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SaveParams:
+    handle: str
+    mode: SaveMode
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SaveResult:
+    data: bytes  # the saved file; a $bin buffer, so it is transferred and not copied
+    size: int  # len(data), for the caller's progress and download
+    incremental: bool  # True when the signed document was written as an incremental update
+    verified: bool  # always True in a reply: the bytes were reopened and checked before return
+    name: str  # the file name the document would be saved under (its display name)
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class PageImage:
     width: int  # pixels; 0 when the revision changed
