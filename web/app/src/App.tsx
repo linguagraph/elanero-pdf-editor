@@ -6,6 +6,8 @@ import { type CommandState } from './commands/registry';
 import { t } from './i18n/t';
 import { EngineLoadingScreen } from './feedback/LoadingScreen';
 import { ToastRegion } from './feedback/ToastRegion';
+import { NotRespondingHost } from './feedback/NotRespondingHost';
+import { JobProgressHost } from './feedback/JobProgressHost';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
 import { BRAND } from './theme/tokens';
@@ -61,6 +63,8 @@ export function App() {
         <UpdatePrompt />
         <EngineLoadingScreen />
         <ToastRegion />
+        <NotRespondingHost />
+        <JobProgressHost />
         {showStart ? (
           <StartPage
             recent={docs.recent}

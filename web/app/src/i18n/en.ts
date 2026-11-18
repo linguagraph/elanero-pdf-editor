@@ -230,6 +230,11 @@ export const EN = {
   'engine.lost.intro': 'If you restart, this is lost:',
   'engine.lost.autosave': 'The changes made since the last autosave',
   'engine.lost.undo': 'The undo history',
+  'engine.restart.done': 'The engine restarted. Lost: {items}.',
+  'engine.restart.lost': 'Could not reopen {names}. Lost: {items}.',
+  'engine.restart.failed':
+    'The engine could not be restarted. The current engine is still running.',
+  'engine.restart.unavailable': 'The engine is not running, so there is nothing to restart.',
 
   // Start-up screen, toasts and job progress (W1.6 section 10, W4.4b).
   'loading.title': 'Elanero is starting',
@@ -239,9 +244,11 @@ export const EN = {
   'toast.region': 'Notifications',
   'toast.dismiss': 'Dismiss',
   'toast.dismissNamed': 'Dismiss: {text}',
+  'toast.undo': 'Undo',
   'job.cancel': 'Cancel',
   'job.working': 'Working',
   'job.percent': '{percent}% done',
+  'job.done': 'Done: {label}',
 
   // Start page, document tabs and opening files (W1.6 section 3, W4.2b).
   'start.heading': 'Open a PDF',
