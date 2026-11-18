@@ -482,7 +482,7 @@ class _Prepared:
     handle: str
     label: str  # the task label begun for a mutating job
     mutating: bool
-    fingerprint: tuple[object, ...]  # the document's state at prepare (see _fingerprint)
+    fingerprint: tuple[object, ...]  # the document's state at prepare (see document_fingerprint)
 
 
 class PreparedJobs:
@@ -533,7 +533,7 @@ class PreparedJobs:
 PREPARED = PreparedJobs()
 
 
-def _fingerprint(session: DocumentSession) -> tuple[object, ...]:
+def document_fingerprint(session: DocumentSession) -> tuple[object, ...]:
     """What a job's copy was made from: the structure version and each page's revision. Any
     edit, undo or redo changes it. The caller holds the session lock."""
     document = session.document
@@ -597,7 +597,7 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
                 "the document is too large for a job",
                 {"max_bytes": limits.MAX_JOB_BYTES, "size": len(data)},
             )
-        fingerprint = _fingerprint(session)
+        fingerprint = document_fingerprint(session)
         if kind.mutating:
             session.begin_task(label)
     token = PREPARED.new_token()
@@ -639,7 +639,7 @@ def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
                 # Ended first: execute refuses while a task runs, and the task must end even
                 # when the document turns out to have changed.
                 session.end_task(entry.label)
-            if _fingerprint(session) != entry.fingerprint:
+            if document_fingerprint(session) != entry.fingerprint:
                 raise RpcFailure(
                     STALE_OBJECT,
                     "the document changed since the job was prepared",

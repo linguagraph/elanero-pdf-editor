@@ -302,6 +302,15 @@ class DocStateDto:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class MarkSavedResult:
+    """``save.mark_saved`` (W1.2 section 12): ``saved`` is True when this call cleared the dirty
+    flag, and False when the document was already clean (a no-op, with no ``saved`` event)."""
+
+    saved: bool
+    state: DocStateDto
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class RunResult:
     label: str  # the undo label of the step (W1.3 ActionResult.label)
     executed: bool  # False when the action found nothing to do

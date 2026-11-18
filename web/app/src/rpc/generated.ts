@@ -183,6 +183,15 @@ export interface JobPrepareResult {
   document: ArrayBuffer;
 }
 
+/**
+ * ``save.mark_saved`` (W1.2 section 12): ``saved`` is True when this call cleared the dirty
+ * flag, and False when the document was already clean (a no-op, with no ``saved`` event).
+ */
+export interface MarkSavedResult {
+  saved: boolean;
+  state: DocStateDto;
+}
+
 export interface OpenParams {
   /** the file name, shown in messages; never used to read the file */
   name: string;
@@ -410,6 +419,7 @@ export interface Methods {
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
   'render.tile': { params: RenderTileParams; result: PageImage; deadline: 'render' };
+  'save.mark_saved': { params: HandleParams; result: MarkSavedResult; deadline: 'instant' };
   'save.save_bytes': { params: SaveParams; result: SaveResult; deadline: 'io' };
   'session.capabilities': { params: HandleParams; result: CapabilitiesResult; deadline: 'instant' };
   'session.close': { params: HandleParams; result: Empty; deadline: 'instant' };
@@ -435,6 +445,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.prepare': 'action',
   'render.page': 'render',
   'render.tile': 'render',
+  'save.mark_saved': 'instant',
   'save.save_bytes': 'io',
   'session.capabilities': 'instant',
   'session.close': 'instant',
@@ -465,6 +476,7 @@ export const RESULT_DECODERS: {
   'jobs.prepare': decodeJobPrepareResult,
   'render.page': decodePageImage,
   'render.tile': decodePageImage,
+  'save.mark_saved': decodeMarkSavedResult,
   'save.save_bytes': decodeSaveResult,
   'session.capabilities': decodeCapabilitiesResult,
   'session.close': decodeEmpty,
@@ -715,6 +727,19 @@ export function decodeJobPrepareResult(
     label: expectString(field(o, 'label', path), `${path}.label`),
     mutating: expectBoolean(field(o, 'mutating', path), `${path}.mutating`),
     document: takeBinary(field(o, 'document', path), ctx, `${path}.document`),
+  };
+}
+
+export function decodeMarkSavedResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): MarkSavedResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['saved', 'state'], path);
+  return {
+    saved: expectBoolean(field(o, 'saved', path), `${path}.saved`),
+    state: decodeDocStateDto(field(o, 'state', path), ctx, `${path}.state`),
   };
 }
 

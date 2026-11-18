@@ -13,7 +13,9 @@ unsigned one a full rewrite (W1.1 section 4). ``copy`` is always a full rewrite.
 from __future__ import annotations
 
 from pdfeditor.webapi import dto, limits
-from pdfeditor.webapi.errors import BUSY, FILE_TOO_LARGE, RpcFailure
+from pdfeditor.webapi.errors import BUSY, FILE_TOO_LARGE, STALE_OBJECT, RpcFailure
+from pdfeditor.webapi.events import state_of
+from pdfeditor.webapi.jobs import document_fingerprint
 from pdfeditor.webapi.registry import REGISTRY
 
 
@@ -25,6 +27,10 @@ def save_bytes(params: dto.SaveParams) -> dto.SaveResult:
         # to wait for the task instead of reporting a failed save (W1.2 section 4).
         raise RpcFailure(BUSY, "a task is working on the document", {"task": busy})
     password = REGISTRY.password(params.handle)
+    with session.lock:
+        # The state the bytes are written from. Calls on one worker run one at a time, so the
+        # document is still this state when the save returns.
+        written = document_fingerprint(session)
     # The core makes the decision and reopens the bytes; a SaveError from it becomes SAVE_FAILED
     # and no bytes are returned. A document that is not verified is never sent.
     saved = session.save_bytes(params.mode.value, password=password)
@@ -36,6 +42,7 @@ def save_bytes(params: dto.SaveParams) -> dto.SaveResult:
             "the saved file is too large for the browser",
             {"max_bytes": limits.MAX_SAVE_BYTES, "size": size},
         )
+    REGISTRY.note_saved(params.handle, written)
     return dto.SaveResult(
         data=saved.data,
         size=size,
@@ -43,3 +50,27 @@ def save_bytes(params: dto.SaveParams) -> dto.SaveResult:
         verified=True,
         name=session.display_name,
     )
+
+
+def mark_saved(params: dto.HandleParams) -> dto.MarkSavedResult:
+    """Clear the dirty flag once the front end has written the bytes of the last save_bytes.
+
+    The rule (W1.2 section 4): the flag is cleared only while the document is in the state that
+    save_bytes wrote. An edit, undo or redo since then makes the call fail with STALE_OBJECT and
+    leaves the document dirty, so the user is not told a newer state was written. A clean
+    document is a no-op success. The state is compared by the job fingerprint, the same check
+    that jobs.apply makes.
+    """
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        if not session.is_dirty:
+            return dto.MarkSavedResult(saved=False, state=state_of(session))
+        written = REGISTRY.saved_fingerprint(params.handle)
+        if written is None or document_fingerprint(session) != written:
+            raise RpcFailure(
+                STALE_OBJECT,
+                "the document changed since it was saved",
+                {"reason": "document changed"},
+            )
+        session.undo_stack.set_clean()
+        return dto.MarkSavedResult(saved=True, state=state_of(session))

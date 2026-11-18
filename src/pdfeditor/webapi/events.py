@@ -78,6 +78,14 @@ def events_for(
         return []
     if method == "session.close":
         return [{"kind": "closed", "handle": handle}]
+    if isinstance(result, dto.MarkSavedResult):
+        # Only a call that cleared the flag says so; a clean document gives no event.
+        if not result.saved:
+            return []
+        return [
+            {"kind": "saved", "handle": handle},
+            {"kind": "state", "handle": handle, "state": to_json(result.state, out)},
+        ]
     if not isinstance(result, _CONTENT_RESULTS) or result.changed is None:
         return []
     changed = result.changed
