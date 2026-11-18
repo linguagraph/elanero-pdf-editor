@@ -40,3 +40,6 @@ web/test/pyodide/out/
 
 # Local pytest run logs (serial vs -n auto comparisons; never committed)
 .pytest-xdist-logs/
+
+# The W4.1 front-end app (web/app): installed packages (dist/ is already ignored above)
+web/app/node_modules/
