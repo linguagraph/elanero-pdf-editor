@@ -65,6 +65,7 @@ function activeCommand(): string | null | undefined {
 
 const withDoc: CommandState = {
   hasDocument: true,
+  hasRecentFiles: false,
   canUndo: false,
   canRedo: false,
   capabilities: new Set(['signing', 'ocr', 'office_import', 'pdfa', 'pwa_install']),

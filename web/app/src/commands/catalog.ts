@@ -8,6 +8,7 @@ import {
   CAN_REDO,
   CAN_UNDO,
   createRegistry,
+  HAS_RECENT,
   NEEDS_DOCUMENT,
   type CommandDef,
   type Enabled,
@@ -21,6 +22,7 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   'mark-text',
   'whats-different',
   'install-app',
+  'open-recent',
 ]);
 
 export const GROUPS: readonly GroupDef[] = [
@@ -228,6 +230,7 @@ export const COMMANDS: readonly CommandDef[] = [
 
   // App menu only
   cmd('close', 'command.close.label', 'app.file'),
+  cmd('open-recent', 'command.open-recent.label', 'app.file', HAS_RECENT),
   cmd('save-as', 'command.save-as.label', 'app.file'),
   cmd('preferences', 'command.preferences.label', 'app.settings', OPEN_ANYTIME),
   cmd('keyboard-shortcuts', 'command.keyboard-shortcuts.label', 'app.settings', OPEN_ANYTIME),
@@ -239,7 +242,7 @@ export const COMMANDS: readonly CommandDef[] = [
 
 // The app menu's sections, in W1.6 section 6 order (a separator between sections).
 export const MENU: readonly (readonly string[])[] = [
-  ['open', 'save', 'save-as', 'print', 'document-properties', 'close'],
+  ['open', 'open-recent', 'save', 'save-as', 'print', 'document-properties', 'close'],
   ['preferences', 'keyboard-shortcuts'],
   ['help', 'whats-different', 'install-app', 'about-elanero'],
 ];
