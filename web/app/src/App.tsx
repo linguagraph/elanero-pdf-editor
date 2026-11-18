@@ -8,6 +8,8 @@ import { EngineLoadingScreen } from './feedback/LoadingScreen';
 import type { EngineConnection } from './engine/engineConnection';
 import { PasswordPrompt } from './documents/PasswordPrompt';
 import { ToastRegion } from './feedback/ToastRegion';
+import { NotRespondingHost } from './feedback/NotRespondingHost';
+import { JobProgressHost } from './feedback/JobProgressHost';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
 import { BrandMark } from './theme/BrandMark';
@@ -85,6 +87,8 @@ export function App({ engine }: AppProps) {
         <EngineLoadingScreen store={engine.store} />
         <PasswordPrompt />
         <ToastRegion />
+        <NotRespondingHost />
+        <JobProgressHost />
         {showStart ? (
           <StartPage
             recent={docs.recent}

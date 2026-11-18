@@ -4,22 +4,10 @@
 // restart helper, so the dialog and the restart cannot disagree.
 import { Button, Dialog, Heading, Modal, ModalOverlay } from 'react-aria-components';
 import { LOST_WORK } from '../engine/restart';
-import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
+import { lostItemText } from './lostWork';
 import './feedback.css';
-
-// The catalogue text of each item the restart helper lists. An item without a text is shown as
-// the helper wrote it; a test fails if the helper gains an item that has no text here.
-const LOST_TEXT: Readonly<Record<string, MessageId>> = {
-  'the changes made since the last autosave': 'engine.lost.autosave',
-  'the undo history': 'engine.lost.undo',
-};
-
-function lostItemText(item: string): string {
-  const id: MessageId | undefined = LOST_TEXT[item];
-  return id === undefined ? item : t(id);
-}
 
 export function isNotRespondingError(error: unknown): boolean {
   return error instanceof RpcError && error.code === 'TIMEOUT';

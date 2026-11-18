@@ -23,6 +23,8 @@ describe('feedback strings go through t()', () => {
         'JobProgress.tsx',
         'LoadingScreen.tsx',
         'NotRespondingDialog.tsx',
+        'NotRespondingHost.tsx',
+        'JobProgressHost.tsx',
       ]),
     );
   });
