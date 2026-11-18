@@ -82,3 +82,19 @@ export const FONT_SIZES_PX = {
   body: 14,
   title: 20,
 } as const;
+
+// Minimum window widths (inclusive) for each layout tier, from W1.6 section 8. CSS media queries
+// cannot read custom properties, so the layout reads these numbers in TypeScript (layout/breakpoints.ts)
+// and the CSS variables exist for reference and for other stylesheets.
+export const BREAKPOINTS_PX = {
+  wide: 1280,
+  medium: 1024,
+  tablet: 768,
+} as const;
+
+// Side rail and panel widths. W1.6 gives no pixel values; these are the web's own choice. The rail
+// is 48 px so its 44 px touch targets fit with a margin.
+export const LAYOUT_PX = {
+  railWidth: 48,
+  panelWidth: 280,
+} as const;

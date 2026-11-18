@@ -14,6 +14,18 @@ export const EN = {
   'about.licence': 'Licence: AGPL-3.0-or-later',
   'about.source': 'Source code',
 
+  // Layout regions (W1.6 sections 1 and 12) and panel frames (section 4).
+  'layout.leftRail': 'Left rail',
+  'layout.leftPanel': 'Left panel',
+  'layout.document': 'Document',
+  'layout.rightPanel': 'Right panel',
+  'layout.rightRail': 'Right rail',
+  'layout.statusBar': 'Status bar',
+  'panel.close': 'Close {title}',
+  'panel.state.expanded': 'Expanded',
+  'panel.state.collapsed': 'Collapsed',
+  'overlay.close': 'Close',
+
   // Engine load stages (W3.1) and the load failure dialog.
   'loading.stage.pyodide': 'Loading the Python runtime',
   'loading.stage.packages': 'Loading the PDF libraries',

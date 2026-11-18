@@ -1,0 +1,230 @@
+/* Region frame, panel frames and overlays (W1.6 sections 1, 4, 5 and 8). Sizes come from the
+   tokens. The tier is read from data attributes that AppFrame sets, because media queries cannot
+   use custom properties. No colour literals here except the translucent scrim and shadows, which
+   are neutral black. */
+
+.app-frame {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  --drawer-left: 0px;
+}
+
+.app-frame[data-left-rail='shown'] {
+  --drawer-left: var(--layout-rail-width);
+}
+
+.app-frame-header {
+  min-width: 0;
+}
+
+.app-frame-body {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-rail {
+  flex: 0 0 var(--layout-rail-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+  background: var(--color-surface);
+  overflow-y: auto;
+}
+
+.app-rail-left {
+  border-right: 1px solid var(--color-border);
+}
+
+.app-rail-right {
+  border-left: 1px solid var(--color-border);
+}
+
+.app-frame[data-left-rail='hidden'] .app-rail-left {
+  display: none;
+}
+
+.app-page-area {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.app-panel {
+  flex: 0 0 var(--layout-panel-width);
+  min-width: 0;
+  background: var(--color-surface);
+  overflow-y: auto;
+}
+
+.app-panel-left {
+  border-right: 1px solid var(--color-border);
+}
+
+.app-panel-right {
+  border-left: 1px solid var(--color-border);
+}
+
+/* A left drawer floats over the page area, beside the left rail when the rail shows. */
+.app-frame[data-left-panel='drawer'] .app-panel-left {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--drawer-left);
+  z-index: 2;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+}
+
+/* A right panel below the wide tier floats over the page area, beside the right rail. */
+.app-frame[data-right-panel='overlay'] .app-panel-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: var(--layout-rail-width);
+  z-index: 2;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+}
+
+.app-frame-status {
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.panel-toggle {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.panel-close {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.panel-close-icon {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.panel-body {
+  padding: var(--space-3);
+}
+
+.panel-body[hidden] {
+  display: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.overlay-modal {
+  width: min(100%, 560px);
+  max-height: 100%;
+  overflow: auto;
+}
+
+.overlay-dialog {
+  outline: none;
+  padding: var(--space-4);
+  border-radius: var(--radius-large);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.overlay-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-title);
+}
+
+.overlay-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+.overlay-close {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.overlay-close[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-frame * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

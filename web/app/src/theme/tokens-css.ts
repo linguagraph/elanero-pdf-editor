@@ -1,6 +1,8 @@
 import {
+  BREAKPOINTS_PX,
   COLOURS,
   FONT_SIZES_PX,
+  LAYOUT_PX,
   RADII_PX,
   SPACE_STEPS,
   SPACE_UNIT_PX,
@@ -29,6 +31,13 @@ function metricDeclarations(indent: string): string[] {
   }
   for (const [name, px] of Object.entries(FONT_SIZES_PX)) {
     lines.push(`${indent}--font-size-${name}: ${px}px;`);
+  }
+  for (const [name, px] of Object.entries(BREAKPOINTS_PX)) {
+    lines.push(`${indent}--breakpoint-${name}: ${px}px;`);
+  }
+  for (const [name, px] of Object.entries(LAYOUT_PX)) {
+    const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+    lines.push(`${indent}--layout-${kebab}: ${px}px;`);
   }
   return lines;
 }
