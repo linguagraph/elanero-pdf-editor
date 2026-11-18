@@ -125,7 +125,13 @@ def test_configure_web_is_idempotent(web: None) -> None:
 def test_close_then_every_call_is_no_document(web: None, fixture_pdf: Any) -> None:
     handle = handle_of(open_bytes(fixture_pdf("text_multipage").read_bytes()))
     closed = call("session.close", {"handle": handle})
-    assert closed == {"v": 1, "id": 1, "ok": True, "result": {}}
+    assert closed == {
+        "v": 1,
+        "id": 1,
+        "ok": True,
+        "result": {},
+        "events": [{"kind": "closed", "handle": handle}],
+    }
     for method, params in [
         ("session.info", {"handle": handle}),
         ("session.pages", {"handle": handle}),
@@ -173,7 +179,7 @@ def test_unlock_owner_gains_owner_access_without_echoing_the_password(
 ) -> None:
     handle = handle_of(open_bytes(fixture_pdf("encrypted").read_bytes(), "user"))
     good = call("session.unlock_owner", {"handle": handle, "password": "owner"})
-    assert good == {"v": 1, "id": 1, "ok": True, "result": {"unlocked": True}}
+    assert good == {"v": 1, "id": 1, "ok": True, "result": {"unlocked": True}, "events": []}
     bad = call("session.unlock_owner", {"handle": handle, "password": "nope-nope"})
     assert bad["result"] == {"unlocked": False}
     assert "nope-nope" not in json.dumps(bad)

@@ -16,8 +16,14 @@ function fakePyodide({ protocol = WEBAPI_PROTOCOL, log = [] }: FakeOptions = {})
   const callProxy = (request: string) => {
     const isHello = (JSON.parse(request) as { method: string }).method === 'hello';
     const reply = isHello
-      ? { v: 1, id: 1, ok: true, result: { protocol, engine: 'mupdf', platform: 'web' } }
-      : { v: 1, id: 2, ok: true, result: { echo: request.length } };
+      ? {
+          v: 1,
+          id: 1,
+          ok: true,
+          result: { protocol, engine: 'mupdf', platform: 'web' },
+          events: [],
+        }
+      : { v: 1, id: 2, ok: true, result: { echo: request.length }, events: [] };
     const proxy = {
       toJs: () => [JSON.stringify(reply), isHello ? undefined : new Uint8Array([7, 8, 9])],
       destroy: vi.fn(),

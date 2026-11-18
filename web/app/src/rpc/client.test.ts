@@ -42,7 +42,13 @@ class FakeWorker implements WorkerClient {
 }
 
 function ok(envelope: Envelope, result: unknown, buffer?: ArrayBuffer): CallResult {
-  const reply = JSON.stringify({ v: PROTOCOL_VERSION, id: envelope.id, ok: true, result });
+  const reply = JSON.stringify({
+    v: PROTOCOL_VERSION,
+    id: envelope.id,
+    ok: true,
+    result,
+    events: [],
+  });
   return buffer === undefined ? { reply } : { reply, buffer };
 }
 
@@ -109,6 +115,7 @@ describe('RpcClient', () => {
           info: { encrypted: false, has_signatures: false, page_count: 1, title: '' },
           pages: 1,
           warning: null,
+          state: DOC_STATE,
         });
 
       const params: OpenParams = { name: 'a.pdf', data, password: null };

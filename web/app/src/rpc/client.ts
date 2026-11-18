@@ -17,6 +17,7 @@ import {
 } from './generated';
 import {
   checkKeys,
+  expectArray,
   expectBoolean,
   expectInteger,
   expectObject,
@@ -175,7 +176,8 @@ function interpret<M extends MethodName>(
     throw new RpcError(code, message, details);
   }
 
-  checkKeys(reply, ['v', 'id', 'ok', 'result'], 'reply');
+  checkKeys(reply, ['v', 'id', 'ok', 'result', 'events'], 'reply');
+  expectArray(field(reply, 'events', 'reply'), 'reply.events');
   const ctx = newDecodeContext(buffers);
   const value = RESULT_DECODERS[method](field(reply, 'result', 'reply'), ctx, 'result');
   for (let index = 0; index < buffers.length; index++) {

@@ -199,6 +199,8 @@ export interface OpenResult {
   pages: number;
   /** set above the warning size (W1.1 section 7) */
   warning: string | null;
+  /** the document state at open (W1.2 section 4): clean, nothing to undo */
+  state: DocStateDto;
 }
 
 export interface PageImage {
@@ -736,12 +738,13 @@ export function decodeOpenResult(
   path: string,
 ): OpenResult {
   const o = expectObject(value, path);
-  checkKeys(o, ['handle', 'info', 'pages', 'warning'], path);
+  checkKeys(o, ['handle', 'info', 'pages', 'warning', 'state'], path);
   return {
     handle: expectString(field(o, 'handle', path), `${path}.handle`),
     info: decodeDocInfo(field(o, 'info', path), ctx, `${path}.info`),
     pages: expectInteger(field(o, 'pages', path), `${path}.pages`),
     warning: orNull(field(o, 'warning', path), `${path}.warning`, (v1, p1) => expectString(v1, p1)),
+    state: decodeDocStateDto(field(o, 'state', path), ctx, `${path}.state`),
   };
 }
 

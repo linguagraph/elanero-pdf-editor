@@ -59,6 +59,7 @@ class OpenResult:
     info: DocInfo
     pages: int
     warning: str | None  # set above the warning size (W1.1 section 7)
+    state: DocStateDto  # the document state at open (W1.2 section 4): clean, nothing to undo
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

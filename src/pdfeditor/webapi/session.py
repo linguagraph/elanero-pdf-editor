@@ -25,6 +25,7 @@ from pdfeditor.webapi.errors import (
     WRONG_PASSWORD,
     RpcFailure,
 )
+from pdfeditor.webapi.events import state_of
 from pdfeditor.webapi.platform import WEB_SNAPSHOT_BUDGET
 from pdfeditor.webapi.registry import REGISTRY
 
@@ -64,6 +65,8 @@ def open_document(params: dto.OpenParams) -> dto.OpenResult:
             )
         handle = REGISTRY.open(session, params.password)
         info = _info(session)
+        with session.lock:
+            state = state_of(session)
     except BaseException:
         # A document that is open in the engine must not outlive a failed call: close it
         # through the registry when it was registered (which also drops the password).
@@ -72,7 +75,7 @@ def open_document(params: dto.OpenParams) -> dto.OpenResult:
         else:
             session.close()
         raise
-    return dto.OpenResult(handle=handle, info=info, pages=pages, warning=warning)
+    return dto.OpenResult(handle=handle, info=info, pages=pages, warning=warning, state=state)
 
 
 def close_document(params: dto.HandleParams) -> dto.Empty:
