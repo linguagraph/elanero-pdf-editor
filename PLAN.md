@@ -571,7 +571,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W4.2b** Start page, tabs, recent files
 - [ ] **W4.3a** Command registry, ribbon and app menu
 - [ ] **W4.3b** Command palette and shortcuts
-- [ ] **W4.4a** Theme (generated CSS variables, light/dark, icons, brand)
+- [ ] **W4.4a** Theme (generated CSS variables, light/dark, icons, brand) _(partial: generated tokens.css, light/dark/system switch, inline SVG icons and brand name done and tested; pending: forced-colours block, brand image assets from data/branding, and the plan's Python source (`scripts/make_web_tokens.py` from `ui/style/tokens.py`), which was replaced by a TypeScript token module as the task asked)
 - [ ] **W4.4b** Toasts, job progress, loading screen, not-responding dialog
 - [ ] **W4.5** Preferences dialog
 - [ ] **W4.6** PWA: manifest and service worker

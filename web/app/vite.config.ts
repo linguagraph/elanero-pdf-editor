@@ -22,6 +22,9 @@ function gitCommit(): string {
 // (dev server) only, the page gets a policy that allows inline scripts. The transform runs
 // only when there is a dev server, so `vite build` output keeps the strict policy.
 const DEV_SCRIPT_SRC = "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'";
+// Vite's dev server injects CSS through <style> elements, which style-src 'self' blocks, so the
+// dev policy also allows inline styles. The build's CSS is a stylesheet file and needs neither.
+const DEV_STYLE_SRC = "style-src 'self' 'unsafe-inline'";
 function devRelaxedCsp(): Plugin {
   return {
     name: 'elanero-dev-relaxed-csp',
@@ -31,7 +34,11 @@ function devRelaxedCsp(): Plugin {
       if (!html.includes(CSP_POLICY)) {
         throw new Error('index.html CSP meta does not match CSP_POLICY');
       }
-      return html.replace(CSP_POLICY, CSP_POLICY.replace(strictScriptSrc, DEV_SCRIPT_SRC));
+      const relaxed = CSP_POLICY.replace(strictScriptSrc, DEV_SCRIPT_SRC).replace(
+        "style-src 'self'",
+        DEV_STYLE_SRC,
+      );
+      return html.replace(CSP_POLICY, relaxed);
     },
   };
 }
