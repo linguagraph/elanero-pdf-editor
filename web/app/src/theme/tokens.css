@@ -77,3 +77,30 @@
   --color-warning: #fce100;
   --color-brand: #4cc2ff;
 }
+
+@media (forced-colors: active) {
+  :root:root {
+    --color-window: Canvas;
+    --color-surface: ButtonFace;
+    --color-surface-alt: ButtonFace;
+    --color-border: CanvasText;
+    --color-border-strong: CanvasText;
+    --color-text: CanvasText;
+    --color-text-muted: CanvasText;
+    --color-text-disabled: GrayText;
+    --color-accent: Highlight;
+    --color-on-accent: HighlightText;
+    --color-accent-text: LinkText;
+    --color-focus-ring: CanvasText;
+    --color-danger: CanvasText;
+    --color-success: CanvasText;
+    --color-warning: CanvasText;
+    --color-brand: LinkText;
+  }
+
+  /* Forced colours recolour outlines too; a system colour keeps the focus ring visible on Canvas. */
+  :focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+}

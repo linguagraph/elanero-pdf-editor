@@ -17,6 +17,7 @@ const TOKEN_FREE_FILES = [
   'theme/ThemeSwitch.tsx',
   'theme/ThemeSwitch.css',
   'theme/icons.tsx',
+  'theme/BrandMark.tsx',
   'theme/theme.ts',
 ];
 const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;

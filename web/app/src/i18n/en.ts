@@ -10,6 +10,7 @@ export const EN = {
   // App shell and About.
   'app.name': 'Elanero',
   'app.version': 'Version {version}',
+  'brand.logoAlt': 'Elanero logo',
   'about.title': 'About Elanero',
   'about.licence': 'Licence: AGPL-3.0-or-later',
   'about.source': 'Source code',

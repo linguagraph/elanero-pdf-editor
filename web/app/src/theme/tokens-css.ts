@@ -42,6 +42,52 @@ function metricDeclarations(indent: string): string[] {
   return lines;
 }
 
+// Windows high contrast (and any forced-colours user setting) overrides colours with the system
+// palette. Every colour token maps to a system colour keyword here, so the components that read
+// the variables get the system colours without their own rules. Borders stay visible because
+// they use CanvasText, not a tint. Each keyword is a CSS system colour, so the user's chosen
+// high-contrast theme is honoured. The selector is `:root:root` so it outranks the dark blocks,
+// which use two-part selectors (`:root:not([data-theme])` and `:root[data-theme]`).
+const FORCED_COLOURS: Record<ColourToken, string> = {
+  window: 'Canvas',
+  surface: 'ButtonFace',
+  surfaceAlt: 'ButtonFace',
+  border: 'CanvasText',
+  borderStrong: 'CanvasText',
+  text: 'CanvasText',
+  textMuted: 'CanvasText',
+  textDisabled: 'GrayText',
+  accent: 'Highlight',
+  onAccent: 'HighlightText',
+  accentText: 'LinkText',
+  focusRing: 'CanvasText',
+  danger: 'CanvasText',
+  success: 'CanvasText',
+  warning: 'CanvasText',
+  brand: 'LinkText',
+};
+
+function forcedColoursBlock(): string[] {
+  const body = '  ';
+  const inner = '    ';
+  return [
+    '@media (forced-colors: active) {',
+    `${body}:root:root {`,
+    ...(Object.keys(FORCED_COLOURS) as ColourToken[]).map(
+      (token) => `${inner}${colourVar(token)}: ${FORCED_COLOURS[token]};`,
+    ),
+    `${body}}`,
+    '',
+    `${body}/* Forced colours recolour outlines too; a system colour keeps the focus ring visible on Canvas. */`,
+    `${body}:focus-visible {`,
+    `${inner}outline: 2px solid CanvasText;`,
+    `${inner}outline-offset: 2px;`,
+    `${body}}`,
+    '}',
+    '',
+  ];
+}
+
 // Light is the base. Dark applies (a) when the system prefers it and the user has not chosen
 // Light, and (b) when the user chose Dark. A user who chose Light stays light either way.
 export function renderTokensCss(): string {
@@ -67,6 +113,7 @@ export function renderTokensCss(): string {
     ...colourDeclarations('dark', body),
     '}',
     '',
+    ...forcedColoursBlock(),
   ];
   return lines.join('\n');
 }
