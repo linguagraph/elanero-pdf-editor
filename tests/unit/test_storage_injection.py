@@ -3,6 +3,7 @@ folders. Each default must behave exactly as before when nothing is injected."""
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -13,7 +14,11 @@ from pdfeditor.core import paths
 from pdfeditor.core.commands.snapshot import SnapshotCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.metadata import Metadata
-from pdfeditor.services.fonts import FontCatalog
+
+# The web package excludes the desktop font catalog (scripts/web_package.py); the font-folder
+# tests below are desktop_only, so the web run never reaches the name this guard leaves unbound.
+with contextlib.suppress(ImportError):
+    from pdfeditor.services.fonts import FontCatalog
 
 FONT = (
     Path(__file__).parent.parent / "fixtures" / "generated" / "fonts" / "TestCyrillic-Regular.ttf"
@@ -152,6 +157,7 @@ def test_web_budget_constant() -> None:
 # -- section 5: injected font folders --------------------------------------------------------
 
 
+@pytest.mark.desktop_only
 def test_folders_are_scanned_and_nothing_else(tmp_path: Path) -> None:
     folder = tmp_path / "uploads"
     folder.mkdir()
@@ -163,12 +169,14 @@ def test_folders_are_scanned_and_nothing_else(tmp_path: Path) -> None:
     assert {Path(face.path).parent for face in faces} == {folder}
 
 
+@pytest.mark.desktop_only
 def test_empty_folder_list_scans_nothing(tmp_path: Path) -> None:
     catalog = FontCatalog(folders=[], cache_path=tmp_path / "fonts.json")
     catalog.scan()
     assert catalog.faces() == []
 
 
+@pytest.mark.desktop_only
 def test_explicit_dirs_override_the_constructor_folders(tmp_path: Path) -> None:
     upload = tmp_path / "uploads"
     upload.mkdir()
@@ -180,6 +188,7 @@ def test_explicit_dirs_override_the_constructor_folders(tmp_path: Path) -> None:
     assert catalog.faces()
 
 
+@pytest.mark.desktop_only
 def test_cache_path_is_used_when_given(tmp_path: Path) -> None:
     folder = tmp_path / "uploads"
     folder.mkdir()
