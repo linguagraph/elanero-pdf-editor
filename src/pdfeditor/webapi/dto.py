@@ -318,8 +318,7 @@ class JobPrepareResult:
     token: str  # the job id: single-use, given back to jobs.apply or jobs.abort
     label: str  # the task label of a mutating job (its busy label); the job type name otherwise
     mutating: bool  # True when the document is read-only until the job is applied or aborted
-    document: bytes  # a copy of the document, for the job worker
-    password: str | None  # only for an encrypted document: the job worker needs it to open the copy
+    document: bytes  # a copy of the document, for the job worker; decrypted when the source is
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -348,8 +347,7 @@ class JobAbortParams:
 class JobRunParams:
     job: str
     args: JsonObject
-    document: bytes  # the copy from jobs.prepare
-    password: str | None  # the open password of an encrypted document, from jobs.prepare
+    document: bytes  # the copy from jobs.prepare (always readable without a password)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.engine.base import OpenError
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
@@ -25,6 +26,7 @@ from pdfeditor.webapi.errors import (
     FILE_TOO_LARGE,
     INVALID_ARGS,
     NO_DOCUMENT,
+    SAVE_FAILED,
     STALE_JOB,
     STALE_OBJECT,
 )
@@ -98,7 +100,6 @@ def run_job(
     job: str,
     args: dict[str, Any],
     document: bytes,
-    password: str | None = None,
     *,
     notify: Any = None,
     cancel: CancelToken | None = None,
@@ -113,7 +114,6 @@ def run_job(
                 "job": job,
                 "args": args,
                 "document": {"$bin": 0},
-                "password": password,
             },
         }
     )
@@ -165,7 +165,7 @@ def test_read_only_job_prepare_run_and_apply(web: None, fixture_pdf: Any) -> Non
     prepared, copy = prepare(handle, "reduce_size", {"preset": "screen"})
     assert prepared["mutating"] is False
     assert prepared["label"] == "reduce_size"
-    assert prepared["password"] is None  # not encrypted, so no password comes back
+    assert "password" not in prepared  # no password comes back in any reply
     assert copy.startswith(b"%PDF")
     assert session.busy == ""  # a read-only job takes no task
 
@@ -231,14 +231,19 @@ def test_a_prepare_refuses_while_a_mutating_job_is_prepared(web: None, fixture_p
     assert ok(call("jobs.abort", {"handle": handle, "token": mutating["token"]})) == {}
 
 
-def test_an_encrypted_document_returns_its_password_for_the_job(
+def test_an_encrypted_document_gives_a_decrypted_copy_and_no_password(
     web: None, fixture_pdf: Any
 ) -> None:
     handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
     prepared, copy = prepare(handle, "reduce_size", {"preset": "lossless"})
-    assert prepared["password"] == "user"  # W1.2 section 13: only for encrypted documents
-    reply, out = run_job("reduce_size", {"preset": "lossless"}, copy, "user")
+    assert "password" not in prepared  # the job worker never gets a password
+    record("page_count_pikepdf", copy, pages=1)  # the copy opens with no password
+    record("page_count_pdfium", copy, pages=1)
+    reply, out = run_job("reduce_size", {"preset": "lossless"}, copy)
     assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+    # The source itself stays encrypted.
+    _, source_out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    record("refuses_without_password_pikepdf", source_out[0])
 
 
 # -- mutating jobs ----------------------------------------------------------------------------
@@ -312,6 +317,53 @@ def test_a_cancel_during_a_read_only_job_stops_it(web: None, fixture_pdf: Any) -
     reply, _ = run_job("reduce_size", {"preset": "print"}, copy, notify=notify, cancel=token)
     assert error(reply)["code"] == CANCELLED
     assert len(notices) == 1  # the job stopped at its first check after the notice
+
+
+def test_a_mutating_job_on_an_encrypted_document_stays_encrypted_and_undoes(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    session = REGISTRY.get(handle)
+    prepared, copy = prepare(handle, "action", sanitize_args())
+    assert "password" not in prepared
+    reply, out = run_job("action", sanitize_args(), copy)
+    result = ok(reply)
+    document = binary(result["document"], out)
+    record("page_count_pikepdf", document, pages=1)  # the job's result is plaintext
+    applied = ok(apply(handle, prepared["token"], document, result["label"], True))
+    assert applied["applied"] is True
+
+    _, saved_out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    record("refuses_without_password_pikepdf", saved_out[0])  # still encrypted after apply
+    record("encrypted_pages_pikepdf", saved_out[0], pages=1, password="user")
+
+    assert ok(call("actions.undo", {"handle": handle}))["done"] is True
+    assert session.undo_stack.can_undo is False
+    _, undone_out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    record("refuses_without_password_pikepdf", undone_out[0])
+    record("encrypted_pages_pikepdf", undone_out[0], pages=1, password="user")
+
+
+def test_a_result_that_cannot_be_encrypted_again_is_refused_and_changes_nothing(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    session = REGISTRY.get(handle)
+    prepared, copy = prepare(handle, "action", sanitize_args())
+    reply, out = run_job("action", sanitize_args(), copy)
+    result = ok(reply)
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise OpenError("the encrypted copy can't be reopened")
+
+    monkeypatch.setattr(session.engine, "open", broken)
+    err = error(
+        apply(handle, prepared["token"], binary(result["document"], out), result["label"], True)
+    )
+    assert err["code"] == SAVE_FAILED
+    assert session.busy == ""  # the task ends even when the apply is refused
+    assert session.undo_stack.can_undo is False
+    assert session.require_full_save is False
 
 
 def test_a_cancelled_mutating_job_is_aborted_and_leaves_the_document_alone(

@@ -18,14 +18,15 @@ from __future__ import annotations
 import secrets
 from collections import deque
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS, SnapshotCommand
 from pdfeditor.core.jobs import JobContext
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.model.metadata import EncryptionMethod
+from pdfeditor.engine.base import EngineError
+from pdfeditor.model.metadata import EncryptionMethod, Permissions, SecuritySettings
 from pdfeditor.services.optimize import PRESETS, ReduceOptions, preset, reduce_size
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.actions import _changed, _Events, _state
@@ -34,6 +35,7 @@ from pdfeditor.webapi.errors import (
     BUSY,
     FILE_TOO_LARGE,
     INVALID_ARGS,
+    SAVE_FAILED,
     STALE_JOB,
     STALE_OBJECT,
     RpcFailure,
@@ -147,12 +149,19 @@ def job_type(name: str) -> JobType:
 # -- the engine's prepared jobs ----------------------------------------------------------------
 
 
+# A job's copy: the snapshot options, but written without encryption. The source stays encrypted
+# and untouched; the job worker never sees a password (W1.2 section 16, question 1).
+DECRYPTED_COPY_OPTIONS = replace(SNAPSHOT_OPTIONS, decrypt=True)
+
+
 @dataclass(slots=True)
 class _Prepared:
     handle: str
     label: str  # the task label begun for a mutating job
     mutating: bool
     fingerprint: tuple[object, ...]  # the document's state at prepare (see _fingerprint)
+    encryption: EncryptionMethod  # the source's method; a result is encrypted with it again
+    permissions: Permissions  # the source's permissions, kept by the re-encryption
 
 
 class PreparedJobs:
@@ -235,7 +244,18 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
     with session.lock:
         if kind.mutating and session.busy:
             raise RpcFailure(BUSY, "a task is working on the document", {"task": session.busy})
-        data = session.document.to_bytes(SNAPSHOT_OPTIONS)
+        info = session.document.info()
+        encrypted = info.encryption is not EncryptionMethod.NONE
+        if encrypted:
+            # Written from a scratch copy: writing without encryption changes the open document's
+            # encryption state, which would then leak into the source's own saves.
+            scratch = session.document.copy()
+            try:
+                data = scratch.to_bytes(DECRYPTED_COPY_OPTIONS)
+            finally:
+                scratch.close()
+        else:
+            data = session.document.to_bytes(SNAPSHOT_OPTIONS)
         if len(data) > limits.MAX_JOB_BYTES:
             raise RpcFailure(
                 FILE_TOO_LARGE,
@@ -243,20 +263,63 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
                 {"max_bytes": limits.MAX_JOB_BYTES, "size": len(data)},
             )
         fingerprint = _fingerprint(session)
-        encrypted = session.document.info().encryption is not EncryptionMethod.NONE
         if kind.mutating:
             session.begin_task(label)
     token = PREPARED.new_token()
-    PREPARED.add(token, _Prepared(params.handle, label, kind.mutating, fingerprint))
-    # W1.2 section 13: an encrypted document's job worker needs the open password to open its copy.
-    password = REGISTRY.password(params.handle) if encrypted else None
-    return dto.JobPrepareResult(
-        token=token,
-        label=label,
-        mutating=kind.mutating,
-        document=data,
-        password=password,
+    PREPARED.add(
+        token,
+        _Prepared(
+            params.handle,
+            label,
+            kind.mutating,
+            fingerprint,
+            info.encryption,
+            info.permissions,
+        ),
     )
+    return dto.JobPrepareResult(token=token, label=label, mutating=kind.mutating, document=data)
+
+
+def _encrypt_like(session: DocumentSession, entry: _Prepared, plain: bytes, password: str) -> bytes:
+    """The job's plaintext result, encrypted as the source was, and checked by reopening it.
+
+    The open password is the user password of the source, and it is also used as the owner
+    password: the web session never holds the source's owner password, so the owner password
+    cannot be kept. The method and the permissions are kept. Raises SAVE_FAILED, with nothing
+    changed, when the result can't be written and reopened encrypted.
+    """
+    if entry.encryption is EncryptionMethod.NONE:
+        return plain
+    try:
+        scratch = session.engine.open(plain, None)
+        try:
+            pages = scratch.page_count
+            scratch.set_pending_security(
+                SecuritySettings(
+                    method=entry.encryption,
+                    user_password=password,
+                    owner_password=password,
+                    permissions=entry.permissions,
+                )
+            )
+            data = bytes(scratch.to_bytes(SNAPSHOT_OPTIONS))
+        finally:
+            scratch.close()
+        reopened = session.engine.open(data, password)
+        try:
+            same_pages = reopened.page_count == pages
+            same_method = reopened.info().encryption is entry.encryption
+        finally:
+            reopened.close()
+    except EngineError as exc:
+        raise RpcFailure(
+            SAVE_FAILED,
+            "the job's result could not be encrypted again",
+            {"reason": str(exc)},
+        ) from exc
+    if not (same_pages and same_method):
+        raise RpcFailure(SAVE_FAILED, "the job's result could not be encrypted again")
+    return data
 
 
 def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
@@ -285,8 +348,12 @@ def apply(params: dto.JobApplyParams) -> dto.JobApplyResult:
                 )
             applied = False
             if entry.mutating:
-                data = params.document
-                assert data is not None  # checked above
+                document = params.document
+                assert document is not None  # checked above
+                # Encrypted again before anything changes: a refusal leaves the document as it was.
+                data = _encrypt_like(
+                    session, entry, document, REGISTRY.password(params.handle) or ""
+                )
                 command = SnapshotCommand(
                     params.label, lambda doc: doc.load_state(data), session.snapshots
                 )

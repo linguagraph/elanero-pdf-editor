@@ -66,9 +66,8 @@ def run_job(
             {"max_bytes": limits.MAX_JOB_BYTES, "size": len(params.document)},
         )
     # The copy is opened here and closed at the end: nothing of it outlives the job.
-    session = DocumentSession.open(
-        params.document, params.password, snapshot_budget=WEB_SNAPSHOT_BUDGET
-    )
+    # The copy is decrypted by jobs.prepare, so the job worker never holds a password (W1.2 16.1).
+    session = DocumentSession.open(params.document, None, snapshot_budget=WEB_SNAPSHOT_BUDGET)
     try:
         output = _execute(session, job_type, typed, request_id, notify, cancel)
     finally:
