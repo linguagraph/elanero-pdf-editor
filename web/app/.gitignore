@@ -1,0 +1,5 @@
+# The W3.1 staged engine assets (scripts/stage_engine_assets.mjs): Pyodide, the wheels, the zip.
+/public/engine-assets/
+# Playwright run output
+/test-results/
+/playwright-report/

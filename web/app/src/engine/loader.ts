@@ -137,6 +137,9 @@ export async function loadEngine(options: LoadOptions): Promise<EngineHandle> {
   emit('packages');
   await attempt('packages', async () => {
     await pyodide.loadPackage(new URL(PYMUPDF_WHEEL_FILE, base).href);
+    // Pyodide logs a wheel it cannot fetch and still resolves, so the import is the real check
+    // that PyMuPDF arrived. The engine's hello alone would pass without it.
+    await pyodide.runPythonAsync('import pymupdf');
     const zip = await fetchBytes(new URL(WEB_ZIP_FILE, base).href);
     pyodide.FS.writeFile(`/home/pyodide/${WEB_ZIP_FILE}`, new Uint8Array(zip));
     await pyodide.runPythonAsync(UNPACK_PY);
