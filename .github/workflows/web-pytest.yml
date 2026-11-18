@@ -8,6 +8,8 @@ name: Web pytest (W2.7a)
 
 on:
   workflow_dispatch:
+  # ci.yml calls this for a pull request that changes the web (its web-tests job).
+  workflow_call:
   pull_request:
     paths:
       - "web/**"

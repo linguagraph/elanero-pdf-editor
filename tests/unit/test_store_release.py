@@ -199,6 +199,7 @@ def test_a_listing_change_is_checked_but_needs_no_install_tests() -> None:
     assert ci_changes.classify(["packaging/store/listing-en.md"]) == {
         "app": True,
         "packaging": False,
+        "web": False,
     }
 
 

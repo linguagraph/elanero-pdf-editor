@@ -18,7 +18,7 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 // Runs the generator's --check with the given output file. Exit code 0 means no drift.
 function runCheck(output?: string): { status: number; stderr: string } {
-  const args = ['run', 'python', 'scripts/make_web_types.py', '--check'];
+  const args = ['run', '--quiet', 'python', 'scripts/make_web_types.py', '--check'];
   if (output !== undefined) args.push('--output', output);
   const result = spawnSync('uv', args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120_000 });
   if (result.error !== undefined) {

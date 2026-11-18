@@ -24,7 +24,7 @@ import ci_changes
     ],
 )
 def test_docs_alone_skip_everything(paths: list[str]) -> None:
-    assert ci_changes.classify(paths) == {"app": False, "packaging": False}
+    assert ci_changes.classify(paths) == {"app": False, "packaging": False, "web": False}
 
 
 @pytest.mark.parametrize(
@@ -39,7 +39,7 @@ def test_docs_alone_skip_everything(paths: list[str]) -> None:
     ],
 )
 def test_code_runs_the_tests_but_not_the_install_tests(paths: list[str]) -> None:
-    assert ci_changes.classify(paths) == {"app": True, "packaging": False}
+    assert ci_changes.classify(paths) == {"app": True, "packaging": False, "web": False}
 
 
 @pytest.mark.parametrize(
@@ -55,7 +55,7 @@ def test_code_runs_the_tests_but_not_the_install_tests(paths: list[str]) -> None
     ],
 )
 def test_packaging_changes_run_the_install_tests(path: str) -> None:
-    assert ci_changes.classify([path]) == {"app": True, "packaging": True}
+    assert ci_changes.classify([path]) == {"app": True, "packaging": True, "web": False}
 
 
 @pytest.mark.parametrize(
@@ -70,7 +70,7 @@ def test_packaging_changes_run_the_install_tests(path: str) -> None:
     ],
 )
 def test_web_alone_skips_the_desktop_ci(paths: list[str]) -> None:
-    assert ci_changes.classify(paths) == {"app": False, "packaging": False}
+    assert ci_changes.classify(paths) == {"app": False, "packaging": False, "web": True}
 
 
 @pytest.mark.parametrize(
@@ -78,31 +78,67 @@ def test_web_alone_skips_the_desktop_ci(paths: list[str]) -> None:
 )
 def test_a_generated_web_file_runs_the_desktop_ci(paths: list[str]) -> None:
     """The desktop generates these and tests them, so a hand edit must not skip the checks."""
-    assert ci_changes.classify(paths) == {"app": True, "packaging": False}
+    assert ci_changes.classify(paths) == {"app": True, "packaging": False, "web": True}
 
 
 def test_web_with_app_code_runs_the_desktop_ci() -> None:
     assert ci_changes.classify(["web/spike/README.md", "src/pdfeditor/app.py"]) == {
         "app": True,
         "packaging": False,
+        "web": True,
     }
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        ["web/app/src/App.tsx"],
+        ["web/app/package-lock.json"],
+        ["web\\app\\src\\App.tsx"],
+        [".github/workflows/web-pytest.yml"],
+        ["web/spike/README.md", "src/pdfeditor/app.py"],
+    ],
+)
+def test_the_web_output_is_on_for_any_web_path(paths: list[str]) -> None:
+    """The gate runs for any web change, including one that also changes the desktop app."""
+    assert ci_changes.classify(paths)["web"] is True
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        ["PLAN.md"],
+        ["docs/guide/signing.md"],
+        ["src/pdfeditor/ui/main_window.py"],
+        ["packaging/pdfeditor.spec"],
+        [".github/workflows/ci.yml"],
+        ["webapp/x.py"],
+        ["src/pdfeditor/web/x.py"],
+    ],
+)
+def test_the_web_output_is_off_without_web_paths(paths: list[str]) -> None:
+    assert ci_changes.classify(paths)["web"] is False
 
 
 @pytest.mark.parametrize(
     "path", ["webapp/x.py", "web-foo/x", "src/pdfeditor/web/x.py", "src/pdfeditor/webapi/x.py"]
 )
 def test_only_the_top_level_web_folder_is_web(path: str) -> None:
-    assert ci_changes.classify([path]) == {"app": True, "packaging": False}
+    assert ci_changes.classify([path]) == {"app": True, "packaging": False, "web": False}
 
 
 def test_other_workflows_still_count_as_packaging() -> None:
-    assert ci_changes.classify([".github/workflows/ci.yml"]) == {"app": True, "packaging": True}
+    assert ci_changes.classify([".github/workflows/ci.yml"]) == {
+        "app": True,
+        "packaging": True,
+        "web": False,
+    }
 
 
 def test_no_changes_found_runs_everything() -> None:
     """If the diff came back empty, something's wrong: never take that as nothing to test."""
-    assert ci_changes.classify([]) == {"app": True, "packaging": True}
-    assert ci_changes.classify(["", "  "]) == {"app": True, "packaging": True}
+    assert ci_changes.classify([]) == {"app": True, "packaging": True, "web": True}
+    assert ci_changes.classify(["", "  "]) == {"app": True, "packaging": True, "web": True}
 
 
 def test_a_nightly_or_release_run_tests_everything(monkeypatch, tmp_path: Path) -> None:
@@ -111,4 +147,4 @@ def test_a_nightly_or_release_run_tests_everything(monkeypatch, tmp_path: Path) 
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setattr(ci_changes, "changed_paths", lambda: ["PLAN.md"])
     assert ci_changes.main() == 0
-    assert output.read_text("utf-8").split() == ["app=true", "packaging=true"]
+    assert output.read_text("utf-8").split() == ["app=true", "packaging=true", "web=true"]
