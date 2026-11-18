@@ -44,6 +44,37 @@ CI runs once per PR, and not again after the merge: `scripts/ci_changes.py` skip
 affect (docs-only PRs run nothing), and PRs run only the Windows tests, without the performance
 budgets. The nightly run and every release run everything.
 
+## Web version
+
+The browser build is `web/app` (React and Vite, with the engine in Pyodide workers). Its Python
+side is `pdfeditor.webapi`, packed by `scripts/web_package.py`. Run the npm commands in `web/app`.
+
+- `npm ci`, then `npm run dev`, `npm run build`, `npm run typecheck`, `npm run lint`,
+  `npm run format:check`, `npm test` (Vitest). `npm run tokens:check` fails when `tokens.css` is stale.
+- Playwright: `npx playwright install --with-deps chromium`, then `npx playwright test`. The
+  engine-load spec needs the engine assets first: from the repo root run
+  `node scripts/stage_engine_assets.mjs --wheel <pymupdf-wasm.whl> --zip dist/web/pdfeditor-web.zip`
+  (or set `PYMUPDF_WHEEL` and `WEB_ZIP`), after `npm ci` in `web/spike`.
+- Pyodide run (CI's `web-pytest` job, from the repo root): `npm ci` in `web/spike`,
+  `python scripts/make_fixtures.py`, `python scripts/build_web_wheel.py`, then
+  `PYMUPDF_WHEEL=<web/spike/dist/wheel-build/*.whl> WEB_ZIP=dist/web/pdfeditor-web.zip node web/test/pyodide/run_tests.mjs`,
+  then `python scripts/web_host_verify.py web/test/pyodide/out/host-checks.json` and `python scripts/check_web_skips.py`.
+- Web rules: no inline script or style, since the policy in `web/app/src/csp.ts` allows only
+  `'self'` (`index.html` carries the same policy; `csp.test.ts` fails on drift).
+- Every user-facing string goes through `t()` (`web/app/src/i18n/t.ts`), with its key in `web/app/src/i18n/en.ts`.
+- Generated files are regenerated, never hand-edited: `web/app/src/rpc/generated.ts` by
+  `python scripts/make_web_types.py` (`--check` for drift), `web/app/src/theme/tokens.css` by `npm run tokens`.
+- The engine runs only in the workers under `web/app/src/engine/`, never on the main thread.
+- No SharedArrayBuffer (GitHub Pages sets no COOP/COEP), so a running engine job is cancelled by
+  discarding its worker (docs/web/plan.md, decision 5), not by an interrupt buffer.
+- PyMuPDF rule (above) applies to `pdfeditor.webapi` and `web/` too.
+- Web-pytest: a test file that imports pikepdf or pypdfium2 at module level is skipped under Pyodide
+  and counted against `web/test/pyodide/host-skip-budget.json`, whose budgets only go down. Use
+  `tests.hostcheck.record` with a `@host_check` (see `tests/unit/test_webapi_save.py`) instead, and
+  do not add budget entries. Tests marked `desktop_only` are not run under Pyodide.
+- Web package: `scripts/web_package.py` ships every `src/pdfeditor` module and data file not in its
+  `EXCLUDED` tuple. A module that must not ship goes there, with a comment giving the reason.
+
 ## Architecture rules (enforced)
 
 Layers, top to bottom. A layer may import only from layers below it (import-linter contract

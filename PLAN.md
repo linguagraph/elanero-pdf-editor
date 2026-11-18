@@ -628,7 +628,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W9.2** Deploy to GitHub Pages under `/app/`
 - [ ] **W9.3** User guide: "Web version" page
 - [ ] **W9.4** `PRIVACY.md` and landing page
-- [ ] **W9.5** `AGENTS.md`: web commands and rules
+- [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: the "Web version" section covers the web commands, rules, web-pytest rules and web package rule, each verified against the repo; pending: the third-party licence list for Pyodide (MPL-2.0) and the npm packages, which does not exist yet)_
 - [ ] **W9.6** Release checklist in `RELEASING.md` _(partial: checklist written and its commands verified; web cache busting, web deploy and web rollback are not yet automated, pending W9.2)_
 
 ### Later / not in current scope
