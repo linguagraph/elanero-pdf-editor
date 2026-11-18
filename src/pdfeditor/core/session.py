@@ -11,7 +11,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pdfeditor.core.commands.base import DESKTOP_SNAPSHOT_BUDGET, Change, Command, UndoStack
+from pdfeditor.core.commands.base import (
+    DESKTOP_SNAPSHOT_BUDGET,
+    Change,
+    ChangeKind,
+    Command,
+    UndoStack,
+)
 from pdfeditor.core.commands.snapshot import SnapshotStore
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Document, Engine, PasswordCallback, SaveError, SaveOptions
@@ -89,6 +95,9 @@ class DocumentSession:
         # Set after redaction/sanitizing: an incremental save would keep the removed content
         # in earlier revisions of the file, so the next save must be a full rewrite.
         self.require_full_save = False
+        # Bumped by every change that reshapes the pages (a STRUCTURE change, which includes
+        # every snapshot restore). The web uses it to refetch page sizes (W1.2 section 7).
+        self.structure_version = 0
         self._snapshots: SnapshotStore | None = None
         self._listeners: list[Listener] = []
         self._tasks: list[str] = []  # background tasks reading the document (see begin_task)
@@ -155,6 +164,11 @@ class DocumentSession:
         for listener in list(self._listeners):
             listener(event)
 
+    def _announce(self, changes: tuple[Change, ...]) -> None:
+        if any(change.kind is ChangeKind.STRUCTURE for change in changes):
+            self.structure_version += 1
+        self._emit(SessionEvent(EventKind.CHANGED, changes))
+
     # -- background tasks -----------------------------------------------------------------
     @property
     def busy(self) -> str:
@@ -200,7 +214,7 @@ class DocumentSession:
             return False
         with self.lock:
             self.undo_stack.push(command, self.document)
-        self._emit(SessionEvent(EventKind.CHANGED, tuple(command.changes())))
+        self._announce(tuple(command.changes()))
         return True
 
     def undo(self) -> bool:
@@ -210,7 +224,7 @@ class DocumentSession:
             command = self.undo_stack.undo(self.document)
         if command is None:
             return False
-        self._emit(SessionEvent(EventKind.CHANGED, tuple(command.changes())))
+        self._announce(tuple(command.changes()))
         return True
 
     def redo(self) -> bool:
@@ -220,7 +234,7 @@ class DocumentSession:
             command = self.undo_stack.redo(self.document)
         if command is None:
             return False
-        self._emit(SessionEvent(EventKind.CHANGED, tuple(command.changes())))
+        self._announce(tuple(command.changes()))
         return True
 
     # -- saving ---------------------------------------------------------------------------

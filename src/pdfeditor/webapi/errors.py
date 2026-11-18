@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 
+from pdfeditor.actions.base import ActionError, Busy, NotSupported, Refused, StaleObject
 from pdfeditor.engine.base import (
     EngineError,
     OpenError,
@@ -86,14 +87,11 @@ ALL_CODES: tuple[str, ...] = (
     INTERNAL,
 )
 
-# Declared by W1.2 but not raised by the calls of W3.2. Each is raised by a later group (the
-# actions, jobs, render, fonts and translation calls), so the tests check this list against the
-# codes the code can raise and nothing else.
+# Declared by W1.2 but not raised yet. Each is raised by a later group (jobs, fonts and
+# translation calls), so the tests check this list against the codes the code can raise and
+# nothing else. REFUSED, BUSY and STALE_OBJECT are raised by the actions calls (W3.5).
 UNUSED_CODES: frozenset[str] = frozenset(
     {
-        REFUSED,
-        BUSY,
-        STALE_OBJECT,
         STALE_JOB,
         CANCELLED,
         IMAGE_TOO_LARGE,
@@ -128,6 +126,10 @@ _MAPPING: tuple[tuple[type[BaseException], str], ...] = (
     (OpenError, OPEN_FAILED),
     (SaveError, SAVE_FAILED),
     (UnsupportedFeature, NOT_SUPPORTED),
+    (Refused, REFUSED),
+    (Busy, BUSY),
+    (StaleObject, STALE_OBJECT),
+    (NotSupported, NOT_SUPPORTED),
     (EngineError, ENGINE_ERROR),
     (MemoryError, OUT_OF_MEMORY),
 )
@@ -139,6 +141,13 @@ def failure_for(exc: BaseException) -> RpcFailure:
         return exc
     for cls, code in _MAPPING:
         if isinstance(exc, cls):
-            return RpcFailure(code, str(exc) or code)
+            return RpcFailure(code, str(exc) or code, _action_details(exc, code))
     log.error("unexpected error in a web call", exc_info=exc)
     return RpcFailure(INTERNAL, INTERNAL_MESSAGE)
+
+
+def _action_details(exc: BaseException, code: str) -> dict[str, object] | None:
+    """The W1.2 section 4 details of an actions-layer error: the busy task, or the reason."""
+    if not isinstance(exc, ActionError):
+        return None
+    return {"task": str(exc)} if code == BUSY else {"reason": str(exc)}

@@ -222,6 +222,67 @@ class PageImage:
     pixels: bytes  # empty when the revision changed
 
 
+class JsonObject:
+    """Marker type for a JSON object that the handler converts itself, once it knows which
+    dataclass it is (the arguments of ``actions.run``, selected by the action name). The
+    converter only checks that it is an object; the handler then runs ``from_json`` on it with
+    the same buffer table, so ``$bin`` markers inside it are still checked."""
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RunParams:
+    handle: str
+    name: str  # a stable action name (W1.3 "Names")
+    args: JsonObject  # the action's arguments, converted by the action's args dataclass
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ChangeDto:
+    kind: str  # "content", "structure", "metadata", "outline" or "annotations" (W1.2 section 7)
+    pages: tuple[int, ...]  # 0-based page indices, sorted
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ChangedDto:
+    changes: tuple[ChangeDto, ...]
+    revisions: dict[str, int]  # the new Page.revision of each changed page, keyed by index
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class DocStateDto:
+    page_count: int
+    structure_version: int  # bumped on every structure change (W1.2 section 7)
+    dirty: bool
+    busy: str  # the background task that makes the document read-only, or ""
+    can_undo: bool
+    can_redo: bool
+    undo_label: str
+    redo_label: str
+    require_full_save: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RunResult:
+    label: str  # the undo label of the step (W1.3 ActionResult.label)
+    executed: bool  # False when the action found nothing to do
+    value: object  # the action's own result (None for most), converted as in section 6
+    changed: ChangedDto | None  # None when no content changed
+    state: DocStateDto
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class HistoryResult:
+    done: bool  # whether anything was undone or redone
+    label: str  # the label of the step that was undone or redone; "" when nothing was
+    changed: ChangedDto | None
+    state: DocStateDto
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AvailableResult:
+    names: tuple[str, ...]  # the actions whose capabilities hold on this document and platform
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 
@@ -312,6 +373,10 @@ def from_json(tp: object, data: object, buffers: BufferTable, path: str) -> Any:
         return data
     if tp is bytes:
         return buffers.take(data, path)
+    if tp is JsonObject:
+        if not isinstance(data, dict):
+            _invalid(path, "expected an object")
+        return data
     if tp is datetime:
         if not isinstance(data, str):
             _invalid(path, "expected an ISO 8601 string")

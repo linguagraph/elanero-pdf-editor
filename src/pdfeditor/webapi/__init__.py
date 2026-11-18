@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pdfeditor.webapi import dto, render, session, text
+from pdfeditor.webapi import actions, dto, render, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 
@@ -28,6 +28,9 @@ _ENVELOPE_KEYS = frozenset({"v", "id", "method", "params"})
 class Method:
     params: type
     handler: Callable[..., object]
+    # True when the handler also gets the call's buffer table, because it converts part of its
+    # params itself (actions.run). Such a handler runs before the unused-buffer check.
+    takes_buffers: bool = False
 
 
 def _hello(params: dto.Empty) -> dto.HelloResult:
@@ -46,6 +49,10 @@ METHODS: dict[str, Method] = {
     "text.extract": Method(dto.ExtractParams, text.extract),
     "text.search": Method(dto.SearchParams, text.search),
     "render.page": Method(dto.RenderPageParams, render.render_page),
+    "actions.run": Method(dto.RunParams, actions.run_action, takes_buffers=True),
+    "actions.undo": Method(dto.HandleParams, actions.undo),
+    "actions.redo": Method(dto.HandleParams, actions.redo),
+    "actions.available": Method(dto.HandleParams, actions.available),
 }
 
 
@@ -112,8 +119,12 @@ def _run(data: object, buffers: list[bytes]) -> tuple[dict[str, object], list[by
 
     table = BufferTable(buffers)
     typed: Any = from_json(method.params, params, table, "params")
-    table.check_all_used()
-    result = method.handler(typed)
+    if method.takes_buffers:
+        result = method.handler(typed, table)
+        table.check_all_used()
+    else:
+        table.check_all_used()
+        result = method.handler(typed)
 
     out: list[bytes] = []
     reply: dict[str, object] = {

@@ -6,11 +6,13 @@ name through :data:`REGISTRY`. Nothing here imports Qt, so ``tests/actions`` run
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from pdfeditor.actions.base import ActionResult, ActionSpec, NotSupported
 from pdfeditor.core.session import DocumentSession
+from pdfeditor.model import platform
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -31,9 +33,14 @@ def action(
     return register
 
 
+_PLATFORM_FLAGS = frozenset(f.name for f in dataclasses.fields(platform.PlatformCapabilities))
+
+
 def _requirement_holds(session: DocumentSession, name: str) -> bool:
-    """Whether a capability an action needs is on. Only engine flags for now; the platform
-    flags of W2.2 are checked here too."""
+    """Whether a capability an action needs is on: an engine flag, or a platform flag (W2.2)
+    when the name is one of those. The web platform turns off some of them (OCR, signing)."""
+    if name in _PLATFORM_FLAGS:
+        return bool(getattr(platform.current(), name))
     return bool(getattr(session.engine.capabilities, name))
 
 
