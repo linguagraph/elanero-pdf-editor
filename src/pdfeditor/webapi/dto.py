@@ -108,6 +108,101 @@ class UnlockResult:
     unlocked: bool
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageParams:
+    handle: str
+    page: int  # 0-based
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RectDto:
+    x0: float  # points, visible page space, origin top-left
+    y0: float
+    x1: float
+    y1: float
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class TextLayerResult:
+    revision: int  # the page revision the layer was built from
+    text: str  # LINE_SEP between lines, so offsets map 1:1 to the char boxes
+    line_rects: tuple[RectDto, ...]
+    char_boxes: bytes  # Float32 x 4 per char (x0, y0, x1, y1); zeros for line separators
+    line_numbers: bytes  # Uint32 per char: the line it belongs to
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class TextPosition:
+    page: int
+    index: int  # caret index before this char on the page (W1.4 section 10)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExtractParams:
+    handle: str
+    start: TextPosition
+    end: TextPosition  # either order; the lower one is the start
+    cursor: str | None  # null for the first slice
+    budget_ms: int
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExtractResult:
+    text: str  # this slice's text; pages are joined with a line separator (empty if no text)
+    cursor: str | None  # null when finished
+    pages_done: int
+    total: int  # pages in the selection
+    done: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SearchOptionsDto:
+    case_sensitive: bool
+    whole_word: bool
+    regex: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SearchParams:
+    handle: str
+    query: str  # non-empty; at most limits.MAX_QUERY_CHARS
+    options: SearchOptionsDto
+    start_page: int  # the search wraps around from here; ignored once a cursor is given
+    cursor: str | None
+    budget_ms: int
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PointDto:
+    x: float
+    y: float
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class QuadDto:
+    ul: PointDto
+    ur: PointDto
+    ll: PointDto
+    lr: PointDto
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SearchHitDto:
+    page: int
+    text: str  # the matched text
+    context: str  # a little text either side, with the match in brackets
+    quads: tuple[QuadDto, ...]  # one per line the match covers
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SearchResult:
+    hits: tuple[SearchHitDto, ...]  # in page order, then reading order within a page
+    cursor: str | None  # null when finished
+    pages_done: int
+    total: int  # pages in the document
+    done: bool
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 
