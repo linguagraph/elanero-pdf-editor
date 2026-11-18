@@ -1,20 +1,19 @@
 """The save call of W3.6 (``save.save_bytes``) through dispatch, on fixtures.
 
 The bytes it returns are reopened in pikepdf (page count, /Rotate) and rendered in pypdfium2
-(the round-trip rule in AGENTS.md). The signed sample is read only: it is the committed
+(the round-trip rule in AGENTS.md). Those checks go through ``tests.hostcheck.record``: they run
+inline on desktop and are replayed on host CPython under Pyodide, which has neither library.
+The signed sample is read only: it is the committed
 self-signed file, and nothing here signs or opens a certificate from the Windows store.
 """
 
 from __future__ import annotations
 
-import io
 import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 
 from pdfeditor.core.session import DocumentSession
@@ -23,6 +22,7 @@ from pdfeditor.webapi import dispatch, limits
 from pdfeditor.webapi.errors import BUSY, FILE_TOO_LARGE, INVALID_ARGS, NO_DOCUMENT, SAVE_FAILED
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
+from tests.hostcheck import record
 
 SIGNED = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"
 
@@ -103,46 +103,28 @@ def rotate(handle: str, delta: int = 90) -> dict[str, Any]:
     )
 
 
-def page_count_of(data: bytes) -> int:
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        return len(pdf.pages)
-
-
-def rotation_of(data: bytes, page: int = 0) -> int:
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        return int(pdf.pages[page].obj.get("/Rotate", 0)) % 360
-
-
-def render_width(data: bytes) -> int:
-    pdf = pdfium.PdfDocument(data)
-    try:
-        return int(pdf[0].render(scale=0.5).width)
-    finally:
-        pdf.close()
-
-
 def test_full_save_reopens_in_pikepdf_and_renders_in_pdfium(web: None, fixture_pdf: Any) -> None:
     handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
     result, saved = saved_bytes(handle, "copy")
     assert saved.startswith(b"%PDF")
     assert result["incremental"] is False
     assert result["name"] == "images.pdf"
-    assert page_count_of(saved) == page_total(handle)
-    assert render_width(saved) > 0
+    record("page_count_pikepdf", saved, pages=page_total(handle))
+    record("render_width_pdfium", saved, scale=0.5)
 
 
 def test_in_place_unsigned_document_is_a_full_save(web: None, fixture_pdf: Any) -> None:
     handle = open_data(fixture_pdf("images").read_bytes())
     result, saved = saved_bytes(handle, "in_place")
     assert result["incremental"] is False
-    assert page_count_of(saved) == page_total(handle)
+    record("page_count_pikepdf", saved, pages=page_total(handle))
 
 
 def test_edit_then_save_contains_the_change(web: None, fixture_pdf: Any) -> None:
     handle = open_data(fixture_pdf("images").read_bytes())
     assert ok(rotate(handle))["executed"] is True
     result, saved = saved_bytes(handle, "copy")
-    assert rotation_of(saved) == 90
+    record("rotation_pikepdf", saved, page=0, degrees=90)
     assert result["incremental"] is False
 
 
@@ -154,8 +136,8 @@ def test_signed_save_is_incremental_and_keeps_the_signature(web: None) -> None:
     result, saved = saved_bytes(handle, "in_place")
     assert result["incremental"] is True
     assert saved.startswith(original)  # the signed bytes are untouched; the change is appended
-    assert page_count_of(saved) == page_total(handle)
-    assert render_width(saved) > 0
+    record("page_count_pikepdf", saved, pages=page_total(handle))
+    record("render_width_pdfium", saved, scale=0.5)
 
 
 def test_copy_of_a_signed_document_is_a_full_rewrite(web: None) -> None:
@@ -175,7 +157,7 @@ def test_a_second_change_after_an_incremental_save_is_refused(web: None) -> None
     assert err["code"] == SAVE_FAILED  # the core's once-per-lineage rule (W1.1 section 4)
     # The copy still works: it is a full rewrite and needs no lineage.
     _, saved = saved_bytes(handle, "copy")
-    assert page_count_of(saved) == page_total(handle)
+    record("page_count_pikepdf", saved, pages=page_total(handle))
 
 
 def test_undo_stack_and_dirty_flag_are_unchanged_by_a_save(web: None, fixture_pdf: Any) -> None:
@@ -203,7 +185,8 @@ def test_saving_an_unchanged_document_twice_gives_the_same_output(
     _, second = saved_bytes(handle, "copy")
     # MuPDF's full-save output is not byte-stable (measured: same size, different bytes, most
     # likely the trailer's random /ID), so the test asserts equal page counts, not equal bytes.
-    assert page_count_of(first) == page_count_of(second) == page_total(handle)
+    record("page_count_pikepdf", first, pages=page_total(handle))
+    record("page_count_pikepdf", second, pages=page_total(handle))
 
 
 def test_an_encrypted_document_is_saved_and_verified_with_its_password(
@@ -213,10 +196,8 @@ def test_an_encrypted_document_is_saved_and_verified_with_its_password(
     result, saved = saved_bytes(handle, "copy")
     assert result["verified"] is True
     assert saved.startswith(b"%PDF")
-    with pytest.raises(pikepdf.PasswordError):
-        pikepdf.open(io.BytesIO(saved))  # still encrypted
-    with pikepdf.open(io.BytesIO(saved), password="user") as pdf:
-        assert len(pdf.pages) == 1
+    record("refuses_without_password_pikepdf", saved)  # still encrypted
+    record("encrypted_pages_pikepdf", saved, pages=1, password="user")
 
 
 def test_unknown_handle_is_no_document(web: None) -> None:
