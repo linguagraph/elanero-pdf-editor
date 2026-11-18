@@ -106,7 +106,7 @@ jobs:
     needs: changes
     uses: ./.github/workflows/web-pytest.yml
     with:
-      web: ${{ needs.changes.outputs.web == 'true' }}
+      run_web: ${{ needs.changes.outputs.web }}
 
   test-windows:
     needs: [changes, checks]
