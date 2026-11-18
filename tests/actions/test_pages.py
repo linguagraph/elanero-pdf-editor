@@ -12,8 +12,6 @@ import sys
 import threading
 from pathlib import Path
 
-import pikepdf
-import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
@@ -40,6 +38,7 @@ from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.pages import LabelStyle, PageLabelRule
 from tests.actions.conftest import Opener
+from tests.hostcheck import record
 
 
 def texts(session: DocumentSession) -> list[str]:
@@ -92,14 +91,9 @@ def png_bytes() -> bytes:
 
 def assert_reads_everywhere(path: Path, pages: int) -> None:
     """The saved file opens in pikepdf and renders page 1 in pypdfium2."""
-    with pikepdf.open(path) as pdf:
-        assert len(pdf.pages) == pages
-    pd = pdfium.PdfDocument(path)
-    try:
-        assert len(pd) == pages
-        assert pd[0].render(scale=0.5).to_pil().size[0] > 0
-    finally:
-        pd.close()
+    record("page_count_pikepdf", path, pages=pages)
+    record("page_count_pdfium", path, pages=pages)
+    record("render_first_page_pdfium", path)
 
 
 # -- each action: result, document after, undo ------------------------------------------------
@@ -398,8 +392,7 @@ def test_round_trip_rotate(open_copy: Opener, tmp_path: Path) -> None:
     finally:
         with reopened.lock:
             reopened.document.close()
-    with pikepdf.open(out) as pdf:
-        assert int(pdf.pages[0].obj.get("/Rotate", 0)) == 90
+    record("rotation_pikepdf", out, page=0, degrees=90)
     assert_reads_everywhere(out, s.page_count)
 
 
@@ -451,10 +444,7 @@ def test_round_trip_crop_margins(open_copy: Opener, tmp_path: Path) -> None:
     before = rects(s)[0]
     page_actions.crop_margins(s, CropMargins((0,), 10, 20, 30, 40))
     out = s.save(tmp_path / "cropped.pdf")
-    with pikepdf.open(out) as pdf:
-        box = [float(v) for v in pdf.pages[0].obj.CropBox]
-        assert box[2] - box[0] == pytest.approx(before.width - 40, abs=0.5)
-        assert box[3] - box[1] == pytest.approx(before.height - 60, abs=0.5)
+    record("crop_box_size_pikepdf", out, width=before.width - 40, height=before.height - 60)
     assert_reads_everywhere(out, s.page_count)
 
 
@@ -469,6 +459,5 @@ def test_round_trip_set_labels(open_copy: Opener, tmp_path: Path) -> None:
     finally:
         with reopened.lock:
             reopened.document.close()
-    with pikepdf.open(out) as pdf:
-        assert "/PageLabels" in pdf.Root
+    record("catalog_has_key_pikepdf", out, key="/PageLabels")
     assert_reads_everywhere(out, s.page_count)
