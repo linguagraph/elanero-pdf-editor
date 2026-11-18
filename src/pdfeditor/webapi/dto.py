@@ -108,6 +108,25 @@ class UnlockResult:
     unlocked: bool
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class RenderPageParams:
+    handle: str
+    page: int  # 0-based, in visible page order
+    revision: int  # the page revision the caller expects (W1.4 section 5)
+    scale_milli: int  # device scale in thousandths: zoom x 96/72 x devicePixelRatio
+    rotation: int  # view rotation: 0, 90, 180 or 270
+    annotations: bool  # draw comments into the image (W1.4 section 4)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageImage:
+    width: int  # pixels; 0 when the revision changed
+    height: int
+    revision: int  # the page's current revision; differs from the request when it changed
+    format: str  # "rgba": four bytes per pixel, tightly packed rows, top row first
+    pixels: bytes  # empty when the revision changed
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 
