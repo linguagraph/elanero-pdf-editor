@@ -18,6 +18,7 @@ const SHARED: Record<string, { keys: string[] }> = shortcutTable.commands;
 function state(overrides: Partial<CommandState> = {}): CommandState {
   return {
     hasDocument: false,
+    hasRecentFiles: false,
     canUndo: false,
     canRedo: false,
     capabilities: new Set(),
@@ -100,6 +101,22 @@ describe('registry declarations', () => {
 
   it('keeps the ribbon in the desktop order, Home first', () => {
     expect(TAB_ORDER).toEqual(['home', 'edit', 'organize', 'protect', 'comment', 'view', 'tools']);
+  });
+});
+
+describe('open recent', () => {
+  it('is disabled while the recent list is empty, and runs once there are files', () => {
+    const openRecent = vi.fn();
+    expect(runCommand(REGISTRY, 'open-recent', state(), { 'open-recent': openRecent })).toBe(false);
+    const withRecent = state({ hasRecentFiles: true });
+    expect(runCommand(REGISTRY, 'open-recent', withRecent, { 'open-recent': openRecent })).toBe(
+      true,
+    );
+    expect(openRecent).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not a desktop shortcut, so it is web-only', () => {
+    expect(WEB_ONLY_IDS.has('open-recent')).toBe(true);
   });
 });
 
@@ -189,6 +206,7 @@ describe('ribbon and menu layouts', () => {
     const sections = menuSections(REGISTRY, withDoc).map((section) => section.map((def) => def.id));
     expect(sections[0]).toEqual([
       'open',
+      'open-recent',
       'save',
       'save-as',
       'print',

@@ -73,10 +73,12 @@ export const EN = {
   'disabled.needsDocument': 'Open a PDF first.',
   'disabled.nothingToUndo': 'There is nothing to undo.',
   'disabled.nothingToRedo': 'There is nothing to redo.',
+  'disabled.noRecentFiles': 'No recent files yet.',
 
   // Command labels, keyed by command id (W1.6 section 11). Shortcuts are not text here: they come
   // from the shared table.
   'command.open.label': 'Open…',
+  'command.open-recent.label': 'Open Recent',
   'command.save.label': 'Save',
   'command.print.label': 'Print…',
   'command.document-properties.label': 'Properties',
@@ -240,6 +242,20 @@ export const EN = {
   'job.cancel': 'Cancel',
   'job.working': 'Working',
   'job.percent': '{percent}% done',
+
+  // Start page, document tabs and opening files (W1.6 section 3, W4.2b).
+  'start.heading': 'Open a PDF',
+  'start.open': 'Open file',
+  'start.drop': 'Drop PDF files here, or use Open file.',
+  'start.recent.heading': 'Recent files',
+  'start.recent.empty': 'No recent files yet.',
+  'start.recent.opened': 'Opened {time}',
+  'start.recent.pickAgain': 'Pick {name} again in the file picker.',
+  'tabs.label': 'Open documents',
+  'tabs.close': 'Close {name}',
+  'tabs.unsaved': 'Unsaved changes',
+  'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
+  'open.engineNotConnected': 'The PDF engine is not connected yet, so {name} cannot be shown.',
 
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',

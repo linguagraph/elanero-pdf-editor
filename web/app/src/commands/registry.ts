@@ -37,17 +37,20 @@ export type Capability = (typeof CAPABILITIES)[number];
 // link to the engine or to the document.
 export interface CommandState {
   readonly hasDocument: boolean;
+  // True when the recent-files list has at least one name (W4.2b).
+  readonly hasRecentFiles: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly capabilities: ReadonlySet<Capability>;
 }
 
-export type DisabledReason = 'needsDocument' | 'nothingToUndo' | 'nothingToRedo';
+export type DisabledReason = 'needsDocument' | 'nothingToUndo' | 'nothingToRedo' | 'noRecentFiles';
 
 export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>> = {
   needsDocument: 'disabled.needsDocument',
   nothingToUndo: 'disabled.nothingToUndo',
   nothingToRedo: 'disabled.nothingToRedo',
+  noRecentFiles: 'disabled.noRecentFiles',
 };
 
 // Returns the reason a command is disabled, or null when it can run.
@@ -57,6 +60,7 @@ export const ALWAYS: Enabled = () => null;
 export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'needsDocument');
 export const CAN_UNDO: Enabled = (state) => (state.canUndo ? null : 'nothingToUndo');
 export const CAN_REDO: Enabled = (state) => (state.canRedo ? null : 'nothingToRedo');
+export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');
 
 // A ribbon group (tab `null` marks a group that only the app menu uses).
 export interface GroupDef {
