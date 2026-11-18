@@ -8,7 +8,7 @@ import { EngineLoadingScreen } from './feedback/LoadingScreen';
 import { ToastRegion } from './feedback/ToastRegion';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
-import { BRAND } from './theme/tokens';
+import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
 import { useDocuments } from './documents/useDocuments';
@@ -43,7 +43,7 @@ export function App() {
     <AppFrame
       header={
         <div className="app-header">
-          <span className="brand">{BRAND.name}</span>
+          <BrandMark />
           <button
             type="button"
             onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
