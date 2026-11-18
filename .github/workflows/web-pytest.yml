@@ -8,8 +8,16 @@ name: Web pytest (W2.7a)
 
 on:
   workflow_dispatch:
-  # ci.yml calls this for a pull request that changes the web (its web-tests job).
+  # ci.yml calls this for every pull request (its web-tests job) and passes `web`, whether the
+  # pull request changes the web.
   workflow_call:
+    inputs:
+      web:
+        description: >-
+          Whether the pull request changes the web. The job always runs, so its check always
+          reports; without web changes its steps are skipped and it passes.
+        type: boolean
+        default: true
   pull_request:
     paths:
       - "web/**"
@@ -34,9 +42,11 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Check out
+        if: (github.event_name != 'workflow_call' || inputs.web)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Read the pinned versions
+        if: (github.event_name != 'workflow_call' || inputs.web)
         id: versions
         run: |
           v=web/spike/versions.json
@@ -55,6 +65,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Node
+        if: (github.event_name != 'workflow_call' || inputs.web)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ steps.versions.outputs.node }}
@@ -62,10 +73,12 @@ jobs:
       # web/spike/package.json is the one package.json: it pins Pyodide, and the runner reads the
       # installed package from web/spike/node_modules.
       - name: Install the npm packages (exact, from the lockfile)
+        if: (github.event_name != 'workflow_call' || inputs.web)
         working-directory: web/spike
         run: npm ci
 
       - name: Restore the PyMuPDF wheel from the cache
+        if: (github.event_name != 'workflow_call' || inputs.web)
         id: wheel-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -75,13 +88,13 @@ jobs:
       # Route 3 (the one that matters for Pyodide 314): build the wheel with PyMuPDF's own
       # Pyodide route, at the tag. The MuPDF it bundles is used as is.
       - name: Set up Python for the Pyodide build
-        if: steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build'
+        if: (github.event_name != 'workflow_call' || inputs.web) && (steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build')
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ steps.versions.outputs.python_line }}
 
       - name: Build the PyMuPDF wasm wheel (route 3)
-        if: steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build'
+        if: (github.event_name != 'workflow_call' || inputs.web) && (steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build')
         env:
           PB: ${{ steps.versions.outputs.pyodide_build }}
           PYODIDE: ${{ steps.versions.outputs.pyodide }}
@@ -160,6 +173,7 @@ jobs:
       # Runs on a cache hit too: the wheel and wheel.sha256 come back from the cache together, and
       # the wheel is hashed again here, so a damaged or swapped cache entry fails the run.
       - name: Verify the wheel against wheel.sha256
+        if: (github.event_name != 'workflow_call' || inputs.web)
         run: |
           set -euo pipefail
           cd web/spike/dist/wheel-build
@@ -167,11 +181,13 @@ jobs:
           sha256sum -c wheel.sha256
 
       - name: Set up the host Python (fixtures and the web build)
+        if: (github.event_name != 'workflow_call' || inputs.web)
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ steps.versions.outputs.host_python }}
 
       - name: Install the host packages and generate the fixtures
+        if: (github.event_name != 'workflow_call' || inputs.web)
         run: |
           set -euo pipefail
           python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
@@ -179,9 +195,11 @@ jobs:
 
       # Stdlib only (scripts/build_web_wheel.py): writes dist/web/pdfeditor-web.zip and manifest.json.
       - name: Build the web package
+        if: (github.event_name != 'workflow_call' || inputs.web)
         run: python scripts/build_web_wheel.py
 
       - name: Upload the web package
+        if: (github.event_name != 'workflow_call' || inputs.web)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-pytest-package
@@ -189,6 +207,7 @@ jobs:
           path: dist/web/
 
       - name: Run the tests under Pyodide (Node)
+        if: (github.event_name != 'workflow_call' || inputs.web)
         env:
           WEB_ZIP: dist/web/pdfeditor-web.zip
         run: |
@@ -201,17 +220,17 @@ jobs:
       # Pyodide run recorded. Runs even when the Pyodide tests failed, since the manifest is
       # written then too. The host packages are the ones installed above.
       - name: Replay the recorded host checks (host CPython)
-        if: always() && hashFiles('web/test/pyodide/out/host-checks.json') != ''
+        if: (github.event_name != 'workflow_call' || inputs.web) && (always() && hashFiles('web/test/pyodide/out/host-checks.json') != '')
         run: python scripts/web_host_verify.py web/test/pyodide/out/host-checks.json
 
       # The ratchet on host-only skips (W2.7b): a module may not exceed its budget, and a module
       # with host-only skips needs a budget entry. The budget file only goes down.
       - name: Check the host-only skip budget
-        if: always()
+        if: (github.event_name != 'workflow_call' || inputs.web) && always()
         run: python scripts/check_web_skips.py
 
       - name: Upload the test output
-        if: always()
+        if: (github.event_name != 'workflow_call' || inputs.web) && always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-pytest-out
