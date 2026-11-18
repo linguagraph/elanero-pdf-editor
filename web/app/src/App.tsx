@@ -1,4 +1,5 @@
 import { About } from './about';
+import { t } from './i18n/t';
 import { BRAND } from './theme/tokens';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { APP_VERSION } from './version';
@@ -13,8 +14,8 @@ export function App() {
         <ThemeSwitch />
       </header>
       <main className="app-main">
-        <h1>{BRAND.name}</h1>
-        <p>Version {APP_VERSION}</p>
+        <h1>{t('app.name')}</h1>
+        <p>{t('app.version', { version: APP_VERSION })}</p>
         <About />
       </main>
     </>

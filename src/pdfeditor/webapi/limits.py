@@ -21,6 +21,7 @@ MAX_BUDGET_MS = 1000
 # Render limits (W1.1 section 7 and W1.4 section 4). Both are checked before MuPDF draws anything.
 MAX_RENDER_PIXELS = 64_000_000  # per page image: 64 MP, the W1.1 print and export ceiling
 MAX_RENDER_SCALE_MILLI = 256_000  # device scale 256: zoom 64 (W1.4 MAX_ZOOM) x 96/72 x DPR 3
+MAX_TILE_PIXELS = 16_000_000  # per tile of render.tile: the W1.1 section 7 per-tile ceiling
 
 # Jobs (W1.1 section 7, W1.2 section 13). A job gets a copy of the document, so its bytes are
 # held to the same size as an open file; the worker runs one job at a time.

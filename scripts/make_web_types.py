@@ -61,6 +61,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "jobs.apply": "action",
     "jobs.prepare": "action",
     "render.page": "render",
+    "render.tile": "render",
     "save.save_bytes": "io",
     "session.capabilities": "instant",
     "session.close": "instant",

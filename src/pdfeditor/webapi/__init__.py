@@ -49,6 +49,7 @@ METHODS: dict[str, Method] = {
     "text.extract": Method(dto.ExtractParams, text.extract),
     "text.search": Method(dto.SearchParams, text.search),
     "render.page": Method(dto.RenderPageParams, render.render_page),
+    "render.tile": Method(dto.RenderTileParams, render.render_tile),
     "actions.run": Method(dto.RunParams, actions.run_action, takes_buffers=True),
     "actions.undo": Method(dto.HandleParams, actions.undo),
     "actions.redo": Method(dto.HandleParams, actions.redo),
