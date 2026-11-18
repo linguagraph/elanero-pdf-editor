@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
 import { ERROR_CODES, PROTOCOL_VERSION, type OpenParams } from './generated';
-import { createRpcClient, deadlineMs, RpcError, RpcTimeoutError, type RpcClient } from './client';
+import {
+  createRpcClient,
+  deadlineMs,
+  isOutOfMemoryMessage,
+  RpcError,
+  RpcTimeoutError,
+  type RpcClient,
+} from './client';
 
 interface Envelope {
   v: number;
@@ -200,6 +207,35 @@ describe('RpcClient', () => {
       await expect(client.call('hello', {})).rejects.toMatchObject({ code: 'INTERNAL' });
       expect(worker.terminate).not.toHaveBeenCalled();
     });
+
+    it('maps a worker failure with the wasm out-of-memory text to OUT_OF_MEMORY', async () => {
+      worker.respond = () =>
+        new Error(
+          'the worker failed: RangeError: WebAssembly.Memory.grow(): Maximum memory size exceeded',
+        );
+
+      const error = await client.call('hello', {}).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(RpcError);
+      expect(error).toMatchObject({ code: 'OUT_OF_MEMORY', details: { method: 'hello' } });
+      // The client never restarts the engine: the UI asks the user (W1.1 section 1).
+      expect(worker.terminate).not.toHaveBeenCalled();
+    });
+
+    it('maps the Pyodide out-of-memory text to OUT_OF_MEMORY, and leaves other text alone', () => {
+      expect(isOutOfMemoryMessage('the worker failed: Aborted(OOM)')).toBe(true);
+      expect(isOutOfMemoryMessage('the worker failed: could not allocate memory')).toBe(true);
+      expect(isOutOfMemoryMessage('the worker failed: out of memory')).toBe(true);
+      expect(isOutOfMemoryMessage('the worker failed: boom')).toBe(false);
+      expect(isOutOfMemoryMessage('the worker failed: a room is not memory')).toBe(false);
+      expect(isOutOfMemoryMessage('memory access out of bounds')).toBe(false);
+    });
+
+    it('keeps an unrelated worker failure as INTERNAL even when it mentions memory', async () => {
+      worker.respond = () => new Error('the worker failed: a bad memory layout in the file');
+
+      await expect(client.call('hello', {})).rejects.toMatchObject({ code: 'INTERNAL' });
+    });
   });
 
   describe('invalid replies', () => {
@@ -278,6 +314,18 @@ describe('RpcClient', () => {
       const error = await outcome;
       expect(error).toBeInstanceOf(RpcTimeoutError);
       expect(error).toMatchObject({ code: 'TIMEOUT', timeoutMs: 100 });
+      expect(worker.terminate).not.toHaveBeenCalled();
+    });
+
+    it('keeps answering after a timeout: the next call still gets its own reply', async () => {
+      vi.useFakeTimers();
+      worker.respond = () => 'silent';
+      const slow = client.call('hello', {}, { timeoutMs: 50 }).catch((caught: unknown) => caught);
+      vi.advanceTimersByTime(50);
+      expect(await slow).toBeInstanceOf(RpcTimeoutError);
+
+      worker.respond = (envelope) => ok(envelope, HELLO);
+      await expect(client.call('hello', {})).resolves.toMatchObject({ protocol: PROTOCOL_VERSION });
       expect(worker.terminate).not.toHaveBeenCalled();
     });
   });
