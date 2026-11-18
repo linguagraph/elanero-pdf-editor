@@ -93,7 +93,8 @@ def page_total(handle: str) -> int:
     return int(ok(call("session.info", {"handle": handle}))["page_count"])
 
 
-_ID_PATTERN = re.compile(rb"/ID\[<[0-9A-Fa-f]+><[0-9A-Fa-f]+>\]")
+# The trailer's /ID array, whatever its spacing (writers differ between platforms).
+_ID_PATTERN = re.compile(rb"/ID\s*\[[^\]]*\]")
 
 
 def saved_bytes(handle: str) -> bytes:
@@ -102,7 +103,10 @@ def saved_bytes(handle: str) -> bytes:
     """
     reply, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
     data = binary(ok(reply)["data"], out)
-    return _ID_PATTERN.sub(b"/ID[<" + b"0" * 32 + b"><" + b"0" * 32 + b">]", data)
+    fixed = b"/ID[<" + b"0" * 32 + b"><" + b"0" * 32 + b">]"
+    data, count = _ID_PATTERN.subn(fixed, data)
+    assert count == 1, "the saved file has no single /ID array to normalise"
+    return data
 
 
 def prepare(
