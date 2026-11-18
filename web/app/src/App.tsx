@@ -1,5 +1,7 @@
 import { About } from './about';
 import { t } from './i18n/t';
+import { EngineLoadingScreen } from './feedback/LoadingScreen';
+import { ToastRegion } from './feedback/ToastRegion';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
 import { BRAND } from './theme/tokens';
@@ -21,6 +23,8 @@ export function App() {
     >
       <div className="app-main">
         <UpdatePrompt />
+        <EngineLoadingScreen />
+        <ToastRegion />
         <h1>{t('app.name')}</h1>
         <p>{t('app.version', { version: APP_VERSION })}</p>
         <About />

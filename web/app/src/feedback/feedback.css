@@ -1,0 +1,156 @@
+/* Toasts, job progress and the start-up screen (W1.6 section 10). Sizes and colours come from the
+   tokens. The dialog reuses the overlay classes from layout.css. */
+
+.toast-region {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100% - 2 * var(--space-4), 360px);
+  pointer-events: none;
+}
+
+.toast-region:empty {
+  display: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 4px solid var(--color-border-strong);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.toast-success {
+  border-left-color: var(--color-success);
+}
+
+.toast-error {
+  border-left-color: var(--color-danger);
+}
+
+.toast-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-dismiss,
+.job-cancel {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.feedback-primary {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-base);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toast-dismiss:focus-visible,
+.job-cancel:focus-visible,
+.feedback-primary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.job-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.job-bar {
+  flex: 1 1 120px;
+  min-width: 80px;
+}
+
+.job-status {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-window);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.loading-title {
+  margin: 0;
+  font-size: var(--font-size-title);
+}
+
+.loading-bar {
+  width: min(100%, 320px);
+}
+
+.loading-stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
+}
+
+.loading-stages li[data-state='current'] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.loading-stages li[data-state='done'] {
+  color: var(--color-text);
+}
+
+.loading-message {
+  max-width: 480px;
+  margin: 0;
+}
+
+.feedback-lost {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .loading-bar {
+    transition: none !important;
+    animation: none !important;
+  }
+}
