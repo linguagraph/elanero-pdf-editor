@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import io
 import random
+import re
+import shutil
 import struct
 import sys
 import zlib
@@ -849,6 +851,168 @@ def shared_objects_listed_twice() -> None:
     pdf.save(OUT / "shared_objects_listed_twice.pdf")
 
 
+def page_marks_acrobat_like() -> None:
+    """A page with an Acrobat-style watermark (an artifact drawing a form XObject whose piece
+    info names it), a word processor's running header (a plain pagination artifact) and
+    body text (copy of tests/engine/test_page_marks.py _acrobat_like)."""
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(300, 300))
+    page = pdf.pages[0]
+    font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica
+        )
+    )
+    form = pikepdf.Stream(pdf, b"BT /F1 20 Tf 0 0 Td (ACRO-WM) Tj ET")
+    form.Type = pikepdf.Name.XObject
+    form.Subtype = pikepdf.Name.Form
+    form.BBox = [0, 0, 200, 40]
+    form.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    form.PieceInfo = pikepdf.Dictionary(
+        ADBE_CompoundType=pikepdf.Dictionary(
+            LastModified=pikepdf.String("D:20240101000000"), Private=pikepdf.Name.Watermark
+        )
+    )
+    page.Resources = pikepdf.Dictionary(
+        Font=pikepdf.Dictionary(F1=font),
+        XObject=pikepdf.Dictionary(Fm0=pdf.make_indirect(form)),
+        Properties=pikepdf.Dictionary(
+            MC0=pikepdf.Dictionary(Type=pikepdf.Name.Pagination, Subtype=pikepdf.Name.Header)
+        ),
+    )
+    page.Contents = pdf.make_stream(
+        b"/Artifact /MC0 BDC BT /F1 10 Tf 20 280 Td (Running header) Tj ET EMC\n"
+        b"BT /F1 12 Tf 20 150 Td (Body text) Tj ET\n"
+        b"/Artifact <</Subtype /Watermark /Type /Pagination >>BDC "
+        b"q 1 0 0 1 50 60 cm /Fm0 Do Q EMC\n"
+    )
+    pdf.save(OUT / "page_marks_acrobat_like.pdf")
+
+
+def incremental_sigflags_empty_embedded() -> None:
+    """A copy of text_multipage with /SigFlags 3 and an empty /Names /EmbeddedFiles (copy of
+    tests/engine/test_mupdf_incremental.py)."""
+    import pikepdf
+
+    with pikepdf.open(OUT / "text_multipage.pdf") as pdf:
+        pdf.Root.AcroForm = pikepdf.Dictionary(SigFlags=3, Fields=pikepdf.Array())
+        pdf.Root.Names = pikepdf.Dictionary(EmbeddedFiles=pikepdf.Dictionary(Names=pikepdf.Array()))
+        pdf.save(OUT / "incremental_sigflags_empty_embedded.pdf")
+
+
+def structure_indirect_values() -> None:
+    """A tagged file whose /Lang, /DisplayDocTitle and /Alt are indirect objects (copy of
+    tests/engine/test_structure.py test_indirect_values_are_read)."""
+    import pikepdf
+
+    with pikepdf.open(OUT / "tagged.pdf") as pdf:
+        pdf.Root.Lang = pdf.make_indirect(pikepdf.String("de-DE"))
+        pdf.Root.ViewerPreferences = pikepdf.Dictionary(
+            DisplayDocTitle=pdf.make_indirect(pikepdf.Object.parse(b"true"))
+        )
+        pdf.Root.StructTreeRoot.K.K[3].Alt = pdf.make_indirect(pikepdf.String("A chart"))
+        pdf.save(OUT / "structure_indirect_values.pdf")
+
+
+def comments_literal_hash_nm() -> None:
+    """A copy of annotations_unnamed whose square has the literal /NM "#123" (copy of
+    tests/actions/test_comments.py test_literal_hash_name_from_a_file_stays_addressable)."""
+    import pikepdf
+
+    path = OUT / "comments_literal_hash_nm.pdf"
+    shutil.copy2(OUT / "annotations_unnamed.pdf", path)
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        square = next(a for a in pdf.pages[0].Annots if a.get("/Subtype") == "/Square")
+        square.NM = pikepdf.String("#123")
+        pdf.save(path)
+
+
+def undo_signed_catalog() -> None:
+    """The images sample with a signature field whose catalog says it is signed, /SigFlags 3
+    (copy of tests/unit/test_undo_session.py; needs images.pdf, generated first)."""
+    import pikepdf
+
+    src = pymupdf.open(OUT / "images.pdf")
+    widget = pymupdf.Widget()
+    widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+    widget.field_name = "Sig1"
+    widget.rect = pymupdf.Rect(50, 50, 200, 100)
+    src[0].add_widget(widget)
+    path = OUT / "undo_signed_catalog.pdf"
+    src.save(path)
+    src.close()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        pdf.Root.AcroForm.SigFlags = 3
+        pdf.save(path)
+
+
+def comments_flattenable_mixed() -> None:
+    """The annotations sample plus a link and a popup on page 1, a hidden comment, and a second
+    page that holds only a link (copy of tests/services/test_comments_flattenable.py; needs
+    annotations.pdf, generated first)."""
+    import pikepdf
+
+    path = OUT / "comments_flattenable_mixed.pdf"
+    shutil.copy2(OUT / "annotations.pdf", path)
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        page = pdf.pages[0]
+        note = next(a for a in page.obj.Annots if a.get("/Subtype") == "/Text")
+        link = pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot,
+                Subtype=pikepdf.Name.Link,
+                Rect=[10, 10, 100, 30],
+                Border=[0, 0, 0],
+            )
+        )
+        popup = pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot,
+                Subtype=pikepdf.Name.Popup,
+                Rect=[400, 400, 520, 470],
+                Parent=note,
+                Open=False,
+            )
+        )
+        page.obj.Annots.append(link)
+        page.obj.Annots.append(popup)
+        # a hidden comment: flatten skips it, so it isn't counted
+        square = next(a for a in page.obj.Annots if a.get("/Subtype") == "/Square")
+        square.F = 2
+        second = pdf.add_blank_page()
+        second_link = pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot,
+                Subtype=pikepdf.Name.Link,
+                Rect=[10, 10, 100, 30],
+                Border=[0, 0, 0],
+            )
+        )
+        second.obj.Annots = pikepdf.Array([second_link])
+        pdf.save(path)
+
+
+def damaged_pubsec_filter() -> None:
+    """A copy of report whose trailer names an /Encrypt dictionary with the Adobe.PubSec
+    handler: the rewrite is pikepdf's, the trailer edit is bytes (copy of
+    tests/engine/test_damaged_files.py _with_encrypt_filter)."""
+    import pikepdf
+
+    handler = "Adobe.PubSec"
+    out = OUT / "damaged_pubsec_filter.pdf"
+    with pikepdf.open(OUT / "report.pdf") as pdf:
+        pdf.save(out, object_stream_mode=pikepdf.ObjectStreamMode.disable)
+    raw = out.read_bytes()
+    n = max(int(m) for m in re.findall(rb"(\d+) 0 obj", raw)) + 1
+    obj = f"{n} 0 obj\n<< /Filter /{handler} /V 4 /R 4 >>\nendobj\n".encode()
+    at = raw.rindex(b"\nxref") + 1  # before the classic xref section (not "startxref")
+    raw = raw[:at] + obj + raw[at:]
+    raw = re.sub(rb"trailer\s*<<", b"trailer << /Encrypt %d 0 R" % n, raw, count=1)
+    out.write_bytes(raw)
+
+
 GENERATORS: dict[str, Callable[[], None]] = {
     "print_to_pdf": print_to_pdf,
     "letter_spacing": letter_spacing,
@@ -881,6 +1045,13 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "perf_mixed_1000": lambda: perf_mixed(1000),
     "shared_objects_annotation": lambda: _shared_objects("annotation"),
     "shared_objects_listed_twice": shared_objects_listed_twice,
+    "page_marks_acrobat_like": page_marks_acrobat_like,
+    "incremental_sigflags_empty_embedded": incremental_sigflags_empty_embedded,
+    "structure_indirect_values": structure_indirect_values,
+    "comments_literal_hash_nm": comments_literal_hash_nm,
+    "undo_signed_catalog": undo_signed_catalog,
+    "comments_flattenable_mixed": comments_flattenable_mixed,
+    "damaged_pubsec_filter": damaged_pubsec_filter,
 }
 
 

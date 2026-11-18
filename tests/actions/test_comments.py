@@ -649,15 +649,8 @@ def test_incremental_save_adds_no_names(open_copy: Opener, monkeypatch: pytest.M
 
 def test_literal_hash_name_from_a_file_stays_addressable(fixture_pdf, tmp_path: Path) -> None:
     """A file whose /NM is literally "#123" keeps that name: find() checks /NM first."""
-    # Host-only: the fixture is made by rewriting a copy with pikepdf, which the Pyodide run lacks.
-    import pikepdf
-
     path = tmp_path / "literal.pdf"
-    shutil.copy2(fixture_pdf("annotations_unnamed"), path)
-    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-        square = next(a for a in pdf.pages[0].Annots if a.get("/Subtype") == "/Square")
-        square.NM = pikepdf.String("#123")
-        pdf.save(path)
+    shutil.copy2(fixture_pdf("comments_literal_hash_nm"), path)
     s = DocumentSession.open(path)
     try:
         assert "#123" in unnamed_names(s)

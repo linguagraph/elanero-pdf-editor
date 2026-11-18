@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -147,12 +148,8 @@ def test_signed_flag_document_with_empty_embedded_files_repeats_from_cache(
 ) -> None:
     """Review repro: /SigFlags 3 and an empty /Names /EmbeddedFiles. The clean steps change
     objects before the write, so the second call must compare against the state after them."""
-    pikepdf = pytest.importorskip("pikepdf")
     path = tmp_path / "flagged.pdf"
-    with pikepdf.open(fixture_pdf("text_multipage")) as pdf:
-        pdf.Root.AcroForm = pikepdf.Dictionary(SigFlags=3, Fields=pikepdf.Array())
-        pdf.Root.Names = pikepdf.Dictionary(EmbeddedFiles=pikepdf.Dictionary(Names=pikepdf.Array()))
-        pdf.save(path)
+    shutil.copy2(fixture_pdf("incremental_sigflags_empty_embedded"), path)
     doc = _open_signed(path)
     first = doc.incremental_bytes(INCREMENTAL)
     assert first is not None

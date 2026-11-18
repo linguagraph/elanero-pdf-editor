@@ -14,48 +14,10 @@ from pdfeditor.services.comments import flattenable
 @pytest.fixture
 def mixed_pdf(fixture_pdf, tmp_path: Path) -> Path:
     """The ``annotations`` fixture (six comments) plus a link and a popup on page 1, a hidden
-    comment, and a second page that holds only a link. Built with pikepdf, so it is host-only
-    (the import stays here, not at module level, so the module imports under Pyodide)."""
-    import pikepdf
-
+    comment, and a second page that holds only a link. A pre-generated file, copied so the
+    test owns it (scripts/make_fixtures.py)."""
     path = tmp_path / "mixed.pdf"
-    shutil.copy2(fixture_pdf("annotations"), path)
-    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-        page = pdf.pages[0]
-        note = next(a for a in page.obj.Annots if a.get("/Subtype") == "/Text")
-        link = pdf.make_indirect(
-            pikepdf.Dictionary(
-                Type=pikepdf.Name.Annot,
-                Subtype=pikepdf.Name.Link,
-                Rect=[10, 10, 100, 30],
-                Border=[0, 0, 0],
-            )
-        )
-        popup = pdf.make_indirect(
-            pikepdf.Dictionary(
-                Type=pikepdf.Name.Annot,
-                Subtype=pikepdf.Name.Popup,
-                Rect=[400, 400, 520, 470],
-                Parent=note,
-                Open=False,
-            )
-        )
-        page.obj.Annots.append(link)
-        page.obj.Annots.append(popup)
-        # a hidden comment: flatten skips it, so it isn't counted
-        square = next(a for a in page.obj.Annots if a.get("/Subtype") == "/Square")
-        square.F = 2
-        second = pdf.add_blank_page()
-        second_link = pdf.make_indirect(
-            pikepdf.Dictionary(
-                Type=pikepdf.Name.Annot,
-                Subtype=pikepdf.Name.Link,
-                Rect=[10, 10, 100, 30],
-                Border=[0, 0, 0],
-            )
-        )
-        second.obj.Annots = pikepdf.Array([second_link])
-        pdf.save(path)
+    shutil.copy2(fixture_pdf("comments_flattenable_mixed"), path)
     return path
 
 

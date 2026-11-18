@@ -222,21 +222,8 @@ def test_save_as_and_errors(session: DocumentSession, tmp_path: Path, fixture_pd
 
 
 def test_signed_documents_save_incrementally(fixture_pdf, tmp_path: Path) -> None:
-    import pikepdf  # host-only builder: the signed catalog is written with pikepdf
-    import pymupdf  # build a document whose catalog says it's signed
-
-    src = pymupdf.open(fixture_pdf("images"))
-    widget = pymupdf.Widget()
-    widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
-    widget.field_name = "Sig1"
-    widget.rect = pymupdf.Rect(50, 50, 200, 100)
-    src[0].add_widget(widget)
     path = tmp_path / "signed.pdf"
-    src.save(path)
-    src.close()
-    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-        pdf.Root.AcroForm.SigFlags = 3
-        pdf.save(path)
+    shutil.copy2(fixture_pdf("undo_signed_catalog"), path)
 
     before = path.read_bytes()
     session = DocumentSession.open(path)
@@ -287,21 +274,8 @@ def test_recovery_entries_from_dead_process(tmp_path: Path, fixture_pdf) -> None
 
 def test_required_full_save_overrides_incremental(fixture_pdf, tmp_path: Path) -> None:
     """After redaction a signed file must be rewritten, not appended to."""
-    import pikepdf  # host-only builder: the signed catalog is written with pikepdf
-    import pymupdf
-
-    src = pymupdf.open(fixture_pdf("images"))
-    widget = pymupdf.Widget()
-    widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
-    widget.field_name = "Sig1"
-    widget.rect = pymupdf.Rect(50, 50, 200, 100)
-    src[0].add_widget(widget)
     path = tmp_path / "signed.pdf"
-    src.save(path)
-    src.close()
-    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-        pdf.Root.AcroForm.SigFlags = 3
-        pdf.save(path)
+    shutil.copy2(fixture_pdf("undo_signed_catalog"), path)
     before = path.read_bytes()
     session = DocumentSession.open(path)
     meta = session.document.metadata()
