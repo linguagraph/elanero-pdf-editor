@@ -1,0 +1,152 @@
+/* The ribbon and the app menu (W1.6 sections 2 and 6). Colours and spacing come from the theme
+   tokens; there are no colour literals here. Styles are in this stylesheet only: the page's CSP
+   forbids inline style attributes, so nothing is set from JS. */
+
+.ribbon {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  color: var(--color-text);
+}
+
+.ribbon-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ribbon-tab {
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ribbon-tab[data-selected] {
+  color: var(--color-accent-text);
+  border-bottom-color: var(--color-accent);
+}
+
+.ribbon-tab[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+.ribbon-panel {
+  min-width: 0;
+  outline: none;
+}
+
+.ribbon-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.ribbon-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-inline-end: 1px solid var(--color-border);
+}
+
+.ribbon-group-commands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  justify-content: center;
+}
+
+.ribbon-group-label {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.ribbon-command {
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.ribbon-command:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
+.ribbon-command[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.ribbon-command[aria-disabled='true'] {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.ribbon-command[aria-disabled='true']:hover {
+  background: none;
+  border-color: transparent;
+}
+
+.app-menu-button {
+  min-width: 32px;
+  min-height: 32px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.app-menu-button[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.app-menu-popover {
+  min-width: 220px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+.app-menu {
+  padding: var(--space-1) 0;
+  outline: none;
+}
+
+.app-menu-item {
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  cursor: pointer;
+  outline: none;
+}
+
+.app-menu-item[data-focused] {
+  background: var(--color-surface-alt);
+}
+
+.app-menu-item[aria-disabled='true'] {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.app-menu-separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--color-border);
+}
