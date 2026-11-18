@@ -101,11 +101,12 @@ jobs:
         run: npm run build
 
   web-tests:
-    # The web-pytest run (web-pytest.yml, reusable). Skipped, which counts as passed, without web
-    # changes. Its check is named "web-tests / web-pytest" when it runs.
+    # The web-pytest run (web-pytest.yml, reusable). It always runs, so its check "web-tests /
+    # web-pytest" always reports; its steps run only when the pull request changes the web.
     needs: changes
-    if: needs.changes.outputs.web == 'true'
     uses: ./.github/workflows/web-pytest.yml
+    with:
+      run_web: ${{ needs.changes.outputs.web }}
 
   test-windows:
     needs: [changes, checks]
