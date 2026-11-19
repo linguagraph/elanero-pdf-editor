@@ -2,8 +2,9 @@
 sections 4 and 7, W3.5).
 
 A call that changes content carries ``changed`` and ``state`` events built from the same DTOs as
-the result's own fields; a read-only call carries none; a failure keeps the error envelope, which
-has no events. The helpers are the ones of the actions tests.
+the result's own fields; a read-only call carries none. A failed call carries the events it caused
+(a refused edit gives ``blocked``, a partial action its ``changed`` and ``state``), and a failure
+before anything changed carries none. The helpers are the ones of the actions tests.
 """
 
 from __future__ import annotations
@@ -12,15 +13,21 @@ import ast
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from pdfeditor import actions as layer
+from pdfeditor.actions.base import Refused
+from pdfeditor.core.commands.base import Change, ChangeKind
+from pdfeditor.core.session import EventKind, SessionEvent
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs
 from pdfeditor.webapi.errors import BUSY, NO_DOCUMENT, REFUSED, STALE_OBJECT
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
+from tests.hostcheck import record
 from tests.unit.test_webapi_actions import (
     ROTATE_RIGHT,
     call,
@@ -33,7 +40,8 @@ from tests.unit.test_webapi_actions import (
     rotate,
     undo,
 )
-from tests.unit.test_webapi_jobs import SANITIZE, open_data, sanitize_args
+from tests.unit.test_webapi_jobs import SANITIZE, open_data, prepare, sanitize_args
+from tests.unit.test_webapi_save import page_total, saved_bytes
 
 
 @pytest.fixture
@@ -154,18 +162,21 @@ def test_the_old_changed_and_state_fields_match_the_events(web: None, fixture_pd
         assert result["state"] == events_of(reply, "state")[0]["state"]
 
 
-def test_a_failed_call_keeps_the_error_envelope_without_events(web: None, fixture_pdf: Any) -> None:
+def test_a_refused_edit_fails_with_busy_and_a_blocked_event(web: None, fixture_pdf: Any) -> None:
+    """W1.2 sections 2 and 7: a failed call carries the events it caused. A refused edit gives
+    ``blocked`` (the task label) and fails with BUSY; the document state did not change."""
     handle = open_bytes(fixture_pdf)
     session = REGISTRY.get(handle)
     session.begin_task("Test task")
     try:
         reply = rotate(handle)
         assert error(reply)["code"] == BUSY
-        assert "events" not in reply
+        assert error(reply)["details"] == {"task": "Test task"}
+        assert reply["events"] == [{"kind": "blocked", "handle": handle, "task": "Test task"}]
     finally:
         session.end_task("Test task")
     failed = call("actions.run", {"handle": handle, "name": "no.such", "args": {}})
-    assert failed["ok"] is False and "events" not in failed
+    assert failed["ok"] is False and failed["events"] == []
 
 
 def test_events_are_json_with_string_revision_keys(web: None, fixture_pdf: Any) -> None:
@@ -239,7 +250,7 @@ def test_an_edit_after_the_save_makes_mark_saved_refuse(web: None, fixture_pdf: 
     ok(rotate(handle))  # the front end holds the bytes of the save, which are now out of date
     reply = mark_saved(handle)
     assert error(reply)["code"] == STALE_OBJECT
-    assert "events" not in reply
+    assert reply["events"] == []  # refused before anything changed, so no state event
     assert REGISTRY.get(handle).is_dirty is True
     # A save of the new state makes the call succeed again.
     save_copy(handle)
@@ -335,7 +346,7 @@ def test_a_refused_prepare_on_an_encrypted_document_gives_no_event(
     )
     reply = prepare_job(handle, "action", sanitize_args())
     assert error(reply)["code"] == REFUSED
-    assert "events" not in reply  # a failure keeps the error envelope
+    assert reply["events"] == []  # refused before the task began, so no state event
     assert len(jobs.PREPARED) == 0
     assert (
         session.busy,
@@ -343,6 +354,142 @@ def test_a_refused_prepare_on_an_encrypted_document_gives_no_event(
         session.structure_version,
         session.is_dirty,
     ) == before
+
+
+# -- failed calls and the recorder (W1.2 sections 2, 4 and 7; W3.5) -----------------------------
+
+
+def test_a_refused_undo_or_redo_gives_blocked_and_busy(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    ok(undo(handle))
+    session = REGISTRY.get(handle)
+    session.begin_task("Test task")
+    try:
+        for method in (redo, undo):
+            reply = method(handle)
+            assert error(reply)["code"] == BUSY, method.__name__
+            assert [e["kind"] for e in reply["events"]] == ["blocked"], method.__name__
+            assert reply["events"][0]["task"] == "Test task"
+    finally:
+        session.end_task("Test task")
+
+
+def test_a_stale_apply_reports_the_busy_flag_it_cleared(web: None, fixture_pdf: Any) -> None:
+    """jobs.apply ends the task before it checks the document. The stale failure must still say
+    so: its state event carries busy "", and the token is spent (a later abort is a no-op)."""
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    prepared, copy = prepare(handle, "action", sanitize_args())
+    token = prepared["token"]
+    session = REGISTRY.get(handle)
+    session.end_task(SANITIZE)
+    ok(rotate(handle))  # an edit while no task runs: the job's copy is now stale
+    session.begin_task(SANITIZE)
+    reply, _, _ = call_raw(
+        "jobs.apply",
+        {
+            "handle": handle,
+            "token": token,
+            "document": {"$bin": 0},
+            "label": "Sanitize",
+            "require_full_save": False,
+        },
+        [copy],
+    )
+    assert error(reply)["code"] == STALE_OBJECT
+    assert [e["kind"] for e in reply["events"]] == ["state"]
+    assert reply["events"][0]["state"]["busy"] == ""
+    assert session.busy == ""
+    aborted = call("jobs.abort", {"handle": handle, "token": token})
+    assert ok(aborted) == {"state": None} and aborted["events"] == []
+
+
+def test_a_refused_action_after_a_change_reports_the_change(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An action that changed a page and then refused: the failure carries what it changed."""
+    handle = open_bytes(fixture_pdf)
+    real_run = layer.run
+
+    def run_then_refuse(session: Any, name: str, args: Any) -> Any:
+        real_run(session, name, args)
+        raise Refused("stopped after the first step")
+
+    monkeypatch.setattr(layer, "run", run_then_refuse)
+    reply = rotate(handle)
+    monkeypatch.undo()
+    assert error(reply)["code"] == REFUSED
+    assert [e["kind"] for e in reply["events"]] == ["changed", "state"]
+    assert reply["events"][0]["revisions"]["0"] == revision_of(handle, 0)
+    assert reply["events"][1]["state"]["undo_label"] == ROTATE_RIGHT
+
+
+def test_a_change_that_leaves_the_state_alone_gives_changed_only(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CHANGED that moves no state (a merged edit, in effect) gives ``changed`` and no state."""
+    handle = open_bytes(fixture_pdf)
+    session = REGISTRY.get(handle)
+
+    def announce_only(_session: Any, name: str, args: Any) -> Any:
+        change = Change(ChangeKind.CONTENT, frozenset({0}))
+        session._emit(SessionEvent(EventKind.CHANGED, (change,)))
+        return SimpleNamespace(label=name, executed=True, value=None)
+
+    monkeypatch.setattr(layer, "run", announce_only)
+    reply = rotate(handle)
+    monkeypatch.undo()
+    assert ok(reply)["executed"] is True
+    assert [e["kind"] for e in reply["events"]] == ["changed"]
+    assert reply["events"][0]["revisions"] == {"0": revision_of(handle, 0)}
+
+
+def test_a_signal_outside_a_call_is_not_recorded(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    session = REGISTRY.get(handle)
+    session.begin_task("Test task")
+    try:
+        assert session.refuse_while_busy() is True  # a BLOCKED event, but no call is running
+        reply = call("session.info", {"handle": handle})
+        ok(reply)
+        assert reply["events"] == []
+    finally:
+        session.end_task("Test task")
+
+
+def test_a_document_has_one_recorder_and_closing_it_removes_it(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    session = REGISTRY.get(handle)
+    assert len(session._listeners) == 1  # the registry's recorder, and nothing else
+    ok(call("session.close", {"handle": handle}))
+    assert session._listeners == []
+
+
+# -- a saved output after a run of events (AGENTS round-trip rule) --------------------------------
+
+
+def test_events_round_trip_save(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    ok(rotate(handle))
+    ok(undo(handle))
+    ok(redo(handle))
+    token = ok(prepare_job(handle, "action", sanitize_args()))["token"]
+    refused = undo(handle)  # a task is prepared: the undo is refused
+    assert error(refused)["code"] == BUSY
+    assert [e["kind"] for e in refused["events"]] == ["blocked"]
+    aborted = call("jobs.abort", {"handle": handle, "token": token})
+    assert [e["kind"] for e in aborted["events"]] == ["state"]
+    assert aborted["events"][0]["state"]["busy"] == ""
+
+    result, saved = saved_bytes(handle, "copy")
+    assert result["incremental"] is False
+    record("page_count_pikepdf", saved, pages=page_total(handle))
+    record("rotation_pikepdf", saved, page=0, degrees=90)
+    record("render_width_pdfium", saved, scale=0.5)
+
+    reopened = open_data(saved, "saved.pdf")
+    pages = ok(call("session.pages", {"handle": reopened}))["pages"]
+    assert pages[0]["rotation"] == 90
 
 
 def test_the_job_event_modules_import_no_pikepdf_or_pypdfium2_at_module_level() -> None:

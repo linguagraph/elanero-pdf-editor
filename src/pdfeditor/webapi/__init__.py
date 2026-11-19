@@ -11,20 +11,26 @@ import json
 import logging
 import re
 from collections.abc import Callable, Mapping
+from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any
 
+from pdfeditor.core.session import DocumentSession
 from pdfeditor.webapi import actions, dto, jobs, memory, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
-from pdfeditor.webapi.events import events_for
+from pdfeditor.webapi.events import CallRecorder, call_events, state_of
 from pdfeditor.webapi.limits import MAX_JSON_DEPTH
+from pdfeditor.webapi.registry import REGISTRY
 
 log = logging.getLogger(__name__)
 
 ENGINE_NAME = "mupdf"
 PLATFORM_NAME = "web"
 _ENVELOPE_KEYS = frozenset({"v", "id", "method", "params"})
+# Calls that name a handle but must not be tracked: session.close forgets its document (its
+# ``closed`` event is built from the success instead).
+_UNTRACKED = frozenset({"session.close"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +78,79 @@ METHODS: dict[str, Method] = {
 }
 
 
+class _CallScope:
+    """The events of one call (W1.2 section 7): the open document the call names, its state
+    before the call, and the recorder that the registry arms while the handler runs.
+
+    A call with no open handle (or session.close) has no scope and gives no events. The state
+    is read before the recorder is armed, and the recorder is armed last, so a failure while
+    starting the scope leaves nothing armed.
+    """
+
+    def __init__(self) -> None:
+        self._method = ""
+        self._handle: str | None = None
+        self._session: DocumentSession | None = None
+        self._recorder: CallRecorder | None = None
+        self._before: dto.DocStateDto | None = None
+        self._armed = ExitStack()
+
+    def begin(self, method: str, params: object) -> None:
+        self._method = method
+        handle = getattr(params, "handle", None)
+        if not isinstance(handle, str):
+            return
+        self._handle = handle
+        if method in _UNTRACKED:
+            return
+        session_ = REGISTRY.find(handle)
+        if session_ is None:
+            return
+        with session_.lock:
+            before = state_of(session_)
+        self._session, self._before = session_, before
+        recorder = self._armed.enter_context(REGISTRY.recording(handle))
+        self._recorder = recorder
+
+    def end(self) -> None:
+        """Disarm the recorder, on success and on failure alike."""
+        self._armed.close()
+
+    def events(self, result: object | None, out: list[bytes]) -> list[dict[str, Any]]:
+        """The events of the call. ``result`` is None for a failed call. A failure while the
+        events are built is logged and gives none, so the call's own error is never masked."""
+        if self._method == "session.close":
+            if result is None or self._handle is None:
+                return []
+            return [{"kind": "closed", "handle": self._handle}]
+        if self._session is None or self._recorder is None or self._before is None:
+            return []
+        try:
+            with self._session.lock:
+                return call_events(
+                    self._handle or "",
+                    self._session,
+                    self._recorder,
+                    self._before,
+                    result,
+                    out,
+                )
+        except Exception:
+            log.exception("could not build the events of %s", self._method)
+            return []
+
+
+def _failure(request_id: object, exc: Exception, events: list[dict[str, Any]]) -> dict[str, Any]:
+    failure = failure_for(exc)
+    return {
+        "v": PROTOCOL_VERSION,
+        "id": request_id,
+        "ok": False,
+        "error": {"code": failure.code, "message": failure.message, "details": failure.details},
+        "events": events,
+    }
+
+
 def dispatch(
     request_json: str, buffers: list[bytes], methods: Mapping[str, Method] = METHODS
 ) -> tuple[str, list[bytes]]:
@@ -81,22 +160,18 @@ def dispatch(
     :mod:`pdfeditor.webapi.jobworker`.
 
     Never raises: a malformed envelope, an unknown method, bad arguments, a document error or a
-    bug all come back as a failure reply (``"ok": false`` with ``error``).
+    bug all come back as a failure reply (``"ok": false`` with ``error`` and ``events``). A failed
+    call carries the events it caused before it failed (W1.2 section 2).
     """
     request_id: object = None
+    scope = _CallScope()
     try:
         data = _load(request_json)
         if isinstance(data, dict) and _is_id(data.get("id")):
             request_id = data["id"]  # echoed even in a failure about the rest of the envelope
-        reply, out = _run(data, buffers, methods)
+        reply, out = _run(data, buffers, methods, scope)
     except Exception as exc:  # every failure becomes a reply; the worker must not die of one
-        failure = failure_for(exc)
-        reply = {
-            "v": PROTOCOL_VERSION,
-            "id": request_id,
-            "ok": False,
-            "error": {"code": failure.code, "message": failure.message, "details": failure.details},
-        }
+        reply = _failure(request_id, exc, scope.events(None, []))
         out = []
     return json.dumps(reply, allow_nan=False, separators=(",", ":")), out
 
@@ -146,7 +221,7 @@ def _reject_constant(name: str) -> object:
 
 
 def _run(
-    data: object, buffers: list[bytes], methods: Mapping[str, Method]
+    data: object, buffers: list[bytes], methods: Mapping[str, Method], scope: _CallScope
 ) -> tuple[dict[str, object], list[bytes]]:
     if not isinstance(data, dict) or set(data) != _ENVELOPE_KEYS:
         raise RpcFailure(INVALID_REQUEST, "the request needs exactly v, id, method and params")
@@ -169,18 +244,22 @@ def _run(
 
     table = BufferTable(buffers)
     typed: Any = from_json(method.params, params, table, "params")
-    if method.takes_buffers:
-        result = method.handler(typed, table)
-        table.check_all_used()
-    else:
-        table.check_all_used()
-        result = method.handler(typed)
+    scope.begin(method_name, typed)
+    try:
+        if method.takes_buffers:
+            result = method.handler(typed, table)
+            table.check_all_used()
+        else:
+            table.check_all_used()
+            result = method.handler(typed)
+    finally:
+        scope.end()  # the recorder is disarmed on a failure too; the failure reads its events
 
     out: list[bytes] = []
     result_json = to_json(result, out)
-    # The events are built from the same DTOs as the result's changed and state fields (W1.2
-    # section 7); a read-only call gets an empty list.
-    events = events_for(method_name, typed, result, out)
+    # The events are built from what the recorder heard and the state before and after the call
+    # (W1.2 section 7); a read-only call gets an empty list.
+    events = scope.events(result, out)
     reply: dict[str, object] = {
         "v": PROTOCOL_VERSION,
         "id": request_id,

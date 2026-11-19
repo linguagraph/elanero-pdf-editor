@@ -2,18 +2,23 @@
 
 A handle is random, so it can't be guessed from another one. The open password is kept with the
 entry only while the document is open: ``close`` drops it, and no reply, log or error carries it.
+Each entry also holds the call recorder of its document (W1.2 section 7): subscribed once when the
+document opens, and armed only while a call on it runs.
 """
 
 from __future__ import annotations
 
 import secrets
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.webapi.errors import NO_DOCUMENT, RpcFailure
+from pdfeditor.webapi.events import CallRecorder
 
 
 class _Entry:
-    __slots__ = ("password", "saved", "session")
+    __slots__ = ("password", "recorder", "saved", "session", "unsubscribe")
 
     def __init__(self, session: DocumentSession, password: str | None) -> None:
         self.session = session
@@ -21,6 +26,8 @@ class _Entry:
         # The document state the last save_bytes wrote (see jobs.document_fingerprint); None until
         # the document is saved through the web. save.mark_saved compares against it.
         self.saved: tuple[object, ...] | None = None
+        self.recorder = CallRecorder(session)
+        self.unsubscribe = session.subscribe(self.recorder)
 
 
 class DocumentRegistry:
@@ -40,11 +47,33 @@ class DocumentRegistry:
         self._entries[handle] = _Entry(session, password)
         return handle
 
-    def get(self, handle: str) -> DocumentSession:
-        entry = self._entries.get(handle)
+    def find(self, handle: object) -> DocumentSession | None:
+        """The open session of a handle, or None when there is none (no error)."""
+        entry = self._entries.get(handle) if isinstance(handle, str) else None
         if entry is None or entry.session.closed:
-            raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
+            return None
         return entry.session
+
+    def get(self, handle: str) -> DocumentSession:
+        session = self.find(handle)
+        if session is None:
+            raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
+        return session
+
+    @contextmanager
+    def recording(self, handle: str) -> Iterator[CallRecorder | None]:
+        """Arm the recorder of an open document for the duration of a call. Yields None for an
+        unknown or closed handle, which has nothing to record."""
+        session = self.find(handle)
+        if session is None:
+            yield None
+            return
+        recorder = self._entries[handle].recorder
+        recorder.arm()
+        try:
+            yield recorder
+        finally:
+            recorder.disarm()
 
     def password(self, handle: str) -> str | None:
         """The open password of a document, for the engine to reopen what it saves. The caller
@@ -66,11 +95,13 @@ class DocumentRegistry:
         return None if entry is None else entry.saved
 
     def close(self, handle: str) -> None:
-        """Forget the handle and its password first, then close the document."""
+        """Forget the handle and its password first, then close the document. The recorder is
+        unsubscribed before the close, so a closed document keeps no listener."""
         entry = self._entries.pop(handle, None)
         if entry is None:
             raise RpcFailure(NO_DOCUMENT, "no open document has this handle")
         entry.password = None
+        entry.unsubscribe()
         entry.session.close()
 
     def close_all(self) -> None:
