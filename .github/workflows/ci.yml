@@ -74,6 +74,12 @@ jobs:
         if: needs.changes.outputs.web == 'true'
         working-directory: web/app
         run: npm ci
+      - name: Licence notice is up to date (stdlib Python, no uv sync)
+        if: needs.changes.outputs.web == 'true'
+        run: python3 scripts/make_web_licences.py --check
+      - name: Installed npm packages match the lock and their licence files
+        if: needs.changes.outputs.web == 'true'
+        run: python3 scripts/make_web_licences.py --verify-installed
       - name: Typecheck
         if: needs.changes.outputs.web == 'true'
         working-directory: web/app

@@ -33,7 +33,9 @@ from typing import Union, get_args, get_origin
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from pdfeditor.services.optimize import PRESETS  # noqa: E402
 from pdfeditor.webapi import METHODS, Method, dto  # noqa: E402
+from pdfeditor.webapi import jobs as job_specs  # noqa: E402
 from pdfeditor.webapi.errors import ALL_CODES  # noqa: E402
 
 OUTPUT = ROOT / "web" / "app" / "src" / "rpc" / "generated.ts"
@@ -297,6 +299,50 @@ def _method_hints(method: Method) -> tuple[object, object]:
     return method.params, result
 
 
+def _ts_value(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _reduce_constants() -> list[str]:
+    """The reduce_size presets, dpi and quality ranges and space-audit keys the dialog and its
+    result read. Taken from the Python tables, so a change there shows up as drift in --check."""
+    lines = [
+        "/** services.optimize.PRESETS: the reduce presets the dialog seeds its fields from. */",
+        "export const REDUCE_PRESETS = {",
+    ]
+    for item in PRESETS:
+        o = item.options.optimize
+        fields = {
+            "image_dpi": o.image_dpi,
+            "jpeg_quality": o.jpeg_quality,
+            "grayscale": o.grayscale,
+            "subset_fonts": o.subset_fonts,
+            "remove_thumbnails": o.remove_thumbnails,
+            "remove_metadata": o.remove_metadata,
+            "object_streams": item.options.object_streams,
+        }
+        body = ", ".join(f"{name}: {_ts_value(value)}" for name, value in fields.items())
+        lines.append(f"  {_quote(item.key)}: {{ {body} }},")
+    dpi_low, dpi_high = job_specs.REDUCE_DPI_RANGE
+    quality_low, quality_high = job_specs.REDUCE_QUALITY_RANGE
+    keys = ", ".join(_quote(k) for k in job_specs.SPACE_CATEGORY_KEYS)
+    lines += [
+        "} as const;",
+        "/** webapi.jobs REDUCE_DPI_RANGE and REDUCE_QUALITY_RANGE: the spin box limits. */",
+        f"export const REDUCE_DPI_RANGE = [{dpi_low}, {dpi_high}] as const;",
+        f"export const REDUCE_QUALITY_RANGE = [{quality_low}, {quality_high}] as const;",
+        "/** webapi.jobs.SPACE_CATEGORY_KEYS: the stable keys of an audit category, for t(). */",
+        f"export const SPACE_CATEGORY_KEYS = [{keys}] as const;",
+        "export type SpaceCategoryKey = (typeof SPACE_CATEGORY_KEYS)[number];",
+        "",
+    ]
+    return lines
+
+
 def render(
     methods: Mapping[str, Method] = METHODS,
     codes: tuple[str, ...] = ALL_CODES,
@@ -364,6 +410,7 @@ def render(
         f"  msPerStep: {IO_EXTRA_MS},",
         "} as const;",
         "",
+        *_reduce_constants(),
     ]
 
     blocks = {

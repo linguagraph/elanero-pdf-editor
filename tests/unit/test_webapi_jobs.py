@@ -153,6 +153,24 @@ def sanitize_args(options: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"name": SANITIZE, "args": {} if options is None else {"options": options}}
 
 
+# The "screen" preset's values, written out as a custom spec: a custom spec equal to a preset must
+# give the same file (the mapping in webapi.jobs._reduce_options).
+SCREEN_OPTIONS: dict[str, Any] = {
+    "image_dpi": 72,
+    "jpeg_quality": 50,
+    "grayscale": False,
+    "subset_fonts": True,
+    "remove_thumbnails": True,
+    "remove_metadata": False,
+    "object_streams": True,
+}
+
+
+def custom_reduce(**changes: Any) -> dict[str, Any]:
+    """A reduce_size spec with the custom preset, its options changed by ``changes``."""
+    return {"preset": "custom", "options": {**SCREEN_OPTIONS, **changes}}
+
+
 # -- read-only jobs ---------------------------------------------------------------------------
 
 
@@ -234,16 +252,136 @@ def test_a_prepare_refuses_while_a_mutating_job_is_prepared(web: None, fixture_p
 def test_an_encrypted_document_gives_a_decrypted_copy_and_no_password(
     web: None, fixture_pdf: Any
 ) -> None:
+    # The audit is read-only and writes no PDF, so it shows the copy the job worker gets.
     handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
-    prepared, copy = prepare(handle, "reduce_size", {"preset": "lossless"})
+    prepared, copy = prepare(handle, "audit", {})
     assert "password" not in prepared  # the job worker never gets a password
     record("page_count_pikepdf", copy, pages=1)  # the copy opens with no password
     record("page_count_pdfium", copy, pages=1)
-    reply, out = run_job("reduce_size", {"preset": "lossless"}, copy)
-    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+    reply, _ = run_job("audit", {}, copy)
+    assert ok(reply)["kind"] == "report"
     # The source itself stays encrypted.
     _, source_out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
     record("refuses_without_password_pikepdf", source_out[0])
+
+
+def test_a_reduce_of_an_encrypted_document_is_refused_at_prepare(
+    web: None, fixture_pdf: Any
+) -> None:
+    # Desktop keeps the encryption; the web's copy has none, so the reduced file would be open.
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    session = REGISTRY.get(handle)
+    err = error(
+        call("jobs.prepare", {"handle": handle, "job": "reduce_size", "args": {"preset": "screen"}})
+    )
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "encrypted_reduce"}
+    assert len(jobs.PREPARED) == 0
+    assert session.busy == ""
+
+
+# -- reduce_size: custom options and the space audit ------------------------------------------
+
+
+def test_custom_options_reduce_the_images_and_reopen(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = custom_reduce(image_dpi=72, jpeg_quality=40, grayscale=True)
+    _, copy = prepare(handle, "reduce_size", args)
+    reply, out = run_job("reduce_size", args, copy)
+    result = ok(reply)
+    assert result["value"]["after"] < result["value"]["before"]
+    assert result["value"]["audit_before"] is None  # the audit is opt-in
+    data = binary(result["files"][0]["data"], out)
+    record("page_count_pikepdf", data, pages=page_total(handle))
+    record("render_pdfium", data, page=0, scale=0.5)
+
+
+def test_custom_options_equal_to_a_preset_give_the_same_size(web: None, fixture_pdf: Any) -> None:
+    # The files differ in their trailer's random ID even for one preset run twice, so the sizes
+    # (and the pages) are what must match.
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    values = []
+    for args in ({"preset": "screen"}, custom_reduce()):
+        _, copy = prepare(handle, "reduce_size", args)
+        reply, _ = run_job("reduce_size", args, copy)
+        values.append(ok(reply)["value"])
+    assert values[0]["after"] == values[1]["after"]
+    assert values[0]["before"] == values[1]["before"]
+
+
+def test_custom_remove_metadata_drops_the_title(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = custom_reduce(remove_metadata=True)
+    _, copy = prepare(handle, "reduce_size", args)
+    reply, out = run_job("reduce_size", args, copy)
+    data = binary(ok(reply)["files"][0]["data"], out)
+    record("docinfo_lacks_key_pikepdf", data, key="/Title")
+
+
+def test_audit_gives_the_space_before_and_after_in_the_same_job(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    # Grayscale and a lower JPEG quality: the screen preset leaves this fixture's images alone.
+    args = {**custom_reduce(image_dpi=72, jpeg_quality=40, grayscale=True), "audit": True}
+    prepared, copy = prepare(handle, "reduce_size", args)
+    assert prepared["mutating"] is False  # one read-only job: no task, no document change
+    notices: list[dict[str, Any]] = []
+    reply, out = run_job("reduce_size", args, copy, notify=notices.append)
+    value = ok(reply)["value"]
+    before, after = value["audit_before"], value["audit_after"]
+    assert before is not None
+    assert after is not None
+    for audit in (before, after):
+        assert audit["total"] > 0
+        for item in audit["categories"]:
+            assert set(item) == {"key", "name", "size"}
+            assert item["key"] in jobs.SPACE_CATEGORY_KEYS
+            assert item["key"] != "other" or item["name"] == "Other objects"
+    images = {"before": 0, "after": 0}
+    for stage, audit in (("before", before), ("after", after)):
+        images[stage] = sum(item["size"] for item in audit["categories"] if item["key"] == "images")
+    assert images["after"] < images["before"]  # the reduce shrank the images
+    # The audit's total is the stored size of the copy the audit reads, close to the file's size.
+    assert abs(after["total"] - value["after"]) <= max(1024, value["after"] // 10)
+    # Five steps (audit before, the reduce, audit after, done). The job worker coalesces the
+    # notices, so only the first and the last are certain to arrive.
+    assert {notice["data"]["total"] for notice in notices} == {5}
+    assert notices[0]["data"]["done"] == 0
+    assert notices[-1]["data"]["done"] == 5
+    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+
+
+def test_without_the_audit_the_values_are_null_and_the_steps_are_three(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    _, copy = prepare(handle, "reduce_size", {"preset": "screen"})
+    notices: list[dict[str, Any]] = []
+    reply, _ = run_job("reduce_size", {"preset": "screen"}, copy, notify=notices.append)
+    value = ok(reply)["value"]
+    assert value["audit_before"] is None
+    assert value["audit_after"] is None
+    assert {notice["data"]["total"] for notice in notices} == {3}
+
+
+def test_a_cancel_before_the_after_audit_stops_the_job(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = {"preset": "screen", "audit": True}
+    _, copy = prepare(handle, "reduce_size", args)
+    token = CancelToken()
+    real_reduce = jobs.reduce_size
+
+    def reduce_then_cancel(*call_args: Any, **call_kwargs: Any) -> Any:
+        result = real_reduce(*call_args, **call_kwargs)
+        token.cancel()  # the reduce is done; the job's check before the audit after stops it
+        return result
+
+    monkeypatch.setattr(jobs, "reduce_size", reduce_then_cancel)
+    reply, _ = run_job("reduce_size", args, copy, cancel=token)
+    assert error(reply)["code"] == CANCELLED
 
 
 # -- mutating jobs ----------------------------------------------------------------------------
@@ -411,6 +549,14 @@ def test_an_unknown_handle_is_no_document(web: None) -> None:
         ),
         ("reduce_size", {"preset": "huge"}, "args.preset"),
         ("reduce_size", {}, "args.preset"),
+        ("reduce_size", {"preset": "custom"}, "args.options"),  # custom needs options
+        ("reduce_size", {"preset": "screen", "options": SCREEN_OPTIONS}, "args.options"),
+        ("reduce_size", custom_reduce(image_dpi=35), "args.options.image_dpi"),
+        ("reduce_size", custom_reduce(image_dpi=1201), "args.options.image_dpi"),
+        ("reduce_size", custom_reduce(jpeg_quality=9), "args.options.jpeg_quality"),
+        ("reduce_size", custom_reduce(jpeg_quality=101), "args.options.jpeg_quality"),
+        ("reduce_size", custom_reduce(extra=1), "args.options.extra"),  # not an option
+        ("reduce_size", {"preset": "screen", "audit": "yes"}, "args.audit"),
     ],
 )
 def test_a_bad_job_spec_is_invalid_args_with_its_path(
