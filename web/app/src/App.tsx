@@ -21,7 +21,9 @@ import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
-import { DocumentView } from './view/DocumentView';
+import { type DocumentViewState, DocumentView } from './view/DocumentView';
+import { DocumentStatusBar } from './view/DocumentStatusBar';
+import { DEFAULT_ZOOM } from './view/zoom';
 import { APP_VERSION } from './version';
 import './app.css';
 
@@ -65,8 +67,23 @@ export function App({ engine }: AppProps) {
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
   const session = useTabSession(activeId);
+  const showDocument = !showStart && activeId !== null && session !== null;
+  const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
+  const [viewState, setViewState] = useState<DocumentViewState>({
+    page: 1,
+    zoom: DEFAULT_ZOOM,
+  });
   return (
     <AppFrame
+      statusBar={
+        showDocument ? (
+          <DocumentStatusBar
+            page={viewState.page}
+            total={activeTab?.pages ?? 0}
+            zoom={viewState.zoom}
+          />
+        ) : undefined
+      }
       header={
         <div className="app-header">
           <BrandMark />
@@ -101,11 +118,20 @@ export function App({ engine }: AppProps) {
           />
         ) : null}
         {!showStart && activeId !== null && session !== null ? (
-          <DocumentView key={activeId} rpc={session.rpc} handle={session.handle} />
+          <DocumentView
+            key={activeId}
+            rpc={session.rpc}
+            handle={session.handle}
+            onViewChange={setViewState}
+          />
         ) : null}
-        <h1>{t('app.name')}</h1>
-        <p>{t('app.version', { version: APP_VERSION })}</p>
-        <About />
+        {showDocument ? null : (
+          <>
+            <h1>{t('app.name')}</h1>
+            <p>{t('app.version', { version: APP_VERSION })}</p>
+            <About />
+          </>
+        )}
       </div>
     </AppFrame>
   );
