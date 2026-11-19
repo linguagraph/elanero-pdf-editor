@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { t } from '../i18n/t';
 import { layoutForWidth } from './breakpoints';
+import { LayoutProvider } from './LayoutContext';
 import { useViewportWidth } from './useViewportWidth';
 import './layout.css';
 
@@ -31,7 +32,7 @@ export function AppFrame({
   const hasLeftPanel = leftPanel !== undefined && leftPanel !== null && leftPanel !== false;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null && rightPanel !== false;
 
-  return (
+  const frame = (
     <div
       className="app-frame"
       data-tier={regions.tier}
@@ -46,7 +47,11 @@ export function AppFrame({
           {leftRail}
         </nav>
         {hasLeftPanel ? (
-          <aside className="app-panel app-panel-left" aria-label={t('layout.leftPanel')}>
+          <aside
+            id="app-panel-left"
+            className="app-panel app-panel-left"
+            aria-label={t('layout.leftPanel')}
+          >
             {leftPanel}
           </aside>
         ) : null}
@@ -54,7 +59,11 @@ export function AppFrame({
           {children}
         </main>
         {hasRightPanel ? (
-          <aside className="app-panel app-panel-right" aria-label={t('layout.rightPanel')}>
+          <aside
+            id="app-panel-right"
+            className="app-panel app-panel-right"
+            aria-label={t('layout.rightPanel')}
+          >
             {rightPanel}
           </aside>
         ) : null}
@@ -69,4 +78,5 @@ export function AppFrame({
       ) : null}
     </div>
   );
+  return <LayoutProvider regions={regions}>{frame}</LayoutProvider>;
 }

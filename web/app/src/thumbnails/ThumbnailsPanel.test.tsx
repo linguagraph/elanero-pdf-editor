@@ -5,10 +5,18 @@ import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
 import { RenderScheduler } from '../view/renderScheduler';
 import { ThumbnailsPanel } from './ThumbnailsPanel';
-import { ThumbnailsRailButton } from './ThumbnailsRailButton';
-import { setThumbnailsOpen, useThumbnailsOpen } from './openState';
+import { RailButton } from '../layout/RailButton';
+import { RAIL_ICONS } from '../layout/railIcons';
+import { closePanel, useOpenPanel } from '../layout/sidePanels';
+import { t } from '../i18n/t';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => {
+  // The side-panel store is module state: every test starts with both sides closed.
+  closePanel('left');
+  closePanel('right');
+});
 
 // A fake engine: session.pages answers at once, and each render.page answers at once with a blank
 // page, so the thumbnails settle without the test driving each reply.
@@ -83,7 +91,7 @@ function Harness({
   rpc: PageRpc;
   onSelect: (i: number) => void;
 }) {
-  const open = useThumbnailsOpen(tabId);
+  const open = useOpenPanel('left') === 'pages';
   const scheduler = new RenderScheduler(rpc, 'h');
   let panel: ReactNode = null;
   if (open) {
@@ -93,13 +101,13 @@ function Harness({
         handle="h"
         scheduler={scheduler}
         onSelect={onSelect}
-        onClose={() => setThumbnailsOpen(tabId, false)}
+        onClose={() => closePanel('left')}
       />
     );
   }
   return (
-    <div>
-      <ThumbnailsRailButton tabId={tabId} disabled={false} />
+    <div data-tab={tabId}>
+      <RailButton panel="pages" label={t('thumbnails.title')} icon={RAIL_ICONS.pages} />
       {panel}
     </div>
   );
@@ -112,7 +120,7 @@ function button(label: string): HTMLButtonElement {
 }
 
 function railButton(): HTMLButtonElement {
-  const found = host.querySelector<HTMLButtonElement>('button.thumbs-rail-button');
+  const found = host.querySelector<HTMLButtonElement>('button[data-panel="pages"]');
   if (found === null) throw new Error('no rail button');
   return found;
 }
@@ -121,30 +129,30 @@ describe('thumbnails side panel', () => {
   it('opens and closes from the rail button', async () => {
     const { rpc } = fakeRpc(3);
     act(() => root.render(<Harness tabId={101} rpc={rpc} onSelect={() => {}} />));
-    expect(railButton().getAttribute('aria-pressed')).toBe('false');
+    expect(railButton().getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector('.thumbs-scroll')).toBeNull();
 
     act(() => railButton().click());
     await flush();
-    expect(railButton().getAttribute('aria-pressed')).toBe('true');
+    expect(railButton().getAttribute('aria-expanded')).toBe('true');
     expect(host.querySelector('.thumbs-scroll')).not.toBeNull();
 
     act(() => button('Close Thumbnails').click());
-    expect(railButton().getAttribute('aria-pressed')).toBe('false');
+    expect(railButton().getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector('.thumbs-scroll')).toBeNull();
   });
 
-  it('keeps the open state of each tab', async () => {
+  it('keeps the open panel when the document changes', async () => {
     const { rpc } = fakeRpc(2);
     act(() => root.render(<Harness tabId={201} rpc={rpc} onSelect={() => {}} />));
     act(() => railButton().click());
     await flush();
 
     act(() => root.render(<Harness tabId={202} rpc={rpc} onSelect={() => {}} />));
-    expect(railButton().getAttribute('aria-pressed')).toBe('false');
+    expect(railButton().getAttribute('aria-expanded')).toBe('true');
 
     act(() => root.render(<Harness tabId={201} rpc={rpc} onSelect={() => {}} />));
-    expect(railButton().getAttribute('aria-pressed')).toBe('true');
+    expect(railButton().getAttribute('aria-expanded')).toBe('true');
   });
 
   it('calls the scroll function with the page index when a thumbnail is chosen', async () => {

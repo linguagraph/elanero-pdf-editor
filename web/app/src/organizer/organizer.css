@@ -1,24 +1,5 @@
-/* The page organizer panel (W6.1) and its rail button. Colours and spacing come from the theme
+/* The page organizer panel (W6.1). Colours and spacing come from the theme
    tokens (W4.4a); each thumbnail's box is sized by the grid, and the canvas fills the box. */
-
-.organizer-rail-button {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-small);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.organizer-rail-button[aria-pressed='true'] {
-  background: var(--color-surface-alt);
-  border-color: var(--color-focus-ring);
-}
-
-.organizer-rail-button:disabled {
-  color: var(--color-text-disabled);
-}
 
 .organizer {
   display: flex;

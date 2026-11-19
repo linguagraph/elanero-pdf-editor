@@ -17,9 +17,7 @@ const READABLE_ATTRIBUTE =
 
 describe('bookmarks strings go through t()', () => {
   it('scans the panel components', () => {
-    expect(COMPONENT_FILES).toEqual(
-      expect.arrayContaining(['BookmarksPanel.tsx', 'BookmarksRailButton.tsx']),
-    );
+    expect(COMPONENT_FILES).toEqual(expect.arrayContaining(['BookmarksPanel.tsx']));
   });
 
   it.each(COMPONENT_FILES)('%s has no literal user text', (file) => {

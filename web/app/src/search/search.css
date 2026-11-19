@@ -1,16 +1,6 @@
 /* The search panel and its highlights (W5.4). Colours come from the theme tokens (W4.4a); the
    highlight boxes are sized from the layout in CSS pixels, set inline. */
 
-.search-rail-button {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-small);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
 .search-form,
 .search-options,
 .search-actions {

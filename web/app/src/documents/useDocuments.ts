@@ -3,7 +3,7 @@
 // engine has opened it. Closing a tab calls session.close. Everything the user reads comes
 // through t().
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { forgetBookmarksTab } from '../bookmarks/openState';
+import { forgetBookmarksTab } from '../bookmarks/expansion';
 import {
   type EngineClient,
   type EngineConnection,

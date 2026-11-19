@@ -490,7 +490,9 @@ describe('document tabs', () => {
     expect(
       host.querySelector(`[aria-label="${t('view.pageNumber', { page: 1, total: 3 })}"]`),
     ).not.toBeNull();
+    // The view and the Pages panel, which is open by default (W4.2a S1), each ask once.
     expect(calls.filter((call) => call.method === 'session.pages')).toEqual([
+      { method: 'session.pages', params: { handle: 'doc-1' } },
       { method: 'session.pages', params: { handle: 'doc-1' } },
     ]);
   });
