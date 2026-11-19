@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from pdfeditor import webapi
+from pdfeditor.actions.base import Refused
 from pdfeditor.engine.base import (
     EngineError,
     OpenError,
@@ -26,6 +27,7 @@ from pdfeditor.webapi.errors import (
     OPEN_FAILED,
     OUT_OF_MEMORY,
     PASSWORD_REQUIRED,
+    REFUSED,
     SAVE_FAILED,
     UNUSED_CODES,
     RpcFailure,
@@ -107,3 +109,16 @@ def test_every_code_is_tested_or_listed_as_unused() -> None:
             # Mapped from an exception class (OUT_OF_MEMORY, NOT_SUPPORTED, ...) counts as raised
             # by errors.py itself, so the test names it and it is covered there.
             assert named, f"{code} is raised but no web test names it"
+
+
+def test_a_refusal_with_a_reason_sends_the_code_as_details_reason() -> None:
+    # W7.5: the web words the security refusals from their code, not from the English text.
+    failure = failure_for(Refused("This document has no security.", reason="no_security"))
+    assert failure.code == REFUSED
+    assert failure.details == {"reason": "no_security"}
+    assert failure.message == "This document has no security."
+
+
+def test_a_refusal_without_a_reason_keeps_its_text_as_details_reason() -> None:
+    failure = failure_for(Refused("Some other refusal."))
+    assert failure.details == {"reason": "Some other refusal."}
