@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
-import type { EngineClient } from '../engine/engineConnection';
+import { type EngineClient, getTabSession, setTabSession } from '../engine/engineConnection';
 import { fakeEngine, type FakeEngine } from '../engine/testEngine';
 import { toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
@@ -33,6 +33,13 @@ function engineClient(): { client: EngineClient; calls: Recorded[] } {
   const call = vi.fn(async (method: string, params: Record<string, unknown>) => {
     calls.push({ method, params });
     if (method === 'session.close') return {};
+    if (method === 'session.pages') {
+      // Three portrait pages, the page count the open reply gives.
+      return { pages: [0, 1, 2].map(() => ({ width: 612, height: 792, rotation: 0 })) };
+    }
+    // The view asks for pixels; these tests do not check them. A reply that never comes keeps the
+    // view from retrying, which a rejected render would make it do endlessly.
+    if (method === 'render.page') return new Promise<never>(() => undefined);
     if (method !== 'session.open') throw new Error(`unexpected ${method}`);
     const name = String(params['name']);
     if (name.startsWith('refused')) throw new RpcError('OPEN_FAILED', 'damaged');
@@ -59,6 +66,8 @@ let calls: Recorded[];
 
 beforeEach(() => {
   window.localStorage.clear();
+  // Tab sessions live in a module-level store, so each test starts with none for the first tabs.
+  for (const id of [1, 2, 3]) setTabSession(id, null);
   const scripted = engineClient();
   calls = scripted.calls;
   engine = fakeEngine(scripted.client);
@@ -337,6 +346,46 @@ describe('document tabs', () => {
     });
     expect(host.querySelector('[role="tablist"]')).toBeNull();
     expect(host.querySelector('.start-page')).not.toBeNull();
+  });
+
+  it('gives a successfully opened tab its engine session, with the handle', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => tabNames().length === 1);
+    const session = getTabSession(1);
+    expect(session).not.toBeNull();
+    expect(session?.handle).toBe('doc-1');
+    expect(session?.rpc).toBeDefined();
+  });
+
+  it('gives no session to a tab whose open failed', async () => {
+    dropFiles([pdf('refused.pdf')]);
+    await until(() => errorToasts().length === 1);
+    expect(tabNames()).toEqual([]);
+    expect(getTabSession(1)).toBeNull();
+  });
+
+  it('clears the session of a closed tab and keeps the others', async () => {
+    dropFiles([pdf('a.pdf'), pdf('b.pdf')]);
+    await until(() => tabNames().length === 2);
+    expect(getTabSession(2)?.handle).toBe('doc-2');
+    act(() => {
+      buttonNamed(t('tabs.close', { name: 'b.pdf' })).click();
+    });
+    expect(getTabSession(2)).toBeNull();
+    expect(getTabSession(1)?.handle).toBe('doc-1');
+  });
+
+  it('mounts the document view for an opened tab, which asks for its pages', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => host.querySelector('.doc-page') !== null);
+    expect(host.querySelector('.doc-view')).not.toBeNull();
+    // Only the pages near the (jsdom) viewport are mounted; the first one is among them.
+    expect(
+      host.querySelector(`[aria-label="${t('view.pageNumber', { page: 1, total: 3 })}"]`),
+    ).not.toBeNull();
+    expect(calls.filter((call) => call.method === 'session.pages')).toEqual([
+      { method: 'session.pages', params: { handle: 'doc-1' } },
+    ]);
   });
 
   it('moves between tabs with the arrow keys', async () => {
