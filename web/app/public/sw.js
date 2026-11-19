@@ -5,8 +5,11 @@
 // and the list of files to keep offline, each with its SHA-256. Served unbuilt (dev), the list is
 // empty and the worker caches nothing.
 //
-// - install: fetches every listed file (bypassing the HTTP cache), checks its SHA-256, and stores
-//   it under this version's cache. Any mismatch fails the install, so the old worker stays.
+// - install: stores every listed file under this version's cache, each checked against its
+//   SHA-256. A file is taken from the first source that has the right bytes: a previous Elanero
+//   version's cache (an unchanged engine file is not downloaded again on an app-only update), then
+//   the HTTP cache, then the network. A file the HTTP cache holds with the wrong bytes is refetched
+//   once from the network. Any mismatch that survives fails the install, so the old worker stays.
 // - Nothing activates on install. The page asks for it with a SKIP_WAITING message, after the
 //   user accepts the update prompt (src/pwa/update.ts).
 // - activate: deletes the caches of other Elanero versions and takes control of open pages.
@@ -32,30 +35,59 @@ self.addEventListener('install', (event) => {
 async function precache() {
   const cache = await caches.open(BUILD.cacheName);
   try {
+    const previous = await previousVersionCaches();
     for (const file of BUILD.files) {
       const url = new URL(file.path, self.registration.scope).href;
-      const response = await fetch(
-        new Request(url, { cache: 'reload', credentials: 'same-origin' }),
-      );
-      if (!response.ok) {
-        throw new Error(`${file.path} could not be fetched (HTTP ${response.status})`);
-      }
-      const body = await response.arrayBuffer();
-      if ((await sha256Hex(body)) !== file.sha256) {
-        throw new Error(`${file.path} does not match the build's SHA-256`);
-      }
+      const copy =
+        (await fromPreviousVersion(previous, url, file.sha256)) ?? (await download(url, file));
       // Only the content type is kept. The body is already decoded, so an encoding header from
       // the server would describe bytes the cache does not hold.
       const headers = new Headers();
-      const type = response.headers.get('content-type');
-      if (type !== null) headers.set('content-type', type);
-      await cache.put(url, new Response(body, { status: 200, headers }));
+      if (copy.type !== null) headers.set('content-type', copy.type);
+      await cache.put(url, new Response(copy.body, { status: 200, headers }));
     }
   } catch (error) {
     // A partial version is removed, so the next install starts clean.
     await caches.delete(BUILD.cacheName);
     throw error;
   }
+}
+
+// The caches of the other Elanero versions still on this origin, opened for reading.
+async function previousVersionCaches() {
+  const names = await caches.keys();
+  const others = names.filter((name) => name.startsWith('elanero-') && name !== BUILD.cacheName);
+  return Promise.all(others.map((name) => caches.open(name)));
+}
+
+// A copy of the file from a previous version, when its bytes are the ones this build lists.
+async function fromPreviousVersion(previous, url, sha256) {
+  for (const old of previous) {
+    const hit = await old.match(url);
+    if (hit === undefined) continue;
+    const body = await hit.arrayBuffer();
+    if ((await sha256Hex(body)) === sha256) {
+      return { body, type: hit.headers.get('content-type') };
+    }
+  }
+  return undefined;
+}
+
+// Fetches the file, first through the HTTP cache (the page loaded the engine files already, so
+// they are not downloaded twice on a first visit), then once more from the network if the cached
+// bytes are not the build's.
+async function download(url, file) {
+  for (const mode of ['default', 'reload']) {
+    const response = await fetch(new Request(url, { cache: mode, credentials: 'same-origin' }));
+    if (!response.ok) {
+      throw new Error(`${file.path} could not be fetched (HTTP ${response.status})`);
+    }
+    const body = await response.arrayBuffer();
+    if ((await sha256Hex(body)) === file.sha256) {
+      return { body, type: response.headers.get('content-type') };
+    }
+  }
+  throw new Error(`${file.path} does not match the build's SHA-256`);
 }
 
 self.addEventListener('activate', (event) => {

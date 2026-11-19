@@ -2,6 +2,7 @@
 // touches the DOM or Node, so the same functions run in both. The build reads the output folder,
 // hashes each file, and writes the result into the service worker; these functions decide the
 // shape of that result.
+import { PYMUPDF_WHEEL_FILE, WEB_ZIP_FILE } from '../engine/pins.ts';
 import { BRAND, COLOURS } from '../theme/tokens.ts';
 
 export interface PrecacheFile {
@@ -89,4 +90,53 @@ export function renderServiceWorker(source: string, build: ServiceWorkerBuild): 
   // for that context.
   const json = JSON.stringify(build).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return source.replace(BUILD_PLACEHOLDER, json);
+}
+
+// The file stage_engine_assets.mjs writes into public/engine-assets (and so into dist/). Only the
+// wheel, the web zip and the packages carry a SHA-256 there; the core files are checked by name.
+export interface StageManifest {
+  pyodide: string;
+  core: readonly string[];
+  packages: readonly { name: string; version: string; file: string; sha256: string }[];
+  wheel: { file: string; bytes: number; sha256: string };
+  web?: { file: string; sha256: string };
+}
+
+// The folder under the build output where the staged engine files are served from.
+export const ENGINE_DIR = 'engine-assets';
+export const STAGE_MANIFEST_FILE = 'stage-manifest.json';
+
+// Compares the precache list with the staged engine files (W4.6 S2). The engine fetches these
+// files by name, so a file missing from the list is not available offline, and a SHA-256 that
+// differs from the stage manifest means the build did not stage what the manifest describes. Each
+// problem names its file. An empty result means the build is consistent.
+export function engineAssetProblems(
+  files: readonly PrecacheFile[],
+  stage: StageManifest,
+): string[] {
+  const precached = new Map(files.map((file) => [file.path, file.sha256]));
+  const problems: string[] = [];
+  const expect = (file: string, sha256?: string): void => {
+    const path = `${ENGINE_DIR}/${file}`;
+    const actual = precached.get(path);
+    if (actual === undefined) {
+      problems.push(`${path} is staged but not in the precache list`);
+    } else if (sha256 !== undefined && actual !== sha256) {
+      problems.push(
+        `${path} is in the precache list with a SHA-256 other than stage-manifest.json`,
+      );
+    }
+  };
+  for (const file of stage.core) expect(file);
+  for (const pkg of stage.packages) expect(pkg.file, pkg.sha256);
+  if (stage.wheel.file !== PYMUPDF_WHEEL_FILE) {
+    problems.push(`the staged wheel ${stage.wheel.file} is not the pinned ${PYMUPDF_WHEEL_FILE}`);
+  }
+  expect(stage.wheel.file, stage.wheel.sha256);
+  if (stage.web?.file !== WEB_ZIP_FILE) {
+    problems.push(`stage-manifest.json does not name ${WEB_ZIP_FILE}`);
+  } else {
+    expect(stage.web.file, stage.web.sha256);
+  }
+  return problems;
 }

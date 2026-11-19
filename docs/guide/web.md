@@ -9,8 +9,9 @@ today and marks what is coming soon.
 
 - **It runs in the browser tab.** Nothing to install on Windows, Mac or iPad: open the web address
   and the editor loads.
-- **It works offline after the first load.** The browser keeps the app's own files, so the editor
-  opens without a connection. Your documents are never kept by the web version (see
+- **It works offline after the first load.** The browser keeps the app's own files and the PDF
+  engine's files, so the editor opens without a connection. Your documents are never kept by the
+  web version (see
   [Where your data is stored](#where-your-data-is-stored)).
 - **It can be installed as an app.** The browser can add Elanero to your desktop, dock or home
   screen and open it in its own window.
@@ -174,7 +175,7 @@ full policy, with what the desktop app stores, is in the
 | Preferences: language, author name, reduce motion, default zoom | Yes | Saved; default zoom applies now, author name comes with comments (coming soon) |
 | Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
-| Works offline | Yes | The app's files yes; documents need the engine's offline files (coming soon) |
+| Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
 | Open, view, search and save PDFs | Yes | Coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Coming soon |
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
