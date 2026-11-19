@@ -14,8 +14,11 @@ site, and your documents are not uploaded to any server.
 
 **What the web version stores in your browser**
 
-- **Your documents** are held only in the memory of the browser tab while they are open. The app
-  writes no document to disk and keeps nothing after the tab closes.
+- **Your documents** are held in the memory of the browser tab while they are open. While a document
+  has unsaved changes, the app keeps an autosave copy of it in the browser's private storage (the
+  origin private file system, which other websites cannot read). The copy is deleted when the
+  document is closed, when it has no unsaved changes, and when you leave the page. Password-protected
+  documents are never copied. The copy stays on your device and is never uploaded.
 - **Your colour theme** (system, light or dark) is stored in the browser's `localStorage` under the
   key `elanero.theme`. It holds only that one word and no document content.
 - **The app itself** is kept in the browser's offline cache (the service worker's cache), so it can
@@ -48,8 +51,8 @@ site, and your documents are not uploaded to any server.
 **How to clear your data**
 
 Clear the site's data in your browser's settings (site data for the Elanero web address). That
-removes the theme setting and the offline copy of the app. Closing the tab discards open
-documents. The app has no separate "clear data" button yet.
+removes the theme setting, the offline copy of the app and any autosave copies. Closing the tab
+discards open documents and their autosave copies. The app has no separate "clear data" button yet.
 
 ## Desktop app (Windows)
 
@@ -115,8 +118,10 @@ is at <https://github.com/linguagraph/elanero-pdf-editor>.
 How the web version section was checked (repository paths):
 
 - Theme key `elanero.theme` is the only `localStorage` use: web/app/src/theme/theme.ts.
-- Documents are not written to disk; no OPFS, IndexedDB or cookies in web/app/src, web/app/public
-  or web/app/index.html (grep). Documents live in the engine's in-memory file system:
+- Autosave copies are the only OPFS use: web/app/src/storage/ (folder autosave/<tab-id>, deleted in
+  autosaver.ts and autosaveStore.ts; never a password-protected document, save.autosave_bytes in
+  src/pdfeditor/webapi/save.py). No IndexedDB or cookies in web/app/src, web/app/public or
+  web/app/index.html (grep). Documents otherwise live in the engine's in-memory file system:
   web/app/src/engine/loader.ts (unpacks into /home/pyodide) and docs/web/design/W1.1.md section 6.
 - Offline cache and documents never cached: web/app/public/sw.js (header comment and fetch
   handler); the cached file list is written by web/app/src/pwa/build.ts.

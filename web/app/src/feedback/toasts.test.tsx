@@ -9,6 +9,7 @@ import {
   enqueueToast,
   removeToast,
   reportRpcError,
+  timesOut,
   VISIBLE_TOASTS,
   type Toast,
   type ToastQueue,
@@ -22,6 +23,14 @@ const EMPTY: ToastQueue = { visible: [], queued: [] };
 function toast(id: number, kind: Toast['kind'] = 'info'): Toast {
   return { id, kind, text: `message ${id}` };
 }
+
+describe('toast kinds', () => {
+  it('times out a warning like info, and keeps only an error until dismissed', () => {
+    expect(timesOut('warning')).toBe(true);
+    expect(timesOut('info')).toBe(true);
+    expect(timesOut('error')).toBe(false);
+  });
+});
 
 describe('toast queue', () => {
   it('shows up to the limit and queues the rest in order', () => {
