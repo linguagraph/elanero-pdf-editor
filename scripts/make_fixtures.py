@@ -948,6 +948,20 @@ def undo_signed_catalog() -> None:
         pdf.save(path)
 
 
+def annotations_form() -> None:
+    """The annotations sample plus a text field on page 1 (a form widget must survive a flatten;
+    needs annotations.pdf, generated first)."""
+    src = pymupdf.open(OUT / "annotations.pdf")
+    widget = pymupdf.Widget()
+    widget.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+    widget.field_name = "Name1"
+    widget.field_value = "Ada"
+    widget.rect = pymupdf.Rect(72, 500, 300, 520)
+    src[0].add_widget(widget)
+    src.save(OUT / "annotations_form.pdf")
+    src.close()
+
+
 def comments_flattenable_mixed() -> None:
     """The annotations sample plus a link and a popup on page 1, a hidden comment, and a second
     page that holds only a link (copy of tests/services/test_comments_flattenable.py; needs
@@ -1051,6 +1065,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "comments_literal_hash_nm": comments_literal_hash_nm,
     "undo_signed_catalog": undo_signed_catalog,
     "comments_flattenable_mixed": comments_flattenable_mixed,
+    "annotations_form": annotations_form,
     "damaged_pubsec_filter": damaged_pubsec_filter,
 }
 

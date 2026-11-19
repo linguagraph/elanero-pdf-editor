@@ -53,6 +53,7 @@ DEADLINE_MS: dict[str, int] = {
 # "instant": they touch no page content.
 DEADLINE_CLASS: dict[str, str] = {
     "actions.available": "instant",
+    "comments.flattenable": "instant",
     "actions.redo": "edit",
     "actions.run": "action",
     "actions.undo": "edit",

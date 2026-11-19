@@ -58,6 +58,7 @@ METHODS: dict[str, Method] = {
     "actions.undo": Method(dto.HandleParams, actions.undo),
     "actions.redo": Method(dto.HandleParams, actions.redo),
     "actions.available": Method(dto.HandleParams, actions.available),
+    "comments.flattenable": Method(dto.HandleParams, actions.flattenable),
     "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
     "save.mark_saved": Method(dto.HandleParams, save.mark_saved),
     "jobs.prepare": Method(dto.JobPrepareParams, jobs.prepare, takes_buffers=True),

@@ -452,6 +452,21 @@ def _annot_count_pikepdf(data: bytes, page: int, minimum: int) -> None:
         assert len(pdf.pages[page].Annots) >= minimum
 
 
+@host_check("widget_named_pikepdf")
+def _widget_named_pikepdf(data: bytes, page: int, field: str, value: str) -> None:
+    """Exactly one widget on the page is named ``field`` and holds ``value``."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        widgets = [
+            a
+            for a in pdf.pages[page].obj.get(pikepdf.Name.Annots, [])
+            if a.get("/Subtype") == pikepdf.Name.Widget and str(a.get("/T", "")) == field
+        ]
+        assert len(widgets) == 1, field
+        assert str(widgets[0].get("/V", "")) == value
+
+
 @host_check("no_annots_pikepdf")
 def _no_annots_pikepdf(data: bytes, page: int) -> None:
     """The page has no annotations left (an empty /Annots array counts as none)."""
