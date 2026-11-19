@@ -153,6 +153,7 @@ full policy, with what the desktop app stores, is in the
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
+| Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
 | Other comments, redaction, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
