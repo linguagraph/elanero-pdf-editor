@@ -402,6 +402,18 @@ def _ocg_count_pikepdf(data: bytes, count: int) -> None:
         assert len(pdf.Root.OCProperties.OCGs) == count
 
 
+@host_check("same_object_count_pikepdf")
+def _same_object_count_pikepdf(data: bytes, reference: str) -> None:
+    """The file has as many indirect objects as ``reference`` (base64 of another saved file)."""
+    import pikepdf
+
+    with (
+        pikepdf.open(io.BytesIO(data)) as pdf,
+        pikepdf.open(io.BytesIO(base64.b64decode(reference))) as ref,
+    ):
+        assert len(pdf.objects) == len(ref.objects), (len(pdf.objects), len(ref.objects))
+
+
 @host_check("streams_lack_pikepdf")
 def _streams_lack_pikepdf(data: bytes, needle: str) -> None:
     """No decoded stream holds ``needle`` as a literal or hex string (independent of MuPDF)."""
