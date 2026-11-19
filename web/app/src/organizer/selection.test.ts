@@ -9,6 +9,7 @@ import {
   NO_SELECTION,
   type PageSelection,
   selectPage,
+  insertedSelection,
 } from './selection';
 
 describe('insertAt and duplicatedPages', () => {
@@ -151,5 +152,15 @@ describe('movedPages', () => {
     expect(movedPages([2, 3])).toEqual([2, 3]);
     expect(movedPages(null)).toBeNull();
     expect(movedPages(['a'])).toBeNull();
+  });
+});
+
+describe('inserted selection', () => {
+  it('selects the inserted pages, with the first as the anchor', () => {
+    expect(insertedSelection(2, 3)).toEqual({ picked: [2, 3, 4], anchor: 2 });
+  });
+
+  it('selects nothing when no page was inserted', () => {
+    expect(insertedSelection(2, 0)).toEqual({ picked: [], anchor: null });
   });
 });

@@ -14,7 +14,7 @@ import {
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import type { JobProgressStore } from '../feedback/jobRun';
-import { downloadBytes } from '../combine/CombineDialog';
+import { downloadBytes } from '../files/downloads';
 import { MAX_FILE_BYTES } from '../documents/openFile';
 import type { JobWorker } from '../split/splitJob';
 import { CompareCancelled, runCompare, type CompareEngine, type CompareReport } from './compareJob';

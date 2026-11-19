@@ -72,6 +72,12 @@ export function duplicatedPages(picked: readonly number[]): number[] {
   return Array.from({ length: picked.length }, (_, offset) => last + 1 + offset);
 }
 
+// The selection after count pages were inserted at at: the new pages, the first one as the anchor.
+export function insertedSelection(at: number, count: number): PageSelection {
+  const picked = Array.from({ length: count }, (_, offset) => at + offset);
+  return { picked, anchor: count > 0 ? at : null };
+}
+
 // Deleting is allowed for some pages, never for all of them: a document keeps one page.
 export function canDelete(picked: readonly number[], count: number): boolean {
   return picked.length > 0 && picked.length < count;

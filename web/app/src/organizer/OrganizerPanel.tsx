@@ -2,22 +2,30 @@
 // user select some of them, and runs rotate, move and delete on the selection through actions.run.
 // Each change is undoable: an info toast offers Undo, which calls actions.undo. The engine is the
 // only source of the page order, so the list is read again from session.pages after every change.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from 'react-aria-components';
 import type { PageRpc } from '../engine/engineConnection';
+import type { JobWorker } from '../files/fileJob';
+import { FileJobCancelled } from '../files/fileJob';
+import { downloadBytes } from '../files/downloads';
+import { passwordPrompt, type PasswordPrompt } from '../documents/passwordRequest';
 import { reportRpcError, toasts, type ToastStore, undoAction } from '../feedback/toasts';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import { Panel } from '../layout/Panel';
+import { ACCEPT } from '../combine/sources';
 import { CachedCanvas } from '../view/pixels';
 import { type PlannedRender, RenderScheduler } from '../view/renderScheduler';
 import { thumbnailScaleMilli, type ThumbnailSize } from '../view/thumbnails';
+import { extractName, runExtract } from './extract';
+import { insertFile, insertedCount, PasswordGaveUp } from './insertFile';
 import {
   canDelete,
   clampSelection,
   duplicatedPages,
   insertAt,
+  insertedSelection,
   movedPages,
   moveTarget,
   NO_SELECTION,
@@ -38,6 +46,15 @@ export interface OrganizerPanelProps {
   readonly onChanged?: (pageCount: number) => void;
   // Where the Undo toasts and the errors go. The app's toast store unless a test passes its own.
   readonly toastStore?: ToastStore;
+  // The open document's name, which the extract's download is named after.
+  readonly documentName: string;
+  // A new job worker for an extract. The app starts the built job worker.
+  readonly startWorker: () => JobWorker;
+  // Offers the extracted bytes as a file. The default makes a download link.
+  readonly download?: (name: string, bytes: ArrayBuffer) => void;
+  // Asks for the password of an encrypted file to insert. The app's password dialog unless a test
+  // passes its own.
+  readonly prompt?: PasswordPrompt;
 }
 
 type PageChange =
@@ -49,6 +66,10 @@ export function OrganizerPanel({
   onClose,
   onChanged,
   toastStore = toasts,
+  documentName,
+  startWorker,
+  download = downloadBytes,
+  prompt = passwordPrompt,
 }: OrganizerPanelProps) {
   const [sizes, setSizes] = useState<readonly ThumbnailSize[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -59,6 +80,7 @@ export function OrganizerPanel({
   // old one is left behind rather than drawn wrongly.
   const [scheduler, setScheduler] = useState(() => new RenderScheduler(rpc, handle));
   const [tick, setTick] = useState(0);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Adopts a fresh page list. A move passes the pages it placed, which become the selection.
   const adopt = (pages: readonly ThumbnailSize[], nextSelection?: PageSelection) => {
@@ -201,6 +223,46 @@ export function OrganizerPanel({
     }));
   };
 
+  // Inserts the chosen file in front of the selection's end (or at the end), and selects the pages it
+  // brought. The password dialog runs inside insertFile; a cancel there changes nothing.
+  const insertFromFile = async (file: File) => {
+    const at = insertAt(picked, total);
+    setBusy(true);
+    try {
+      const reply = await insertFile({ rpc, handle, file, at, prompt });
+      if (reply === null || !reply.executed) return;
+      const count = insertedCount(reply.value);
+      await reload(insertedSelection(at, count));
+      toastStore.push(
+        'info',
+        t('organizer.inserted', { count }),
+        undoAction(() => void undoChange()),
+      );
+    } catch (error) {
+      if (error instanceof PasswordGaveUp) toastStore.push('error', t('organizer.passwordGaveUp'));
+      else reportFailure(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // The chosen pages go to a new file, which is downloaded. Nothing in the document changes, so
+  // there is no Undo.
+  const extract = async () => {
+    const name = extractName(documentName);
+    const count = picked.length;
+    setBusy(true);
+    try {
+      const file = await runExtract({ engine: rpc, startWorker }, handle, picked);
+      download(name, file.data);
+      toastStore.push('info', t('organizer.extracted', { count, name }));
+    } catch (error) {
+      if (!(error instanceof FileJobCancelled)) reportFailure(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const deleteSelected = () => {
     if (!canDelete(picked, total)) return;
     const count = picked.length;
@@ -250,8 +312,14 @@ export function OrganizerPanel({
             <button type="button" disabled={busy} onClick={insertBlank}>
               {t('organizer.insertBlank')}
             </button>
+            <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
+              {t('organizer.insertFile')}
+            </button>
             <button type="button" disabled={!hasSelection || busy} onClick={duplicateSelected}>
               {t('command.duplicate-pages.label')}
+            </button>
+            <button type="button" disabled={!hasSelection || busy} onClick={() => void extract()}>
+              {t('command.extract-pages.label')}
             </button>
             <button type="button" disabled={!canUp} onClick={() => moveSelected('up')}>
               {t('organizer.moveUp')}
@@ -267,6 +335,18 @@ export function OrganizerPanel({
               {t('command.delete-pages.label')}
             </button>
           </div>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={ACCEPT}
+            hidden
+            aria-label={t('organizer.insertFileLabel')}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (file !== undefined) void insertFromFile(file);
+            }}
+          />
           {keepOne ? (
             <p className="organizer-status" role="status">
               {t('organizer.keepOne')}

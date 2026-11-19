@@ -29,3 +29,16 @@ export function downloadLinks(files: readonly ResultFile[]): DownloadLink[] {
 export function revokeLinks(links: readonly DownloadLink[]): void {
   for (const link of links) URL.revokeObjectURL(link.href);
 }
+
+// Hands bytes to the browser as a file (the Combine, Compare and organizer downloads). The object
+// URL is released after the click has started the download.
+export function downloadBytes(name: string, bytes: ArrayBuffer, type = 'application/pdf'): void {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
