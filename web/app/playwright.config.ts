@@ -28,9 +28,10 @@ export default defineConfig({
           timeout: 60_000,
         },
         {
-          // The test build is served at "/": with the deploy base (W9.2) `vite preview` answers the
-          // module requests with 404. The base changes only the asset URLs, not the CSP under test.
-          command: `npx vite build --base=/ && npx vite preview --port ${APP_PORT} --strictPort`,
+          // The e2e build takes the root base (`vite preview` serves the folder at the root; the
+          // production base of W9.2 would put every asset under a sub-path it does not serve). It
+          // goes to dist/e2e, so it never overwrites the production build in dist/.
+          command: `npx vite build --base=/ --outDir dist/e2e && npx vite preview --outDir dist/e2e --port ${APP_PORT} --strictPort`,
           url: `http://localhost:${APP_PORT}/`,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

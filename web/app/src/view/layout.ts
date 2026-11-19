@@ -1,7 +1,10 @@
 // The page layouts (W1.4 sections 1 and 7). Pure arithmetic in CSS pixels: the caller gives each
 // page's size in points and the zoom, and gets the box of every page. Two layouts: the continuous
 // single column, and two-page spreads (the desktop's two-up modes, core/layout.py compute_layout).
-import { CSS_PX_PER_POINT } from './zoom';
+import { CSS_PX_PER_POINT, clampZoom, DEFAULT_ZOOM } from './zoom';
+
+// The page layouts the reader can choose (the toolbar and the status bar show them).
+export type ViewLayout = 'continuous' | 'twoPage';
 
 // The gap between pages and around the column, in points (core/layout.py PAGE_GAP).
 export const PAGE_GAP_PT = 12;
@@ -201,4 +204,44 @@ export function currentPageIndex(
     }
   }
   return best;
+}
+
+// The view's fit modes (W1.4 section 3): the zoom at which the page width fills the viewport minus
+// the page gaps (Fit Width), or the whole page fits (Fit Page). The layout is linear in the zoom, so
+// the fitted zoom is the viewport divided by the content size at zoom 1. `columns` is 2 for the
+// two-page layout, where a spread holds two pages and three gaps.
+export type FitMode = 'width' | 'page';
+
+// The largest width and the largest height of the document's pages: a fit that holds every page.
+export function largestPage(sizes: readonly PageSizePt[]): PageSizePt {
+  return sizes.reduce(
+    (max, size) => ({
+      width: Math.max(max.width, size.width),
+      height: Math.max(max.height, size.height),
+    }),
+    { width: 0, height: 0 },
+  );
+}
+
+// The zoom at which `columns` pages of this width, with their gaps, fill the viewport width. A
+// viewport with no width yet (hidden, or before the first layout) gives the actual size.
+export function fitWidthZoom(pageWidthPt: number, viewWidthPx: number, columns = 1): number {
+  if (!(viewWidthPx > 0) || !(pageWidthPt > 0)) return DEFAULT_ZOOM;
+  const contentPt = columns * pageWidthPt + (columns + 1) * PAGE_GAP_PT;
+  return clampZoom(viewWidthPx / (CSS_PX_PER_POINT * contentPt));
+}
+
+// The zoom at which the page fits the viewport both ways: the smaller of the width fit and the
+// height fit, with a page gap above and below it.
+export function fitPageZoom(
+  pageWidthPt: number,
+  pageHeightPt: number,
+  viewWidthPx: number,
+  viewHeightPx: number,
+  columns = 1,
+): number {
+  const byWidth = fitWidthZoom(pageWidthPt, viewWidthPx, columns);
+  if (!(viewHeightPx > 0) || !(pageHeightPt > 0)) return byWidth;
+  const byHeight = clampZoom(viewHeightPx / (CSS_PX_PER_POINT * (pageHeightPt + 2 * PAGE_GAP_PT)));
+  return Math.min(byWidth, byHeight);
 }

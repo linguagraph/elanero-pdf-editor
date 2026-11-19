@@ -393,6 +393,9 @@ export const EN = {
   'view.zoomOut': 'Zoom out',
   'view.zoomIn': 'Zoom in',
   'view.zoomPercent': '{percent}%',
+  'view.fitWidth': 'Fit width',
+  'view.fitPage': 'Fit page',
+  'view.actualSize': 'Actual size',
   'view.goToPage': 'Go to page',
   'view.jumpInvalid':
     'There is no page "{input}" in this document. Type a page label, or a page number from 1 to {total}.',
@@ -615,7 +618,7 @@ export const EN = {
     'This preset does not make the file smaller: the original is {before} and the reduced copy would be {after}. The original stays as it is, so there is nothing to download.',
   'compress.keep': 'Keep the original',
   'compress.download': 'Download {name}',
-  'compress.size.bytes': '{count} bytes',
+  'compress.size.bytes': '{count} B',
   'compress.size.kb': '{value} KB',
   'compress.size.mb': '{value} MB',
   'compress.size.gb': '{value} GB',

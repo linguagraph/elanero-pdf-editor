@@ -110,11 +110,44 @@ describe('document tabs', () => {
     expect(onSelect).toHaveBeenLastCalledWith(1);
   });
 
+  it('jumps to the first and last tab with Home and End', () => {
+    const { onSelect } = render(activateTab(threeTabs(), 2));
+    key(tabs()[1] as HTMLElement, 'Home');
+    expect(onSelect).toHaveBeenLastCalledWith(1);
+    key(tabs()[0] as HTMLElement, 'End');
+    expect(onSelect).toHaveBeenLastCalledWith(3);
+  });
+
+  it('marks only the active tab as aria-selected after the selection changes', () => {
+    render(activateTab(threeTabs(), 1));
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'true',
+      'false',
+      'false',
+    ]);
+    render(activateTab(threeTabs(), 2));
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+  });
+
   it('selects a tab when it is clicked', () => {
     const { onSelect } = render(threeTabs());
     act(() => {
       tabs()[0]?.click();
     });
     expect(onSelect).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('document tab names', () => {
+  it('truncates a long name and shows the full name as a tooltip', () => {
+    const long = 'a-very-long-document-name-that-does-not-fit.pdf';
+    render(addTab(EMPTY_TABS, pdf(long)));
+    const name = host.querySelector<HTMLElement>('.doc-tab-name');
+    expect(name?.getAttribute('title')).toBe(long);
+    expect(name?.textContent).toBe(long);
   });
 });

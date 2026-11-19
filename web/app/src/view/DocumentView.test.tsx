@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
-import { readPreferences, writePreferences } from '../prefs/store';
+import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
 import { DocumentView } from './DocumentView';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -58,7 +58,13 @@ async function flush(): Promise<void> {
   });
 }
 
+// The geometry tests here are at 100 %; the saved default is Fit width otherwise.
+function savePreferences(record: Record<string, unknown>): void {
+  window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(record));
+}
+
 beforeEach(() => {
+  savePreferences({ defaultZoom: 'actual' });
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
@@ -281,6 +287,7 @@ describe('DocumentView render retries', () => {
 describe('DocumentView layouts and night reading', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    savePreferences({ defaultZoom: 'actual' });
   });
 
   const button = (label: string) =>

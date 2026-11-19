@@ -17,6 +17,7 @@ export function SearchRailButton({ tabId, disabled }: SearchRailButtonProps) {
   return (
     <button
       type="button"
+      title={t('search.title')}
       className="search-rail-button"
       aria-pressed={open}
       disabled={disabled || tabId === null}
@@ -29,7 +30,11 @@ export function SearchRailButton({ tabId, disabled }: SearchRailButtonProps) {
         setSearchOpen(tabId, !open);
       }}
     >
-      {t('search.title')}
+      <svg className="rail-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+      <span className="visually-hidden">{t('search.title')}</span>
     </button>
   );
 }

@@ -8,6 +8,7 @@ import { toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RECENT_STORAGE_KEY } from '../recent/recentFiles';
 import { RpcError } from '../rpc/client';
+import { fitWidthZoom } from '../view/layout';
 import { APP_VERSION } from '../version';
 import { passwordPrompt } from './passwordRequest';
 
@@ -417,8 +418,10 @@ describe('document tabs', () => {
     expect(host.querySelector('.doc-status-page')?.textContent).toBe(
       t('view.pageNumber', { page: 1, total: 3 }),
     );
+    // The saved default zoom is Fit width: the pages (612 pt wide) fill the window.
+    const percent = Math.round(fitWidthZoom(612, window.innerWidth) * 100);
     expect(host.querySelector('.doc-status-zoom')?.textContent).toBe(
-      t('view.zoomPercent', { percent: 100 }),
+      t('view.zoomPercent', { percent }),
     );
   });
 

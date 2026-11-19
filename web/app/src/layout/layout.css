@@ -43,6 +43,64 @@
   border-right: 1px solid var(--color-border);
 }
 
+/* Rail buttons (W1.6 section 4): flat, one per panel, with the label as the tooltip. The active one
+   is marked with an accent bar on the side that faces the open panel. The feature stylesheets set
+   the boxes, so these rules are written to win over them. */
+.app-rail > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.app-rail > button[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  font-weight: 600;
+}
+
+.app-rail-left > button[aria-pressed='true'] {
+  box-shadow: inset -3px 0 0 var(--color-accent);
+}
+
+.app-rail-right > button[aria-pressed='true'] {
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+/* The icon of a rail button; the name is read by screen readers and shown as the tooltip. */
+.rail-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.app-rail > button:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.app-rail > button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
 .app-rail-right {
   border-left: 1px solid var(--color-border);
 }

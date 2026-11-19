@@ -46,6 +46,31 @@ test('tablet width (800 px): left rail shown, no horizontal scroll', async ({ pa
   await expect(page.getByRole('navigation', { name: 'Left rail' })).toBeVisible();
 });
 
+// The rail buttons show icons, with the name as the tooltip and for screen readers. At the real rail
+// width each icon must sit inside its button and inside the rail, so no label is cut off.
+test('desktop width: every right rail button fits its rail and shows its icon', async ({
+  page,
+}) => {
+  await openAtWidth(page, 1366, 768);
+  const rail = page.getByRole('navigation', { name: 'Right rail' });
+  const buttons = rail.locator('button');
+  await expect(buttons).toHaveCount(4);
+  const railBox = await rail.boundingBox();
+  // 48 px of rail plus its 1 px border.
+  expect(railBox?.width).toBeCloseTo(49, 0);
+  for (let i = 0; i < 4; i += 1) {
+    const button = buttons.nth(i);
+    const box = await button.boundingBox();
+    expect(
+      box && railBox && box.x >= railBox.x && box.x + box.width <= railBox.x + railBox.width,
+    ).toBe(true);
+    const icon = await button.locator('.rail-icon').boundingBox();
+    expect(icon && box && icon.x >= box.x && icon.x + icon.width <= box.x + box.width).toBe(true);
+    await expect(button.locator('.rail-icon')).toBeVisible();
+    await expect(button).toHaveAttribute('title', /.+/);
+  }
+});
+
 // W4.3c: the ribbon sits under the logo bar, full width. Above the tablet breakpoint it shows the
 // tab list; below it, the collapsed form (one row of tabs, groups in popovers).
 test('desktop width (1366 px): the ribbon is mounted with its tabs', async ({ page }) => {
