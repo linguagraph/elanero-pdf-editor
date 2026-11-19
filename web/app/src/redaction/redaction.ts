@@ -68,6 +68,6 @@ export function applyRedactions(
 
 // Reverses the last step, as the toast's Undo does.
 export async function undoLastStep(rpc: PageRpc, handle: string): Promise<ChangedDto | null> {
-  const reply = await rpc.call('actions.undo', { handle });
+  const reply = await rpc.call('actions.undo', { handle, expect_history: null });
   return reply.done ? reply.changed : null;
 }

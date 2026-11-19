@@ -112,6 +112,14 @@ def redo(handle: str) -> dict[str, Any]:
     return call("actions.redo", {"handle": handle})
 
 
+def undo_offered_at(handle: str, history: int) -> dict[str, Any]:
+    return call("actions.undo", {"handle": handle, "expect_history": history})
+
+
+def history_of(handle: str) -> int:
+    return REGISTRY.get(handle).undo_stack.version
+
+
 def test_a_page_action_runs_and_reports_the_change(web: None, fixture_pdf: Any) -> None:
     handle = open_bytes(fixture_pdf)
     before = revision_of(handle, 0)
@@ -442,3 +450,73 @@ def _stale(session: Any, args: Any) -> ActionResult[None]:
 
 def _crash(session: Any, args: Any) -> ActionResult[None]:
     raise RuntimeError("secret detail")
+
+
+def test_history_moves_on_every_do_undo_and_redo_but_not_on_save(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf)
+    start = history_of(handle)
+    after_run = ok(rotate(handle, 90))["state"]["history"]
+    assert after_run > start
+    after_undo = ok(undo(handle))["state"]["history"]
+    assert after_undo > after_run
+    after_redo = ok(redo(handle))["state"]["history"]
+    assert after_redo > after_undo
+    assert after_redo == history_of(handle)
+    saved, _, _ = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    ok(saved)
+    assert history_of(handle) == after_redo
+
+
+def test_an_undo_with_the_offered_history_undoes_that_step(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    offered = ok(rotate(handle, 90))["state"]["history"]
+    result = ok(undo_offered_at(handle, offered))
+    assert result["done"] is True
+    assert result["label"] == ROTATE_RIGHT
+    assert result["changed"] is not None
+    assert rotation_of(handle, 0) == 0
+
+
+def test_a_stale_undo_is_refused_and_changes_nothing(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    first_history = ok(rotate(handle, 90))["state"]["history"]
+    ok(rotate(handle, 180, pages=[0]))  # a newer step on top
+    current = history_of(handle)
+    reply = undo_offered_at(handle, first_history)
+    err = error(reply)
+    assert err["code"] == STALE_OBJECT
+    assert err["details"] == {"history": current}
+    assert reply["events"] == []
+    assert rotation_of(handle, 0) == 270  # both rotations kept
+    assert history_of(handle) == current
+
+
+def test_an_undo_on_an_empty_stack_is_stale_even_with_a_matching_history(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf)
+    offered = ok(rotate(handle, 90))["state"]["history"]
+    ok(undo(handle))  # the step is gone; the history moved on
+    current = history_of(handle)
+    err = error(undo_offered_at(handle, current))
+    assert err["code"] == STALE_OBJECT
+    assert err["details"] == {"history": current}
+    assert offered != current
+    assert rotation_of(handle, 0) == 0
+    assert ok(redo(handle))["done"] is True  # the refused undo left the redo branch alone
+
+
+def test_busy_still_wins_over_a_matching_history(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    offered = ok(rotate(handle, 90))["state"]["history"]
+    session = REGISTRY.get(handle)
+    session.begin_task("OCR")
+    try:
+        err = error(undo_offered_at(handle, offered))
+        assert err["code"] == BUSY
+        assert err["details"] == {"task": "OCR"}
+    finally:
+        session.end_task("OCR")
+    assert rotation_of(handle, 0) == 90

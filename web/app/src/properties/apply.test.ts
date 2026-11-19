@@ -76,7 +76,7 @@ describe('document properties', () => {
     await applyProperties(deps, info, { ...editableValues(info), title: 'New' });
     store.getState().visible[0]?.action?.run();
     await settle();
-    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1' });
+    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: null });
   });
 
   it('calls nothing when no field changed', async () => {
