@@ -101,3 +101,25 @@ def test_the_generated_methods_cover_every_call() -> None:
     text = make_web_types.render()
     for name in METHODS:
         assert f"'{name}': {{ params:" in text
+
+
+def test_the_event_union_lists_every_event_kind() -> None:
+    text = make_web_types.render()
+    kinds = ", ".join(f"'{kind}'" for kind in sorted(dto.EVENT_TYPES))
+    assert f"export const EVENT_KINDS = [{kinds}] as const;" in text
+    for kind, event_class in dto.EVENT_TYPES.items():
+        assert f"  '{kind}': {event_class.__name__};" in text  # EventPayloads
+        assert f"  '{kind}': decode{event_class.__name__}," in text  # EVENT_DECODERS
+
+
+def test_an_event_with_an_unsupported_field_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    bad = make_dataclass("BadEvent", [("handle", str), ("items", list[int])])
+    monkeypatch.setitem(dto.EVENT_TYPES, "bad", bad)
+    with pytest.raises(TypeError, match="no TypeScript form"):
+        make_web_types.render()
+
+
+def test_an_event_kind_must_name_a_dataclass(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(dto.EVENT_TYPES, "odd", str)
+    with pytest.raises(TypeError, match="must be a dataclass"):
+        make_web_types.render()

@@ -391,6 +391,50 @@ class DocStateDto:
     require_full_save: bool
 
 
+# The change events of a reply (W1.2 section 7). Each one is built from its dataclass by
+# webapi.events; the generator emits one TypeScript interface and decoder per class, and the
+# client adds the "kind" key from the EVENT_TYPES key.
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ChangedEvent:
+    handle: str
+    changes: tuple[ChangeDto, ...]  # what the call changed, in the order it happened
+    revisions: dict[str, int]  # the new Page.revision of each changed page, keyed by index
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class StateEvent:
+    handle: str
+    state: DocStateDto  # the document state after the call; sent only when it differs
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SavedEvent:
+    handle: str  # save.mark_saved reported the document clean
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ClosedEvent:
+    handle: str  # session.close released the document
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class BlockedEvent:
+    handle: str
+    task: str  # the busy label when the session refused an edit; the call fails with BUSY
+
+
+# The kind of each event on the wire, and the dataclass that carries its fields.
+EVENT_TYPES: dict[str, type] = {
+    "blocked": BlockedEvent,
+    "changed": ChangedEvent,
+    "closed": ClosedEvent,
+    "saved": SavedEvent,
+    "state": StateEvent,
+}
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class MarkSavedResult:
     """``save.mark_saved`` (W1.2 section 12): ``saved`` is True when this call cleared the dirty

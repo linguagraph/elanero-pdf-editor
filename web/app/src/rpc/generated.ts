@@ -95,6 +95,12 @@ export interface AvailableResult {
   names: string[];
 }
 
+export interface BlockedEvent {
+  handle: string;
+  /** the busy label when the session refused an edit; the call fails with BUSY */
+  task: string;
+}
+
 export interface CapabilitiesResult {
   /** engine.base.Capabilities, one flag per name */
   engine: Record<string, boolean>;
@@ -112,6 +118,19 @@ export interface ChangedDto {
   changes: ChangeDto[];
   /** the new Page.revision of each changed page, keyed by index */
   revisions: Record<string, number>;
+}
+
+export interface ChangedEvent {
+  handle: string;
+  /** what the call changed, in the order it happened */
+  changes: ChangeDto[];
+  /** the new Page.revision of each changed page, keyed by index */
+  revisions: Record<string, number>;
+}
+
+export interface ClosedEvent {
+  /** session.close released the document */
+  handle: string;
 }
 
 export interface DocInfo {
@@ -451,6 +470,11 @@ export interface SaveResult {
   name: string;
 }
 
+export interface SavedEvent {
+  /** save.mark_saved reported the document clean */
+  handle: string;
+}
+
 export interface SearchHitDto {
   page: number;
   /** the matched text */
@@ -505,6 +529,12 @@ export interface SecurityResult {
   /** its method; NONE for a pending removal */
   pending_method: EncryptionMethod | null;
   has_signatures: boolean;
+}
+
+export interface StateEvent {
+  handle: string;
+  /** the document state after the call; sent only when it differs */
+  state: DocStateDto;
 }
 
 export interface TextLayerResult {
@@ -653,6 +683,32 @@ export const RESULT_DECODERS: {
   'text.search': decodeSearchResult,
 };
 
+/** Every kind of change event (W1.2 section 7), sorted. */
+export const EVENT_KINDS = ['blocked', 'changed', 'closed', 'saved', 'state'] as const;
+export type RpcEventKind = (typeof EVENT_KINDS)[number];
+/** The fields of each event, by kind: its dataclass, without the `kind` key. */
+export interface EventPayloads {
+  'blocked': BlockedEvent;
+  'changed': ChangedEvent;
+  'closed': ClosedEvent;
+  'saved': SavedEvent;
+  'state': StateEvent;
+}
+/** A change event of a reply: its kind and the fields of its dataclass. */
+export type RpcEvent = {
+  [K in RpcEventKind]: { kind: K } & EventPayloads[K];
+}[RpcEventKind];
+/** The decoder of each event's fields; the caller strips and re-adds the `kind` key. */
+export const EVENT_DECODERS: {
+  readonly [K in RpcEventKind]: Decoder<EventPayloads[K]>;
+} = {
+  'blocked': decodeBlockedEvent,
+  'changed': decodeChangedEvent,
+  'closed': decodeClosedEvent,
+  'saved': decodeSavedEvent,
+  'state': decodeStateEvent,
+};
+
 export function decodeAutosaveResult(
   value: unknown,
   ctx: DecodeContext,
@@ -676,6 +732,19 @@ export function decodeAvailableResult(
   checkKeys(o, ['names'], path);
   return {
     names: expectArray(field(o, 'names', path), `${path}.names`).map((item1, index1) => expectString(item1, `${`${path}.names`}[${index1}]`)),
+  };
+}
+
+export function decodeBlockedEvent(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): BlockedEvent {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'task'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    task: expectString(field(o, 'task', path), `${path}.task`),
   };
 }
 
@@ -715,6 +784,32 @@ export function decodeChangedDto(
   return {
     changes: expectArray(field(o, 'changes', path), `${path}.changes`).map((item1, index1) => decodeChangeDto(item1, ctx, `${`${path}.changes`}[${index1}]`)),
     revisions: decodeRecord(field(o, 'revisions', path), `${path}.revisions`, (item1, p1) => expectInteger(item1, p1)),
+  };
+}
+
+export function decodeChangedEvent(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): ChangedEvent {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'changes', 'revisions'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    changes: expectArray(field(o, 'changes', path), `${path}.changes`).map((item1, index1) => decodeChangeDto(item1, ctx, `${`${path}.changes`}[${index1}]`)),
+    revisions: decodeRecord(field(o, 'revisions', path), `${path}.revisions`, (item1, p1) => expectInteger(item1, p1)),
+  };
+}
+
+export function decodeClosedEvent(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): ClosedEvent {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
   };
 }
 
@@ -1285,6 +1380,18 @@ export function decodeSaveResult(
   };
 }
 
+export function decodeSavedEvent(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SavedEvent {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+  };
+}
+
 export function decodeSearchHitDto(
   value: unknown,
   ctx: DecodeContext,
@@ -1361,6 +1468,19 @@ export function decodeSecurityResult(
     pending: orNull(field(o, 'pending', path), `${path}.pending`, (v1, p1) => expectOneOf(v1, ['encrypt', 'remove'] as const, p1)),
     pending_method: orNull(field(o, 'pending_method', path), `${path}.pending_method`, (v1, p1) => expectOneOf(v1, ['none', 'rc4-40', 'rc4-128', 'aes-128', 'aes-256', 'unknown'] as const, p1)),
     has_signatures: expectBoolean(field(o, 'has_signatures', path), `${path}.has_signatures`),
+  };
+}
+
+export function decodeStateEvent(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): StateEvent {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'state'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    state: decodeDocStateDto(field(o, 'state', path), ctx, `${path}.state`),
   };
 }
 

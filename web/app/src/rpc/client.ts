@@ -14,10 +14,11 @@ import {
   type ErrorCode,
   type MethodName,
   type Methods,
+  type RpcEvent,
 } from './generated';
+import { decodeEvents } from './events';
 import {
   checkKeys,
-  expectArray,
   expectBoolean,
   expectInteger,
   expectObject,
@@ -137,13 +138,42 @@ function encodeValue(value: unknown, buffers: ArrayBuffer[], path: string): unkn
   throw new RpcError('INVALID_ARGS', `${path}: a ${typeof value} has no JSON form`);
 }
 
-// Reads one reply. Throws RpcError for an error reply and ReplyShapeError for anything that does
-// not match the generated types; the caller maps the latter to INTERNAL.
-function interpret<M extends MethodName>(
+// What a reply says: the change events it carries, and the typed result or the error that ends the
+// call. The events are published whatever the outcome (W1.2 sections 2 and 7).
+interface Reading<M extends MethodName> {
+  events: RpcEvent[];
+  outcome: { ok: true; value: Methods[M]['result'] } | { ok: false; error: RpcError };
+}
+
+function decodeSuccess<M extends MethodName>(
   method: M,
-  id: number,
-  result: CallResult,
+  reply: Record<string, unknown>,
+  buffers: ArrayBuffer[],
 ): Methods[M]['result'] {
+  const ctx = newDecodeContext(buffers);
+  const value = RESULT_DECODERS[method](field(reply, 'result', 'reply'), ctx, 'result');
+  for (let index = 0; index < buffers.length; index++) {
+    if (!ctx.used.has(index)) {
+      throw new ReplyShapeError(`buffers[${index}]`, 'buffer not referenced by the reply');
+    }
+  }
+  return value;
+}
+
+function decodeFailure(reply: Record<string, unknown>, buffers: ArrayBuffer[]): RpcError {
+  if (buffers.length > 0) throw new ReplyShapeError('buffers', 'an error reply has buffers');
+  const error = expectObject(field(reply, 'error', 'reply'), 'reply.error');
+  const code = expectOneOf(field(error, 'code', 'reply.error'), ERROR_CODES, 'reply.error.code');
+  const message = expectString(field(error, 'message', 'reply.error'), 'reply.error.message');
+  const details = expectObject(field(error, 'details', 'reply.error'), 'reply.error.details');
+  return new RpcError(code, message, details);
+}
+
+// Reads one reply. Throws RpcError for a reply that names a bad envelope and ReplyShapeError for
+// anything that does not match the generated types; both come with no events, because the events
+// are only trusted once the envelope is. Once the events have decoded, a bad result or error still
+// keeps them, and the call fails with INTERNAL.
+function interpret<M extends MethodName>(method: M, id: number, result: CallResult): Reading<M> {
   const buffers = result.buffer === undefined ? [] : [result.buffer];
   let parsed: unknown;
   try {
@@ -166,27 +196,34 @@ function interpret<M extends MethodName>(
   }
 
   const ok = expectBoolean(field(reply, 'ok', 'reply'), 'reply.ok');
-  if (!ok) {
-    checkKeys(reply, ['v', 'id', 'ok', 'error', 'events'], 'reply');
-    if (buffers.length > 0) throw new ReplyShapeError('buffers', 'an error reply has buffers');
-    expectArray(field(reply, 'events', 'reply'), 'reply.events');
-    const error = expectObject(field(reply, 'error', 'reply'), 'reply.error');
-    const code = expectOneOf(field(error, 'code', 'reply.error'), ERROR_CODES, 'reply.error.code');
-    const message = expectString(field(error, 'message', 'reply.error'), 'reply.error.message');
-    const details = expectObject(field(error, 'details', 'reply.error'), 'reply.error.details');
-    throw new RpcError(code, message, details);
+  checkKeys(
+    reply,
+    ok ? ['v', 'id', 'ok', 'result', 'events'] : ['v', 'id', 'ok', 'error', 'events'],
+    'reply',
+  );
+  // An invalid event fails the whole reply (a ReplyShapeError), so none of its events is published.
+  const events = decodeEvents(
+    field(reply, 'events', 'reply'),
+    newDecodeContext([]),
+    'reply.events',
+  );
+  try {
+    const outcome = ok
+      ? { ok: true as const, value: decodeSuccess(method, reply, buffers) }
+      : { ok: false as const, error: decodeFailure(reply, buffers) };
+    return { events, outcome };
+  } catch (error) {
+    return { events, outcome: { ok: false, error: toRpcError(method, error) } };
   }
+}
 
-  checkKeys(reply, ['v', 'id', 'ok', 'result', 'events'], 'reply');
-  expectArray(field(reply, 'events', 'reply'), 'reply.events');
-  const ctx = newDecodeContext(buffers);
-  const value = RESULT_DECODERS[method](field(reply, 'result', 'reply'), ctx, 'result');
-  for (let index = 0; index < buffers.length; index++) {
-    if (!ctx.used.has(index)) {
-      throw new ReplyShapeError(`buffers[${index}]`, 'buffer not referenced by the reply');
-    }
+// interpret, with a bad envelope or event list turned into the call's INTERNAL error (no events).
+function readReply<M extends MethodName>(method: M, id: number, result: CallResult): Reading<M> {
+  try {
+    return interpret(method, id, result);
+  } catch (error) {
+    return { events: [], outcome: { ok: false, error: toRpcError(method, error) } };
   }
-  return value;
 }
 
 // Every failure leaves the client as an RpcError. A reply that is not what the types say is an
@@ -199,10 +236,37 @@ function toRpcError(method: string, error: unknown): RpcError {
   return new RpcError('INTERNAL', `the engine did not answer ${method}: ${messageOf(error)}`);
 }
 
+// A listener of change events (W1.2 section 7): called with the events of one reply, in order.
+export type RpcEventListener = (events: readonly RpcEvent[]) => void;
+
 export class RpcClient {
   private nextId = 1;
+  private readonly listeners = new Set<RpcEventListener>();
 
   constructor(private readonly worker: WorkerClient) {}
+
+  // Adds a listener of change events. Returns the function that removes it. Events of a reply reach
+  // the listeners before that call's promise settles, on success and on failure, and also when the
+  // reply comes after the call timed out or was aborted.
+  subscribe(listener: RpcEventListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  // A listener that throws is logged and skipped: the call and the other listeners are unaffected.
+  private publish(events: readonly RpcEvent[]): void {
+    if (events.length === 0) return;
+    // A copy, so a listener that subscribes or unsubscribes while the events go out is safe.
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(events);
+      } catch (error) {
+        console.error(`an RPC event listener failed: ${messageOf(error)}`);
+      }
+    }
+  }
 
   // One call. Resolves with the typed result, or rejects with an RpcError.
   call<M extends MethodName>(
@@ -242,14 +306,17 @@ export class RpcClient {
       signal?.addEventListener('abort', onAbort, { once: true });
 
       this.worker.call(request, buffers).then(
-        (result) =>
+        (result) => {
+          // Read and published before settle: a reply that arrives after the timeout or abort
+          // still delivers its events, though its result is dropped.
+          const reading = readReply(method, id, result);
+          this.publish(reading.events);
+          const { outcome } = reading;
           settle(() => {
-            try {
-              resolve(interpret(method, id, result));
-            } catch (error) {
-              reject(toRpcError(method, error));
-            }
-          }),
+            if (outcome.ok) resolve(outcome.value);
+            else reject(outcome.error);
+          });
+        },
         (error: unknown) => settle(() => reject(workerFailure(method, error))),
       );
     });

@@ -482,4 +482,152 @@ describe('RpcClient', () => {
       });
     });
   });
+  describe('change events', () => {
+    const CHANGED = {
+      kind: 'changed',
+      handle: 'h',
+      changes: [{ kind: 'content', pages: [0] }],
+      revisions: { '0': 3 },
+    };
+    const STATE = { kind: 'state', handle: 'h', state: DOC_STATE };
+
+    // A reply with events, from the envelope the fake worker received.
+    function replyWith(envelope: Envelope, body: Record<string, unknown>): CallResult {
+      return { reply: JSON.stringify({ v: PROTOCOL_VERSION, id: envelope.id, ...body }) };
+    }
+
+    it('publishes the events of a success before the call resolves', async () => {
+      const order: string[] = [];
+      client.subscribe((events) => order.push(events.map((event) => event.kind).join(',')));
+      worker.respond = (envelope) =>
+        replyWith(envelope, { ok: true, result: HELLO, events: [CHANGED, STATE] });
+
+      await client.call('hello', {}).then(() => order.push('resolved'));
+
+      expect(order).toEqual(['changed,state', 'resolved']);
+    });
+
+    it('hands the events to subscribers with their kind and fields', async () => {
+      const seen: unknown[] = [];
+      client.subscribe((events) => seen.push(...events));
+      worker.respond = (envelope) =>
+        replyWith(envelope, { ok: true, result: HELLO, events: [CHANGED, STATE] });
+
+      await client.call('hello', {});
+
+      expect(seen).toEqual([CHANGED, STATE]);
+    });
+
+    it('publishes the events of a failure, then rejects with the failure code', async () => {
+      const order: string[] = [];
+      client.subscribe((events) => order.push(events.map((event) => event.kind).join(',')));
+      const blocked = { kind: 'blocked', handle: 'h', task: 'Sanitize Document' };
+      worker.respond = (envelope) =>
+        replyWith(envelope, {
+          ok: false,
+          error: { code: 'BUSY', message: 'busy', details: { task: 'Sanitize Document' } },
+          events: [blocked],
+        });
+
+      const outcome = await client.call('hello', {}).catch((error: unknown) => error);
+
+      expect(outcome).toMatchObject({ code: 'BUSY' });
+      expect(order).toEqual(['blocked']);
+    });
+
+    it('publishes nothing for a reply without events', async () => {
+      const listener = vi.fn();
+      client.subscribe(listener);
+      worker.respond = (envelope) => ok(envelope, HELLO);
+
+      await client.call('hello', {});
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('publishes nothing when an event is invalid, and the call is INTERNAL', async () => {
+      const listener = vi.fn();
+      client.subscribe(listener);
+      worker.respond = (envelope) =>
+        replyWith(envelope, {
+          ok: true,
+          result: HELLO,
+          events: [{ kind: 'dirty', handle: 'h' }],
+        });
+
+      await expect(client.call('hello', {})).rejects.toMatchObject({
+        code: 'INTERNAL',
+        message: expect.stringContaining('reply.events[0].kind'),
+      });
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('publishes the events of a reply whose result is invalid, and fails with INTERNAL', async () => {
+      const listener = vi.fn();
+      client.subscribe(listener);
+      worker.respond = (envelope) =>
+        replyWith(envelope, { ok: true, result: { protocol: 'x' }, events: [STATE] });
+
+      await expect(client.call('hello', {})).rejects.toMatchObject({ code: 'INTERNAL' });
+      expect(listener).toHaveBeenCalledWith([STATE]);
+    });
+
+    it('publishes the events of a reply that arrives after the timeout, and drops its result', async () => {
+      vi.useFakeTimers();
+      let deliver: (result: CallResult) => void = () => undefined;
+      worker.call = () => new Promise<CallResult>((resolve) => (deliver = resolve));
+      const seen: string[][] = [];
+      client.subscribe((events) => seen.push(events.map((event) => event.kind)));
+
+      const outcome = client.call('hello', {}, { timeoutMs: 50 }).catch((error: unknown) => error);
+      vi.advanceTimersByTime(50);
+      expect(await outcome).toBeInstanceOf(RpcTimeoutError);
+      expect(seen).toEqual([]);
+
+      deliver({
+        reply: JSON.stringify({
+          v: PROTOCOL_VERSION,
+          id: 1,
+          ok: true,
+          result: HELLO,
+          events: [STATE],
+        }),
+      });
+      for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+
+      expect(seen).toEqual([['state']]);
+    });
+
+    it('stops delivery after unsubscribe', async () => {
+      const listener = vi.fn();
+      const unsubscribe = client.subscribe(listener);
+      unsubscribe();
+      worker.respond = (envelope) =>
+        replyWith(envelope, { ok: true, result: HELLO, events: [STATE] });
+
+      await client.call('hello', {});
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('logs a throwing listener and still delivers to the others and resolves the call', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const other = vi.fn();
+        client.subscribe(() => {
+          throw new Error('listener bug');
+        });
+        client.subscribe(other);
+        worker.respond = (envelope) =>
+          replyWith(envelope, { ok: true, result: HELLO, events: [STATE] });
+
+        await expect(client.call('hello', {})).resolves.toEqual(HELLO);
+
+        expect(other).toHaveBeenCalledWith([STATE]);
+        expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('listener bug'));
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  });
 });

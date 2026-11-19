@@ -370,6 +370,13 @@ def render(
         types_.ts(params)
         types_.ts(result)
         signatures[method_name] = (params, result)
+    # The change events (W1.2 section 7) are not reachable from a call's result, so they are
+    # registered here; their interfaces and decoders are emitted like any other dataclass.
+    for kind in sorted(dto.EVENT_TYPES):
+        event_class = dto.EVENT_TYPES[kind]
+        if not dataclasses.is_dataclass(event_class):
+            raise TypeError(f"event {kind!r} must be a dataclass (W1.2 section 7)")
+        types_.ts(event_class)
     types_.drain()
 
     lines: list[str] = [
@@ -461,6 +468,29 @@ def render(
         _, result = signatures[method_name]
         lines.append(f"  {_quote(method_name)}: decode{result.__name__},")  # type: ignore[attr-defined]
     lines += ["};", ""]
+
+    kinds = sorted(dto.EVENT_TYPES)
+    event_names = {kind: dto.EVENT_TYPES[kind].__name__ for kind in kinds}
+    lines += [
+        "/** Every kind of change event (W1.2 section 7), sorted. */",
+        f"export const EVENT_KINDS = [{', '.join(_quote(k) for k in kinds)}] as const;",
+        "export type RpcEventKind = (typeof EVENT_KINDS)[number];",
+        "/** The fields of each event, by kind: its dataclass, without the `kind` key. */",
+        "export interface EventPayloads {",
+        *[f"  {_quote(k)}: {event_names[k]};" for k in kinds],
+        "}",
+        "/** A change event of a reply: its kind and the fields of its dataclass. */",
+        "export type RpcEvent = {",
+        "  [K in RpcEventKind]: { kind: K } & EventPayloads[K];",
+        "}[RpcEventKind];",
+        "/** The decoder of each event's fields; the caller strips and re-adds the `kind` key. */",
+        "export const EVENT_DECODERS: {",
+        "  readonly [K in RpcEventKind]: Decoder<EventPayloads[K]>;",
+        "} = {",
+        *[f"  {_quote(k)}: decode{event_names[k]}," for k in kinds],
+        "};",
+        "",
+    ]
 
     for name in sorted(types_.classes):
         lines += [*blocks[name][1], ""]

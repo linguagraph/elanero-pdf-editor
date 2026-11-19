@@ -108,19 +108,20 @@ def call_events(
     events: list[dict[str, Any]] = []
     changed = changed_of(session, recorder.changes)
     if changed is not None:
-        events.append(
-            {
-                "kind": "changed",
-                "handle": handle,
-                "changes": to_json(changed.changes, out),
-                "revisions": to_json(changed.revisions, out),
-            }
-        )
+        payload = dto.ChangedEvent(handle, changed.changes, changed.revisions)
+        events.append(event("changed", payload, out))
     if recorder.blocked_task is not None:
-        events.append({"kind": "blocked", "handle": handle, "task": recorder.blocked_task})
+        events.append(event("blocked", dto.BlockedEvent(handle, recorder.blocked_task), out))
     if isinstance(result, dto.MarkSavedResult) and result.saved:
-        events.append({"kind": "saved", "handle": handle})
+        events.append(event("saved", dto.SavedEvent(handle), out))
     after = state_of(session)
     if after != before:
-        events.append({"kind": "state", "handle": handle, "state": to_json(after, out)})
+        events.append(event("state", dto.StateEvent(handle, after), out))
     return events
+
+
+def event(kind: str, payload: object, out: list[bytes]) -> dict[str, Any]:
+    """One event on the wire: its ``kind`` (the key of ``dto.EVENT_TYPES``) and its fields."""
+    if dto.EVENT_TYPES[kind] is not type(payload):
+        raise TypeError(f"{kind} is carried by {dto.EVENT_TYPES[kind].__name__}")
+    return {"kind": kind, **to_json(payload, out)}  # type: ignore[dict-item]

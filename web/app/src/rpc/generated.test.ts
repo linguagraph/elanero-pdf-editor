@@ -3,8 +3,22 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { decodeSaveParams, RESULT_DECODERS, type MethodName, type Methods } from './generated';
-import { newDecodeContext, ReplyShapeError, takeBinary, type DecodeContext } from './shape';
+import {
+  decodeSaveParams,
+  EVENT_DECODERS,
+  EVENT_KINDS,
+  RESULT_DECODERS,
+  type MethodName,
+  type Methods,
+  type RpcEventKind,
+} from './generated';
+import {
+  newDecodeContext,
+  ReplyShapeError,
+  takeBinary,
+  type DecodeContext,
+  type Decoder,
+} from './shape';
 
 // The repository root. `npm test` runs from web/app, so it is two folders up from there.
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
@@ -216,6 +230,52 @@ describe('reply validators', () => {
     expect(() => takeBinary({ $bin: -1 }, ctxWith(buffer), 'x')).toThrow('bad index');
     expect(() => takeBinary({ $bin: 0, extra: 1 }, ctxWith(buffer), 'x')).toThrow(
       'expected a binary value',
+    );
+  });
+});
+
+describe('the change event decoders', () => {
+  const DOC_STATE = {
+    page_count: 2,
+    structure_version: 1,
+    dirty: true,
+    busy: '',
+    can_undo: true,
+    can_redo: false,
+    undo_label: 'Rotate Right',
+    redo_label: '',
+    require_full_save: false,
+  };
+  // One sample payload per kind (the event without its `kind` key), as the decoders read it.
+  const SAMPLES: { [K in RpcEventKind]: unknown } = {
+    blocked: { handle: 'h', task: 'Sanitize Document' },
+    changed: {
+      handle: 'h',
+      changes: [{ kind: 'content', pages: [0, 1] }],
+      revisions: { '0': 4, '1': 2 },
+    },
+    closed: { handle: 'h' },
+    saved: { handle: 'h' },
+    state: { handle: 'h', state: DOC_STATE },
+  };
+
+  it('has a decoder for every kind, and a sample for every kind', () => {
+    expect(Object.keys(EVENT_DECODERS).sort()).toEqual([...EVENT_KINDS].sort());
+    expect(Object.keys(SAMPLES).sort()).toEqual([...EVENT_KINDS].sort());
+  });
+
+  it('decodes a sample of each kind to the payload it came from', () => {
+    for (const kind of EVENT_KINDS) {
+      const decode = EVENT_DECODERS[kind] as Decoder<unknown>;
+      const ctx = newDecodeContext([]);
+      expect(decode(SAMPLES[kind], ctx, kind)).toEqual(SAMPLES[kind]);
+    }
+  });
+
+  it('rejects a payload with a field its kind does not have', () => {
+    const decode = EVENT_DECODERS.saved;
+    expect(() => decode({ handle: 'h', task: 'x' }, newDecodeContext([]), 'saved')).toThrow(
+      ReplyShapeError,
     );
   });
 });
