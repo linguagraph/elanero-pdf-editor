@@ -26,6 +26,16 @@ describe('fit width', () => {
     expect(fitWidthZoom(1_000_000, 100)).toBe(MIN_ZOOM);
   });
 
+  it('pins the fit to MAX_ZOOM when the fit would be above it, and to MIN_ZOOM below it', () => {
+    // A 1 pt wide page in a 1e9 px view fits at about 1e6: far above the limit.
+    expect(fitWidthZoom(1, 1e9)).toBe(MAX_ZOOM);
+    // A 1e6 pt page in a 10 px view fits at about 1e-5: far below the limit.
+    expect(fitWidthZoom(1e6, 10)).toBe(MIN_ZOOM);
+    // A fit inside the limits is kept as it is.
+    expect(fitWidthZoom(612, 1000)).toBeGreaterThan(MIN_ZOOM);
+    expect(fitWidthZoom(612, 1000)).toBeLessThan(MAX_ZOOM);
+  });
+
   it('gives the actual size when the viewport or the page has no size yet', () => {
     expect(fitWidthZoom(612, 0)).toBe(1);
     expect(fitWidthZoom(0, 1000)).toBe(1);

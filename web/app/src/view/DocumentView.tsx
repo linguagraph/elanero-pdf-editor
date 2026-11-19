@@ -202,7 +202,16 @@ export function DocumentView({
 
   // Reads the scroll position and the viewport size into state: on scroll, on resize (the window's,
   // and the element's own, which moves when the layout around it does) and once the pages are known.
-  const measure = () => setScroll(viewportOf(scrollRef.current));
+  // A width or height change under 1 px is ignored: a scrollbar appearing or a rounding step must not
+  // make the fitted zoom flip back and forth between two values.
+  const measure = () => {
+    const next = viewportOf(scrollRef.current);
+    setScroll((prev) => ({
+      top: next.top,
+      height: Math.abs(next.height - prev.height) >= 1 ? next.height : prev.height,
+      width: Math.abs(next.width - prev.width) >= 1 ? next.width : prev.width,
+    }));
+  };
   useEffect(() => {
     measure();
     window.addEventListener('resize', measure);
@@ -367,7 +376,11 @@ export function DocumentView({
         <button type="button" aria-pressed={fit === 'page'} onClick={() => setFit('page')}>
           {t('view.fitPage')}
         </button>
-        <button type="button" onClick={() => zoomTo(DEFAULT_ZOOM)}>
+        <button
+          type="button"
+          aria-pressed={fit === null && manualZoom === DEFAULT_ZOOM}
+          onClick={() => zoomTo(DEFAULT_ZOOM)}
+        >
           {t('view.actualSize')}
         </button>
         <div role="group" aria-label={t('view.layoutLabel')}>

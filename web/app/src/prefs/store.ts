@@ -138,6 +138,7 @@ export function writePreferences(prefs: Preferences): boolean {
   };
   setTheme(prefs.theme);
   const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));
-  window.dispatchEvent(new Event(PREFERENCES_CHANGED_EVENT));
+  // Only a write that was kept changes what the view reads, so only then is the change announced.
+  if (saved) window.dispatchEvent(new Event(PREFERENCES_CHANGED_EVENT));
   return saved;
 }

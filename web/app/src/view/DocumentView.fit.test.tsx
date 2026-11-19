@@ -211,4 +211,83 @@ describe('DocumentView fit modes (W5.1e)', () => {
     window.innerWidth = before;
     expect(zoomText()).toBe(`${Math.round(fitWidthZoom(LETTER.width, before / 2) * 100)}%`);
   });
+
+  it('presses Actual size only at 100 % with no fit mode', async () => {
+    savePreferences({ defaultZoom: 'fitWidth' });
+    const { rpc } = fakeRpc();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    expect(button('Actual size')?.getAttribute('aria-pressed')).toBe('false');
+    act(() => {
+      button('Actual size')?.click();
+    });
+    expect(button('Actual size')?.getAttribute('aria-pressed')).toBe('true');
+    expect(button('Fit width')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('ignores a width change under 1 px, so the fitted zoom does not flip', async () => {
+    savePreferences({ defaultZoom: 'fitWidth' });
+    const { rpc } = fakeRpc();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const scroller = host.querySelector<HTMLElement>('.doc-view-scroll');
+    if (scroller === null) throw new Error('no scroll area');
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 800 });
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    const at800 = `${Math.round(fitWidthZoom(LETTER.width, 800) * 100)}%`;
+    expect(zoomText()).toBe(at800);
+    // A 0.5 px change is rounding: the zoom stays.
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 799.5 });
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(zoomText()).toBe(at800);
+    // A 10 px change (a scrollbar) refits.
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 790 });
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(zoomText()).toBe(`${Math.round(fitWidthZoom(LETTER.width, 790) * 100)}%`);
+  });
+
+  it('leaves fit mode on Ctrl+wheel and steps from the fitted zoom', async () => {
+    savePreferences({ defaultZoom: 'fitWidth' });
+    const { rpc } = fakeRpc();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const fitted = fitWidthZoom(LETTER.width, viewWidth());
+    const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');
+    act(() => {
+      scroll?.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -100, ctrlKey: true, cancelable: true, bubbles: true }),
+      );
+    });
+    expect(zoomText()).toBe(`${Math.round(stepZoom(fitted, 1) * 100)}%`);
+    expect(button('Fit width')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('fits the width of two pages side by side in the two-page layout', async () => {
+    savePreferences({ defaultZoom: 'fitWidth' });
+    const { rpc } = fakeRpc();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    act(() => {
+      button('Two pages')?.click();
+    });
+    expect(zoomText()).toBe(`${Math.round(fitWidthZoom(LETTER.width, viewWidth(), 2) * 100)}%`);
+    // Two pages fill less zoom than one page would, since each page is half the width.
+    expect(fitWidthZoom(LETTER.width, viewWidth(), 2)).toBeLessThan(
+      fitWidthZoom(LETTER.width, viewWidth(), 1),
+    );
+  });
 });
