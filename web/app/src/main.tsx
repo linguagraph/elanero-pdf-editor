@@ -2,7 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { createEngineConnection } from './engine/engineConnection';
-import { engineBootOptions } from './engine/bootOptions';
+import { engineBootOptions, jobWorkerBootOptions } from './engine/bootOptions';
+import { startJobWorker } from './engine/start';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
 import { initTheme } from './theme/theme';
@@ -21,7 +22,7 @@ if (shouldRefuse(window)) {
   const engine = createEngineConnection({ boot: engineBootOptions() });
   createRoot(root).render(
     <StrictMode>
-      <App engine={engine} />
+      <App engine={engine} startPrintWorker={() => startJobWorker(jobWorkerBootOptions())} />
     </StrictMode>,
   );
   // Production only: the dev server's modules must not sit behind a service worker cache.

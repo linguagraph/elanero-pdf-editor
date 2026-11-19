@@ -6,6 +6,8 @@ import { type CommandState } from './commands/registry';
 import { t } from './i18n/t';
 import { EngineLoadingScreen } from './feedback/LoadingScreen';
 import type { EngineConnection } from './engine/engineConnection';
+import type { WorkerClient } from './engine/start';
+import { PrintDialog } from './print/PrintDialog';
 import { PasswordPrompt } from './documents/PasswordPrompt';
 import { ToastRegion } from './feedback/ToastRegion';
 import { NotRespondingHost } from './feedback/NotRespondingHost';
@@ -55,10 +57,13 @@ const NO_DOCUMENT_STATE: CommandState = {
 export interface AppProps {
   // The engine link (W3.1). App starts it once, after the first paint, and stops it on unmount.
   readonly engine: EngineConnection;
+  // Starts the job worker for a print (W6.5). Tests leave it out; printing then reports nothing.
+  readonly startPrintWorker?: () => WorkerClient;
 }
 
-export function App({ engine }: AppProps) {
+export function App({ engine, startPrintWorker }: AppProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const docs = useDocuments(engine);
   useEffect(() => {
@@ -76,6 +81,7 @@ export function App({ engine }: AppProps) {
   const state: CommandState = { ...NO_DOCUMENT_STATE, hasRecentFiles: docs.recent.length > 0 };
   const handlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
+    print: () => setPrintOpen(true),
     open: () => docs.openPicker(),
     'open-recent': () => docs.showStartPage(),
     'combine-files-into-pdf': () => setCombineOpen(true),
@@ -196,6 +202,14 @@ export function App({ engine }: AppProps) {
       }
     >
       <PreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
+      <PrintDialog
+        isOpen={printOpen}
+        onClose={() => setPrintOpen(false)}
+        session={session}
+        pageCount={activeTab?.pages ?? 0}
+        currentPage={viewState.page}
+        startWorker={startPrintWorker}
+      />
       <CombineDialog isOpen={combineOpen} onClose={() => setCombineOpen(false)} />
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
