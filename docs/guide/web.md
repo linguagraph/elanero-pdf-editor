@@ -140,6 +140,7 @@ full policy, with what the desktop app stores, is in the
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Other comments, redaction, stamps, watermarks, security, compare | Yes | Coming soon |
+| Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
 | Print | Yes | Coming soon |
 | Translation (opt-in) | Yes | Coming soon |
 | OCR and batch OCR | Yes | Desktop only (for now) |

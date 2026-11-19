@@ -7,7 +7,8 @@ import { t } from '../i18n/t';
 import type { MessageId } from '../i18n/en';
 import { Overlay } from '../layout/Overlay';
 import type { JobProgressStore } from '../feedback/jobRun';
-import { parseMegabytes, parsePagesPerFile, parseRanges, type InputError } from './ranges';
+import { downloadLinks, revokeLinks } from '../files/downloads';
+import { parseMegabytes, parsePagesPerFile, parseRanges, rangeErrorMessage } from './ranges';
 import {
   runSplit,
   SplitCancelled,
@@ -52,18 +53,6 @@ export function SplitDialog(props: SplitDialogProps) {
   );
 }
 
-// The message for a range the user typed wrong. The item is shown back as typed.
-function rangeMessage(error: InputError): string {
-  switch (error.kind) {
-    case 'empty':
-      return t('split.error.ranges.empty');
-    case 'invalid':
-      return t('split.error.ranges.invalid', { item: error.item });
-    case 'outOfRange':
-      return t('split.error.ranges.outOfRange', { item: error.item, count: error.count });
-  }
-}
-
 // Builds the job's choice from the form, or the message to show when a value is refused. Nothing
 // starts until this returns a choice.
 function choiceFrom(
@@ -81,7 +70,7 @@ function choiceFrom(
     }
     case 'ranges': {
       const parsed = parseRanges(values.ranges, pageCount);
-      if (!parsed.ok) return { ok: false, message: rangeMessage(parsed.error) };
+      if (!parsed.ok) return { ok: false, message: rangeErrorMessage(parsed.error) };
       return { ok: true, choice: { mode, parts: parsed.parts } };
     }
     case 'bookmarks':
@@ -92,11 +81,6 @@ function choiceFrom(
       return { ok: true, choice: { mode, maxBytes } };
     }
   }
-}
-
-// The file name a download gets: the last part of the path the job wrote.
-export function downloadName(file: SplitFile): string {
-  return file.name.split('/').pop() ?? file.name;
 }
 
 function SplitForm({
@@ -125,18 +109,9 @@ function SplitForm({
   }, []);
 
   // One object URL per result file, freed when the result changes or the form closes.
-  const links = useMemo(
-    () =>
-      (files ?? []).map((file) => ({
-        name: downloadName(file),
-        href: URL.createObjectURL(new Blob([file.data], { type: file.mime })),
-      })),
-    [files],
-  );
+  const links = useMemo(() => downloadLinks(files ?? []), [files]);
   useEffect(() => {
-    return () => {
-      for (const link of links) URL.revokeObjectURL(link.href);
-    };
+    return () => revokeLinks(links);
   }, [links]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {

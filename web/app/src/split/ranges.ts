@@ -1,11 +1,24 @@
-// Reads what the user typed in the split dialog (W6.2). Pure: no engine, no DOM. Pages are typed
-// 1-based, as the user reads them, and returned 0-based, as the split job takes them.
+// Reads what the user typed in the split and export dialogs (W6.2, W7.7). Pure: no engine, no DOM.
+// Pages are typed 1-based, as the user reads them, and returned 0-based, as the jobs take them.
+import { t } from '../i18n/t';
 
 // Why a typed value was refused. The dialog maps each kind to a message and the offending item.
 export type InputError =
   | { readonly kind: 'empty' }
   | { readonly kind: 'invalid'; readonly item: string }
   | { readonly kind: 'outOfRange'; readonly item: string; readonly count: number };
+
+// The message for a range the user typed wrong. The item is shown back as typed.
+export function rangeErrorMessage(error: InputError): string {
+  switch (error.kind) {
+    case 'empty':
+      return t('split.error.ranges.empty');
+    case 'invalid':
+      return t('split.error.ranges.invalid', { item: error.item });
+    case 'outOfRange':
+      return t('split.error.ranges.outOfRange', { item: error.item, count: error.count });
+  }
+}
 
 export type ParseResult =
   | { readonly ok: true; readonly parts: readonly (readonly number[])[] }
