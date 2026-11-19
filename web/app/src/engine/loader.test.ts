@@ -205,11 +205,12 @@ describe('loadEngine', () => {
       options({ importPyodide: async () => fakeModule(pyodide as unknown as PyodideLike) }),
     );
     const input = new Uint8Array([1, 2, 3]).buffer;
-    const result = handle.dispatch('{"method":"x"}', input);
+    const result = handle.dispatch('{"method":"x"}', [input]);
     expect(result.reply).toContain('"echo"');
     expect(result.buffer).toBeInstanceOf(ArrayBuffer);
     expect(new Uint8Array(result.buffer as ArrayBuffer)).toEqual(new Uint8Array([7, 8, 9]));
-    expect(pyodide.toPy).toHaveBeenCalledTimes(1);
+    // The hello call made one sizes list; this call makes the joined bytes and a sizes list.
+    expect(pyodide.toPy).toHaveBeenCalledTimes(3);
     expect(call).toHaveBeenCalledTimes(2); // hello during load, then this call
     const lastProxy = call.mock.results[1]?.value as { destroy: ReturnType<typeof vi.fn> };
     expect(lastProxy.destroy).toHaveBeenCalled();

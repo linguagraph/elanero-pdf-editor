@@ -19,18 +19,21 @@ interface Envelope {
 }
 
 // What the fake worker does with one request: a reply, a failure, or silence.
-type Responder = (envelope: Envelope, buffer?: ArrayBuffer) => CallResult | Error | 'silent';
+type Responder = (
+  envelope: Envelope,
+  buffers: readonly ArrayBuffer[],
+) => CallResult | Error | 'silent';
 
 // A WorkerClient stand-in. It records every request and answers with the test's responder.
 class FakeWorker implements WorkerClient {
-  readonly requests: { envelope: Envelope; buffer?: ArrayBuffer }[] = [];
+  readonly requests: { envelope: Envelope; buffers: readonly ArrayBuffer[] }[] = [];
   readonly terminate = vi.fn();
   respond: Responder = () => 'silent';
 
-  call(request: string, buffer?: ArrayBuffer): Promise<CallResult> {
+  call(request: string, buffers: readonly ArrayBuffer[] = []): Promise<CallResult> {
     const envelope = JSON.parse(request) as Envelope;
-    this.requests.push({ envelope, buffer });
-    const answer = this.respond(envelope, buffer);
+    this.requests.push({ envelope, buffers });
+    const answer = this.respond(envelope, buffers);
     if (answer === 'silent') return new Promise<CallResult>(() => undefined);
     if (answer instanceof Error) return Promise.reject(answer);
     return Promise.resolve(answer);
@@ -97,7 +100,7 @@ describe('RpcClient', () => {
       expect(hello).toEqual(HELLO);
       const [sent] = worker.requests;
       expect(sent?.envelope).toEqual({ v: PROTOCOL_VERSION, id: 1, method: 'hello', params: {} });
-      expect(sent?.buffer).toBeUndefined();
+      expect(sent?.buffers).toEqual([]);
     });
 
     it('numbers each request and matches each reply to its own id', async () => {
@@ -124,7 +127,7 @@ describe('RpcClient', () => {
       expect(opened.handle).toBe('h');
       const [sent] = worker.requests;
       expect(sent?.envelope.params).toEqual({ name: 'a.pdf', data: { $bin: 0 }, password: null });
-      expect(sent?.buffer).toBe(data);
+      expect(sent?.buffers).toEqual([data]);
     });
 
     it('returns a reply buffer as the ArrayBuffer its $bin marker names', async () => {
@@ -289,18 +292,27 @@ describe('RpcClient', () => {
   });
 
   describe('params', () => {
-    it('refuses a call that would send more than one binary value', async () => {
+    it('sends each binary value as its own buffer, in the order of its markers', async () => {
+      const first = new Uint8Array([1]).buffer;
+      const second = new Uint8Array([2, 2]).buffer;
+      worker.respond = (envelope) => ok(envelope, { ok: true });
       const extra = {
         name: 'a.pdf',
-        data: new ArrayBuffer(1),
+        data: first,
         password: null,
-        more: new ArrayBuffer(1),
+        more: second,
       };
 
-      await expect(
-        client.call('session.open', extra as unknown as OpenParams),
-      ).rejects.toMatchObject({ code: 'INVALID_ARGS' });
-      expect(worker.requests).toHaveLength(0);
+      await client.call('session.open', extra as unknown as OpenParams).catch(() => undefined);
+
+      const [sent] = worker.requests;
+      expect(sent?.envelope.params).toEqual({
+        name: 'a.pdf',
+        data: { $bin: 0 },
+        password: null,
+        more: { $bin: 1 },
+      });
+      expect(sent?.buffers).toEqual([first, second]);
     });
   });
 

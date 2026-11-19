@@ -15,13 +15,17 @@ export interface AbortClient {
 }
 
 export interface StartedJob {
-  // The document handle the job runs on, given back to jobs.abort.
-  readonly handle: string;
-  // The single-use job id from jobs.prepare.
+  // The document handle the job runs on, given back to jobs.abort. Absent for a job with no
+  // document (merge): it has no prepare, so there is no abort to call.
+  readonly handle?: string;
+  // The job id: single-use from jobs.prepare, or local for a job that has none (merge).
   readonly token: string;
   // The translated task label, from the prepare reply.
   readonly label: string;
-  readonly client: AbortClient;
+  // The abort client. Absent together with the handle.
+  readonly client?: AbortClient;
+  // What Cancel does for a job with no jobs.abort: W3.7 says cancel terminates the job worker.
+  readonly terminate?: () => void;
 }
 
 export type JobOutcome = { readonly ok: true } | { readonly ok: false; readonly error: unknown };
@@ -99,6 +103,12 @@ export function createJobProgressStore(options: JobProgressOptions = {}): JobPro
     async cancel() {
       const job = state.job;
       if (job === undefined) return;
+      if (job.terminate !== undefined) {
+        job.terminate();
+        if (state.job?.token === job.token) update({ job: undefined });
+        return;
+      }
+      if (job.client === undefined || job.handle === undefined) return;
       try {
         await job.client.call('jobs.abort', { handle: job.handle, token: job.token });
       } catch (error) {
