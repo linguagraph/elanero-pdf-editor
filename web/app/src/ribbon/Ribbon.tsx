@@ -26,8 +26,7 @@ import {
   type TabId,
 } from '../commands/registry';
 import { t } from '../i18n/t';
-import { useViewportWidth } from '../layout/useViewportWidth';
-import { BREAKPOINTS_PX } from '../theme/tokens';
+import { useLayoutRegions } from '../layout/LayoutContext';
 import './ribbon.css';
 
 export interface RibbonProps {
@@ -40,7 +39,7 @@ export interface RibbonProps {
 // tablet breakpoint, and the collapsed form below it (a phone, W4.2a), where the groups open from
 // the tabs.
 export function Ribbon(props: RibbonProps) {
-  const collapsed = useViewportWidth() < BREAKPOINTS_PX.tablet;
+  const collapsed = useLayoutRegions().tier === 'phone';
   return collapsed ? <CollapsedRibbon {...props} /> : <FullRibbon {...props} />;
 }
 

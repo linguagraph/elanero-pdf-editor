@@ -7,7 +7,7 @@ import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import type { OutlineEntry } from '../rpc/generated';
-import { expandedOf, setExpandedOf } from './openState';
+import { expandedOf, setExpandedOf } from './expansion';
 import { initialExpanded, treeAction, visibleRows } from './tree';
 import './bookmarks.css';
 
