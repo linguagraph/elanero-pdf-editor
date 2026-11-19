@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
 import { type CommandHandlers, runCommand } from './commands/run';
@@ -29,6 +29,7 @@ import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
+import { createJobWorkerPool, type JobWorkerPool } from './engine/jobPool';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
@@ -75,9 +76,26 @@ export interface AppProps {
   readonly engine: EngineConnection;
   // Starts the job worker for a print (W6.5). Tests leave it out; printing then reports nothing.
   readonly startPrintWorker?: () => WorkerClient;
+  // The job worker pool (W3.1 slice 2). Tests leave it out and get a pool of their own.
+  readonly jobs?: JobWorkerPool;
 }
 
-export function App({ engine, startPrintWorker }: AppProps) {
+export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
+  const ownPool = useMemo(
+    () => createJobWorkerPool({ start: () => startJobWorker(jobWorkerBootOptions()) }),
+    [],
+  );
+  const jobs = jobsProp ?? ownPool;
+  // StrictMode runs this cleanup once at mount, so the warm-up flag resets with the pool: the next
+  // page draw warms the pool again (jobs.warm re-arms a disposed pool).
+  const warmed = useRef(false);
+  useEffect(
+    () => () => {
+      warmed.current = false;
+      jobs.dispose();
+    },
+    [jobs],
+  );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -89,8 +107,6 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
-  // One stable job worker factory for the document's jobs, so a redaction keeps its marks.
-  const startJob = useCallback(() => startJobWorker(jobWorkerBootOptions()), []);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
   useEffect(() => {
@@ -131,6 +147,19 @@ export function App({ engine, startPrintWorker }: AppProps) {
     () => (session === null ? null : new RenderScheduler(session.rpc, session.handle)),
     [session],
   );
+  // The job worker is warmed once per page load, after the first page of the first document is
+  // drawn (W1.1). Later documents do nothing; the dispose cleanup above clears the flag.
+  useEffect(() => {
+    let stale = false;
+    void scheduler?.firstPage.then(() => {
+      if (stale || warmed.current) return;
+      warmed.current = true;
+      jobs.warm();
+    });
+    return () => {
+      stale = true;
+    };
+  }, [scheduler, jobs]);
   const viewRef = useRef<DocumentViewHandle>(null);
   const thumbnailsOpen = useThumbnailsOpen(activeId);
   const organizerOpen = useOrganizerOpen(activeId);
@@ -241,7 +270,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
             rpc={session.rpc}
             handle={session.handle}
             documentName={activeTab?.name ?? ''}
-            startWorker={() => startJobWorker(jobWorkerBootOptions())}
+            startWorker={jobs.acquire}
             onChanged={(pageCount) => {
               // The search marks name pages by index, which a change may have moved.
               setSearchMarks(null);
@@ -282,7 +311,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           engine={rpc}
           handle={session.handle}
           pageCount={activeTab.pages}
-          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+          startWorker={jobs.acquire}
         />
       ) : null}
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
@@ -293,7 +322,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           handle={session.handle}
           pageCount={activeTab.pages}
           currentPage={viewState.page}
-          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+          startWorker={jobs.acquire}
         />
       ) : null}
       {documentShown && session !== null && rpc !== undefined ? (
@@ -302,7 +331,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           onClose={() => setCompressOpen(false)}
           engine={rpc}
           handle={session.handle}
-          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+          startWorker={jobs.acquire}
         />
       ) : null}
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
@@ -312,7 +341,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           engine={rpc}
           handle={session.handle}
           currentName={activeTab.name}
-          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+          startWorker={jobs.acquire}
           onGoToPage={goTo}
         />
       ) : null}
@@ -322,7 +351,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           onClose={() => setSanitizeOpen(false)}
           engine={session.rpc}
           handle={session.handle}
-          startWorker={startJob}
+          startWorker={jobs.acquire}
           onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}
@@ -332,7 +361,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           onClose={() => setFlattenOpen(false)}
           engine={session.rpc}
           handle={session.handle}
-          startWorker={startJob}
+          startWorker={jobs.acquire}
           onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}
@@ -343,7 +372,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
           engine={session.rpc}
           handle={session.handle}
           name={activeTab.name}
-          startWorker={startJob}
+          startWorker={jobs.acquire}
         />
       ) : null}
       {documentShown && session !== null ? (
@@ -363,7 +392,11 @@ export function App({ engine, startPrintWorker }: AppProps) {
         currentPage={viewState.page}
         startWorker={startPrintWorker}
       />
-      <CombineDialog isOpen={combineOpen} onClose={() => setCombineOpen(false)} />
+      <CombineDialog
+        isOpen={combineOpen}
+        onClose={() => setCombineOpen(false)}
+        startWorker={jobs.acquire}
+      />
       {documentShown && session !== null ? (
         <PropertiesDialog
           isOpen={propertiesOpen}
@@ -402,7 +435,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
             handle={session.handle}
             scheduler={scheduler}
             onViewChange={setViewState}
-            startWorker={startJob}
+            startWorker={jobs.acquire}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }

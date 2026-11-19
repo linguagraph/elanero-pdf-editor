@@ -3,7 +3,7 @@
 // and the harness page (e2e/harness). Each test boots its own engine in a fresh page.
 import { expect, test, type Page, type Worker } from '@playwright/test';
 import { CSP_POLICY } from '../src/csp';
-import type { BootReport } from './harness/harness';
+import type { BootReport, PoolCancelReport, PoolReuseReport } from './harness/harness';
 
 const WHEEL = /\/pymupdf-[^/]+\.whl$/;
 const STAGES = ['pyodide', 'packages', 'engine', 'ready'];
@@ -81,6 +81,78 @@ test('the job worker loads, answers hello, and has the network globals removed',
     importScripts: 'undefined',
   });
   await page.evaluate(() => window.__harness.stopJob());
+});
+
+// A one-page PDF, written out with its cross-reference table, so the engine opens it as one page.
+function onePagePdf(): string {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
+  ];
+  let text = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((body, index) => {
+    offsets.push(text.length);
+    text += `${index + 1} 0 obj ${body} endobj\n`;
+  });
+  const xref = text.length;
+  text += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) text += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  text += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(text, 'latin1').toString('base64');
+}
+
+test('the job pool reuses one job worker for two jobs, and the reused worker stays locked down', async ({
+  page,
+}) => {
+  const workers: Worker[] = [];
+  page.on('worker', (worker) => workers.push(worker));
+  const violations = await openHarness(page);
+  const report: PoolReuseReport = await page.evaluate(
+    (data) => window.__harness.poolReuse(data, 'one.pdf'),
+    onePagePdf(),
+  );
+
+  expect(report.error, 'pool job error').toBeUndefined();
+  expect(report.files).toEqual([1, 1]);
+  // The engine worker keeps fetch; a job worker has it removed. Only job workers are counted.
+  const jobWorkers: Worker[] = [];
+  for (const worker of workers.filter((item) => item.url().startsWith('blob:'))) {
+    if ((await worker.evaluate(() => typeof fetch)) === 'undefined') jobWorkers.push(worker);
+  }
+  expect(jobWorkers, 'job workers started for two jobs').toHaveLength(1);
+  const globals = await jobWorkers[0]!.evaluate(() => ({
+    fetch: typeof (globalThis as Record<string, unknown>).fetch,
+    XMLHttpRequest: typeof (globalThis as Record<string, unknown>).XMLHttpRequest,
+    WebSocket: typeof (globalThis as Record<string, unknown>).WebSocket,
+    importScripts: typeof (globalThis as Record<string, unknown>).importScripts,
+  }));
+  expect(globals, 'reused job worker globals').toEqual({
+    fetch: 'undefined',
+    XMLHttpRequest: 'undefined',
+    WebSocket: 'undefined',
+    importScripts: 'undefined',
+  });
+  await page.evaluate(() => window.__harness.poolStop());
+  expect(violations, 'CSP or page errors').toEqual([]);
+});
+
+test('cancelling a job discards its worker, and a new one starts in the background', async ({
+  page,
+}) => {
+  const workers: Worker[] = [];
+  page.on('worker', (worker) => workers.push(worker));
+  const violations = await openHarness(page);
+  const report: PoolCancelReport = await page.evaluate(() => window.__harness.poolCancel());
+
+  expect(report.error, 'pool cancel error').toBeUndefined();
+  expect(report.hello).toEqual({ protocol: 1, engine: expect.any(String), platform: 'web' });
+  // One worker for the cancelled job and one for the re-warm after it. The event for the second
+  // worker can arrive a moment after the reply, so the count is polled.
+  await expect.poll(() => workers.filter((item) => item.url().startsWith('blob:')).length).toBe(2);
+  await page.evaluate(() => window.__harness.poolStop());
+  expect(violations, 'CSP or page errors').toEqual([]);
 });
 
 test('a blocked wheel fails the load at the packages stage, without hanging', async ({ page }) => {
