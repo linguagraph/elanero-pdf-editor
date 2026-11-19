@@ -62,6 +62,13 @@ is reloaded until you press it.
   the desktop's keys wherever the browser allows, and will list them in
   [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming soon).
 
+## Side panels
+
+- **Thumbnails.** The **Thumbnails** button on the right rail opens a panel with a small preview of
+  every page. Click a preview to go to that page. The panel opens and closes for each open
+  document separately, and it is not remembered after a reload. Bookmarks, attachments and layers
+  are not available yet.
+
 ## What is not available yet
 
 These features are on the desktop today and are planned for the web version. None works in the web

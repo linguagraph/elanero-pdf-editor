@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CSS_PX_PER_POINT } from './zoom';
 import {
   computeColumn,
   computeSpreads,
@@ -7,6 +8,7 @@ import {
   isInViewport,
   PAGE_GAP_PT,
   type PageBox,
+  scrollTopForSpread,
   visibleRange,
 } from './layout';
 
@@ -144,5 +146,24 @@ describe('currentPageIndex in two-page spreads', () => {
 
   it('reports the first spread at the top of the document', () => {
     expect(currentPageIndex(boxes, 0, 100)).toBe(0);
+  });
+});
+
+describe('scrollTopForSpread', () => {
+  it('scrolls to the top of the row holding the page, not the page itself', () => {
+    // Page 1 is shorter than page 0: it is centred in the row, so its own top is lower.
+    const sizes = [
+      { width: 100, height: 200 },
+      { width: 100, height: 100 },
+      { width: 100, height: 200 },
+      { width: 100, height: 200 },
+    ];
+    const { boxes } = computeSpreads(sizes, 1, false);
+    const rowTop = boxes[0]?.top ?? 0;
+    expect(boxes[1]?.top).toBeGreaterThan(rowTop);
+    expect(scrollTopForSpread(boxes, 1, 1, false)).toBe(
+      Math.max(0, rowTop - PAGE_GAP_PT * CSS_PX_PER_POINT),
+    );
+    expect(scrollTopForSpread(boxes, 9, 1, false)).toBeNull();
   });
 });

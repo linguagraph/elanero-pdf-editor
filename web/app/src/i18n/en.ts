@@ -298,6 +298,13 @@ export const EN = {
   'view.coverAlone': 'Page 1 alone',
   'view.night': 'Night reading',
 
+  // Thumbnails side panel (W5.2). The rail button shows the panel's name.
+  'thumbnails.title': 'Thumbnails',
+  'thumbnails.list': 'Page thumbnails',
+  'thumbnails.goTo': 'Go to page {page} of {total}',
+  'thumbnails.loading': 'Loading thumbnails…',
+  'thumbnails.loadFailed': 'The thumbnails could not be read. Try opening the file again.',
+
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',
   'update.reload': 'Reload',
