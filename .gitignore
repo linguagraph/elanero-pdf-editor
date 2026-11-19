@@ -43,3 +43,6 @@ web/test/pyodide/out/
 
 # The W4.1 front-end app (web/app): installed packages (dist/ is already ignored above)
 web/app/node_modules/
+
+# The web app root has no package.json: a stray `npm install` there writes an empty lock (W9.5b)
+/web/package-lock.json
