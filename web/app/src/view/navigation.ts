@@ -1,7 +1,7 @@
 // Page labels, page jump and the navigation history (W5.3, W1.4 sections 1 and 9). Pure functions
 // over zero-based page indexes, so the status bar, the thumbnails and the keyboard all use one rule.
-// Labels are the document's own page labels (a page with no label shows its number); the labels
-// come from session.pages once the engine returns them, and until then the caller passes none.
+// Labels are the document's own page labels (a page with no label shows its number). The engine
+// returns them with session.pages, and the document view passes them on; until then, none.
 
 // The most positions the history keeps per tab. The oldest are dropped first.
 export const MAX_HISTORY = 100;

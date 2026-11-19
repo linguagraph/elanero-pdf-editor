@@ -92,8 +92,9 @@ is reloaded until you press it.
   jumped from, or went to from a thumbnail, and go forward again. A small move of one page is not
   recorded, and a new jump after going back clears the forward pages. The history is kept for each
   open document until you reload the page.
-- **Page labels and links.** A document's own page labels (such as i, ii, 1) are not shown yet, and
-  links in the document do not work yet (coming soon).
+- **Page labels and links.** The status bar shows the document's own page labels (such as i, ii, 1),
+  and you can type a label into the page field to go to that page. Links in the document do not
+  work yet (coming soon).
 
 ## What is not available yet
 

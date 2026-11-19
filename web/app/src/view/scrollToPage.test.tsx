@@ -19,6 +19,7 @@ function fakeRpc(pageCount: number): PageRpc {
             height: 792,
             rotation: 0,
           })),
+          labels: [],
         });
       }
       return new Promise(() => {});
