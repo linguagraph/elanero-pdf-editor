@@ -143,6 +143,38 @@ def unlock_owner(params: dto.UnlockParams) -> dto.UnlockResult:
     return dto.UnlockResult(unlocked=unlocked)
 
 
+def document_security(params: dto.HandleParams) -> dto.SecurityResult:
+    """The security state (W7.5). Copies the method and the flags only: a password never
+    leaves the engine through this call."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        doc = session.document
+        info = doc.info()
+        owner_access = doc.has_owner_access()
+        pending_settings = doc.pending_security()
+    pending: dto.PendingSecurity | None = None
+    pending_method: EncryptionMethod | None = None
+    # A removal queued on a plain document changes nothing (security.remove refuses it as "no
+    # security"), so the web reports no pending change for it.
+    plain = info.encryption is EncryptionMethod.NONE
+    if pending_settings is not None and not (
+        plain and pending_settings.method is EncryptionMethod.NONE
+    ):
+        pending_method = pending_settings.method
+        if pending_method is EncryptionMethod.NONE:
+            pending = dto.PendingSecurity.REMOVE
+        else:
+            pending = dto.PendingSecurity.ENCRYPT
+    return dto.SecurityResult(
+        encryption=info.encryption,
+        permissions=dataclasses.replace(info.permissions),
+        owner_access=owner_access,
+        pending=pending,
+        pending_method=pending_method,
+        has_signatures=info.has_signatures,
+    )
+
+
 def _info(session: DocumentSession) -> dto.DocInfo:
     with session.lock:
         info = session.document.info()

@@ -173,10 +173,10 @@ def _duplicate_shares_images_pikepdf(data: bytes, size_before: int) -> None:
 
 
 @host_check("render_first_page_pdfium")
-def _render_first_page_pdfium(data: bytes) -> None:
+def _render_first_page_pdfium(data: bytes, password: str = "") -> None:
     import pypdfium2 as pdfium
 
-    pd = pdfium.PdfDocument(data)
+    pd = pdfium.PdfDocument(data, password=password or None)
     try:
         assert pd[0].render(scale=0.5).to_pil().size[0] > 0
     finally:
@@ -899,6 +899,20 @@ def _render_size_pdfium(data: bytes, page: int, scale: float) -> None:
         assert rendered.width > 0 and rendered.height > 0
     finally:
         pd.close()
+
+
+@host_check("permissions_pikepdf")
+def _permissions_pikepdf(data: bytes, password: str, allowed: dict[str, bool]) -> None:
+    """Opened with ``password``, each named flag of ``pdf.allow`` has the expected value.
+
+    The keys are pikepdf's own names (``extract``, ``print_lowres``, ...), so the check reads the
+    permissions as an independent implementation does.
+    """
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
+        for name, value in allowed.items():
+            assert getattr(pdf.allow, name) is value, name
 
 
 @host_check("not_encrypted_pikepdf")

@@ -25,14 +25,26 @@ export function asRpcError(error: unknown): RpcError {
   return new RpcError('INTERNAL', `the file could not be opened: ${message}`);
 }
 
-// The bytes are read for each attempt. Sending a buffer transfers it to the worker, which leaves
-// the main thread's copy detached, so a second attempt needs a fresh read.
+// The file's size refusal, or null when the file may be opened. The queue checks it when the file is
+// picked, so a too-large file is refused at once and never waits for the engine.
+export function sizeRefusal(file: File): RpcError | null {
+  if (file.size <= MAX_FILE_BYTES) return null;
+  return new RpcError('FILE_TOO_LARGE', 'the file is too large for the browser', {
+    max_bytes: MAX_FILE_BYTES,
+    size: file.size,
+  });
+}
+
+// The bytes are read for each attempt unless the caller already read them (the first attempt of a
+// queued file, W3.1). Sending a buffer transfers it to the worker, which leaves the main thread's
+// copy detached, so a second attempt needs a fresh read.
 async function send(
   client: EngineClient,
   file: File,
   password: string | null,
+  bytes?: ArrayBuffer,
 ): Promise<OpenResult> {
-  const data = await file.arrayBuffer();
+  const data = bytes ?? (await file.arrayBuffer());
   return client.call('session.open', { name: file.name, data, password });
 }
 
@@ -42,22 +54,19 @@ function isPasswordRequired(error: unknown): boolean {
 
 // Opens the file. A PASSWORD_REQUIRED reply asks for the password once (askPassword resolves null
 // when the user cancels) and calls again with it. The password is used for that call only: the
-// engine keeps it for the open document, and nothing here stores it.
+// engine keeps it for the open document, and nothing here stores it. firstBytes, when given, are the
+// file's bytes read earlier; only the first attempt uses them.
 export async function openFile(
   client: EngineClient,
   file: File,
   askPassword: PasswordAsker,
+  firstBytes?: ArrayBuffer,
 ): Promise<OpenOutcome> {
-  if (file.size > MAX_FILE_BYTES) {
-    const error = new RpcError('FILE_TOO_LARGE', 'the file is too large for the browser', {
-      max_bytes: MAX_FILE_BYTES,
-      size: file.size,
-    });
-    return { status: 'failed', error };
-  }
+  const refusal = sizeRefusal(file);
+  if (refusal !== null) return { status: 'failed', error: refusal };
 
   try {
-    return { status: 'opened', result: await send(client, file, null) };
+    return { status: 'opened', result: await send(client, file, null, firstBytes) };
   } catch (error) {
     if (!isPasswordRequired(error)) return { status: 'failed', error: asRpcError(error) };
   }

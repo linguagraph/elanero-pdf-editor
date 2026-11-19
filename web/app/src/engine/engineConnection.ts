@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from 'react';
 import { engineLoad, type EngineLoadStore } from '../feedback/engineLoad';
 import { type CallOptions, createRpcClient, type RpcClient } from '../rpc/client';
-import { EngineLoadError } from './errors';
+import { CallError, EngineLoadError } from './errors';
 import type { FailedStage, Stage } from './protocol';
 import { startEngine, type StartOptions, type WorkerClient } from './start';
 import type { Methods } from '../rpc/generated';
@@ -23,6 +23,9 @@ export interface EngineConnection {
   readonly store: EngineLoadStore;
   // The RPC client, once the engine is ready. Undefined before that and after a failure.
   client(): EngineClient | undefined;
+  // Resolves with the RPC client once the engine is ready. A failed load does not reject it: the
+  // wait goes on through a Try again. Rejects only on dispose(). The open queue uses it (W3.1).
+  whenReady(): Promise<EngineClient>;
   // Starts the engine, or starts it again. Any worker already running is terminated first.
   start(): void;
   // Stops the worker. Called when the app unmounts.
@@ -57,6 +60,9 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
   let generation = 0;
   let worker: WorkerClient | undefined;
   let rpc: EngineClient | undefined;
+  // Callers waiting in whenReady(). They survive a failed load and a restart; only dispose()
+  // rejects them.
+  let waiters: { resolve(client: EngineClient): void; reject(error: Error): void }[] = [];
 
   const stop = (): void => {
     generation += 1;
@@ -94,7 +100,11 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
     const client = createRpcClient(next);
     client.call('hello', {}, { timeoutMs: LOAD_TIMEOUT_MS }).then(
       () => {
-        if (isCurrent()) rpc = client;
+        if (!isCurrent()) return;
+        rpc = client;
+        const ready = waiters;
+        waiters = [];
+        for (const waiter of ready) waiter.resolve(client);
       },
       (error: unknown) => {
         if (!isCurrent()) return;
@@ -106,10 +116,21 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
   return {
     store,
     client: () => rpc,
+    whenReady() {
+      if (rpc !== undefined) return Promise.resolve(rpc);
+      return new Promise<EngineClient>((resolve, reject) => {
+        waiters.push({ resolve, reject });
+      });
+    },
     start,
     dispose() {
       stop();
       store.setStarter(undefined);
+      const pending = waiters;
+      waiters = [];
+      for (const waiter of pending) {
+        waiter.reject(new CallError('the engine connection was disposed'));
+      }
     },
   };
 }
@@ -127,6 +148,8 @@ export interface PageRpc {
       | 'session.pages'
       | 'session.info'
       | 'session.outline'
+      | 'session.security'
+      | 'session.unlock_owner'
       | 'render.page'
       | 'render.tile'
       | 'text.layer'

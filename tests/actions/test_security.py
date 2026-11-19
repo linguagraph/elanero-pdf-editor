@@ -282,3 +282,76 @@ def test_pending_security_survives_a_snapshot_action_undo_and_redo(
     out = s.save(tmp_path / "locked.pdf")
     record("encrypted_pages_pikepdf", out, pages=pages, password="open me")
     record("page_count_pdfium", out, pages=pages, password="open me")
+
+
+# -- W7.5 S2: refusal reasons and settings validation --------------------------------------
+
+
+def test_refusals_carry_a_stable_reason_and_keep_their_english_message(
+    open_encrypted: OpenEncrypted, open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    owner = open_encrypted("user")
+    with pytest.raises(Refused) as needed:
+        run(owner, "security.set", SetSecurity(SecuritySettings(EncryptionMethod.AES_256, "", "")))
+    assert needed.value.reason == "owner_password_needed"
+    assert str(needed.value) == OWNER_MESSAGE + " to change this document's security."
+
+    plain = open_copy("report")
+    with pytest.raises(Refused, match=r"This document has no security\.") as none:
+        run(plain, "security.remove", RemoveSecurity())
+    assert none.value.reason == "no_security"
+
+    pretend_signed(plain, monkeypatch)
+    with pytest.raises(Refused, match=SIGNED_MESSAGE) as signed:
+        run(plain, "security.remove", RemoveSecurity())
+    assert signed.value.reason == "signed_document"
+
+
+@pytest.mark.parametrize(
+    ("method", "user", "owner", "message"),
+    [
+        (EncryptionMethod.RC4_128, "open", "boss", r"Only AES-256 and AES-128"),
+        (EncryptionMethod.UNKNOWN, "open", "boss", r"Only AES-256 and AES-128"),
+        (EncryptionMethod.AES_256, "", "", r"Enter a password to open"),
+        (EncryptionMethod.AES_256, "same", "same", r"must differ from the open password"),
+        (EncryptionMethod.AES_256, "ä" * 64, "boss", r"at most 127 bytes"),
+        (EncryptionMethod.AES_256, "open", "ä" * 64, r"at most 127 bytes"),
+        (EncryptionMethod.AES_128, "密码", "boss", r"ASCII letters only"),
+        (EncryptionMethod.AES_128, "pässwörd", "boss", r"ASCII letters only"),
+        (EncryptionMethod.AES_128, "a" * 33, "boss", r"at most 32 characters"),
+    ],
+)
+def test_each_settings_rule_is_refused_with_invalid_settings(
+    open_copy: Opener, method: EncryptionMethod, user: str, owner: str, message: str
+) -> None:
+    s = open_copy("report")
+    settings = SecuritySettings(method, user, owner, RESTRICTED)
+    with pytest.raises(Refused, match=message) as info:
+        run(s, "security.set", SetSecurity(settings))
+    assert info.value.reason == "invalid_settings"
+    assert _pending(s) is None and not s.undo_stack.can_undo
+    for secret in (user, owner):
+        assert not secret or secret not in str(info.value)
+
+
+def test_an_open_password_alone_may_repeat_as_the_owner_password(open_copy: Opener) -> None:
+    s = open_copy("report")
+    run(s, "security.set", SetSecurity(SecuritySettings(EncryptionMethod.AES_256, "same", "same")))
+    assert _pending(s) is not None
+
+
+@pytest.mark.parametrize(
+    ("method", "user", "owner"),
+    [
+        (EncryptionMethod.AES_256, "ä" * 63 + "b", "boss"),  # 127 bytes: the limit
+        (EncryptionMethod.AES_128, "a" * 32, "boss"),  # 32 characters: the limit
+        (EncryptionMethod.AES_256, "open", ""),  # open password only, no owner
+        (EncryptionMethod.NONE, "", ""),  # removal is always allowed
+    ],
+)
+def test_settings_at_the_limits_and_removal_are_accepted(
+    open_copy: Opener, method: EncryptionMethod, user: str, owner: str
+) -> None:
+    s = open_copy("report")
+    run(s, "security.set", SetSecurity(SecuritySettings(method, user, owner, RESTRICTED)))
+    assert _pending(s) is not None

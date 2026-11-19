@@ -377,15 +377,18 @@ export function App({ engine, startPrintWorker }: AppProps) {
       <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
       <div className="app-main">
         <UpdatePrompt />
-        <EngineLoadingScreen store={engine.store} />
         <PasswordPrompt />
         <ToastRegion />
         <NotRespondingHost />
         <JobProgressHost />
         {showStart ? (
+          // The load stages sit in the start page, which stays usable while the engine loads (W3.1).
           <StartPage
             recent={docs.recent}
             pickHint={docs.pickHint}
+            loading={<EngineLoadingScreen store={engine.store} />}
+            pending={docs.pending}
+            onCancelPending={docs.cancelPending}
             onOpen={() => docs.openPicker()}
             onRecent={(name) => docs.openPicker(name)}
             onFiles={docs.openFiles}
