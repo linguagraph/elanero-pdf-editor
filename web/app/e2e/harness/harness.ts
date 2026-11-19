@@ -3,7 +3,9 @@
 import { EngineLoadError } from '../../src/engine/errors';
 import { startEngine, startJobWorker, type WorkerClient } from '../../src/engine/start';
 import type { Stage } from '../../src/engine/protocol';
+import { createJobProgressStore } from '../../src/feedback/jobRun';
 import { RpcClient } from '../../src/rpc/client';
+import { runSplit } from '../../src/split/splitJob';
 
 const ASSET_BASE = new URL('/engine-assets/', location.href).href;
 const HELLO = JSON.stringify({ v: 1, id: 99, method: 'hello', params: {} });
@@ -92,6 +94,58 @@ async function rawHello(assetBaseUrl: string): Promise<BootReport> {
   }
 }
 
+// One split through the app's own job flow (splitJob.ts, fileJob.ts): the engine opens the PDF,
+// jobs.prepare takes the copy, job.run runs in the job worker, and jobs.apply ends the job. The
+// report says what the browser got back; the bytes stay in the page.
+export interface SplitReport {
+  files?: { name: string; mime: string; size: number; header: string }[];
+  // The bar's percent values in order, from the job's progress notices.
+  percents: number[];
+  error?: { name: string; message: string; code?: string };
+}
+
+async function runSplitJob(pdfBase64: string, name: string): Promise<SplitReport> {
+  const pdf = Uint8Array.from(atob(pdfBase64), (char) => char.charCodeAt(0)).buffer;
+  const engineWorker = startEngine({
+    workerUrl: '/src/engine/engine.worker.ts',
+    assetBaseUrl: ASSET_BASE,
+  });
+  const engine = new RpcClient(engineWorker);
+  const progress = createJobProgressStore();
+  const percents: number[] = [];
+  progress.subscribe(() => {
+    const percent = progress.getState().job?.percent;
+    if (percent !== undefined && percents.at(-1) !== percent) percents.push(percent);
+  });
+  try {
+    const opened = await engine.call('session.open', { name, data: pdf, password: null });
+    const files = await runSplit(
+      {
+        engine,
+        progress,
+        startWorker: () =>
+          startJobWorker({ workerUrl: '/src/engine/jobworker.ts', assetBaseUrl: ASSET_BASE }),
+      },
+      opened.handle,
+      { mode: 'pages', pagesPerFile: 1 },
+    );
+    const decoder = new TextDecoder('latin1');
+    return {
+      files: files.map((file) => ({
+        name: file.name,
+        mime: file.mime,
+        size: file.data.byteLength,
+        header: decoder.decode(file.data.slice(0, 5)),
+      })),
+      percents,
+    };
+  } catch (error) {
+    return { percents, error: describe(error) };
+  } finally {
+    engineWorker.terminate();
+  }
+}
+
 declare global {
   interface Window {
     __harness: {
@@ -99,8 +153,9 @@ declare global {
       bootJob: () => Promise<BootReport>;
       stopJob: () => void;
       rawHello: (assetBaseUrl: string) => Promise<BootReport>;
+      runSplitJob: (pdfBase64: string, name: string) => Promise<SplitReport>;
     };
   }
 }
 
-window.__harness = { bootEngine, bootJob, stopJob, rawHello };
+window.__harness = { bootEngine, bootJob, stopJob, rawHello, runSplitJob };

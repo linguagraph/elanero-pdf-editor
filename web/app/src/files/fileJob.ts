@@ -3,7 +3,7 @@
 // its result is the files, not a document. Cancel calls jobs.abort and stops the job worker
 // (W1.1 section 1). Progress goes to the app's job bar. The split (W6.2) and the export (W7.7) use
 // this one flow; each passes its job type name and arguments.
-import type { CallResult } from '../engine/loader';
+import type { CallResult, Notice } from '../engine/loader';
 import { RpcError, type RpcErrorCode } from '../rpc/client';
 import { ERROR_CODES, type Methods, PROTOCOL_VERSION } from '../rpc/generated';
 import {
@@ -29,7 +29,11 @@ export interface FileJobEngine {
 
 // One job worker. call() sends one request with its binary values, as the engine channel does.
 export interface JobWorker {
-  call(request: string, buffers?: readonly ArrayBuffer[]): Promise<CallResult>;
+  call(
+    request: string,
+    buffers?: readonly ArrayBuffer[],
+    onNotice?: (notice: Notice) => void,
+  ): Promise<CallResult>;
   terminate(): void;
 }
 
@@ -77,24 +81,32 @@ export function readFilesReply(result: CallResult, job: string): ResultFile[] {
     throw new ReplyShapeError('result.kind', `a ${job} job returns files`);
   }
   const items = expectArray(field(value, 'files', 'result'), 'result.files');
-  if (items.length > 1) {
-    // The engine's channel carries one binary value per reply, so several files cannot come back
-    // yet. This is refused with a clear error rather than returning a partial result.
-    throw new RpcError('INTERNAL', `a ${job} job with more than one file cannot be returned yet`);
-  }
-  const buffer = result.buffer;
+  // The file bytes are the reply's buffers, in $bin order: one buffer per file.
+  const buffers = result.buffers ?? (result.buffer === undefined ? [] : [result.buffer]);
   return items.map((item) => {
     const entry = expectObject(item, 'result.files[]');
     const ref = expectObject(field(entry, 'data', 'result.files[]'), 'result.files[].data');
-    if (buffer === undefined || expectInteger(field(ref, '$bin', 'data'), 'data.$bin') !== 0) {
+    const data = buffers[expectInteger(field(ref, '$bin', 'data'), 'data.$bin')];
+    if (data === undefined) {
       throw new ReplyShapeError('result.files[].data', 'no buffer for the file');
     }
     return {
       name: expectString(field(entry, 'name', 'result.files[]'), 'name'),
       mime: expectString(field(entry, 'mime', 'result.files[]'), 'mime'),
-      data: buffer,
+      data,
     };
   });
+}
+
+// The bar's percent for a progress notice (W1.2 section 8), or undefined for any other notice. A
+// notice with no total cannot be a percent, so it is ignored.
+export function progressPercent(notice: Notice): number | undefined {
+  if (notice.notice !== 'progress') return undefined;
+  const data = notice.data;
+  if (typeof data !== 'object' || data === null) return undefined;
+  const { done, total } = data as { done?: unknown; total?: unknown };
+  if (typeof done !== 'number' || typeof total !== 'number' || total <= 0) return undefined;
+  return Math.min(100, Math.max(0, Math.round((done * 100) / total)));
 }
 
 // Runs one file job. Resolves with the files; rejects with an RpcError, or FileJobCancelled.
@@ -140,7 +152,14 @@ export async function runFileJob(
       method: 'job.run',
       params: { job, args, document: { $bin: 0 } },
     });
-    const result = await Promise.race([worker.call(request, [prepared.document]), cancelled]);
+    const onNotice = (notice: Notice): void => {
+      const percent = progressPercent(notice);
+      if (percent !== undefined) progress.progress(token, percent);
+    };
+    const result = await Promise.race([
+      worker.call(request, [prepared.document], onNotice),
+      cancelled,
+    ]);
     const files = readFilesReply(result, job);
     await engine.call('jobs.apply', {
       handle,

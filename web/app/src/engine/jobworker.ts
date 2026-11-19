@@ -28,7 +28,7 @@ export function lockDownGlobals(target: object = globalThis): void {
 }
 
 export function serveJobWorker(scope: WorkerScope, load: LoadEngine = loadEngine): void {
-  serveEngine(scope, { load, beforeEngine: () => lockDownGlobals() });
+  serveEngine(scope, { load, beforeEngine: () => lockDownGlobals(), role: 'job' });
 }
 
 if (isWorkerContext()) {

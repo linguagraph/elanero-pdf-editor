@@ -3,6 +3,7 @@
 import { CallError, EngineLoadError } from './errors';
 import type { CallResult } from './loader';
 import type { ErrorMessage, ReplyMessage, Stage, WorkerOutbound } from './protocol';
+import type { Notice } from './loader';
 
 export interface StartOptions {
   // Absolute or same-origin URL of the worker module (engine.worker.ts or jobworker.ts, built).
@@ -12,7 +13,12 @@ export interface StartOptions {
 }
 
 export interface WorkerClient {
-  call(request: string, buffers?: readonly ArrayBuffer[]): Promise<CallResult>;
+  // onNotice gets each notice of this call (a job's progress), in order, before the reply.
+  call(
+    request: string,
+    buffers?: readonly ArrayBuffer[],
+    onNotice?: (notice: Notice) => void,
+  ): Promise<CallResult>;
   onStage(listener: (stage: Stage) => void): () => void;
   terminate(): void;
 }
@@ -70,6 +76,7 @@ function toError(error: ErrorMessage['error']): Error {
 interface Waiter {
   resolve(result: CallResult): void;
   reject(error: Error): void;
+  onNotice?: (notice: Notice) => void;
 }
 
 function startWorker(options: StartOptions): WorkerClient {
@@ -104,6 +111,11 @@ function startWorker(options: StartOptions): WorkerClient {
     // The first message means the module has loaded, so the blob is no longer needed.
     revokeBlob();
     const data = event.data;
+    if ('kind' in data && data.kind === 'notice') {
+      // A notice belongs to a call still waiting; one for a finished call is dropped.
+      pending.get(data.id)?.onNotice?.(data.notice);
+      return;
+    }
     if ('kind' in data) {
       for (const listener of stageListeners) listener(data.stage);
       return;
@@ -115,11 +127,15 @@ function startWorker(options: StartOptions): WorkerClient {
       waiter.reject(toError(data.error));
     } else {
       const reply = data as ReplyMessage;
-      waiter.resolve(
-        reply.buffer === undefined
-          ? { reply: reply.reply }
-          : { reply: reply.reply, buffer: reply.buffer },
-      );
+      if (reply.buffers !== undefined) {
+        waiter.resolve({ reply: reply.reply, buffers: reply.buffers });
+      } else {
+        waiter.resolve(
+          reply.buffer === undefined
+            ? { reply: reply.reply }
+            : { reply: reply.reply, buffer: reply.buffer },
+        );
+      }
     }
   });
 
@@ -134,11 +150,11 @@ function startWorker(options: StartOptions): WorkerClient {
   worker.postMessage({ kind: 'init', baseUrl: assetBase });
 
   return {
-    call(request, buffers = []) {
+    call(request, buffers = [], onNotice) {
       if (closed) return Promise.reject(new CallError('the worker has been terminated'));
       const id = nextId++;
       return new Promise<CallResult>((resolve, reject) => {
-        pending.set(id, { resolve, reject });
+        pending.set(id, { resolve, reject, onNotice });
         const message = { id, method: 'dispatch', request };
         try {
           if (buffers.length === 0) {

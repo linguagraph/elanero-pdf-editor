@@ -72,6 +72,43 @@ describe('job worker network lockdown', () => {
     expect(() => lockDownGlobals(host)).toThrow(/fetch/);
   });
 
+  it('answers job.run with the reply and its buffer, and forwards each notice first', async () => {
+    const { scope, posted, send } = fakeScope();
+    const seenRoles: unknown[] = [];
+    serveJobWorker(scope, async (options: LoadOptions): Promise<EngineHandle> => {
+      seenRoles.push(options.role);
+      // A fake Python call: it sends one progress notice, then returns a reply with one buffer.
+      return {
+        dispatch: (request, buffers = [], onNotice) => {
+          expect(JSON.parse(request).method).toBe('job.run');
+          expect(buffers.map((buffer) => buffer.byteLength)).toEqual([3]);
+          onNotice?.({ notice: 'progress', id: 1, data: { done: 1, total: 2, status: '' } });
+          return {
+            reply: JSON.stringify({ v: 1, id: 1, ok: true, result: { kind: 'files' }, events: [] }),
+            buffer: new Uint8Array([7, 8]).buffer,
+          };
+        },
+      };
+    });
+    send({ kind: 'init', baseUrl: 'http://localhost/engine/' });
+    const request = JSON.stringify({ v: 1, id: 1, method: 'job.run', params: {} });
+    send({ id: 4, method: 'dispatch', request, buffers: [new Uint8Array([1, 2, 3]).buffer] });
+    // The answer waits for the engine, which needs a turn of the event loop.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seenRoles).toEqual(['job']);
+    expect(posted).toEqual([
+      {
+        kind: 'notice',
+        id: 4,
+        notice: { notice: 'progress', id: 1, data: { done: 1, total: 2, status: '' } },
+      },
+      expect.objectContaining({ id: 4, reply: expect.stringContaining('"kind":"files"') }),
+    ]);
+    const reply = posted[1] as { buffer: ArrayBuffer };
+    expect(Array.from(new Uint8Array(reply.buffer))).toEqual([7, 8]);
+  });
+
   it('answers only the dispatch method', async () => {
     const { scope, posted, send } = fakeScope();
     serveJobWorker(scope, async () => ({ dispatch: () => ({ reply: '{}' }) }));
