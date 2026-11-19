@@ -24,6 +24,8 @@ from pdfeditor.model.metadata import EncryptionMethod, SecuritySettings
 from pdfeditor.model.redaction import SanitizeOptions
 
 OWNER_NEEDED = "The permissions password is needed to change this document's security."
+# Changing encryption needs a full rewrite, which would break the signatures (Acrobat refuses too).
+SIGNED_REFUSED = "This document is signed. Changing its security would invalidate the signatures."
 
 # -- argument types ------------------------------------------------------------------------
 
@@ -46,11 +48,18 @@ class SanitizeDocument:
 # -- actions -------------------------------------------------------------------------------
 
 
+def _refuse_if_signed(session: DocumentSession) -> None:
+    """Caller holds ``session.lock``."""
+    if session.document.info().has_signatures:
+        raise Refused(SIGNED_REFUSED)
+
+
 @action("security.set", SetSecurity, requires=("encrypt",))
 def set_security(session: DocumentSession, args: SetSecurity) -> ActionResult[None]:
     """Queue password protection (or its removal) for the next save."""
     ensure_idle(session)
     with session.lock:
+        _refuse_if_signed(session)
         if not session.document.has_owner_access():
             raise Refused(OWNER_NEEDED)
     command = SetSecurityCommand(args.settings)
@@ -63,6 +72,7 @@ def remove_security(session: DocumentSession, args: RemoveSecurity) -> ActionRes
     """Lift the passwords and restrictions on the next save, or drop a pending change."""
     ensure_idle(session)
     with session.lock:
+        _refuse_if_signed(session)
         doc = session.document
         encrypted = doc.info().encryption is not EncryptionMethod.NONE
         pending = doc.pending_security()

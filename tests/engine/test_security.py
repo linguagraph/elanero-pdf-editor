@@ -110,3 +110,16 @@ def test_metadata_command_syncs_xmp(fixture_pdf) -> None:
     assert doc.pending_security() is None
     session.undo_stack.set_clean()
     session.close()
+
+
+def test_permission_flags_read_back_after_save(engine: Engine, fixture_pdf, tmp_path: Path) -> None:
+    if not engine.capabilities.encrypt:
+        pytest.skip("engine can't encrypt")
+    flags = Permissions(print=False, modify=True, copy=False, annotate=False)
+    doc = engine.open(fixture_pdf("report"))
+    doc.set_pending_security(SecuritySettings(EncryptionMethod.AES_256, "open me", "boss", flags))
+    out = doc.save(tmp_path / "flags.pdf")
+    doc.close()
+    user = engine.open(out, "open me")
+    assert user.info().permissions == flags
+    user.close()

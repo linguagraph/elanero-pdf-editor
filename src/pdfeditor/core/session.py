@@ -22,6 +22,7 @@ from pdfeditor.core.commands.snapshot import SnapshotStore
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Document, Engine, PasswordCallback, SaveError, SaveOptions
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
+from pdfeditor.model.metadata import EncryptionMethod
 
 log = logging.getLogger(__name__)
 _ids = itertools.count(1)
@@ -315,9 +316,20 @@ class DocumentSession:
                 options = SaveOptions(incremental=False, garbage=self._garbage_level())
                 doc.prepare_full_save(options)  # the same preparation as save()
                 data = doc.to_bytes(options)
-            self._verify_bytes(data, doc.page_count, password)
+            self._verify_bytes(data, doc.page_count, self._verify_password(password))
         log.info("saved %d bytes%s", len(data), " (incremental)" if incremental else "")
         return SaveBytes(data=data, incremental=incremental)
+
+    def _verify_password(self, password: str | None) -> str | None:
+        """The password the saved bytes must open with. A pending change decides it, not the
+        caller's open password: removing security gives plain bytes, and a new encryption
+        opens only with the new passwords (the same rule as the desktop's ``_save_full``)."""
+        pending = self.document.pending_security()
+        if pending is None:
+            return password
+        if pending.method is EncryptionMethod.NONE:
+            return None
+        return pending.owner_password or pending.user_password
 
     def _verify_bytes(self, data: bytes, pages: int, password: str | None) -> None:
         """Open the bytes again and compare the page count. An encrypted document is opened with

@@ -16,8 +16,9 @@ from pdfeditor.engine.base import SaveOptions
 
 log = logging.getLogger(__name__)
 
-# Recovery copies favor speed over size, like undo snapshots.
-RECOVERY_OPTIONS = SaveOptions(garbage=0, deflate=False)
+# Recovery copies favor speed over size, like undo snapshots, and keep the current encryption:
+# they are reopened with the password the document holds, not a pending one.
+RECOVERY_OPTIONS = SaveOptions(garbage=0, deflate=False, apply_security=False)
 
 
 @dataclass(frozen=True, slots=True)

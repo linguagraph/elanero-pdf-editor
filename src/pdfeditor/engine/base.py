@@ -126,6 +126,9 @@ class SaveOptions:
     object_streams: bool = False
     clean_content: bool = False
     decrypt: bool = False  # write without encryption (export pipelines; never for snapshots)
+    # False keeps the file's current encryption rather than the pending security change. Undo
+    # snapshots and recovery files need it: they reopen with the password the document holds now.
+    apply_security: bool = True
     # Subset fonts this app embedded while editing (never on an incremental save, which must
     # keep a signature's byte range intact). Doesn't affect fonts already in the document.
     subset_fonts: bool = True
