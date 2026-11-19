@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { engineAssetProblems, type PrecacheFile, type StageManifest } from './build';
+import {
+  engineAssetProblems,
+  STAGE_MANIFEST_FILE,
+  type PrecacheFile,
+  type StageManifest,
+} from './build';
 import { PYMUPDF_WHEEL_FILE, WEB_ZIP_FILE } from '../engine/pins';
 
 const HASH = (letter: string): string => letter.repeat(64);
@@ -21,6 +26,7 @@ function complete(): PrecacheFile[] {
     { path: 'engine-assets/pillow.whl', sha256: HASH('a') },
     { path: `engine-assets/${PYMUPDF_WHEEL_FILE}`, sha256: HASH('b') },
     { path: `engine-assets/${WEB_ZIP_FILE}`, sha256: HASH('c') },
+    { path: `engine-assets/${STAGE_MANIFEST_FILE}`, sha256: HASH('d') },
   ];
 }
 
@@ -58,9 +64,20 @@ describe('engineAssetProblems (W4.6 S2)', () => {
     expect(problems.some((problem) => problem.includes('pymupdf-9.9.9.whl'))).toBe(true);
   });
 
+  it('reports a leftover file in the engine-assets folder that the stage manifest does not list', () => {
+    const files = [...complete(), { path: 'engine-assets/old-engine.whl', sha256: HASH('9') }];
+    expect(engineAssetProblems(files, STAGE)).toEqual([
+      'engine-assets/old-engine.whl is in the engine-assets folder but is not listed in stage-manifest.json',
+    ]);
+  });
+
   it('reports a stage manifest without the web zip', () => {
     const stage = { ...STAGE, web: undefined };
     const problems = engineAssetProblems(complete(), stage);
-    expect(problems).toEqual([`stage-manifest.json does not name ${WEB_ZIP_FILE}`]);
+    // The zip is still staged, so it is also a file the manifest does not list.
+    expect(problems).toEqual([
+      `stage-manifest.json does not name ${WEB_ZIP_FILE}`,
+      `engine-assets/${WEB_ZIP_FILE} is in the engine-assets folder but is not listed in stage-manifest.json`,
+    ]);
   });
 });

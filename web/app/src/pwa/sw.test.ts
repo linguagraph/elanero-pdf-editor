@@ -66,6 +66,9 @@ function respond(bytes: Bytes | undefined): Response {
 // One worker's world: the caches on the origin, what the network serves, what the HTTP cache
 // holds, and a log of every fetch the worker made ("<cache mode> <path>", or "http <path>").
 function world(options: {
+  // Entries already in a cache of this build's name: the active version, when only the worker
+  // changed and the file list did not.
+  current?: Record<string, Bytes>;
   previous?: Record<string, Bytes>;
   httpCache?: Record<string, Bytes>;
   network?: Record<string, Bytes>;
@@ -82,6 +85,9 @@ function world(options: {
   };
   for (const [path, bytes] of Object.entries(options.previous ?? {})) {
     cacheNamed(OLD).entries.set(urlOf(path), respond(bytes));
+  }
+  for (const [path, bytes] of Object.entries(options.current ?? {})) {
+    cacheNamed(NEW).entries.set(urlOf(path), respond(bytes));
   }
   const network = options.network ?? CONTENT;
   const http = options.httpCache ?? {};
@@ -106,6 +112,7 @@ function world(options: {
     caches: {
       open: async (name: string) => cacheNamed(name),
       keys: async () => [...caches.keys()],
+      has: async (name: string) => caches.has(name),
       delete: async (name: string) => caches.delete(name),
     },
     fetch: fetchFake,
@@ -157,6 +164,21 @@ describe('service worker install (W4.6 S2)', () => {
     const w = world({ network: { ...CONTENT, 'assets/app.js': text('tampered') } });
     await expect(w.install()).rejects.toThrow(/assets\/app\.js does not match/);
     expect(w.caches.has(NEW)).toBe(false);
+  });
+
+  it('a failed install leaves a pre-existing cache of the same name intact', async () => {
+    // The same file list with a new worker: the active version's cache has this name already.
+    const w = world({
+      current: CONTENT,
+      network: { ...CONTENT, 'assets/app.js': text('tampered') },
+    });
+    await expect(w.install()).rejects.toThrow(/assets\/app\.js does not match/);
+    expect(w.caches.has(NEW)).toBe(true);
+    for (const [path, bytes] of Object.entries(CONTENT)) {
+      const kept = await w.caches.get(NEW)?.match(urlOf(path));
+      expect(kept?.status).toBe(200);
+      expect(new Uint8Array((await kept?.arrayBuffer()) ?? [])).toEqual(bytes.body);
+    }
   });
 
   it('copies an unchanged file from the previous version without a request for it', async () => {

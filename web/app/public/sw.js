@@ -33,6 +33,10 @@ self.addEventListener('install', (event) => {
 });
 
 async function precache() {
+  // The name hashes only the file list, so a rebuild that changes just this worker can reuse the
+  // active version's cache name. That cache holds the active version's offline files, so a failed
+  // install removes it only when this install created it.
+  const existed = await caches.has(BUILD.cacheName);
   const cache = await caches.open(BUILD.cacheName);
   try {
     const previous = await previousVersionCaches();
@@ -47,8 +51,9 @@ async function precache() {
       await cache.put(url, new Response(copy.body, { status: 200, headers }));
     }
   } catch (error) {
-    // A partial version is removed, so the next install starts clean.
-    await caches.delete(BUILD.cacheName);
+    // A partial version this install created is removed, so the next install starts clean. Entries
+    // written into an existing cache were each checked against the SHA-256 above, so they stay.
+    if (!existed) await caches.delete(BUILD.cacheName);
     throw error;
   }
 }

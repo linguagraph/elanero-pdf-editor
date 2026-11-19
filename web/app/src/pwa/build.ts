@@ -138,5 +138,24 @@ export function engineAssetProblems(
   } else {
     expect(stage.web.file, stage.web.sha256);
   }
+  // The folder is precached as a whole, so a file left in it by an earlier stage would be served
+  // offline without being checked. Only the files the manifest names (and the manifest itself) may
+  // be there.
+  const listed = new Set<string>([
+    STAGE_MANIFEST_FILE,
+    ...stage.core,
+    ...stage.packages.map((pkg) => pkg.file),
+    stage.wheel.file,
+    ...(stage.web ? [stage.web.file] : []),
+  ]);
+  for (const file of files) {
+    const prefix = `${ENGINE_DIR}/`;
+    if (!file.path.startsWith(prefix)) continue;
+    if (!listed.has(file.path.slice(prefix.length))) {
+      problems.push(
+        `${file.path} is in the engine-assets folder but is not listed in stage-manifest.json`,
+      );
+    }
+  }
   return problems;
 }
