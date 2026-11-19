@@ -68,8 +68,12 @@ is reloaded until you press it.
 
 - **Thumbnails.** The **Thumbnails** button on the right rail opens a panel with a small preview of
   every page. Click a preview to go to that page. The panel opens and closes for each open
-  document separately, and it is not remembered after a reload. Bookmarks, attachments and layers
-  are not available yet.
+  document separately, and it is not remembered after a reload. Attachments and layers are not
+  available yet.
+- **Bookmarks.** The **Bookmarks** button on the right rail opens the document's outline as a tree.
+  Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
+  Entries without a page are greyed out. The panel is read-only for now: you cannot add, rename or
+  move bookmarks yet. Each open document keeps its own expanded entries until you close it.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
   thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
   Shift-click to select a range. Then rotate the selected pages left or right, move them up or

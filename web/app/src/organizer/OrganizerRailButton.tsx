@@ -2,6 +2,7 @@
 // panel's open state for the active tab. Opening it closes the thumbnails and search panels, since
 // one right panel shows at a time.
 import { t } from '../i18n/t';
+import { setBookmarksOpen } from '../bookmarks/openState';
 import { setSearchOpen } from '../search/openState';
 import { setThumbnailsOpen } from '../thumbnails/openState';
 import { setOrganizerOpen, useOrganizerOpen } from './openState';
@@ -25,6 +26,7 @@ export function OrganizerRailButton({ tabId, disabled }: OrganizerRailButtonProp
         if (tabId === null) return;
         setThumbnailsOpen(tabId, false);
         setSearchOpen(tabId, false);
+        setBookmarksOpen(tabId, false);
         setOrganizerOpen(tabId, !open);
       }}
     >

@@ -421,6 +421,15 @@ export const EN = {
   'thumbnails.loading': 'Loading thumbnails…',
   'thumbnails.loadFailed': 'The thumbnails could not be read. Try opening the file again.',
 
+  // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
+  'bookmarks.title': 'Bookmarks',
+  'bookmarks.list': 'Document bookmarks',
+  'bookmarks.empty': 'This document has no bookmarks.',
+  'bookmarks.loading': 'Loading bookmarks…',
+  'bookmarks.loadFailed': 'The bookmarks could not be read. Try opening the file again.',
+  'bookmarks.expand': 'Expand {title}',
+  'bookmarks.collapse': 'Collapse {title}',
+
   // Page organizer side panel (W6.1). Rotate and delete reuse the command labels; the undo labels
   // are the engine's, shown in English in v1.
   'organizer.title': 'Organize pages',

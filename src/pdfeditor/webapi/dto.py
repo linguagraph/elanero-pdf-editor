@@ -89,6 +89,23 @@ class PagesResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class OutlineEntry:
+    # One bookmark, in depth-first order. The tree is implied by ``level``: an entry's children
+    # are the following entries of a greater level, up to the next entry at its own level or
+    # above. ``page`` is the zero-based destination page, or None for an entry without one (a
+    # web link, or a destination the file does not resolve).
+    title: str
+    level: int  # 1 for a top-level bookmark
+    page: int | None
+    is_open: bool  # the file's own "open" flag for the entry (its initial expansion)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class OutlineResult:
+    entries: tuple[OutlineEntry, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class PlatformFlags:
     # The fields of model.platform.PlatformCapabilities; a test keeps the two in step.
     linearize: bool
