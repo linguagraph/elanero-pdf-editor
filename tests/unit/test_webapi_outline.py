@@ -9,9 +9,11 @@ from typing import Any
 import pytest
 
 from pdfeditor.model import platform as model_platform
+from pdfeditor.model.outline import Destination, OutlineItem
 from pdfeditor.webapi import dispatch
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
+from pdfeditor.webapi.session import outline_entries
 from tests.unit.test_webapi_session import handle_of, open_bytes
 
 
@@ -38,8 +40,7 @@ def test_outline_lists_titles_pages_and_levels(web: None, fixture_pdf: Any) -> N
     reply = call("session.outline", {"handle": handle})
     assert reply["ok"] is True, reply
     entries = reply["result"]["entries"]
-    # The fixture is two chapters per three levels of pairs: a chapter (level 1) followed by its
-    # sections (level 2); pages are zero-based.
+    # Three chapters (level 1), each followed by its two sections (level 2); pages are zero-based.
     assert [(e["title"], e["level"], e["page"]) for e in entries] == [
         ("Chapter 1", 1, 0),
         ("Section 1.1", 2, 0),
@@ -65,3 +66,43 @@ def test_outline_needs_an_open_document(web: None) -> None:
     reply = call("session.outline", {"handle": "0" * 32})
     assert reply["ok"] is False
     assert reply["error"]["code"] == "NO_DOCUMENT"
+
+
+def test_deep_levels_step_back_and_a_bookmark_without_destination(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = handle_of(open_bytes(fixture_pdf("outline_irregular").read_bytes()))
+    reply = call("session.outline", {"handle": handle})
+    assert reply["ok"] is True, reply
+    assert [(e["title"], e["level"], e["page"]) for e in reply["result"]["entries"]] == [
+        ("Deep A", 1, 0),
+        ("Deep B", 2, 1),
+        ("Deep C", 3, 2),
+        ("Back to B level", 2, 3),
+        ("No destination", 1, None),
+    ]
+
+
+def test_destinations_outside_the_document_have_no_page() -> None:
+    items = [
+        OutlineItem(title="first", dest=Destination(page_index=0)),
+        OutlineItem(title="last", dest=Destination(page_index=2)),
+        OutlineItem(title="past the end", dest=Destination(page_index=3)),
+        OutlineItem(title="negative", dest=Destination(page_index=-1)),
+        OutlineItem(title="no destination", uri="https://example.org/"),
+    ]
+    entries = outline_entries(items, page_count=3)
+    assert [(e.title, e.page) for e in entries] == [
+        ("first", 0),
+        ("last", 2),
+        ("past the end", None),
+        ("negative", None),
+        ("no destination", None),
+    ]
+
+
+def test_outline_entries_follow_the_tree_depth() -> None:
+    child = OutlineItem(title="child", dest=Destination(page_index=1))
+    root = OutlineItem(title="root", dest=Destination(page_index=0), children=[child])
+    entries = outline_entries([root], page_count=2)
+    assert [(e.title, e.level) for e in entries] == [("root", 1), ("child", 2)]
