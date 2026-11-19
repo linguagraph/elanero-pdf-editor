@@ -108,3 +108,15 @@
 .doc-view--night .doc-page-canvas {
   filter: invert(1);
 }
+
+/* The status bar under the document (W1.6 section 1): the page indicator and the zoom. */
+.doc-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  min-height: 32px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

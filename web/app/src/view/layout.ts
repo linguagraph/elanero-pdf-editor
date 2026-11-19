@@ -142,3 +142,27 @@ export function isInViewport(box: PageBox, scrollTop: number, viewportHeight: nu
 export function distanceToCentre(box: PageBox, scrollTop: number, viewportHeight: number): number {
   return Math.abs(box.top + box.height / 2 - (scrollTop + viewportHeight / 2));
 }
+
+// The page the user is reading: the one whose centre is nearest the centre of the viewport. Only
+// the pages in the mounted range are compared, which always holds the nearest one. Returns a
+// zero-based index, clamped to the document (0 for an empty one).
+export function currentPageIndex(
+  boxes: readonly PageBox[],
+  scrollTop: number,
+  viewportHeight: number,
+): number {
+  if (boxes.length === 0) return 0;
+  const { first, end } = visibleRange(boxes, scrollTop, viewportHeight);
+  let best = Math.min(first, boxes.length - 1);
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let index = first; index < end; index += 1) {
+    const box = boxes[index];
+    if (box === undefined) continue;
+    const distance = distanceToCentre(box, scrollTop, viewportHeight);
+    if (distance < bestDistance) {
+      best = index;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}

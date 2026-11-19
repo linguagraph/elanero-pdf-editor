@@ -9,6 +9,7 @@ import { readPreferences, writePreferences } from '../prefs/store';
 import {
   computeColumn,
   computeSpreads,
+  currentPageIndex,
   distanceToCentre,
   isInViewport,
   type PageSizePt,
@@ -27,9 +28,20 @@ export const MAX_RENDER_ATTEMPTS = 3;
 // The page layouts the toolbar offers: the continuous single column, or two-page spreads.
 type ViewLayout = 'continuous' | 'twoPage';
 
+// What the view reports to its host for the status bar: the page at the middle of the viewport
+// (one-based) and the zoom. In two-page mode the pages of a spread share their centre line, so the
+// page reported is the left one of the spread at the middle of the viewport.
+export interface DocumentViewState {
+  readonly page: number;
+  readonly zoom: number;
+}
+
 export interface DocumentViewProps {
   readonly rpc: PageRpc;
   readonly handle: string;
+  // Called when the page or the zoom changes, and once when the view mounts. Give it a stable
+  // function (a state setter, for one) so the view does not report again on each render.
+  readonly onViewChange?: (state: DocumentViewState) => void;
 }
 
 interface CachedDraw {
@@ -76,7 +88,7 @@ function PageCanvas({
   return <canvas ref={ref} className="doc-page-canvas" />;
 }
 
-export function DocumentView({ rpc, handle }: DocumentViewProps) {
+export function DocumentView({ rpc, handle, onViewChange }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
@@ -194,6 +206,10 @@ export function DocumentView({ rpc, handle }: DocumentViewProps) {
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
+  const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
+  useEffect(() => {
+    onViewChange?.({ page: currentPage, zoom });
+  }, [currentPage, zoom, onViewChange]);
 
   // Plans the queue from what is on screen now, then sends as many requests as the limit allows.
   // Replies bump the tick, which runs this again, so the queue keeps moving until it is empty.
