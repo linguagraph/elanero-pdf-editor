@@ -526,7 +526,7 @@ class MuDocument:
             kwargs["encryption"] = pymupdf.PDF_ENCRYPT_NONE
             return kwargs
         s = self._security
-        if s is not None:
+        if s is not None and options.apply_security:
             kwargs["encryption"] = _ENCRYPT_METHODS[s.method]
             if s.method is not EncryptionMethod.NONE:
                 kwargs["user_pw"] = s.user_password

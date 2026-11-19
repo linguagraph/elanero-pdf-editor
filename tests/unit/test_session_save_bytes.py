@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from pdfeditor.core.commands import SetSecurityCommand
 from pdfeditor.core.commands.document_cmds import SetMetadataCommand
 from pdfeditor.core.session import DocumentSession, EventKind, SessionEvent
-from pdfeditor.engine.base import SaveError
-from pdfeditor.model.metadata import Metadata
+from pdfeditor.engine.base import PasswordRequired, SaveError
+from pdfeditor.model.metadata import EncryptionMethod, Metadata, Permissions, SecuritySettings
 from tests.hostcheck import record
 
 SIGNED = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"
@@ -225,4 +226,68 @@ def test_copy_after_a_real_edit_still_refuses_the_next_in_place_save(tmp_path: P
     session.save_bytes("copy")
     with pytest.raises(SaveError, match="once after it changes"):
         session.save_bytes("in_place")
+    session.close()
+
+
+# -- password protection (W7.5 S1) ---------------------------------------------------------
+
+
+def _encrypt_settings() -> SecuritySettings:
+    return SecuritySettings(EncryptionMethod.AES_256, "open me", "boss", Permissions(copy=False))
+
+
+def test_save_bytes_after_security_set_verifies_with_the_new_password(
+    fixture_pdf: Callable[[str], Path], tmp_path: Path
+) -> None:
+    """The web caller passes the open password it holds; the bytes open only with the new one,
+    so the check must use the pending password, not the caller's (W7.5 section 2, item 2)."""
+    session = DocumentSession.open(fixture_pdf("report"))
+    pages = session.page_count
+    assert session.execute(SetSecurityCommand(_encrypt_settings()))
+
+    result = session.save_bytes("copy", password=None)
+    out = tmp_path / "locked.pdf"
+    out.write_bytes(result.data)
+    with pytest.raises(PasswordRequired):
+        DocumentSession.open(out)
+    opened = DocumentSession.open(out, "open me")
+    assert opened.page_count == pages
+    opened.close()
+    record("encrypted_pages_pikepdf", result.data, pages=pages, password="open me")
+    record("page_count_pdfium", result.data, pages=pages, password="open me")
+    session.close()
+
+
+def test_save_bytes_after_security_remove_gives_bytes_that_open_without_a_password(
+    fixture_pdf: Callable[[str], Path],
+) -> None:
+    session = DocumentSession.open(fixture_pdf("encrypted"), "user")
+    pages = session.page_count
+    assert session.execute(SetSecurityCommand(SecuritySettings(EncryptionMethod.NONE)))
+
+    result = session.save_bytes("copy", password="user")
+    record("page_count_pikepdf", result.data, pages=pages)
+    record("page_count_pdfium", result.data, pages=pages)
+    session.close()
+
+
+def test_both_passwords_set_verifies_the_user_password_too(
+    fixture_pdf: Callable[[str], Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With a user and an owner password both set, the saved bytes must open with the user
+    password the user types, so the check runs for each of them, not only the owner's
+    (W7.5 review fix). The spy records which passwords are checked, never logging them."""
+    session = DocumentSession.open(fixture_pdf("report"))
+    assert session.execute(SetSecurityCommand(_encrypt_settings()))
+    checked: list[str | None] = []
+    real_verify = session._verify_bytes
+
+    def spy(data: bytes, pages: int, password: str | None) -> None:
+        checked.append(password)
+        real_verify(data, pages, password)
+
+    monkeypatch.setattr(session, "_verify_bytes", spy)
+    result = session.save_bytes("copy")
+    assert checked == ["open me", "boss"]
+    record("encrypted_pages_pikepdf", result.data, pages=session.page_count, password="open me")
     session.close()

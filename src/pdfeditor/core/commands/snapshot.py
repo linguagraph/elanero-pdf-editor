@@ -12,8 +12,9 @@ from pathlib import Path
 from pdfeditor.core.commands.base import Change, ChangeKind, Command
 from pdfeditor.engine.base import Document, SaveOptions
 
-# Fast snapshots: no garbage collection or recompression; streams are copied as they are.
-SNAPSHOT_OPTIONS = SaveOptions(garbage=0, deflate=False)
+# Fast snapshots: no garbage collection or recompression; streams are copied as they are. They
+# keep the current encryption: undo reloads them with the password the document holds now.
+SNAPSHOT_OPTIONS = SaveOptions(garbage=0, deflate=False, apply_security=False)
 
 # The web keeps its snapshots in MEMFS, so its budget is much smaller (W2.3). The web passes it
 # to DocumentSession; the desktop keeps DESKTOP_SNAPSHOT_BUDGET.
