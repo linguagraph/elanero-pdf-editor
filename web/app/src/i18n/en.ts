@@ -667,7 +667,7 @@ export const EN = {
   'marks.cancel': 'Cancel',
   'marks.remove': 'Remove',
   'marks.done.added': 'Marks added.',
-  'marks.done.removed': 'Removed {count} marked items.',
+  'marks.done.removed': 'Removed {count} marks.',
   'marks.failed': 'The marks could not be changed. Try again.',
   'marks.loading': 'Checking the document...',
   'marks.font.helv': 'Helvetica',
@@ -686,8 +686,7 @@ export const EN = {
   'marks.hf.left': 'Left',
   'marks.hf.center': 'Center',
   'marks.hf.right': 'Right',
-  'marks.hf.tokens':
-    'Text can include the page, pages, label, date, file and bates tokens, each in double angle brackets.',
+  'marks.hf.tokens': 'Insert tokens such as {page}, {pages}, {label}, {date}, {file} or {bates}.',
   'marks.hf.marginX': 'Side margin',
   'marks.hf.marginTop': 'Top margin',
   'marks.hf.marginBottom': 'Bottom margin',
