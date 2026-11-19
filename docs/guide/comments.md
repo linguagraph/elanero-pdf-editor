@@ -46,6 +46,8 @@ The **Manage** group:
 - **Delete** (**Delete Comment**) removes the selected comments.
 - **Flatten** (**Flatten All Comments**) makes comments part of the page, so they can no longer be
   moved or edited. Use it when the review is finished and you want the marks to stay as they are.
+  In the web version, Flatten asks you to confirm first. You can undo it until you save the file;
+  after that, the flattening is permanent for that file.
 
 Select a comment to move or resize it, and copy and paste it (**Ctrl+C** and **Ctrl+V**). The
 **Properties** panel (**Ctrl+E**) changes the color, fill, opacity, border, text and author of the

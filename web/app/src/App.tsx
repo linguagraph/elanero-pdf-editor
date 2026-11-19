@@ -28,6 +28,7 @@ import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
+import { FlattenDialog } from './flatten/FlattenDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
@@ -78,6 +79,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
+  const [flattenOpen, setFlattenOpen] = useState(false);
   // One stable job worker factory for the document's jobs, so a redaction keeps its marks.
   const startJob = useCallback(() => startJobWorker(jobWorkerBootOptions()), []);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -107,6 +109,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'document-properties': () => setPropertiesOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
+    'flatten-all-comments': () => setFlattenOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -270,6 +273,16 @@ export function App({ engine, startPrintWorker }: AppProps) {
         <SanitizeDialog
           isOpen={sanitizeOpen}
           onClose={() => setSanitizeOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={startJob}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null ? (
+        <FlattenDialog
+          isOpen={flattenOpen}
+          onClose={() => setFlattenOpen(false)}
           engine={session.rpc}
           handle={session.handle}
           startWorker={startJob}
