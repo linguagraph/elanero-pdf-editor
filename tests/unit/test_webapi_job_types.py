@@ -404,11 +404,26 @@ def test_merge_leaves_the_open_documents_alone(web: None, fixture_pdf: Any) -> N
     pdf = text_fixture(fixture_pdf)
     handle = open_data(pdf, "text.pdf")
     session = REGISTRY.get(handle)
+    # Raw save bytes differ between two saves of the same document (see the read-only test), so the
+    # open document is compared by what it contains after a reopen.
     before = saved_bytes(handle)
+    before_state = reopened_state(before)
+    version = session.structure_version
+    undo_depth = len(session.undo_stack)
     args = {"sources": [{"name": "first.pdf", "data": {"$bin": 0}}]}
     reply, _ = run_without_document("merge", args, [pdf])
     assert ok(reply)["kind"] == "new_document"
-    assert saved_bytes(handle) == before
+    after = saved_bytes(handle)
+    assert reopened_state(after) == before_state  # page count and each page's text
+    assert before_state[0] == page_total(handle)
+    record(
+        "same_object_count_pikepdf",
+        after,
+        reference=base64.b64encode(before).decode("ascii"),
+    )  # the same number of objects in the saved file
+    assert session.structure_version == version
+    assert len(session.undo_stack) == undo_depth
+    assert session.is_dirty is False
     assert session.busy == ""
 
 
