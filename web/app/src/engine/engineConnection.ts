@@ -119,9 +119,10 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
 // is open in the engine and the RPC client is connected (hello succeeded); until then the document
 // view is not mounted for it. Nothing sets a session yet: the open wiring comes with the RPC
 // session work, so this store is the seam that work fills in. The UI reads it, never the worker.
-// The calls the document view makes. RpcClient satisfies this; tests pass a fake.
+// The calls the document view, the thumbnails panel and the page organizer make. RpcClient satisfies
+// this; tests pass a fake.
 export interface PageRpc {
-  call<M extends 'session.pages' | 'render.page'>(
+  call<M extends 'session.pages' | 'render.page' | 'actions.run' | 'actions.undo'>(
     method: M,
     params: Methods[M]['params'],
   ): Promise<Methods[M]['result']>;
