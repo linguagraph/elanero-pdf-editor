@@ -3,7 +3,7 @@
 // engine has opened it. Closing a tab calls session.close. Everything the user reads comes
 // through t().
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import type { EngineConnection } from '../engine/engineConnection';
+import { type EngineConnection, setTabSession } from '../engine/engineConnection';
 import { reportRpcError, toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { addRecentFile, readRecentFiles, type RecentFile } from '../recent/recentFiles';
@@ -41,6 +41,13 @@ export interface Documents {
 
 export function useDocuments(engine: EngineConnection): Documents {
   const [tabs, setTabs] = useState<TabState>(EMPTY_TABS);
+  // The latest tab state, updated at once on every change. The open loop reads the id of the tab it
+  // has just added from here, which a state updater cannot give it synchronously.
+  const tabsRef = useRef<TabState>(EMPTY_TABS);
+  const commitTabs = useCallback((update: (state: TabState) => TabState) => {
+    tabsRef.current = update(tabsRef.current);
+    setTabs(tabsRef.current);
+  }, []);
   const [recent, setRecent] = useState<RecentFile[]>(() => readRecentFiles());
   const [showStart, setShowStart] = useState(false);
   const [pickHint, setPickHint] = useState<string | null>(null);
@@ -68,13 +75,16 @@ export function useDocuments(engine: EngineConnection): Documents {
         }
         const { handle, pages, warning } = outcome.result;
         if (warning !== null) toasts.push('info', t('open.largeFile', { name: file.name }));
-        setTabs((state) => addTab(state, { name: file.name, handle, pages }));
+        // The tab id is the one addTab gives the new tab. Its session lets the document view mount.
+        const id = tabsRef.current.nextId;
+        commitTabs((state) => addTab(state, { name: file.name, handle, pages }));
+        setTabSession(id, { rpc: client, handle });
         setRecent(addRecentFile(file.name));
         setShowStart(false);
         setPickHint(null);
       }
     },
-    [engine],
+    [engine, commitTabs],
   );
 
   const openFiles = useCallback(
@@ -100,15 +110,20 @@ export function useDocuments(engine: EngineConnection): Documents {
     setRecent(readRecentFiles());
   }, []);
 
-  const selectTab = useCallback((id: number) => {
-    setTabs((state) => activateTab(state, id));
-    setShowStart(false);
-  }, []);
+  const selectTab = useCallback(
+    (id: number) => {
+      commitTabs((state) => activateTab(state, id));
+      setShowStart(false);
+    },
+    [commitTabs],
+  );
 
   const closeTab = useCallback(
     (id: number) => {
       const tab = tabs.tabs.find((candidate) => candidate.id === id);
-      setTabs((state) => closeTabState(state, id));
+      commitTabs((state) => closeTabState(state, id));
+      // The document view of a closed tab goes with it: no session is kept for it.
+      setTabSession(id, null);
       if (tab === undefined) return;
       const client = engine.client();
       if (client === undefined) return;
@@ -116,7 +131,7 @@ export function useDocuments(engine: EngineConnection): Documents {
         reportRpcError(toasts, asRpcError(error));
       });
     },
-    [tabs, engine],
+    [tabs, engine, commitTabs],
   );
 
   return {
