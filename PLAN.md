@@ -610,7 +610,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W7.5** A8 Password protection and permissions
 - [ ] **W7.6** A9 Document properties and metadata editing
 - [ ] **W7.7** A10 Export pages as images and text
-- [ ] **W7.8** A11 Compare documents
+- [x] **W7.8** A11 Compare documents
 - [ ] **W7.9** A12–A13 Flatten annotations; attachments and layers
 
 **W8 Quality, #141**

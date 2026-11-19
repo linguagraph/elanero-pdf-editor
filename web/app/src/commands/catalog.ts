@@ -204,7 +204,7 @@ export const COMMANDS: readonly CommandDef[] = [
   ),
   cmd('reduce-file-size', 'command.reduce-file-size.label', 'tools.optimize'),
   cmd('space-usage', 'command.space-usage.label', 'tools.optimize'),
-  cmd('compare-files', 'command.compare-files.label', 'tools.compare', OPEN_ANYTIME),
+  cmd('compare-files', 'command.compare-files.label', 'tools.compare'),
   cmd(
     'pdf-a-preflight',
     'command.pdf-a-preflight.label',
