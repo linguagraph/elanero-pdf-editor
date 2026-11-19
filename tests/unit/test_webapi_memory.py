@@ -7,6 +7,7 @@ Pyodide run checks the int. The other tests replace the probe to pass a value th
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Iterator
 from typing import Any
 
@@ -91,3 +92,34 @@ def test_snapshot_bytes_grow_with_an_undo_snapshot(web: None, fixture_pdf: Any) 
     snapshot = call("system.memory", {})["snapshot_bytes"]
     assert snapshot > 0
     assert snapshot == session.undo_stack.disk_bytes
+
+
+def test_system_memory_does_not_wait_for_a_running_task(web: None, fixture_pdf: Any) -> None:
+    # A long task holds the session lock for its whole run; system.memory must still answer.
+    handle = open_fixture(fixture_pdf("images").read_bytes())
+    session = REGISTRY.get(handle)
+    held = threading.Event()
+    release = threading.Event()
+
+    def task() -> None:
+        with session.lock:
+            held.set()
+            release.wait(timeout=10)
+
+    worker = threading.Thread(target=task, daemon=True)
+    worker.start()
+    try:
+        assert held.wait(timeout=5)
+        result: dict[str, Any] = {}
+
+        def query() -> None:
+            result["value"] = call("system.memory", {})
+
+        caller = threading.Thread(target=query, daemon=True)
+        caller.start()
+        caller.join(timeout=5)
+        assert not caller.is_alive(), "system.memory blocked on a session lock held by a task"
+        assert result["value"]["documents"] >= 1
+    finally:
+        release.set()
+        worker.join(timeout=5)
