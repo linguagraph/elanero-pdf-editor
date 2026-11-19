@@ -390,4 +390,64 @@ describe('App side rails (W4.2a S2)', () => {
     expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('search.title'));
     expect(host.querySelector('[data-panel="pages"]')?.getAttribute('aria-expanded')).toBe('false');
   });
+
+  // Opens a one-page document with Search already open on the left, so each Ctrl+F test starts from
+  // the state it names.
+  async function openDocument(searchOpen: boolean): Promise<void> {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(scripted.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('find.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+    if (searchOpen) {
+      act(() => {
+        openPanel('search');
+      });
+    }
+  }
+
+  function pressCtrlF(): void {
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }),
+      );
+    });
+  }
+
+  it('Ctrl+F moves focus to the Search input when the panel is already open', async () => {
+    await openDocument(true);
+    const input = host.querySelector<HTMLInputElement>('#app-panel-left input[type="search"]');
+    if (input === null) throw new Error('no search input');
+    // Focus elsewhere: on a rail button, outside the search box.
+    const pages = host.querySelector<HTMLElement>('[data-panel="pages"]');
+    pages?.focus();
+    expect(document.activeElement).toBe(pages);
+
+    pressCtrlF();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('Ctrl+F opens the Search panel and focuses its input when the panel is closed', async () => {
+    await openDocument(false);
+    expect(host.querySelector('[data-panel="search"]')?.getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    const pages = host.querySelector<HTMLElement>('[data-panel="pages"]');
+    pages?.focus();
+
+    pressCtrlF();
+    expect(host.querySelector('[data-panel="search"]')?.getAttribute('aria-expanded')).toBe('true');
+    const input = host.querySelector<HTMLInputElement>('#app-panel-left input[type="search"]');
+    expect(document.activeElement).toBe(input);
+  });
 });

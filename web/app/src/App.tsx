@@ -104,6 +104,8 @@ export function App({
     },
     [jobs],
   );
+  // Bumped by Ctrl+F so the search panel moves focus to its query box (see SearchPanel).
+  const [searchFocus, setSearchFocus] = useState(0);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -146,8 +148,11 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
-    // Ctrl+F: the search panel, on the left. The command needs a document, so the panel is shown.
-    find: () => openPanel('search'),
+    // Ctrl+F: the search panel, on the left, with focus in its query box (also when it is open).
+    find: () => {
+      openPanel('search');
+      setSearchFocus((count) => count + 1);
+    },
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -269,6 +274,7 @@ export function App({
             onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
             onGoTo={goTo}
             onClose={() => closePanel('left')}
+            focusRequest={searchFocus}
           />
         ) : documentShown &&
           leftPanelOpen === 'bookmarks' &&
