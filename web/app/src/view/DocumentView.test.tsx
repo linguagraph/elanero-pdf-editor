@@ -26,6 +26,8 @@ function fakeRpc(pageCount: number) {
         }));
         return Promise.resolve({ pages });
       }
+      // The text layers (W5.4) are asked for but never answered here: they are not renders.
+      if (method === 'text.layer') return new Promise(() => undefined);
       return new Promise((resolve) => {
         renders.push({
           params: params as Methods['render.page']['params'],
@@ -210,6 +212,8 @@ function scriptedRpc(answer: (attempt: number) => Promise<unknown>) {
     if (method === 'session.pages') {
       return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }] });
     }
+    // The text layer is not a render: it is never answered here and does not use up an attempt.
+    if (method === 'text.layer') return new Promise(() => undefined);
     const attempt = attempts;
     attempts += 1;
     return answer(attempt);
