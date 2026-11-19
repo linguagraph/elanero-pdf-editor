@@ -18,6 +18,7 @@ import {
   ReplyShapeError,
 } from '../rpc/shape';
 import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
+import { memoryWarner } from '../feedback/memoryWarning';
 import type { JobWorker, SplitEngine } from '../split/splitJob';
 
 // The engine calls the flow makes. The RPC client satisfies it; tests pass a fake.
@@ -141,6 +142,8 @@ export async function runCompare(
     args: { ...args, other: other.slice(0) },
   });
   const { token } = prepared;
+  // The job worker's copy counts against the heap warning (W3.9 D4). Read before the copy is sent.
+  void memoryWarner.check(engine, 'job', prepared.document.byteLength);
 
   const worker = deps.startWorker();
   let cancel: () => void = () => undefined;
@@ -189,6 +192,7 @@ export async function runCompare(
       label: '',
       require_full_save: false,
     });
+    void memoryWarner.check(engine, 'job');
     progress.finish(token, { ok: true });
     return report;
   } catch (error) {

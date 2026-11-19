@@ -60,9 +60,12 @@ function failed(
   code: string,
   message = 'the message',
   details: Record<string, unknown> = { size: 3 },
+  events: unknown = [],
 ): CallResult {
   const error = { code, message, details };
-  return { reply: JSON.stringify({ v: PROTOCOL_VERSION, id: envelope.id, ok: false, error }) };
+  return {
+    reply: JSON.stringify({ v: PROTOCOL_VERSION, id: envelope.id, ok: false, error, events }),
+  };
 }
 
 const HELLO = { protocol: PROTOCOL_VERSION, engine: 'mupdf', platform: 'web' };
@@ -205,6 +208,39 @@ describe('RpcClient', () => {
       await expect(client.call('hello', {})).rejects.toMatchObject({
         code: 'INTERNAL',
         message: expect.stringContaining('reply.error.code'),
+      });
+    });
+
+    it('still rejects a failure that carries events with its own code', async () => {
+      // W1.2 section 2: a failed call carries the events it caused (a refused edit: blocked).
+      const blocked = { kind: 'blocked', handle: 'h', task: 'Sanitize' };
+      worker.respond = (envelope) => failed(envelope, 'BUSY', 'busy', {}, [blocked]);
+
+      await expect(client.call('hello', {})).rejects.toMatchObject({ code: 'BUSY' });
+    });
+
+    it('turns a failure without events into INTERNAL', async () => {
+      worker.respond = (envelope) => ({
+        reply: JSON.stringify({
+          v: PROTOCOL_VERSION,
+          id: envelope.id,
+          ok: false,
+          error: { code: 'BUSY', message: 'busy', details: {} },
+        }),
+      });
+
+      await expect(client.call('hello', {})).rejects.toMatchObject({
+        code: 'INTERNAL',
+        message: expect.stringContaining('reply.events'),
+      });
+    });
+
+    it('turns a failure whose events are not a list into INTERNAL', async () => {
+      worker.respond = (envelope) => failed(envelope, 'BUSY', 'busy', {}, { kind: 'state' });
+
+      await expect(client.call('hello', {})).rejects.toMatchObject({
+        code: 'INTERNAL',
+        message: expect.stringContaining('reply.events'),
       });
     });
 

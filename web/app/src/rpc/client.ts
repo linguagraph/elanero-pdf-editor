@@ -167,8 +167,9 @@ function interpret<M extends MethodName>(
 
   const ok = expectBoolean(field(reply, 'ok', 'reply'), 'reply.ok');
   if (!ok) {
-    checkKeys(reply, ['v', 'id', 'ok', 'error'], 'reply');
+    checkKeys(reply, ['v', 'id', 'ok', 'error', 'events'], 'reply');
     if (buffers.length > 0) throw new ReplyShapeError('buffers', 'an error reply has buffers');
+    expectArray(field(reply, 'events', 'reply'), 'reply.events');
     const error = expectObject(field(reply, 'error', 'reply'), 'reply.error');
     const code = expectOneOf(field(error, 'code', 'reply.error'), ERROR_CODES, 'reply.error.code');
     const message = expectString(field(error, 'message', 'reply.error'), 'reply.error.message');

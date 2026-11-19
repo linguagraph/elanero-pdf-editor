@@ -4,6 +4,7 @@
 import type { WorkerClient } from '../engine/start';
 import { reportRpcError, type ToastStore, toasts } from '../feedback/toasts';
 import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
+import { memoryWarner } from '../feedback/memoryWarning';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { JobAbortParams, JobPrepareResult, Methods } from '../rpc/generated';
@@ -12,7 +13,7 @@ import { type PrintJobArgs, runPrintWorker } from './printWorker';
 
 // The two calls the flow makes on the engine worker.
 export interface PrintRpc {
-  call<M extends 'jobs.prepare' | 'jobs.abort'>(
+  call<M extends 'jobs.prepare' | 'jobs.abort' | 'system.memory'>(
     method: M,
     params: Methods[M]['params'],
   ): Promise<Methods[M]['result']>;
@@ -60,6 +61,8 @@ export async function runPrintJob(options: PrintJobOptions): Promise<void> {
     reportRpcError(toastStore, asRpcError(error));
     return;
   }
+  // The job worker's copy counts against the heap warning (W3.9 D4). Read before the copy is sent.
+  void memoryWarner.check(options.rpc, 'job', prepared.document.byteLength);
 
   let worker: WorkerClient | undefined;
   const abortClient = {
