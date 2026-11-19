@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CSS_PX_PER_POINT,
+  MAX_RENDER_SCALE_MILLI,
   MAX_ZOOM,
   MIN_ZOOM,
   quantizeScale,
@@ -51,5 +52,16 @@ describe('device scale (W1.4 section 3)', () => {
     expect(scaleMilli(1, 1)).toBe(quantizeScale(4 / 3));
     expect(scaleMilli(2, 2)).toBe(quantizeScale(((2 * 4) / 3) * 2));
     expect(scaleMilli(0.5, 1)).toBe(quantizeScale(0.5 * (4 / 3)));
+  });
+
+  it('clamps the render scale to the engine limit instead of asking for a refused render', () => {
+    // zoom 64 at DPR 4 is device scale 341: over the 256 limit, so the render is clamped.
+    expect(MAX_RENDER_SCALE_MILLI).toBe(256_000);
+    expect(scaleMilli(64, 4)).toBe(MAX_RENDER_SCALE_MILLI);
+  });
+
+  it('leaves a normal zoom unchanged', () => {
+    expect(scaleMilli(1, 1)).toBe(quantizeScale(4 / 3));
+    expect(scaleMilli(64, 1)).toBe(quantizeScale(64 * (4 / 3)));
   });
 });

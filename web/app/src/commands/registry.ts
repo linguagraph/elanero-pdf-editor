@@ -78,6 +78,8 @@ export interface CommandDef {
   readonly group: string;
   readonly enabled: Enabled;
   readonly capability?: Capability;
+  // Search aliases (W4.3b D3): the palette also matches words in this message. Never shown.
+  readonly keywordsId?: MessageId;
 }
 
 export interface Registry {

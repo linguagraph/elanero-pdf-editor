@@ -39,6 +39,13 @@ Use your browser's own install option. In Chrome and Edge, use the install icon 
 or the browser menu. In Safari, use the browser's **Add to Dock** (Mac) or **Add to Home Screen**
 (iPad) option. Elanero's **Install App** command in the app menu is coming soon.
 
+Once installed in Chrome or Edge, Elanero is an **Open with** choice for PDF files. Right-click a PDF
+in Explorer (or Finder), choose **Open with**, then **Elanero**: the file opens in a tab. Selecting
+several PDFs opens them together, as tabs in one window. If Elanero is already open, the files open
+in that window and your open documents stay as they are. Up to 20 files open from one choice; the
+others are left for the app's Open button. Other browsers and the plain browser tab have no
+**Open with**: use Open or drag and drop.
+
 When a new version of Elanero is ready, a banner appears at the top with a **Reload** button. Nothing
 is reloaded until you press it.
 
@@ -56,6 +63,10 @@ is reloaded until you press it.
   **Apply** saves your changes; **Cancel**, Esc or a click outside the dialog puts back the saved
   theme. The default zoom applies to the open document at once, and to each document you open. The
   author name is saved now and used once comments are available in the web version (coming soon).
+
+  Zoom above 100% on a high-density screen can ask for more pixels than a page can be drawn at. The
+  viewer then draws the page at the largest size it supports, so the page stays visible rather than
+  going blank.
 
 ## Ribbon and keyboard shortcuts
 
@@ -182,6 +193,8 @@ Evidence for the claims on this page (repository paths, checked on main):
 - Install App has no handler: web/app/src/commands/catalog.ts ('install-app'); no handler in App.tsx.
 - Install (manifest, standalone display): web/app/index.html, web/app/src/pwa/build.ts (buildManifest),
   web/app/vite.config.ts.
+- Open with (file_handlers, launch_handler) and the launch queue: web/app/src/pwa/launch.ts,
+  web/app/src/pwa/build.ts, web/app/src/main.tsx.
 - Offline app files, documents never cached: web/app/public/sw.js, web/app/src/pwa/register.ts,
   web/app/src/main.tsx (service worker registered in production builds only).
 - Update banner and Reload: web/app/src/pwa/UpdatePrompt.tsx, web/app/src/pwa/update.ts,

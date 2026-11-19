@@ -6,7 +6,14 @@
 // and none is done. `{name}` marks a named parameter that `t()` fills in from its second argument.
 // Messages say what happened and what to do, in words the user knows; they never name internal
 // classes or error codes.
+//
+// A value is either a string, read with `t()` and keyed by `MessageId`, or a plural object
+// `{ one, other }`, read with `tp(id, count)` and keyed by `PluralId`. In a plural, `{count}` is the
+// count passed to `tp()`, formatted for the locale. Never write "(s)" or "{count} pages" by hand.
 export const EN = {
+  // Plural sample for the tp() tests (W4.7 S1). Nothing in the UI uses it yet.
+  'sample.pages': { one: '{count} page', other: '{count} pages' },
+
   // App shell and About.
   'app.name': 'Elanero',
   'app.version': 'Version {version}',
@@ -78,6 +85,17 @@ export const EN = {
   'disabled.notAvailableYet': 'This command is not available yet.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
+  // Search aliases (W4.3b D3): the palette also matches these words. They are never shown.
+  'command.document-properties.keywords': 'info title author',
+  'command.find.keywords': 'search',
+  'command.delete-pages.keywords': 'remove',
+  'command.split-document.keywords': 'divide separate',
+  'command.combine-files-into-pdf.keywords': 'merge join',
+  'command.redact.keywords': 'censor hide',
+  'command.encrypt-with-password.keywords': 'password lock protect',
+  'command.remove-security.keywords': 'unlock decrypt password',
+  'command.sanitize-document.keywords': 'clean metadata',
+  'command.reduce-file-size.keywords': 'compress shrink optimize',
   'palette.title': 'Command palette',
   'palette.search': 'Search commands',
   'palette.placeholder': 'Type a command',
@@ -426,6 +444,8 @@ export const EN = {
   'tabs.unsaved': 'Unsaved changes',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
   'open.largeFile': '{name} is large, so opening and editing may be slow.',
+  'open.launchFailed': '{name} could not be opened. Open it again from the app.',
+  'open.launchTooMany': 'Only the first {max} files were opened. Open the others from the app.',
   'autosave.unavailable':
     'This browser does not keep an autosave copy, so unsaved changes are lost if the page closes.',
   'autosave.noSpace':
@@ -763,4 +783,14 @@ export const EN = {
   'marks.kind.Background': 'background colour',
 } as const;
 
-export type MessageId = keyof typeof EN;
+// Keys whose value is a string: the ones `t()` takes. Callers with a label or a message id that
+// never holds a plural keep using this type.
+export type MessageId = {
+  [K in keyof typeof EN]: (typeof EN)[K] extends string ? K : never;
+}[keyof typeof EN];
+
+// Keys whose value is a plural object: the ones `tp()` takes.
+export type PluralId = Exclude<keyof typeof EN, MessageId>;
+
+// Every key, for code that takes either kind (the catalogue and the tests).
+export type AnyMessageId = keyof typeof EN;

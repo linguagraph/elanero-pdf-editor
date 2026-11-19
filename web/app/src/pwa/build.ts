@@ -61,6 +61,21 @@ export function buildManifest(): Record<string, unknown> {
       { src: 'icons/elanero-256.png', sizes: '256x256', type: 'image/png' },
       { src: 'icons/elanero-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
     ],
+    // "Open with" for PDFs (W4.6 S1). The action is the start URL, so it is in scope under any base
+    // path and the service worker serves the shell for it. The file arrives through launchQueue,
+    // never in the URL. Only PDF is accepted.
+    file_handlers: [
+      {
+        action: './',
+        accept: { 'application/pdf': ['.pdf'] },
+        icons: [{ src: 'icons/elanero-256.png', sizes: '256x256', type: 'image/png' }],
+        // Several files picked together arrive as one launch, in one window (the app has tabs).
+        launch_type: 'single-client',
+      },
+    ],
+    // An open window gets the launch through its launchQueue, without a reload that would lose
+    // unsaved work. "auto" is the fallback where focus-existing is not supported.
+    launch_handler: { client_mode: ['focus-existing', 'auto'] },
   };
 }
 
