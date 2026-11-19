@@ -307,8 +307,9 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
         isOpen={preferencesOpen}
         onClose={() => setPreferencesOpen(false)}
         // Any open tab counts, including one still loading or behind the start page (Open Recent):
-        // clearing reloads the page, which would lose its unsaved edits.
-        hasDocuments={docs.tabs.tabs.length > 0}
+        // clearing reloads the page, which would lose its unsaved edits. A file still queued or
+        // opening (docs.pending) counts too: it can finish while the confirmation is showing.
+        hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
       />
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
         <SplitDialog

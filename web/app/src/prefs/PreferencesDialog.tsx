@@ -121,7 +121,9 @@ function PreferencesForm({
   // and disables the button.
   const clearingRef = useRef(false);
   const clearAll = async () => {
-    if (clearingRef.current) return;
+    // A tab opened while the confirmation shows (a file still queued or opening) must block the
+    // clear too: the button is disabled, and this guard keeps every other path from reloading.
+    if (hasDocuments || clearingRef.current) return;
     clearingRef.current = true;
     setClearing(true);
     setClearFailed(false);
@@ -237,7 +239,7 @@ function PreferencesForm({
               <button
                 type="button"
                 className="overlay-close prefs-danger"
-                disabled={clearing}
+                disabled={hasDocuments || clearing}
                 onClick={() => void clearAll()}
               >
                 {t('prefs.clearAll.clear')}

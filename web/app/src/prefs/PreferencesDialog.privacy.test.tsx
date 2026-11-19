@@ -125,6 +125,30 @@ describe('PreferencesDialog: Clear all local data', () => {
     expect(harness.reloadPage).toHaveBeenCalledTimes(1);
   });
 
+  it('blocks the confirmed clear when a document opens while the confirmation shows', () => {
+    const harness = render(false, COMPLETE);
+    clickButton(t('prefs.clearAll.open'));
+    expect(dialog().textContent).toContain(t('prefs.clearAll.confirm'));
+    act(() => {
+      root.render(
+        <PreferencesDialog
+          isOpen
+          onClose={() => undefined}
+          hasDocuments
+          clearData={harness.clearData}
+          reloadPage={harness.reloadPage}
+        />,
+      );
+    });
+    expect(buttonNamed(t('prefs.clearAll.clear')).disabled).toBe(true);
+    expect(dialog().textContent).toContain(t('prefs.clearAll.blocked'));
+    act(() => {
+      buttonNamed(t('prefs.clearAll.clear')).click();
+    });
+    expect(harness.clearData).not.toHaveBeenCalled();
+    expect(harness.reloadPage).not.toHaveBeenCalled();
+  });
+
   it('shows the message and does not reload when the clear is incomplete', async () => {
     const harness = render(false, { keysRemoved: 1, complete: false });
     clickButton(t('prefs.clearAll.open'));
