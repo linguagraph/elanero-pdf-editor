@@ -78,6 +78,17 @@ export const EN = {
   'disabled.notAvailableYet': 'This command is not available yet.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
+  // Search aliases (W4.3b D3): the palette also matches these words. They are never shown.
+  'command.document-properties.keywords': 'info title author',
+  'command.find.keywords': 'search',
+  'command.delete-pages.keywords': 'remove',
+  'command.split-document.keywords': 'divide separate',
+  'command.combine-files-into-pdf.keywords': 'merge join',
+  'command.redact.keywords': 'censor hide',
+  'command.encrypt-with-password.keywords': 'password lock protect',
+  'command.remove-security.keywords': 'unlock decrypt password',
+  'command.sanitize-document.keywords': 'clean metadata',
+  'command.reduce-file-size.keywords': 'compress shrink optimize',
   'palette.title': 'Command palette',
   'palette.search': 'Search commands',
   'palette.placeholder': 'Type a command',
