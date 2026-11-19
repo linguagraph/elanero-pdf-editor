@@ -1,7 +1,7 @@
 // What the comparison report shows and saves (W7.8). The changes are grouped by the page they are
 // on: a changed page lists its changes in the order the job gave them. The saved text is the same
 // report, as plain text, so the two never disagree.
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import type { MessageId } from '../i18n/en';
 import type { CompareChange, CompareReport } from './compareJob';
 
@@ -61,8 +61,7 @@ export function reportText(report: CompareReport, older: string, newer: string):
     t('compare.report.older', { name: older }),
     t('compare.report.newer', { name: newer }),
     '',
-    t('compare.report.summary', {
-      compared: comparedPageCount(report),
+    tp('compare.report.summary', comparedPageCount(report), {
       changed: groupChanges(report.changes).length,
     }),
   ];

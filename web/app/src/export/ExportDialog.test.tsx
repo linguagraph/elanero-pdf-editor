@@ -5,7 +5,7 @@ import type { CallResult } from '../engine/loader';
 import type { FileJobEngine, JobWorker } from '../files/fileJob';
 import { createJobProgressStore, type JobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import { ExportDialog, type ExportDialogProps } from './ExportDialog';
 
@@ -165,7 +165,7 @@ describe('ExportDialog', () => {
     await flush();
 
     expect(dialogElement().textContent).toContain(
-      t('split.error.ranges.outOfRange', { item: '9-12', count: 10 }),
+      tp('split.error.ranges.outOfRange', 10, { item: '9-12' }),
     );
     expect(call).not.toHaveBeenCalled();
   });

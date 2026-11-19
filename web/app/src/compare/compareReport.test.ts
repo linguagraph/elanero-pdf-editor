@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import type { CompareChange, CompareReport } from './compareJob';
 import { groupChanges, kindLabel, reportText } from './compareReport';
 
@@ -54,7 +54,7 @@ describe('reportText', () => {
     const text = reportText(REPORT, 'Old.pdf', 'New.pdf');
     expect(text).toContain(t('compare.report.older', { name: 'Old.pdf' }));
     expect(text).toContain(t('compare.report.newer', { name: 'New.pdf' }));
-    expect(text).toContain(t('compare.report.summary', { compared: 5, changed: 3 }));
+    expect(text).toContain(tp('compare.report.summary', 5, { changed: 3 }));
     expect(text).toContain(t('compare.report.page', { page: 1 }));
     expect(text).toContain(`${t('compare.kind.replaced')}: 'old' -> 'new'`);
     expect(text).toContain(`${t('compare.kind.inserted')}: a new line`);

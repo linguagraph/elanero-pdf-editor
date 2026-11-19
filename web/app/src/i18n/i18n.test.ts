@@ -54,6 +54,17 @@ describe('message catalogue (W4.7)', () => {
     }
   });
 
+  it('keeps count-dependent text in plural entries, never "(s)" or "{count} nouns"', () => {
+    // The label-and-value form ("Comments: {count}") reads correctly in every language and stays
+    // allowed. Plural entries are exempt: their `other` form legitimately says "{count} pages".
+    for (const id of ids) {
+      const entry = EN[id];
+      if (typeof entry !== 'string') continue;
+      expect(entry, id).not.toMatch(/\(s\)/);
+      expect(entry, id).not.toMatch(/\{(count|total)\} \p{L}+s\b/u);
+    }
+  });
+
   it('gives every English plural exactly the one and other forms', () => {
     for (const id of ids) {
       const entry = EN[id];
@@ -96,6 +107,12 @@ describe('tp() plural forms', () => {
     expect(tp('sample.pages', 1)).toBe('1 page');
     expect(tp('sample.pages', 0)).toBe('0 pages');
     expect(tp('sample.pages', 2)).toBe('2 pages');
+  });
+
+  it('uses the singular form of the migrated W4.7 keys at a count of 1', () => {
+    expect(tp('organizer.deleted', 1)).toBe('Deleted 1 page');
+    expect(tp('search.countTotal', 1)).toBe('1 match');
+    expect(tp('marks.done.removed', 1)).toBe('Removed 1 mark.');
   });
 
   it('formats the count with grouping for the locale', () => {

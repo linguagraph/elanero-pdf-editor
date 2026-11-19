@@ -1,6 +1,6 @@
 // Reads what the user typed in the split and export dialogs (W6.2, W7.7). Pure: no engine, no DOM.
 // Pages are typed 1-based, as the user reads them, and returned 0-based, as the jobs take them.
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 
 // Why a typed value was refused. The dialog maps each kind to a message and the offending item.
 export type InputError =
@@ -16,7 +16,7 @@ export function rangeErrorMessage(error: InputError): string {
     case 'invalid':
       return t('split.error.ranges.invalid', { item: error.item });
     case 'outOfRange':
-      return t('split.error.ranges.outOfRange', { item: error.item, count: error.count });
+      return tp('split.error.ranges.outOfRange', error.count, { item: error.item });
   }
 }
 

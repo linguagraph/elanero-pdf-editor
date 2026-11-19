@@ -2,7 +2,7 @@
 // marks not yet applied, Clear, and Apply. Apply asks for confirmation first, since the removed
 // content cannot be put back by saving. Nothing here changes the document; the controller does.
 import { useState } from 'react';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import type { RedactionSnapshot } from './controller';
 import './redaction.css';
@@ -38,7 +38,7 @@ export function RedactionBar({ state, onToggle, onClear, onApply }: RedactionBar
         showCloseButton={false}
       >
         <div className="redact-confirm">
-          <p>{t('redact.confirm.body', { count })}</p>
+          <p>{tp('redact.confirm.body', count)}</p>
           <div className="redact-actions">
             <button
               type="button"

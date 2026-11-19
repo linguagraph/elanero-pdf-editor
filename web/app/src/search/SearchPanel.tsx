@@ -4,7 +4,7 @@
 // and choosing one asks the view to scroll to its page through onGoTo.
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import type { SearchHitDto, SearchOptionsDto } from '../rpc/generated';
 import { collectSearch, nextHit, previousHit, type SearchMarks } from './search';
@@ -39,16 +39,16 @@ function statusText(view: RunView): string {
     case 'searching':
       return t('search.progress', { done: view.pagesDone, total: view.total });
     case 'stopped':
-      return t('search.stopped', { count: view.hits.length });
+      return tp('search.stopped', view.hits.length);
     case 'failed':
       return t('search.failed');
     case 'done':
       if (view.hits.length === 0) return t('search.noMatches');
       return view.current >= 0
-        ? t('search.count', { current: view.current + 1, count: view.hits.length })
-        : t('search.countTotal', { count: view.hits.length });
+        ? tp('search.count', view.hits.length, { current: view.current + 1 })
+        : tp('search.countTotal', view.hits.length);
     case 'idle':
-      return view.hits.length > 0 ? t('search.countTotal', { count: view.hits.length }) : '';
+      return view.hits.length > 0 ? tp('search.countTotal', view.hits.length) : '';
   }
 }
 

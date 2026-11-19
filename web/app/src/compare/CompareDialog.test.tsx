@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
 import { createJobProgressStore, type JobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { MAX_FILE_BYTES } from '../documents/openFile';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import type { JobWorker, SplitEngine } from '../split/splitJob';
@@ -196,9 +196,7 @@ describe('CompareDialog', () => {
     const [request, buffers] = worker.call.mock.calls[0] as unknown as [string, ArrayBuffer[]];
     expect(JSON.parse(request).params.args).toMatchObject({ other: { $bin: 1 } });
     expect(new TextDecoder().decode(buffers[1])).toBe(NEW_CONTENT);
-    expect(dialogElement().textContent).toContain(
-      t('compare.report.summary', { compared: 3, changed: 2 }),
-    );
+    expect(dialogElement().textContent).toContain(tp('compare.report.summary', 3, { changed: 2 }));
   });
 
   it('shows the job on the progress bar while it runs', async () => {
