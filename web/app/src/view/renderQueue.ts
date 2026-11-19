@@ -10,6 +10,9 @@ export interface RenderRequest {
   readonly revision: number;
   readonly scaleMilli: number;
   readonly rotation: number;
+  // A tile of a page drawn as tiles (W1.4 section 4); absent for a whole page image.
+  readonly tileX?: number;
+  readonly tileY?: number;
 }
 
 export interface QueueEntry {
@@ -24,7 +27,9 @@ export const MAX_IN_FLIGHT = 2;
 
 // Identifies a request within one document. Two requests with the same key render the same pixels.
 export function requestKey(request: RenderRequest): string {
-  return `${request.page}:${request.revision}:${request.scaleMilli}:${request.rotation}`;
+  const base = `${request.page}:${request.revision}:${request.scaleMilli}:${request.rotation}`;
+  if (request.tileX === undefined || request.tileY === undefined) return base;
+  return `${base}:${request.tileX}:${request.tileY}`;
 }
 
 function byPriority(a: QueueEntry, b: QueueEntry): number {

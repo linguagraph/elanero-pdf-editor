@@ -2,7 +2,8 @@
 // stacked vertically at the zoom level, each with a placeholder at its size. Only the pages near the
 // viewport are mounted; the visible ones are rendered through render.page, queued and cached by the
 // render scheduler, which the thumbnails panel of the same tab shares. Each page also gets its text
-// layer (W5.4) and the search highlights. No annotations or tiles here (W5.1b and later).
+// layer (W5.4) and the search highlights. Pages above 4 MP are drawn as tiles (W5.1b, tiles.ts);
+// no annotations here.
 import {
   type Ref,
   useEffect,
@@ -19,8 +20,6 @@ import {
   computeColumn,
   computeSpreads,
   currentPageIndex,
-  distanceToCentre,
-  isInViewport,
   type PageSizePt,
   scrollTopForPage,
   scrollTopForSpread,
@@ -35,9 +34,9 @@ import type { PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import { TextLayerCache } from '../text/textLayerCache';
-import { pageCacheKey } from './pageCache';
 import { CachedCanvas } from './pixels';
-import { type PlannedRender, RenderScheduler } from './renderScheduler';
+import { RenderScheduler } from './renderScheduler';
+import { planPageRenders, tileRect, tilesInViewport } from './tiles';
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, scaleMilli, stepZoom } from './zoom';
 import { anchoredScroll, isZoomWheel, takeWheelSteps, wheelDeltaPixels } from './wheel';
 import './documentView.css';
@@ -217,22 +216,24 @@ export function DocumentView({
     onViewChange?.({ page: currentPage, zoom });
   }, [currentPage, zoom, onViewChange]);
 
-  // Plans the page renders from what is on screen now. Renders finishing bump the tick, which runs
-  // this again, so the queue keeps moving until it is empty.
+  // Plans the page renders from what is on screen now: the visible pages first, then the pages
+  // just outside the viewport (prefetch, which the scheduler sends after the visible ones). A page
+  // above 4 MP is planned as its tiles. Renders finishing bump the tick, which runs this again, so
+  // the queue keeps moving until it is empty.
   useEffect(() => {
     if (sizes === null) return;
-    const planned: PlannedRender[] = [];
-    for (let index = range.first; index < range.end; index += 1) {
-      const box = layout.boxes[index];
-      if (box === undefined) continue;
-      planned.push({
-        page: index,
+    scheduler.plan(
+      'page',
+      planPageRenders({
+        boxes: layout.boxes,
+        sizes,
+        first: range.first,
+        end: range.end,
+        scrollTop: scroll.top,
+        viewportHeight: scroll.height,
         scaleMilli: scale,
-        visible: isInViewport(box, scroll.top, scroll.height),
-        distance: distanceToCentre(box, scroll.top, scroll.height),
-      });
-    }
-    scheduler.plan('page', planned);
+      }),
+    );
     // The plan depends on what is on screen and the scale; the scheduler is stable state.
   }, [sizes, layout, range.first, range.end, scroll.top, scroll.height, scale, scheduler, tick]);
 
@@ -322,13 +323,16 @@ export function DocumentView({
         >
           <div className="doc-view-content" style={{ width: layout.width, height: layout.height }}>
             {layout.boxes.slice(range.first, range.end).map((box) => {
-              const cacheKey = pageCacheKey({
-                handle,
-                page: box.index,
-                revision: scheduler.revisionOf(box.index),
-                scaleMilli: scale,
-                rotation: 0,
-              });
+              // A page above 4 MP is drawn as the tiles of its visible part; a smaller one as one image.
+              const size = sizes[box.index];
+              const tiled =
+                size === undefined
+                  ? null
+                  : tilesInViewport(box, size, scale, scroll.top, scroll.height);
+              const keys =
+                tiled === null
+                  ? [scheduler.cacheKeyOf('page', box.index, scale)]
+                  : tiled.cells.map((cell) => scheduler.cacheKeyOf('page', box.index, scale, cell));
               return (
                 <div
                   key={box.index}
@@ -338,12 +342,34 @@ export function DocumentView({
                   style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
                 >
                   <div className="doc-page-placeholder" />
-                  <CachedCanvas
-                    cache={scheduler.cache}
-                    cacheKey={cacheKey}
-                    version={tick}
-                    className="doc-page-canvas"
-                  />
+                  {tiled === null ? (
+                    <CachedCanvas
+                      cache={scheduler.cache}
+                      cacheKey={keys[0] ?? ''}
+                      version={tick}
+                      className="doc-page-canvas"
+                    />
+                  ) : (
+                    tiled.cells.map((cell, index) => {
+                      const rect = tileRect(tiled.device, cell);
+                      const percent = (value: number, of: number) => `${(value / of) * 100}%`;
+                      return (
+                        <CachedCanvas
+                          key={`${cell.tileX}:${cell.tileY}`}
+                          cache={scheduler.cache}
+                          cacheKey={keys[index] ?? ''}
+                          version={tick}
+                          className="doc-page-canvas"
+                          style={{
+                            left: percent(rect.x, tiled.device.width),
+                            top: percent(rect.y, tiled.device.height),
+                            width: percent(rect.width, tiled.device.width),
+                            height: percent(rect.height, tiled.device.height),
+                          }}
+                        />
+                      );
+                    })
+                  )}
                   <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
                   {commentTool !== null && sizes !== null ? (
                     <CommentLayer
@@ -360,7 +386,7 @@ export function DocumentView({
                     revision={scheduler.revisionOf(box.index)}
                     zoom={zoom}
                   />
-                  {scheduler.isFailed(cacheKey) ? (
+                  {keys.some((key) => scheduler.isFailed(key)) ? (
                     <span className="doc-page-error">{t('view.renderFailed')}</span>
                   ) : null}
                 </div>

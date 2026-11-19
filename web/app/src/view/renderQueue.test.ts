@@ -82,3 +82,28 @@ describe('RenderQueue', () => {
     expect(queue.queuedKeys()).toEqual([requestKey(entry(0, true, 0, 4).request)]);
   });
 });
+
+describe('RenderQueue tiles', () => {
+  it('keys a tile apart from the whole page and from the other tiles', () => {
+    const whole = { page: 1, revision: 0, scaleMilli: 1000, rotation: 0 };
+    const a = { ...whole, tileX: 0, tileY: 1 };
+    const b = { ...whole, tileX: 1, tileY: 1 };
+    expect(requestKey(a)).not.toBe(requestKey(whole));
+    expect(requestKey(a)).not.toBe(requestKey(b));
+  });
+
+  it('drops a queued tile that the next plan no longer wants, before it is sent', () => {
+    const queue = new RenderQueue(1);
+    const tile = (tileX: number): QueueEntry => ({
+      request: { page: 0, revision: 0, scaleMilli: 1000, rotation: 0, tileX, tileY: 0 },
+      visible: true,
+      distance: tileX,
+    });
+    queue.plan([tile(0), tile(1), tile(2)]);
+    expect(queue.next()?.tileX).toBe(0);
+    const dropped = queue.plan([tile(2)]);
+    expect(dropped).toEqual([requestKey(tile(1).request)]);
+    queue.finish(requestKey(tile(0).request));
+    expect(queue.next()?.tileX).toBe(2);
+  });
+});

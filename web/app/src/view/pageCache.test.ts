@@ -76,3 +76,38 @@ describe('PageCache', () => {
     expect(cache.byteCount).toBe(0);
   });
 });
+
+describe('PageCache budget and pins (W1.4 section 6)', () => {
+  it('never evicts a pinned bitmap, even over the budget', () => {
+    const cache = new PageCache(300);
+    cache.set('visible', page(100));
+    cache.set('b', page(100));
+    cache.pin(new Set(['visible']));
+    cache.set('c', page(100));
+    cache.set('d', page(100));
+    expect(cache.has('visible')).toBe(true);
+    expect(cache.has('b')).toBe(false);
+    expect(cache.byteCount).toBeLessThanOrEqual(300);
+  });
+
+  it('lets the cache exceed the budget when only pinned bitmaps are left', () => {
+    const cache = new PageCache(200);
+    cache.set('a', page(100));
+    cache.set('b', page(100));
+    cache.pin(new Set(['a', 'b']));
+    cache.set('c', page(100));
+    expect(cache.has('a')).toBe(true);
+    expect(cache.has('b')).toBe(true);
+    expect(cache.has('c')).toBe(true);
+    expect(cache.byteCount).toBe(300);
+  });
+
+  it('keys a whole page with -1 tile coordinates and each tile apart', () => {
+    const base = { handle: 'h', page: 2, revision: 0, scaleMilli: 1000, rotation: 0 };
+    expect(pageCacheKey(base)).toBe('h|2|0|1000|0|-1|-1');
+    const tile00 = pageCacheKey({ ...base, tileX: 0, tileY: 0 });
+    const tile10 = pageCacheKey({ ...base, tileX: 1, tileY: 0 });
+    expect(tile00).not.toBe(pageCacheKey(base));
+    expect(tile00).not.toBe(tile10);
+  });
+});
