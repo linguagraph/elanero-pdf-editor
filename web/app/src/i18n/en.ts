@@ -260,6 +260,47 @@ export const EN = {
   'job.working': 'Working',
   'job.percent': '{percent}% done',
   'job.done': 'Done: {label}',
+  'job.encryptedRefused':
+    'This document is encrypted, so the browser cannot change it. Use the desktop app to redact or sanitize it.',
+
+  // Redaction (W7.4): the mark tool, the apply and its confirmation.
+  'redact.toolbarLabel': 'Redaction',
+  'redact.mark': 'Mark areas',
+  'redact.count': '{count} marked',
+  'redact.clear': 'Clear marks',
+  'redact.apply': 'Apply redactions',
+  'redact.confirm.title': 'Apply redactions?',
+  'redact.confirm.body':
+    'The text and images under the {count} marked areas are removed for good. Saving keeps them removed. Undo can reverse this only until you close the document.',
+  'redact.confirm.apply': 'Apply now',
+  'redact.confirm.cancel': 'Cancel',
+  'redact.applied': 'Redactions applied.',
+  'redact.markFailed': 'The area could not be marked. Try again.',
+  'redact.applyFailed': 'The redactions could not be applied. Try again.',
+
+  // Sanitize (W7.4): the dialog's items, its confirmation and the report.
+  'sanitize.title': 'Sanitize document',
+  'sanitize.intro': 'Choose the hidden data to remove. Nothing is removed until you confirm.',
+  'sanitize.option.metadata': 'Document properties (title, author and so on)',
+  'sanitize.option.xmp': 'XMP metadata',
+  'sanitize.option.javascript': 'JavaScript and automatic actions',
+  'sanitize.option.attachments': 'Attached files',
+  'sanitize.option.links': 'Links',
+  'sanitize.option.hidden_text': 'Hidden (invisible) text',
+  'sanitize.option.comments': 'Comments and markups',
+  'sanitize.option.form_data': 'Form field values',
+  'sanitize.option.thumbnails': 'Embedded page thumbnails',
+  'sanitize.option.hidden_layers': 'Content on hidden layers',
+  'sanitize.option.off_page_text': 'Text outside the visible page area',
+  'sanitize.run': 'Sanitize',
+  'sanitize.close': 'Close',
+  'sanitize.confirm.body':
+    'The chosen data is removed for good. Undo can reverse this only until you close the document, and a saved file keeps it removed.',
+  'sanitize.confirm.run': 'Sanitize now',
+  'sanitize.confirm.back': 'Back',
+  'sanitize.result.heading': 'Removed:',
+  'sanitize.result.none': 'Nothing needed removing.',
+  'sanitize.failed': 'The document could not be sanitized. Try again.',
   'combine.title': 'Combine files',
   'combine.label': 'Combining files',
   'combine.dropHint':

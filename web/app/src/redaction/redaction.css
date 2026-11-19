@@ -1,0 +1,55 @@
+/* The redaction tools (W7.4). The layer covers one page box while the mark tool is on. */
+.redact-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.redact-preview {
+  position: absolute;
+  background: rgb(0 0 0 / 0.3);
+  outline: 1px dashed currentColor;
+  pointer-events: none;
+}
+
+.redact-bar,
+.redact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.redact-bar {
+  padding: 4px 0;
+}
+
+.redact-error {
+  color: var(--color-error, #b3261e);
+}
+
+.sanitize {
+  display: grid;
+  gap: 12px;
+}
+
+.sanitize-options {
+  display: grid;
+  gap: 6px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.sanitize-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.sanitize-result {
+  margin: 0;
+  padding-left: 20px;
+}

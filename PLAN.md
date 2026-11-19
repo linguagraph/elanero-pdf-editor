@@ -606,7 +606,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W7.1b** A4 Comments panel
 - [ ] **W7.2** A5 Comment summary export and XFDF import/export
 - [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds
-- [ ] **W7.4** A7 Redaction and sanitize
+- [x] **W7.4** A7 Redaction and sanitize
 - [ ] **W7.5** A8 Password protection and permissions
 - [ ] **W7.6** A9 Document properties and metadata editing
 - [ ] **W7.7** A10 Export pages as images and text
