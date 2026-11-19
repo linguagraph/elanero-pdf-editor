@@ -14,6 +14,8 @@ from __future__ import annotations
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.base import Change
 from pdfeditor.core.session import EventKind, SessionEvent
+from pdfeditor.model.pages import MarkKind
+from pdfeditor.services import stamping
 from pdfeditor.services.comments import flattenable as flattenable_comments
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.dto import BufferTable, from_json
@@ -67,6 +69,20 @@ def flattenable(params: dto.HandleParams) -> dto.FlattenableResult:
     with session.lock:
         count, pages = flattenable_comments(session.document)
     return dto.FlattenableResult(count=count, pages=pages)
+
+
+def list_marks(params: dto.HandleParams) -> dto.MarksResult:
+    """The page marks in the document (header and footer, Bates, watermark, background), read-only:
+    the web's marks dialogs read it to offer Replace and Remove. Empty without ``page_marks``."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        found = stamping.find_marks(session.engine, session.document)
+    items = tuple(
+        dto.MarkSummaryDto(kind=kind, pages=len(found[kind].pages), foreign=found[kind].foreign)
+        for kind in MarkKind
+        if kind in found
+    )
+    return dto.MarksResult(items=items)
 
 
 def undo(params: dto.HandleParams) -> dto.HistoryResult:

@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum, IntFlag
 from typing import Any, NoReturn, Union, get_args, get_origin
 
+from pdfeditor.model.pages import MarkKind
 from pdfeditor.services.assembly import SplitMode
 from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
 
@@ -364,6 +365,18 @@ class HistoryResult:
 @dataclasses.dataclass(frozen=True, slots=True)
 class AvailableResult:
     names: tuple[str, ...]  # the actions whose capabilities hold on this document and platform
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MarkSummaryDto:
+    kind: MarkKind  # a kind of page mark (services.stamping.find_marks)
+    pages: int  # how many pages carry it
+    foreign: bool  # only other tools' marks of this kind were found (Acrobat's)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MarksResult:
+    items: tuple[MarkSummaryDto, ...]  # one per kind present, in MarkKind order
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

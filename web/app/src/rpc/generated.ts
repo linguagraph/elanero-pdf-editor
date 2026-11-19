@@ -45,6 +45,14 @@ export const IO_EXTRA = {
 } as const;
 
 /**
+ * Page content added as one replaceable unit (Acrobat's "pagination artifacts").
+ *
+ * The app wraps what it draws in a marked-content artifact naming the kind, so it can be
+ * found again to update or remove, and keeps the settings used next to it.
+ */
+export type MarkKind = 'HeaderFooter' | 'Bates' | 'Watermark' | 'Background';
+
+/**
  * W1.1 section 4: ``in_place`` keeps signatures (incremental when signed); ``copy`` is a full
  * rewrite, as Save As.
  */
@@ -209,6 +217,20 @@ export interface JobPrepareResult {
 export interface MarkSavedResult {
   saved: boolean;
   state: DocStateDto;
+}
+
+export interface MarkSummaryDto {
+  /** a kind of page mark (services.stamping.find_marks) */
+  kind: MarkKind;
+  /** how many pages carry it */
+  pages: number;
+  /** only other tools' marks of this kind were found (Acrobat's) */
+  foreign: boolean;
+}
+
+export interface MarksResult {
+  /** one per kind present, in MarkKind order */
+  items: MarkSummaryDto[];
 }
 
 export interface OpenParams {
@@ -451,6 +473,7 @@ export interface Methods {
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
+  'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
   'render.tile': { params: RenderTileParams; result: PageImage; deadline: 'render' };
   'save.mark_saved': { params: HandleParams; result: MarkSavedResult; deadline: 'instant' };
@@ -479,6 +502,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
+  'marks.list': 'instant',
   'render.page': 'render',
   'render.tile': 'render',
   'save.mark_saved': 'instant',
@@ -512,6 +536,7 @@ export const RESULT_DECODERS: {
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
+  'marks.list': decodeMarksResult,
   'render.page': decodePageImage,
   'render.tile': decodePageImage,
   'save.mark_saved': decodeMarkSavedResult,
@@ -812,6 +837,32 @@ export function decodeMarkSavedResult(
   return {
     saved: expectBoolean(field(o, 'saved', path), `${path}.saved`),
     state: decodeDocStateDto(field(o, 'state', path), ctx, `${path}.state`),
+  };
+}
+
+export function decodeMarkSummaryDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): MarkSummaryDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['kind', 'pages', 'foreign'], path);
+  return {
+    kind: expectOneOf(field(o, 'kind', path), ['HeaderFooter', 'Bates', 'Watermark', 'Background'] as const, `${path}.kind`),
+    pages: expectInteger(field(o, 'pages', path), `${path}.pages`),
+    foreign: expectBoolean(field(o, 'foreign', path), `${path}.foreign`),
+  };
+}
+
+export function decodeMarksResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): MarksResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['items'], path);
+  return {
+    items: expectArray(field(o, 'items', path), `${path}.items`).map((item1, index1) => decodeMarkSummaryDto(item1, ctx, `${`${path}.items`}[${index1}]`)),
   };
 }
 
