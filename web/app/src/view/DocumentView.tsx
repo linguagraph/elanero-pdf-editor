@@ -8,6 +8,7 @@ import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import {
   computeColumn,
+  currentPageIndex,
   distanceToCentre,
   isInViewport,
   type PageSizePt,
@@ -28,12 +29,22 @@ export interface DocumentViewHandle {
   scrollToPage(index: number): void;
 }
 
+// What the view reports to its host for the status bar: the page at the middle of the viewport
+// (one-based) and the zoom.
+export interface DocumentViewState {
+  readonly page: number;
+  readonly zoom: number;
+}
+
 export interface DocumentViewProps {
   readonly rpc: PageRpc;
   readonly handle: string;
   // The tab's scheduler, shared with the thumbnails panel. When absent the view makes its own.
   readonly scheduler?: RenderScheduler;
   readonly ref?: Ref<DocumentViewHandle>;
+  // Called when the page or the zoom changes, and once when the view mounts. Give it a stable
+  // function (a state setter, for one) so the view does not report again on each render.
+  readonly onViewChange?: (state: DocumentViewState) => void;
 }
 
 // The viewport height, or the window's when the element has no layout yet (jsdom, first paint).
@@ -41,7 +52,13 @@ function viewportHeightOf(element: HTMLElement | null): number {
   return element?.clientHeight || window.innerHeight;
 }
 
-export function DocumentView({ rpc, handle, scheduler: shared, ref }: DocumentViewProps) {
+export function DocumentView({
+  rpc,
+  handle,
+  scheduler: shared,
+  ref,
+  onViewChange,
+}: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
@@ -100,6 +117,10 @@ export function DocumentView({ rpc, handle, scheduler: shared, ref }: DocumentVi
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
+  const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
+  useEffect(() => {
+    onViewChange?.({ page: currentPage, zoom });
+  }, [currentPage, zoom, onViewChange]);
 
   // Plans the page renders from what is on screen now. Renders finishing bump the tick, which runs
   // this again, so the queue keeps moving until it is empty.

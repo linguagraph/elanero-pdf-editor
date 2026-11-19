@@ -21,7 +21,9 @@ import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
-import { type DocumentViewHandle, DocumentView } from './view/DocumentView';
+import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
+import { DocumentStatusBar } from './view/DocumentStatusBar';
+import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
@@ -78,8 +80,23 @@ export function App({ engine }: AppProps) {
   const viewRef = useRef<DocumentViewHandle>(null);
   const thumbnailsOpen = useThumbnailsOpen(activeId);
   const documentShown = !showStart && activeId !== null && session !== null && scheduler !== null;
+  const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
+  // The page and zoom the document view reports, for the status bar under the document.
+  const [viewState, setViewState] = useState<DocumentViewState>({
+    page: 1,
+    zoom: DEFAULT_ZOOM,
+  });
   return (
     <AppFrame
+      statusBar={
+        documentShown ? (
+          <DocumentStatusBar
+            page={viewState.page}
+            total={activeTab?.pages ?? 0}
+            zoom={viewState.zoom}
+          />
+        ) : undefined
+      }
       rightRail={<ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />}
       rightPanel={
         documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
@@ -134,11 +151,16 @@ export function App({ engine }: AppProps) {
             rpc={session.rpc}
             handle={session.handle}
             scheduler={scheduler}
+            onViewChange={setViewState}
           />
         ) : null}
-        <h1>{t('app.name')}</h1>
-        <p>{t('app.version', { version: APP_VERSION })}</p>
-        <About />
+        {documentShown ? null : (
+          <>
+            <h1>{t('app.name')}</h1>
+            <p>{t('app.version', { version: APP_VERSION })}</p>
+            <About />
+          </>
+        )}
       </div>
     </AppFrame>
   );

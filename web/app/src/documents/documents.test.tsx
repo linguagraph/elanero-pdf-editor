@@ -8,6 +8,7 @@ import { toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RECENT_STORAGE_KEY } from '../recent/recentFiles';
 import { RpcError } from '../rpc/client';
+import { APP_VERSION } from '../version';
 import { passwordPrompt } from './passwordRequest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -386,6 +387,48 @@ describe('document tabs', () => {
     expect(calls.filter((call) => call.method === 'session.pages')).toEqual([
       { method: 'session.pages', params: { handle: 'doc-1' } },
     ]);
+  });
+
+  it('shows only the document view when a document is open, with no About text', async () => {
+    expect(host.textContent).toContain(t('about.title'));
+    dropFiles([pdf('a.pdf')]);
+    await until(() => host.querySelector('.doc-page') !== null);
+    expect(host.querySelector('.doc-view')).not.toBeNull();
+    expect(host.querySelector('h1')).toBeNull();
+    expect(host.textContent).not.toContain(t('about.title'));
+    expect(host.textContent).not.toContain(t('app.version', { version: APP_VERSION }));
+  });
+
+  it('shows the page indicator as Page 1 of N at the start', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => host.querySelector('.doc-page') !== null);
+    expect(host.querySelector('.doc-status-page')?.textContent).toBe(
+      t('view.pageNumber', { page: 1, total: 3 }),
+    );
+    expect(host.querySelector('.doc-status-zoom')?.textContent).toBe(
+      t('view.zoomPercent', { percent: 100 }),
+    );
+  });
+
+  it('updates the page indicator when the view scrolls to another page', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => host.querySelector('.doc-page') !== null);
+    const scroller = host.querySelector<HTMLElement>('.doc-view-scroll');
+    if (scroller === null) throw new Error('no scroll area');
+    // Each page is 1056 CSS px tall with the gaps; this offset puts page 2 at the viewport's centre.
+    Object.defineProperty(scroller, 'scrollTop', { configurable: true, value: 1100 });
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(host.querySelector('.doc-status-page')?.textContent).toBe(
+      t('view.pageNumber', { page: 2, total: 3 }),
+    );
+  });
+
+  it('keeps About and no status bar on the start page', () => {
+    expect(host.querySelector('h1')?.textContent).toBe(t('app.name'));
+    expect(host.textContent).toContain(t('about.title'));
+    expect(host.querySelector('.doc-status')).toBeNull();
   });
 
   it('moves between tabs with the arrow keys', async () => {
