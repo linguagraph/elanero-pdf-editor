@@ -115,7 +115,19 @@ describe('RpcClient', () => {
       worker.respond = (envelope) =>
         ok(envelope, {
           handle: 'h',
-          info: { encrypted: false, has_signatures: false, page_count: 1, title: '' },
+          info: {
+            encrypted: false,
+            has_signatures: false,
+            page_count: 1,
+            title: '',
+            author: '',
+            subject: '',
+            keywords: '',
+            creator: '',
+            producer: '',
+            creation_date: '',
+            mod_date: '',
+          },
           pages: 1,
           warning: null,
           state: DOC_STATE,

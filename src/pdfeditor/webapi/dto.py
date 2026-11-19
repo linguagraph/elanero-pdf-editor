@@ -52,6 +52,14 @@ class DocInfo:
     has_signatures: bool
     page_count: int
     title: str
+    # The other Info fields the properties dialog shows (W7.6). Dates are raw PDF date strings.
+    author: str
+    subject: str
+    keywords: str
+    creator: str
+    producer: str
+    creation_date: str
+    mod_date: str
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

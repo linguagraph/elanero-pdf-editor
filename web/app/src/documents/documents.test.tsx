@@ -51,7 +51,19 @@ function engineClient(): { client: EngineClient; calls: Recorded[] } {
     opened += 1;
     return {
       handle: `doc-${opened}`,
-      info: { encrypted: false, has_signatures: false, page_count: 3, title: '' },
+      info: {
+        encrypted: false,
+        has_signatures: false,
+        page_count: 3,
+        title: '',
+        author: '',
+        subject: '',
+        keywords: '',
+        creator: '',
+        producer: '',
+        creation_date: '',
+        mod_date: '',
+      },
       pages: 3,
       warning: null,
       state: {},
