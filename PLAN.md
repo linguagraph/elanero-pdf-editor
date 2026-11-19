@@ -610,7 +610,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W7.5** A8 Password protection and permissions
 - [ ] **W7.6** A9 Document properties and metadata editing _(partial: the web's properties dialog (title, author, subject and keywords editable; dates, application and producer read-only) reads the existing `session.info` call, which now also carries the Info fields, and applies one `document.set_metadata` with the whole Info block, so only the changed fields differ; over-long values (1000 characters, a web limit) are refused before any call; Apply shows an Undo toast. Vitest covers the helpers, the apply and the dialog; a webapi test checks pikepdf and pdfium on the saved file. Pending: the fonts list, PDF version and security read-only panels of A9; a Playwright run)_
 - [ ] **W7.7** A10 Export pages as images and text
-- [ ] **W7.8** A11 Compare documents
+- [x] **W7.8** A11 Compare documents
 - [ ] **W7.9** A12–A13 Flatten annotations; attachments and layers
 
 **W8 Quality, #141**

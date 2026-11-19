@@ -141,7 +141,8 @@ full policy, with what the desktop app stores, is in the
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
-| Other comments, redaction, stamps, watermarks, security, compare | Yes | Coming soon |
+| Other comments, redaction, stamps, watermarks, security | Yes | Coming soon |
+| Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Print | Yes | Coming soon |
 | Translation (opt-in) | Yes | Coming soon |
 | OCR and batch OCR | Yes | Desktop only (for now) |

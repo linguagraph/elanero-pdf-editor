@@ -60,6 +60,10 @@ nothing differs, the result says **No differences found.**
 
 To share the result, click **Export Report…**. It writes a PDF report of the comparison.
 
+In the web version, the dialog takes the newer document from a file picker, and the report lists
+the changed pages. Each changed page links to its page in the open view. **Save report as text**
+writes the report as a text file.
+
 ## Limits
 
 - Reducing a file can lower image quality. Always check the copy before you replace the original.
