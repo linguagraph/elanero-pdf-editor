@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeColumn,
+  computeSpreads,
   currentPageIndex,
   distanceToCentre,
   isInViewport,
@@ -124,5 +125,24 @@ describe('currentPageIndex', () => {
 
   it('is 0 for an empty document', () => {
     expect(currentPageIndex([], 0, 100)).toBe(0);
+  });
+});
+
+describe('currentPageIndex in two-page spreads', () => {
+  // Four equal pages make two rows of two. Both pages of a row share a centre line, so the page
+  // reported at the middle of a row is its left page.
+  const sizes = [0, 1, 2, 3].map(() => ({ width: 100, height: 100 }));
+  const { boxes } = computeSpreads(sizes, 1, false);
+
+  it('reports the left page of the spread at the middle of the viewport', () => {
+    const second = boxes[2];
+    if (second === undefined) throw new Error('missing page 3');
+    const viewport = 100;
+    const scrollTop = second.top + second.height / 2 - viewport / 2;
+    expect(currentPageIndex(boxes, scrollTop, viewport)).toBe(2);
+  });
+
+  it('reports the first spread at the top of the document', () => {
+    expect(currentPageIndex(boxes, 0, 100)).toBe(0);
   });
 });

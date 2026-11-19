@@ -12,6 +12,7 @@
 
 .doc-view-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -26,6 +27,11 @@
   border-radius: var(--radius-small);
   background: var(--color-surface);
   color: var(--color-text);
+}
+
+.doc-view-toolbar button[aria-pressed='true'] {
+  border-color: var(--color-focus-ring);
+  font-weight: 600;
 }
 
 .doc-view-toolbar button:disabled {
@@ -86,6 +92,21 @@
   background: var(--color-surface);
   color: var(--color-danger);
   font-size: var(--font-size-small);
+}
+
+/* Night reading (W1.4 section 8): the page fill goes dark and the page images are inverted. Only the
+   page canvases and placeholders are filtered, so the overlay and the error text stay as they are. */
+.doc-view--night .doc-view-scroll {
+  background: #1b1b1b;
+}
+
+.doc-view--night .doc-page {
+  background: #000;
+}
+
+.doc-view--night .doc-page-placeholder,
+.doc-view--night .doc-page-canvas {
+  filter: invert(1);
 }
 
 /* The status bar under the document (W1.6 section 1): the page indicator and the zoom. */

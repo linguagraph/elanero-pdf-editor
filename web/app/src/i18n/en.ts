@@ -292,6 +292,11 @@ export const EN = {
   'view.zoomPercent': '{percent}%',
   'view.pageNumber': 'Page {page} of {total}',
   'view.renderFailed': 'This page could not be drawn.',
+  'view.layoutLabel': 'Page layout',
+  'view.layoutSingle': 'Single column',
+  'view.layoutTwoPage': 'Two pages',
+  'view.coverAlone': 'Page 1 alone',
+  'view.night': 'Night reading',
 
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',

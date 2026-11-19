@@ -20,6 +20,8 @@ export interface Preferences {
   readonly authorName: string;
   readonly defaultZoom: ZoomChoice;
   readonly reduceMotion: boolean;
+  // Night reading inverts the pages in the document view (a view setting, W1.6; not a theme).
+  readonly nightReading: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -28,6 +30,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   authorName: '',
   defaultZoom: 'fitWidth',
   reduceMotion: false,
+  nightReading: false,
 };
 
 // The non-theme preferences are one JSON object. The theme keeps its own key (theme.ts), because
@@ -106,6 +109,10 @@ export function readPreferences(): Preferences {
       typeof record.reduceMotion === 'boolean'
         ? record.reduceMotion
         : DEFAULT_PREFERENCES.reduceMotion,
+    nightReading:
+      typeof record.nightReading === 'boolean'
+        ? record.nightReading
+        : DEFAULT_PREFERENCES.nightReading,
   };
 }
 
@@ -117,6 +124,7 @@ export function writePreferences(prefs: Preferences): boolean {
     authorName: cleanAuthorName(prefs.authorName),
     defaultZoom: pickChoice(prefs.defaultZoom, ZOOM_CHOICES, DEFAULT_PREFERENCES.defaultZoom),
     reduceMotion: prefs.reduceMotion,
+    nightReading: prefs.nightReading,
   };
   setTheme(prefs.theme);
   return writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));
