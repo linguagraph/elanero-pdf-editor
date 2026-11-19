@@ -276,8 +276,11 @@ def test_audit_reports_the_stored_size_by_category(web: None, fixture_pdf: Any) 
     assert value["total"] > 0
     assert value["categories"]
     for item in value["categories"]:
-        assert set(item) == {"name", "size"}
+        assert set(item) == {"key", "name", "size"}
+        assert item["key"] in jobs.SPACE_CATEGORY_KEYS
         assert isinstance(item["size"], int)
+        # A real audit's labels all have a key: only "Other objects" is "other" by its own name.
+        assert item["key"] != "other" or item["name"] == "Other objects"
 
 
 def test_export_text_gives_one_text_file(web: None, fixture_pdf: Any) -> None:
