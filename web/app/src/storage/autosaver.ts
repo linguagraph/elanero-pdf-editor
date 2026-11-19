@@ -33,6 +33,11 @@ export interface Autosaver {
   // Brings the scheduler in step with the open documents. A dirty document is scheduled; a document
   // that is clean, or no longer open, has its copy deleted.
   sync(docs: readonly AutosaveDocument[]): void;
+  // True when the document (by tab id) has no copy because it is password-protected (D2).
+  isProtected(docId: number): boolean;
+  // Stops tracking a document whose tab a restart is closing because it could not be reopened. Its
+  // copy is the recovery copy, so it is kept in the store: nothing is deleted (W3.9 S3).
+  release(docId: number): void;
 }
 
 // Re-syncs when the page comes back from the back-forward cache (pageshow with persisted set). The
@@ -221,6 +226,19 @@ export function createAutosaver(options: AutosaverOptions): Autosaver {
   }
 
   return {
+    isProtected(docId) {
+      return entries.get(docId)?.disabled === 'protected';
+    },
+
+    release(docId) {
+      const entry = entries.get(docId);
+      if (entry === undefined) return;
+      // Unlike forget, no delete is queued: a write still in flight is dropped by the gone check.
+      entry.gone = true;
+      cancel(entry);
+      entries.delete(docId);
+    },
+
     sync(docs) {
       const present = new Set<number>();
       for (const doc of docs) {

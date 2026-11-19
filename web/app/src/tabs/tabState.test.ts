@@ -5,6 +5,7 @@ import {
   closeTab,
   EMPTY_TABS,
   hasDirtyTab,
+  replaceHandle,
   setDirty,
   setPageCount,
   type TabState,
@@ -75,5 +76,23 @@ describe('tab state', () => {
     const state = setPageCount(withThree(), 2, 7);
     expect(state.tabs.map((tab) => tab.pages)).toEqual([1, 7, 1]);
     expect(state.activeId).toBe(3);
+  });
+});
+
+describe('replaceHandle (W3.9 restart)', () => {
+  it('points the tab at the reopened document and marks it dirty again', () => {
+    const state = setDirty(withThree(), 2, false);
+
+    const next = replaceHandle(state, 2, 'handle-new', 7);
+
+    expect(next.tabs[1]).toMatchObject({ id: 2, handle: 'handle-new', pages: 7, dirty: true });
+    expect(next.tabs[0]).toEqual(state.tabs[0]);
+    expect(next.activeId).toBe(state.activeId);
+  });
+
+  it('leaves the state alone for a tab that is not open', () => {
+    const state = withThree();
+
+    expect(replaceHandle(state, 99, 'handle-x', 1)).toEqual(state);
   });
 });

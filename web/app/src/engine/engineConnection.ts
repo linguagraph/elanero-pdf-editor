@@ -4,11 +4,12 @@
 // is ready, and again after a failure.
 import { useSyncExternalStore } from 'react';
 import { engineLoad, type EngineLoadStore } from '../feedback/engineLoad';
+import { notResponding } from '../feedback/notResponding';
 import { type CallOptions, createRpcClient, type RpcClient } from '../rpc/client';
 import { CallError, EngineLoadError } from './errors';
 import type { FailedStage, Stage } from './protocol';
 import { startEngine, type StartOptions, type WorkerClient } from './start';
-import type { Methods } from '../rpc/generated';
+import type { MethodName, Methods } from '../rpc/generated';
 
 // The calls the app makes on the engine. The real RPC client satisfies it; tests pass a fake.
 export type EngineClient = Pick<RpcClient, 'call' | 'chunked'>;
@@ -28,6 +29,11 @@ export interface EngineConnection {
   whenReady(): Promise<EngineClient>;
   // Starts the engine, or starts it again. Any worker already running is terminated first.
   start(): void;
+  // Replaces the engine with a new worker (W3.9). The new worker starts first; the old one is
+  // terminated only after that, and its late answers are ignored. Returns false when the browser
+  // refuses the new worker: the old engine then keeps running. The new engine is ready when
+  // whenReady() resolves, since it loads again like a first start.
+  restart(): boolean;
   // Stops the worker. Called when the app unmounts.
   dispose(): void;
 }
@@ -38,6 +44,9 @@ export interface EngineConnectionOptions {
   readonly store?: EngineLoadStore;
   // Defaults to startEngine. Tests pass a fake worker here.
   readonly startWorker?: (options: StartOptions) => WorkerClient;
+  // Told each call that passes its deadline or runs out of memory (W3.9). Defaults to the app's
+  // not-responding dialog.
+  readonly report?: (error: unknown) => void;
 }
 
 function messageOf(error: unknown): string {
@@ -52,9 +61,26 @@ function failedStage(last: Stage | undefined): FailedStage {
   return last === 'ready' ? 'engine' : last;
 }
 
+// Passes each call through, and reports the two failures that mean the engine has stopped answering
+// (a deadline, an out-of-memory). The call's own promise is unchanged, so every caller still gets
+// its error. Chunked calls are not reported.
+function observed(client: RpcClient, report: (error: unknown) => void): EngineClient {
+  const call = <M extends MethodName>(
+    method: M,
+    params: Methods[M]['params'],
+    options?: CallOptions,
+  ): Promise<Methods[M]['result']> =>
+    client.call(method, params, options).catch((error: unknown) => {
+      report(error);
+      throw error;
+    });
+  return { call, chunked: client.chunked.bind(client) as EngineClient['chunked'] };
+}
+
 export function createEngineConnection(options: EngineConnectionOptions): EngineConnection {
   const store = options.store ?? engineLoad;
   const startWorker = options.startWorker ?? startEngine;
+  const report = options.report ?? ((error: unknown) => notResponding.report(error));
   // Every start gets a number. A callback from an older worker sees a different number and does
   // nothing, so a terminated worker can never change the state.
   let generation = 0;
@@ -71,22 +97,10 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
     rpc = undefined;
   };
 
-  const start = (): void => {
-    stop();
-    // Registered on every start, not once: dispose() clears it, and a remount starts again.
-    store.setStarter(start);
+  // Makes a started worker the engine: it is loaded through hello, and its stages go to the store.
+  const attach = (next: WorkerClient): void => {
     const current = generation;
     const isCurrent = (): boolean => current === generation;
-    store.stage('pyodide');
-
-    let next: WorkerClient;
-    try {
-      next = startWorker(options.boot);
-    } catch (error) {
-      // The browser refused the worker (no Worker support, a blocked URL): a load failure.
-      store.fail(new EngineLoadError('pyodide', messageOf(error), { cause: error }));
-      return;
-    }
     worker = next;
 
     let last: Stage | undefined;
@@ -97,8 +111,14 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
     });
 
     // hello waits for the load and checks the protocol, so its answer is the readiness signal.
-    const client = createRpcClient(next);
-    client.call('hello', {}, { timeoutMs: LOAD_TIMEOUT_MS }).then(
+    const rpcClient = createRpcClient(next);
+    // A call of a replaced worker still has its deadline timer: it can time out after the restart.
+    // That is no fault of the engine now running, so the report is dropped (the caller still gets
+    // its own rejection).
+    const client = observed(rpcClient, (error) => {
+      if (isCurrent()) report(error);
+    });
+    rpcClient.call('hello', {}, { timeoutMs: LOAD_TIMEOUT_MS }).then(
       () => {
         if (!isCurrent()) return;
         rpc = client;
@@ -113,6 +133,42 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
     );
   };
 
+  const start = (): void => {
+    stop();
+    // Registered on every start, not once: dispose() clears it, and a remount starts again.
+    store.setStarter(start);
+    store.stage('pyodide');
+
+    let next: WorkerClient;
+    try {
+      next = startWorker(options.boot);
+    } catch (error) {
+      // The browser refused the worker (no Worker support, a blocked URL): a load failure.
+      store.fail(new EngineLoadError('pyodide', messageOf(error), { cause: error }));
+      return;
+    }
+    attach(next);
+  };
+
+  const restart = (): boolean => {
+    let next: WorkerClient;
+    try {
+      next = startWorker(options.boot);
+    } catch {
+      return false;
+    }
+    // The generation moves before the old worker is terminated, so its failure is not reported as
+    // a load failure of the new engine.
+    const old = worker;
+    generation += 1;
+    rpc = undefined;
+    worker = undefined;
+    old?.terminate();
+    store.stage('pyodide');
+    attach(next);
+    return true;
+  };
+
   return {
     store,
     client: () => rpc,
@@ -123,6 +179,7 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
       });
     },
     start,
+    restart,
     dispose() {
       stop();
       store.setStarter(undefined);

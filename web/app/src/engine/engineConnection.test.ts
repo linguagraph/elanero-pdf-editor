@@ -319,3 +319,107 @@ describe('tab engine sessions', () => {
     expect(getTabSession(101)).toBeNull();
   });
 });
+
+describe('engine restart and reporting (W3.9)', () => {
+  let workers: FakeWorker[];
+  let startWorker: ReturnType<typeof vi.fn<(options: StartOptions) => WorkerClient>>;
+
+  beforeEach(() => {
+    workers = [];
+    startWorker = vi.fn(() => {
+      const worker = new FakeWorker();
+      workers.push(worker);
+      return worker;
+    });
+  });
+
+  async function readyEngine(report = vi.fn()) {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker, report });
+    engine.start();
+    workers[0]!.answerHello();
+    await settle();
+    return { engine, store, report };
+  }
+
+  it('replaces the worker: the old one is terminated, the new one must answer hello', async () => {
+    const { engine } = await readyEngine();
+    const old = workers[0]!;
+
+    expect(engine.restart()).toBe(true);
+
+    expect(startWorker).toHaveBeenCalledTimes(2);
+    expect(old.terminate).toHaveBeenCalledTimes(1);
+    expect(engine.client()).toBeUndefined();
+    const ready = vi.fn();
+    void engine.whenReady().then(ready);
+    await settle();
+    expect(ready).not.toHaveBeenCalled();
+
+    workers[1]!.answerHello();
+    await settle();
+    expect(ready).toHaveBeenCalledWith(engine.client());
+  });
+
+  it('keeps the old engine running when the browser refuses the new worker', async () => {
+    const { engine } = await readyEngine();
+    const client = engine.client();
+    startWorker.mockImplementationOnce(() => {
+      throw new Error('Workers are blocked by this page');
+    });
+
+    expect(engine.restart()).toBe(false);
+
+    expect(workers[0]!.terminate).not.toHaveBeenCalled();
+    expect(engine.client()).toBe(client);
+  });
+
+  it('ignores a late failure of the old worker after a restart', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker, report: vi.fn() });
+    engine.start();
+    // The old engine is still loading (its hello is pending) when the restart replaces it.
+    expect(workers[0]!.pending).toHaveLength(1);
+    engine.restart();
+    // Terminating the old worker rejects its pending hello: that is not a failure of the new one.
+    workers[0]!.pending[0]!.reject(new Error('the worker has been terminated'));
+    await settle();
+    expect(store.getState()).toEqual({ status: 'loading', stage: 'pyodide' });
+
+    workers[1]!.stage('ready');
+    workers[1]!.answerHello();
+    await settle();
+    expect(store.getState()).toEqual({ status: 'ready' });
+  });
+
+  it('reports an out-of-memory call to the report hook and still rejects it', async () => {
+    const { engine, report } = await readyEngine();
+    const pending = engine.client()!.call('system.memory', {});
+    workers[0]!.pending[0]!.reject(new Error('Cannot enlarge memory arrays'));
+
+    await expect(pending).rejects.toMatchObject({ code: 'OUT_OF_MEMORY' });
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'OUT_OF_MEMORY' }));
+  });
+
+  it('a call of a replaced worker that times out after the restart is not reported', async () => {
+    const { engine, report } = await readyEngine();
+    // A short deadline, so the timer fires within the test.
+    const pending = engine.client()!.call('system.memory', {}, { timeoutMs: 5 });
+    const old = workers[0]!;
+    expect(engine.restart()).toBe(true);
+    workers[1]!.answerHello();
+    await settle();
+
+    await expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' });
+    expect(old.terminate).toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('a timeout of the current worker is still reported', async () => {
+    const { engine, report } = await readyEngine();
+    const pending = engine.client()!.call('system.memory', {}, { timeoutMs: 5 });
+
+    await expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' });
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'TIMEOUT' }));
+  });
+});

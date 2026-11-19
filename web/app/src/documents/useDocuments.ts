@@ -10,6 +10,7 @@ import {
   setTabSession,
 } from '../engine/engineConnection';
 import { memoryWarner } from '../feedback/memoryWarning';
+import { notResponding } from '../feedback/notResponding';
 import { reportRpcError, toasts } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
@@ -23,9 +24,11 @@ import {
   closeTab as closeTabState,
   EMPTY_TABS,
   hasDirtyTab,
+  replaceHandle,
   setPageCount,
   type TabState,
 } from '../tabs/tabState';
+import { restartSession } from './engineSession';
 import { asRpcError, openFile, sizeRefusal } from './openFile';
 import { passwordPrompt } from './passwordRequest';
 import { guardUnload } from './unloadGuard';
@@ -112,14 +115,47 @@ export function useDocuments(engine: EngineConnection): Documents {
   const dirty = hasDirtyTab(tabs);
   // The autosave copies of this page load (W3.9 S2). One scheduler per page; it is held in state
   // so the effects below see the same instance.
+  const [autosaveStore] = useState(() => createAutosaveStore());
   const [autosaver] = useState(() =>
     createAutosaver({
       tabId: browserTabId(),
-      store: createAutosaveStore(),
+      store: autosaveStore,
       client: () => engine.client(),
       warn: (warning) => toasts.push('warning', t(AUTOSAVE_MESSAGES[warning])),
     }),
   );
+
+  // The restart reopens each document from its autosave copy (W3.9 S3). The session is rebuilt
+  // with the tabs, so a restart always sees the documents that are open now.
+  useEffect(() => {
+    notResponding.setSession(
+      restartSession({
+        engine,
+        tabs: tabs.tabs,
+        tabId: browserTabId(),
+        store: autosaveStore,
+        // Encrypted by its open result, or copied as protected by the autosaver (D2).
+        isProtected: (id) =>
+          tabs.tabs.some((tab) => tab.id === id && tab.encrypted) || autosaver.isProtected(id),
+        // The live tab list, not the snapshot above: a tab closed during the restart is seen.
+        isOpen: (id) => tabsRef.current.tabs.some((tab) => tab.id === id),
+        reopened: (id, client, opened) => {
+          commitTabs((state) => replaceHandle(state, id, opened.handle, opened.pages));
+          setTabSession(id, { rpc: client, handle: opened.handle });
+        },
+        // A document that could not come back: its tab closes and its old session is detached.
+        // The copy stays in the store: it is the recovery copy of a document the restart could not
+        // reopen, so the autosaver must not delete it when the tab goes (W3.9 S3).
+        lost: (id) => {
+          autosaver.release(id);
+          commitTabs((state) => closeTabState(state, id));
+          setTabSession(id, null);
+          forgetBookmarksTab(id);
+        },
+      }),
+    );
+    return () => notResponding.setSession(undefined);
+  }, [engine, autosaver, autosaveStore, tabs, commitTabs]);
 
   // Warn before the page closes while a document has unsaved changes.
   useEffect(() => (dirty ? guardUnload(window) : undefined), [dirty]);
@@ -162,7 +198,8 @@ export function useDocuments(engine: EngineConnection): Documents {
       if (warning !== null) toasts.push('info', t('open.largeFile', { name: file.name }));
       // The tab id is the one addTab gives the new tab. Its session lets the document view mount.
       const id = tabsRef.current.nextId;
-      commitTabs((state) => addTab(state, { name: file.name, handle, pages }));
+      const encrypted = outcome.result.info.encrypted;
+      commitTabs((state) => addTab(state, { name: file.name, handle, pages, encrypted }));
       setTabSession(id, { rpc: client, handle });
       void memoryWarner.check(client, 'open');
       setRecent(addRecentFile(file.name));

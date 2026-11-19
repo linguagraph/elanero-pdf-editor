@@ -171,6 +171,16 @@ describe('autosaver', () => {
     expect(warnings).toHaveLength(0);
   });
 
+  it('reports a protected document so the restart can name it', async () => {
+    const { autosaver } = setup({
+      answer: async () => ({ data: new ArrayBuffer(0), size: 0, skipped: 'protected' }),
+    });
+    autosaver.sync([doc()]);
+    await advance(SETTLE_MS);
+    expect(autosaver.isProtected(1)).toBe(true);
+    expect(autosaver.isProtected(2)).toBe(false);
+  });
+
   it('warns once and stops a document over the autosave cap', async () => {
     const { autosaver, call, warnings } = setup({
       answer: async () => ({ data: new ArrayBuffer(0), size: 0, skipped: 'too_large' }),
@@ -231,6 +241,17 @@ describe('autosaver', () => {
     autosaver.sync([]);
     await advance(AUTOSAVE_INTERVAL_MS * 2);
     expect(removes).toEqual([{ tabId: 'tab-a', docId: 1 }]);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('a released document keeps its copy when its tab closes, and is not copied again', async () => {
+    const { autosaver, removes, call } = setup();
+    autosaver.sync([doc()]);
+    await advance(SETTLE_MS);
+    autosaver.release(1);
+    autosaver.sync([]);
+    await advance(AUTOSAVE_INTERVAL_MS * 2);
+    expect(removes).toEqual([]);
     expect(call).toHaveBeenCalledTimes(1);
   });
 

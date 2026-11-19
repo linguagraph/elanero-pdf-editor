@@ -237,6 +237,10 @@ export const EN = {
   'engine.notResponding.body':
     'Elanero is still working on this. You can wait, or restart the engine.',
   'engine.notResponding.wait': 'Wait',
+  // The engine ran out of memory (W3.9): the same dialog, with its own words.
+  'engine.outOfMemory.title': 'Elanero ran out of memory',
+  'engine.outOfMemory.body':
+    'Elanero cannot take more memory for this. You can wait, or restart the engine to free it. Your documents are reopened from their last autosave.',
   'engine.restart.title': 'Restart the engine?',
   'engine.restart.body':
     'The engine will restart and reopen your documents from their last autosave. Changes made since then and the undo history will be lost.',
@@ -246,8 +250,12 @@ export const EN = {
   'engine.lost.undo': 'The undo history',
   'engine.restart.done': 'The engine restarted. Lost: {items}.',
   'engine.restart.lost': 'Could not reopen {names}. Lost: {items}.',
-  'engine.restart.failed':
-    'The engine could not be restarted. The current engine is still running.',
+  'engine.restart.lost.protected':
+    '{names} is password-protected, so no autosave copy was kept. Open it again to continue.',
+  'engine.restart.failed': 'The engine could not be restarted.',
+  'engine.restart.busy':
+    'A job is still running, so the engine was not restarted. Try again when it finishes.',
+  'engine.restart.jobCancelled': 'A running job was cancelled.',
   'engine.restart.unavailable': 'The engine is not running, so there is nothing to restart.',
 
   // Start-up screen, toasts and job progress (W1.6 section 10, W4.4b).

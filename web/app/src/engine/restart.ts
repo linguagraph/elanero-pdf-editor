@@ -1,10 +1,8 @@
 // The engine restart (W1.1 section 1, W3.9). The "Restart engine" button of the not-responding
-// dialog calls this and nothing else restarts the engine. It starts a new engine worker and stops
-// the old one, then names the documents the caller must reopen from their last autosave. It does
-// not touch storage: the caller reads the autosave bytes (OPFS, once that task is built) and
-// reopens each document through its own RPC client.
-import { startEngine, type StartOptions, type WorkerClient } from './start';
-
+// dialog calls this and nothing else restarts the engine. The engine connection owns the worker:
+// replaceEngine starts the new one, then stops the old one, and the caller reopens each document
+// it names from its last autosave (storage/autosaver.ts) through its own RPC client. This helper
+// does not touch storage.
 // A document that was open when the engine stopped. The id is the caller's own (for example the
 // tab's document id); the helper only passes it on.
 export interface OpenDocumentRef {
@@ -25,9 +23,9 @@ export const LOST_WORK: LostWork = {
 };
 
 export interface RestartOptions {
-  // The engine worker that stopped answering. It is terminated only after the new one started.
-  readonly current: WorkerClient;
-  readonly start: StartOptions;
+  // Replaces the engine (engineConnection.restart): the new worker starts before the old one stops.
+  // False when the browser refuses the new worker; the old engine then keeps running.
+  readonly replaceEngine: () => boolean;
   // Every document open in the engine, in the order the caller wants them reopened.
   readonly documents: readonly OpenDocumentRef[];
 }
@@ -35,36 +33,18 @@ export interface RestartOptions {
 export type RestartResult =
   | {
       readonly ok: true;
-      // The new engine. Its documents are not open yet: the caller reopens each one in `reopen`.
-      readonly worker: WorkerClient;
+      // The documents to reopen. The new engine's documents are not open yet: the caller reopens
+      // each one once the engine is ready.
       readonly reopen: readonly OpenDocumentRef[];
       readonly lost: LostWork;
     }
   | {
       readonly ok: false;
       readonly code: 'ENGINE_START_FAILED';
-      readonly message: string;
     };
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-// The new worker is started before the old one is terminated. A start that fails therefore
-// changes nothing: the old worker is still running, and the dialog can offer Wait again. The
-// reverse order would leave the app with no engine and no way back to a working one.
+// A failed start changes nothing: the old engine still runs, and the dialog can offer Wait again.
 export function restartEngine(options: RestartOptions): RestartResult {
-  let worker: WorkerClient;
-  try {
-    worker = startEngine(options.start);
-  } catch (error) {
-    return { ok: false, code: 'ENGINE_START_FAILED', message: messageOf(error) };
-  }
-  options.current.terminate();
-  return {
-    ok: true,
-    worker,
-    reopen: [...options.documents],
-    lost: LOST_WORK,
-  };
+  if (!options.replaceEngine()) return { ok: false, code: 'ENGINE_START_FAILED' };
+  return { ok: true, reopen: [...options.documents], lost: LOST_WORK };
 }

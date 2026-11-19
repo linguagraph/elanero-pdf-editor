@@ -5,5 +5,7 @@ import { notResponding, type NotRespondingStore, useNotResponding } from './notR
 
 export function NotRespondingHost({ store = notResponding }: { store?: NotRespondingStore }) {
   const { error } = useNotResponding(store);
-  return <NotRespondingDialog error={error} onWait={store.wait} onRestart={store.restart} />;
+  return (
+    <NotRespondingDialog error={error} onWait={store.wait} onRestart={() => void store.restart()} />
+  );
 }

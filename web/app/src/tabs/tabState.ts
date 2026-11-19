@@ -9,6 +9,9 @@ export interface DocumentTab {
   // The opaque handle session.open returned (W1.2 section 12). Every later call names it.
   readonly handle: string;
   readonly pages: number;
+  // True when the document is encrypted (its open result says so). Such a document is never
+  // reopened from an autosave copy (W3.9 S3, D2).
+  readonly encrypted: boolean;
 }
 
 // A document the engine has opened, as the tab needs it.
@@ -16,6 +19,7 @@ export interface OpenedTab {
   readonly name: string;
   readonly handle: string;
   readonly pages: number;
+  readonly encrypted?: boolean;
 }
 
 export interface TabState {
@@ -34,6 +38,7 @@ export function addTab(state: TabState, opened: OpenedTab): TabState {
     dirty: false,
     handle: opened.handle,
     pages: opened.pages,
+    encrypted: opened.encrypted === true,
   };
   return { tabs: [...state.tabs, tab], activeId: tab.id, nextId: state.nextId + 1 };
 }
@@ -70,4 +75,19 @@ export function setPageCount(state: TabState, id: number, pages: number): TabSta
 
 export function hasDirtyTab(state: TabState): boolean {
   return state.tabs.some((tab) => tab.dirty);
+}
+
+// Points a tab at the handle of its document reopened after an engine restart (W3.9 S3). The copy
+// that reopened it holds the unsaved changes, so the tab is dirty again: it keeps being autosaved
+// and the page still warns before it closes.
+export function replaceHandle(
+  state: TabState,
+  id: number,
+  handle: string,
+  pages: number,
+): TabState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, handle, pages, dirty: true } : tab)),
+  };
 }
