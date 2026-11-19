@@ -44,6 +44,8 @@ export const IO_EXTRA = {
   msPerStep: 1000,
 } as const;
 
+export type EncryptionMethod = 'none' | 'rc4-40' | 'rc4-128' | 'aes-128' | 'aes-256' | 'unknown';
+
 /**
  * Page content added as one replaceable unit (Acrobat's "pagination artifacts").
  *
@@ -51,6 +53,9 @@ export const IO_EXTRA = {
  * found again to update or remove, and keeps the settings used next to it.
  */
 export type MarkKind = 'HeaderFooter' | 'Bates' | 'Watermark' | 'Background';
+
+/** The kind of a security change queued for the next save (``session.security``). */
+export type PendingSecurity = 'encrypt' | 'remove';
 
 /**
  * W1.1 section 4: ``in_place`` keeps signatures (incremental when signed); ``copy`` is a full
@@ -297,6 +302,17 @@ export interface PagesResult {
   labels: string[];
 }
 
+export interface Permissions {
+  print: boolean;
+  modify: boolean;
+  copy: boolean;
+  annotate: boolean;
+  fill_forms: boolean;
+  accessibility: boolean;
+  assemble: boolean;
+  print_high_quality: boolean;
+}
+
 export interface PlatformFlags {
   linearize: boolean;
   ocr: boolean;
@@ -434,6 +450,24 @@ export interface SearchResult {
   done: boolean;
 }
 
+/**
+ * ``session.security`` (W7.5 section 4): the security state, read-only. It never carries a
+ * password, nor the passwords of a pending change.
+ */
+export interface SecurityResult {
+  /** the file's own method, as opened */
+  encryption: EncryptionMethod;
+  /** the file's permissions, to prefill the dialog */
+  permissions: Permissions;
+  /** not encrypted, or unlocked with the owner password */
+  owner_access: boolean;
+  /** the change queued for the next save, if any */
+  pending: PendingSecurity | null;
+  /** its method; NONE for a pending removal */
+  pending_method: EncryptionMethod | null;
+  has_signatures: boolean;
+}
+
 export interface TextLayerResult {
   /** the page revision the layer was built from */
   revision: number;
@@ -484,6 +518,7 @@ export interface Methods {
   'session.open': { params: OpenParams; result: OpenResult; deadline: 'io' };
   'session.outline': { params: HandleParams; result: OutlineResult; deadline: 'instant' };
   'session.pages': { params: HandleParams; result: PagesResult; deadline: 'instant' };
+  'session.security': { params: HandleParams; result: SecurityResult; deadline: 'instant' };
   'session.unlock_owner': { params: UnlockParams; result: UnlockResult; deadline: 'instant' };
   'text.extract': { params: ExtractParams; result: ExtractResult; deadline: 'slice' };
   'text.layer': { params: PageParams; result: TextLayerResult; deadline: 'render' };
@@ -513,6 +548,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.open': 'io',
   'session.outline': 'instant',
   'session.pages': 'instant',
+  'session.security': 'instant',
   'session.unlock_owner': 'instant',
   'text.extract': 'slice',
   'text.layer': 'render',
@@ -547,6 +583,7 @@ export const RESULT_DECODERS: {
   'session.open': decodeOpenResult,
   'session.outline': decodeOutlineResult,
   'session.pages': decodePagesResult,
+  'session.security': decodeSecurityResult,
   'session.unlock_owner': decodeUnlockResult,
   'text.extract': decodeExtractResult,
   'text.layer': decodeTextLayerResult,
@@ -979,6 +1016,25 @@ export function decodePagesResult(
   };
 }
 
+export function decodePermissions(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): Permissions {
+  const o = expectObject(value, path);
+  checkKeys(o, ['print', 'modify', 'copy', 'annotate', 'fill_forms', 'accessibility', 'assemble', 'print_high_quality'], path);
+  return {
+    print: expectBoolean(field(o, 'print', path), `${path}.print`),
+    modify: expectBoolean(field(o, 'modify', path), `${path}.modify`),
+    copy: expectBoolean(field(o, 'copy', path), `${path}.copy`),
+    annotate: expectBoolean(field(o, 'annotate', path), `${path}.annotate`),
+    fill_forms: expectBoolean(field(o, 'fill_forms', path), `${path}.fill_forms`),
+    accessibility: expectBoolean(field(o, 'accessibility', path), `${path}.accessibility`),
+    assemble: expectBoolean(field(o, 'assemble', path), `${path}.assemble`),
+    print_high_quality: expectBoolean(field(o, 'print_high_quality', path), `${path}.print_high_quality`),
+  };
+}
+
 export function decodePlatformFlags(
   value: unknown,
   ctx: DecodeContext,
@@ -1196,6 +1252,23 @@ export function decodeSearchResult(
     pages_done: expectInteger(field(o, 'pages_done', path), `${path}.pages_done`),
     total: expectInteger(field(o, 'total', path), `${path}.total`),
     done: expectBoolean(field(o, 'done', path), `${path}.done`),
+  };
+}
+
+export function decodeSecurityResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SecurityResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['encryption', 'permissions', 'owner_access', 'pending', 'pending_method', 'has_signatures'], path);
+  return {
+    encryption: expectOneOf(field(o, 'encryption', path), ['none', 'rc4-40', 'rc4-128', 'aes-128', 'aes-256', 'unknown'] as const, `${path}.encryption`),
+    permissions: decodePermissions(field(o, 'permissions', path), ctx, `${path}.permissions`),
+    owner_access: expectBoolean(field(o, 'owner_access', path), `${path}.owner_access`),
+    pending: orNull(field(o, 'pending', path), `${path}.pending`, (v1, p1) => expectOneOf(v1, ['encrypt', 'remove'] as const, p1)),
+    pending_method: orNull(field(o, 'pending_method', path), `${path}.pending_method`, (v1, p1) => expectOneOf(v1, ['none', 'rc4-40', 'rc4-128', 'aes-128', 'aes-256', 'unknown'] as const, p1)),
+    has_signatures: expectBoolean(field(o, 'has_signatures', path), `${path}.has_signatures`),
   };
 }
 

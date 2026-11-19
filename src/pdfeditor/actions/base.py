@@ -37,6 +37,12 @@ class ActionSpec:
 class ActionError(Exception):
     code = "ACTION_ERROR"
 
+    def __init__(self, message: str = "", *, reason: str | None = None) -> None:
+        super().__init__(message)
+        # A stable code for the reason, when the web needs to word it (W7.5); the message stays
+        # English and is what the desktop shows.
+        self.reason = reason
+
 
 class Refused(ActionError):
     code = "REFUSED"

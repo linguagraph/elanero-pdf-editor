@@ -151,4 +151,8 @@ def _action_details(exc: BaseException, code: str) -> dict[str, object] | None:
     """The W1.2 section 4 details of an actions-layer error: the busy task, or the reason."""
     if not isinstance(exc, ActionError):
         return None
-    return {"task": str(exc)} if code == BUSY else {"reason": str(exc)}
+    if code == BUSY:
+        return {"task": str(exc)}
+    if exc.reason is not None:  # a stable code from the action (W7.5), never a password
+        return {"reason": exc.reason}
+    return {"reason": str(exc)}

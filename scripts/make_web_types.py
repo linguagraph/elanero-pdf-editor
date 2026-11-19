@@ -72,6 +72,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "session.open": "io",
     "session.outline": "instant",
     "session.pages": "instant",
+    "session.security": "instant",
     "session.unlock_owner": "instant",
     "text.extract": "slice",
     "text.layer": "render",

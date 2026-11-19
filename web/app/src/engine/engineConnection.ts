@@ -127,6 +127,8 @@ export interface PageRpc {
       | 'session.pages'
       | 'session.info'
       | 'session.outline'
+      | 'session.security'
+      | 'session.unlock_owner'
       | 'render.page'
       | 'render.tile'
       | 'text.layer'
