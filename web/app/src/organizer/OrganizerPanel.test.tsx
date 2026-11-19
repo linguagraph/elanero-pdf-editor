@@ -2,7 +2,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
+import { createPasswordPrompt, type PasswordPrompt } from '../documents/passwordRequest';
+import { jobProgress } from '../feedback/jobRun';
 import { createToastStore, type ToastStore } from '../feedback/toasts';
+import type { JobWorker } from '../files/fileJob';
+import { RpcError } from '../rpc/client';
+import { PROTOCOL_VERSION } from '../rpc/generated';
 import { t } from '../i18n/t';
 import { OrganizerPanel } from './OrganizerPanel';
 
@@ -16,9 +21,14 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
   });
 }
 
+// The pages an insert from file adds in these tests.
+const INSERTED = 2;
+
 // A fake engine: session.pages lists pageCount pages, and the actions answer at once. A move
-// reports the pages it placed, as the engine does; the other actions report nothing.
-function fakeRpc(pageCount: number, moveValue: number[] = [1]) {
+// reports the pages it placed, as the engine does; the other actions report nothing. An insert from
+// file adds INSERTED pages, and a file locked with `locked` asks for that password first. The split
+// job (the extract) answers with one file, and jobs.abort answers at once.
+function fakeRpc(pageCount: number, moveValue: number[] = [1], locked?: string) {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
   let count = pageCount;
   // The page count before each action, so an undo can restore it.
@@ -36,6 +46,21 @@ function fakeRpc(pageCount: number, moveValue: number[] = [1]) {
       }
       if (method === 'actions.run') {
         counts.push(count);
+        if (params.name === 'pages.insert_file') {
+          const { password } = params.args as { password: string | null };
+          if (locked !== undefined && password !== locked) {
+            counts.pop();
+            return Promise.reject(new RpcError('PASSWORD_REQUIRED', 'password protected'));
+          }
+          count += INSERTED;
+          return Promise.resolve({
+            label: 'Insert Pages',
+            executed: true,
+            value: INSERTED,
+            changed: null,
+            state: {},
+          });
+        }
         if (params.name === 'pages.delete') {
           count -= (params.args as { pages: number[] }).pages.length;
         }
@@ -55,6 +80,18 @@ function fakeRpc(pageCount: number, moveValue: number[] = [1]) {
       if (method === 'actions.undo') {
         count = counts.pop() ?? count;
         return Promise.resolve({ done: true, label: 'x', changed: null, state: {} });
+      }
+      if (method === 'jobs.prepare') {
+        return Promise.resolve({
+          token: 'j1',
+          label: 'split',
+          mutating: false,
+          document: new ArrayBuffer(4),
+          state: null,
+        });
+      }
+      if (method === 'jobs.apply' || method === 'jobs.abort') {
+        return Promise.resolve({ applied: false, changed: null, state: null });
       }
       const request = params as { revision: number };
       return Promise.resolve({
@@ -87,7 +124,42 @@ async function flush(): Promise<void> {
   });
 }
 
-function mount(rpc: PageRpc, store: ToastStore, onChanged?: (pageCount: number) => void): void {
+// What the extract's job worker answers: one PDF, whose bytes are the reply's buffer.
+function extractWorker(): JobWorker {
+  const reply = {
+    v: PROTOCOL_VERSION,
+    id: 1,
+    ok: true,
+    result: {
+      kind: 'files',
+      label: '',
+      require_full_save: false,
+      document: null,
+      files: [{ name: 'split/part-1.pdf', mime: 'application/pdf', data: { $bin: 0 } }],
+      value: null,
+      name: '',
+    },
+    events: [],
+  };
+  const bytes = new Uint8Array([37, 80, 68, 70]).buffer;
+  return {
+    call: vi.fn(() => Promise.resolve({ reply: JSON.stringify(reply), buffers: [bytes] })),
+    terminate: vi.fn(),
+  } as unknown as JobWorker;
+}
+
+interface MountOptions {
+  readonly prompt?: PasswordPrompt;
+  readonly download?: (name: string, bytes: ArrayBuffer) => void;
+  readonly worker?: () => JobWorker;
+}
+
+function mount(
+  rpc: PageRpc,
+  store: ToastStore,
+  onChanged?: (pageCount: number) => void,
+  options: MountOptions = {},
+): void {
   act(() => {
     root.render(
       <OrganizerPanel
@@ -96,9 +168,36 @@ function mount(rpc: PageRpc, store: ToastStore, onChanged?: (pageCount: number) 
         onClose={() => {}}
         toastStore={store}
         onChanged={onChanged}
+        documentName="doc.pdf"
+        startWorker={options.worker ?? extractWorker}
+        download={options.download}
+        prompt={options.prompt}
       />,
     );
   });
+}
+
+// A PDF the test can read. jsdom's File has no arrayBuffer(), so the test supplies one that gives a
+// fresh copy each time, as a read of a File does.
+function pdfFile(name: string): File {
+  const bytes = new Uint8Array([37, 80, 68, 70]).buffer;
+  const file = new File([bytes], name, { type: 'application/pdf' });
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.slice(0) });
+  return file;
+}
+
+// Chooses a file in the panel's hidden file input, as the user does in the file dialog.
+function chooseFile(file: File): void {
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+  if (input === null) throw new Error('no file input');
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  act(() => {
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+function insertCalls(calls: { method: string; params: Record<string, unknown> }[]) {
+  return calls.filter((call) => call.params.name === 'pages.insert_file');
 }
 
 function options(): HTMLElement[] {
@@ -334,5 +433,122 @@ describe('page organizer insert and duplicate', () => {
     expect(calls.some((call) => call.method === 'actions.undo')).toBe(true);
     expect(calls.filter((call) => call.method === 'session.pages').length).toBeGreaterThan(listed);
     expect(onChanged).toHaveBeenLastCalledWith(4);
+  });
+});
+
+describe('page organizer insert from file', () => {
+  it('inserts the file after the last selected page and selects the pages it brought', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    const store = createToastStore();
+    mount(rpc, store);
+    await flush();
+    click(options()[1]!);
+    chooseFile(pdfFile('scan.pdf'));
+    await flush();
+    expect(insertCalls(calls)[0]?.params.args).toMatchObject({
+      name: 'scan.pdf',
+      at: 2,
+      pages: null,
+      password: null,
+    });
+    expect(options()).toHaveLength(4 + INSERTED);
+    expect(selectedPages()).toEqual([2, 3]);
+    expect(store.getState().visible[0]?.text).toBe(t('organizer.inserted', { count: INSERTED }));
+  });
+
+  it('asks for the password of a locked file once and inserts it with the answer', async () => {
+    const { rpc, calls } = fakeRpc(4, [1], 'secret');
+    const prompt = createPasswordPrompt();
+    const ask = vi.spyOn(prompt, 'ask').mockResolvedValue('secret');
+    mount(rpc, createToastStore(), undefined, { prompt });
+    await flush();
+    chooseFile(pdfFile('locked.pdf'));
+    await flush();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask).toHaveBeenCalledWith('locked.pdf');
+    const passwords = insertCalls(calls).map(
+      (call) => (call.params.args as { password: unknown }).password,
+    );
+    expect(passwords).toEqual([null, 'secret']);
+    expect(options()).toHaveLength(4 + INSERTED);
+  });
+
+  it('a cancelled password dialog inserts nothing and shows nothing', async () => {
+    const { rpc } = fakeRpc(4, [1], 'secret');
+    const prompt = createPasswordPrompt();
+    const ask = vi.spyOn(prompt, 'ask').mockResolvedValue(null);
+    const store = createToastStore();
+    mount(rpc, store, undefined, { prompt });
+    await flush();
+    chooseFile(pdfFile('locked.pdf'));
+    await flush();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(options()).toHaveLength(4);
+    expect(store.getState().visible).toHaveLength(0);
+  });
+
+  it('stops after five password answers and says the file is still locked', async () => {
+    const { rpc, calls } = fakeRpc(4, [1], 'secret');
+    const prompt = createPasswordPrompt();
+    const ask = vi.spyOn(prompt, 'ask').mockResolvedValue('wrong');
+    const store = createToastStore();
+    mount(rpc, store, undefined, { prompt });
+    await flush();
+    chooseFile(pdfFile('locked.pdf'));
+    await flush();
+    expect(ask).toHaveBeenCalledTimes(5);
+    expect(insertCalls(calls)).toHaveLength(6);
+    expect(options()).toHaveLength(4);
+    expect(store.getState().visible[0]?.text).toBe(t('organizer.passwordGaveUp'));
+  });
+});
+
+describe('page organizer extract', () => {
+  it('downloads the selected pages as "<name> (extract).pdf" with no Undo', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    const store = createToastStore();
+    const download = vi.fn();
+    mount(rpc, store, undefined, { download });
+    await flush();
+    click(options()[1]!);
+    click(options()[3]!, { ctrlKey: true });
+    click(buttonNamed(t('command.extract-pages.label')));
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'jobs.prepare',
+      params: {
+        handle: 'h',
+        job: 'split',
+        args: { mode: 'ranges', pages_per_file: 1, ranges: [[1, 3]], max_bytes: 0 },
+      },
+    });
+    expect(download).toHaveBeenCalledWith('doc (extract).pdf', expect.any(ArrayBuffer));
+    expect(calls.filter((call) => call.method === 'actions.run')).toHaveLength(0);
+    const shown = store.getState().visible[0];
+    expect(shown?.text).toBe(t('organizer.extracted', { count: 2, name: 'doc (extract).pdf' }));
+    expect(shown?.action).toBeUndefined();
+    expect(options()).toHaveLength(4);
+  });
+
+  it('a cancelled extract downloads nothing and shows nothing', async () => {
+    const { rpc } = fakeRpc(4);
+    const store = createToastStore();
+    const download = vi.fn();
+    const worker = (): JobWorker =>
+      ({
+        call: vi.fn(() => new Promise<never>(() => undefined)),
+        terminate: vi.fn(),
+      }) as unknown as JobWorker;
+    mount(rpc, store, undefined, { download, worker });
+    await flush();
+    click(options()[0]!);
+    click(buttonNamed(t('command.extract-pages.label')));
+    await flush();
+    await act(async () => {
+      await jobProgress.cancel();
+    });
+    await flush();
+    expect(download).not.toHaveBeenCalled();
+    expect(store.getState().visible).toHaveLength(0);
   });
 });

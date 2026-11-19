@@ -7,6 +7,7 @@ import { startJobWorker, type WorkerClient } from '../engine/start';
 import { jobWorkerBootOptions } from '../engine/bootOptions';
 import { t } from '../i18n/t';
 import { jobProgress, type JobProgressStore } from '../feedback/jobRun';
+import { downloadBytes } from '../files/downloads';
 import { Overlay } from '../layout/Overlay';
 import { runCombine } from './run';
 import {
@@ -36,19 +37,6 @@ type Phase = 'editing' | 'working' | 'done';
 interface Result {
   readonly name: string;
   readonly bytes: ArrayBuffer;
-}
-
-// Hands the bytes to the browser as a file. The object URL is released after the click has
-// started the download.
-export function downloadBytes(name: string, bytes: ArrayBuffer, type = 'application/pdf'): void {
-  const url = URL.createObjectURL(new Blob([bytes], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function CombineDialog({

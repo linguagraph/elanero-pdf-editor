@@ -82,8 +82,11 @@ is reloaded until you press it.
   down, delete them (after a confirmation; a document always keeps one page), or duplicate them.
   Insert blank page adds an empty page after the last selected page (or at the end when nothing is
   selected), the same size as the page before it. Duplicate puts a copy of each selected page right
-  after the last one. Each change can be undone from the notice that follows it. Inserting pages
-  from a file, extracting pages, and dragging pages, are not available yet.
+  after the last one. Insert from file adds the pages of a PDF, or one image, after the last selected
+  page (or at the end when nothing is selected); an encrypted PDF asks for its
+  password, up to five times. Extract downloads the selected pages as a new PDF named
+  "<name> (extract).pdf"; the document itself does not change. Each change, other than an
+  extract, can be undone from the notice that follows it. Dragging pages is not available yet.
 
 ## Going to a page
 

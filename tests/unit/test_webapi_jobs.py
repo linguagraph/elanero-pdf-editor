@@ -444,3 +444,28 @@ def test_a_document_over_the_job_limit_is_refused(
     assert err["details"]["max_bytes"] == 100
     assert err["details"]["size"] > 100
     assert REGISTRY.get(handle).busy == ""
+
+
+def test_extract_is_a_split_into_one_range_that_changes_nothing(
+    web: None, fixture_pdf: Any
+) -> None:
+    """The organizer's extract (W6.1b): the split job with one range, in the order chosen."""
+    handle = open_data(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    session = REGISTRY.get(handle)
+    before = (session.is_dirty, session.undo_stack.can_undo, session.structure_version)
+    args = {"mode": "ranges", "pages_per_file": 1, "ranges": [[2, 0]], "max_bytes": 0}
+
+    prepared, copy = prepare(handle, "split", args)
+    assert prepared["mutating"] is False
+    reply, out = run_job("split", args, copy)
+    result = ok(reply)
+    assert result["kind"] == "files"
+    assert len(result["files"]) == 1
+    extracted = binary(result["files"][0]["data"], out)
+    assert extracted.startswith(b"%PDF")
+    record("page_count_pikepdf", extracted, pages=2)
+    record("page_count_pdfium", extracted, pages=2)
+
+    assert ok(apply(handle, prepared["token"]))["applied"] is False
+    assert (session.is_dirty, session.undo_stack.can_undo, session.structure_version) == before
+    assert page_total(handle) == 5

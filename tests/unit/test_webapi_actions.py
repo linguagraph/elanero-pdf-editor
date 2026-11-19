@@ -4,6 +4,8 @@ the change events and their errors (W1.2 sections 4, 7 and 12, W1.3 section 2)."
 from __future__ import annotations
 
 import json
+import struct
+import zlib
 from collections.abc import Iterator
 from typing import Any
 
@@ -20,11 +22,13 @@ from pdfeditor.webapi.errors import (
     INVALID_ARGS,
     NO_DOCUMENT,
     NOT_SUPPORTED,
+    PASSWORD_REQUIRED,
     REFUSED,
     STALE_OBJECT,
 )
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
+from tests.hostcheck import record
 
 ROTATE_RIGHT = "Rotate Page Right"
 
@@ -348,6 +352,84 @@ def test_insert_blank_and_duplicate_change_the_page_count_and_undo_restores(
     assert page_count(handle) == count + 1
     assert ok(undo(handle))["done"] is True
     assert page_count(handle) == count
+
+
+def _png(width: int = 4, height: int = 4) -> bytes:
+    """A small red PNG, written out by hand so the test needs no imaging library."""
+    rows = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+
+    def chunk(tag: bytes, body: bytes) -> bytes:
+        crc = zlib.crc32(tag + body) & 0xFFFFFFFF
+        return struct.pack(">I", len(body)) + tag + body + struct.pack(">I", crc)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def insert_file(
+    handle: str, data: bytes, name: str, at: int, password: str | None = None
+) -> dict[str, Any]:
+    """The reply of pages.insert_file, with the file's bytes as the call's first buffer."""
+    reply, _, _ = call_raw(
+        "actions.run",
+        {
+            "handle": handle,
+            "name": "pages.insert_file",
+            "args": {
+                "data": {"$bin": 0},
+                "name": name,
+                "at": at,
+                "pages": None,
+                "password": password,
+            },
+        },
+        [data],
+    )
+    return reply
+
+
+def test_insert_file_adds_a_pdfs_pages_and_undo_restores(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    count = page_count(handle)
+    source = fixture_pdf("images").read_bytes()
+    result = ok(insert_file(handle, source, "images.pdf", 1))
+    inserted = result["value"]
+    assert result["executed"] is True and inserted > 0
+    assert page_count(handle) == count + inserted
+    reply, _, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    assert ok(reply)["verified"] is True
+    record("page_count_pikepdf", out[0], pages=count + inserted)
+    record("page_count_pdfium", out[0], pages=count + inserted)
+    assert ok(undo(handle))["done"] is True
+    assert page_count(handle) == count
+
+
+def test_insert_file_adds_an_image_as_one_page(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf)
+    count = page_count(handle)
+    result = ok(insert_file(handle, _png(), "scan.png", 2))
+    assert result["value"] == 1
+    assert page_count(handle) == count + 1
+
+
+def test_an_encrypted_source_needs_its_password_and_changes_nothing_without_it(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf)
+    count = page_count(handle)
+    secret = fixture_pdf("encrypted").read_bytes()
+    for password in (None, "wrong"):
+        err = error(insert_file(handle, secret, "secret.pdf", 1, password))
+        assert err["code"] == PASSWORD_REQUIRED
+        assert page_count(handle) == count
+    result = ok(insert_file(handle, secret, "secret.pdf", 1, "user"))
+    assert result["value"] == 1
+    assert page_count(handle) == count + 1
 
 
 def _never(session: Any, args: Any) -> ActionResult[None]:

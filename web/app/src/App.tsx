@@ -232,6 +232,8 @@ export function App({ engine, startPrintWorker }: AppProps) {
           <OrganizerPanel
             rpc={session.rpc}
             handle={session.handle}
+            documentName={activeTab?.name ?? ''}
+            startWorker={() => startJobWorker(jobWorkerBootOptions())}
             onChanged={(pageCount) => {
               // The search marks name pages by index, which a change may have moved.
               setSearchMarks(null);
