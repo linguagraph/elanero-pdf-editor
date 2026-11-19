@@ -224,3 +224,86 @@ describe('App', () => {
     }
   });
 });
+
+// Clear all reloads the page, so it must stay disabled while any tab is open, even when Open Recent
+// has put the start page in front of that tab's unsaved work (W4.5 review finding).
+describe('App: Clear all is disabled while a tab is open', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+  });
+
+  function buttonIn(scope: ParentNode, label: string): HTMLButtonElement | undefined {
+    return [...scope.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === label,
+    );
+  }
+
+  it('stays disabled after Open Recent shows the start page over an open tab', async () => {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(scripted.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('unsaved.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+    expect(scripted.renders()).toBeGreaterThan(0);
+
+    // Open Recent from the app menu; the start page then shows next to the open tab.
+    const menu = host.querySelector<HTMLButtonElement>(
+      `button[aria-label="${t('appMenu.label')}"]`,
+    );
+    if (menu === undefined || menu === null) throw new Error('no app menu');
+    act(() => {
+      menu.click();
+    });
+    const openRecent = () =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (item) => item.textContent?.trim() === t('command.open-recent.label'),
+      );
+    await until(() => openRecent() !== undefined);
+    const item = openRecent();
+    if (item === undefined) throw new Error('no Open Recent item');
+    act(() => {
+      item.click();
+    });
+    await until(() => host.querySelector('.start-drop') !== null);
+    expect(host.querySelector('.start-drop')).not.toBeNull();
+
+    const preferences = buttonIn(host, t('command.preferences.label'));
+    if (preferences === undefined) throw new Error('no preferences button');
+    act(() => {
+      preferences.click();
+    });
+    const clear = await vi.waitFor(() => {
+      const found = buttonIn(document, t('prefs.clearAll.open'));
+      if (found === undefined) throw new Error('no clear button');
+      return found;
+    });
+    expect(clear.disabled).toBe(true);
+  });
+});

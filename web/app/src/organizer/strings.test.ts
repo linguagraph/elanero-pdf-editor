@@ -18,9 +18,7 @@ const READABLE_ATTRIBUTE =
 
 describe('organizer strings go through t()', () => {
   it('scans the organizer components', () => {
-    expect(COMPONENT_FILES).toEqual(
-      expect.arrayContaining(['OrganizerPanel.tsx', 'OrganizerRailButton.tsx']),
-    );
+    expect(COMPONENT_FILES).toEqual(expect.arrayContaining(['OrganizerPanel.tsx']));
   });
 
   it.each(COMPONENT_FILES)('%s has no literal user text', (file) => {

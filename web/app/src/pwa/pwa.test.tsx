@@ -27,12 +27,34 @@ describe('web app manifest (W4.6)', () => {
 
   it('uses only relative URLs, so the base path is set at build time', () => {
     const manifest = buildManifest();
-    const urls = [manifest.start_url, manifest.scope, ...(manifest.icons as { src: string }[])];
+    const handlers = manifest.file_handlers as { action: string; icons: { src: string }[] }[];
+    const urls = [
+      manifest.start_url,
+      manifest.scope,
+      ...(manifest.icons as { src: string }[]),
+      ...handlers.map((handler) => handler.action),
+      ...handlers.flatMap((handler) => handler.icons),
+    ];
     for (const entry of urls) {
       const src = typeof entry === 'string' ? entry : (entry as { src: string }).src;
       expect(src.startsWith('/'), src).toBe(false);
       expect(src.startsWith('http'), src).toBe(false);
     }
+  });
+
+  it('declares PDF "Open with" and focus-existing launches (W4.6 S1)', () => {
+    const manifest = JSON.parse(JSON.stringify(buildManifest())) as Record<string, unknown>;
+    const handlers = manifest.file_handlers as {
+      action: string;
+      accept: Record<string, string[]>;
+      launch_type: string;
+    }[];
+    expect(handlers).toHaveLength(1);
+    const [handler] = handlers;
+    expect(handler?.action).toBe(manifest.start_url);
+    expect(handler?.accept).toEqual({ 'application/pdf': ['.pdf'] });
+    expect(handler?.launch_type).toBe('single-client');
+    expect(manifest.launch_handler).toEqual({ client_mode: ['focus-existing', 'auto'] });
   });
 
   it('has its icons in public/', () => {

@@ -45,19 +45,21 @@ import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
 import { BookmarksPanel } from './bookmarks/BookmarksPanel';
-import { BookmarksRailButton } from './bookmarks/BookmarksRailButton';
-import { setBookmarksOpen, useBookmarksOpen } from './bookmarks/openState';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
-import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
-import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
 import { OrganizerPanel } from './organizer/OrganizerPanel';
-import { OrganizerRailButton } from './organizer/OrganizerRailButton';
-import { setOrganizerOpen, useOrganizerOpen } from './organizer/openState';
 import { SearchPanel } from './search/SearchPanel';
-import { SearchRailButton } from './search/SearchRailButton';
-import { setSearchOpen, useSearchOpen } from './search/openState';
 import type { SearchMarks } from './search/search';
+import { RailButton } from './layout/RailButton';
+import { RAIL_ICONS } from './layout/railIcons';
+import {
+  closePanel,
+  PANEL_SIDE,
+  type PanelKey,
+  togglePanel,
+  useOpenPanel,
+} from './layout/sidePanels';
 import { APP_VERSION } from './version';
+import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
 
 // The command state every command reads before the document fields are filled in (see `state`).
@@ -78,9 +80,21 @@ export interface AppProps {
   readonly startPrintWorker?: () => WorkerClient;
   // The job worker pool (W3.1 slice 2). Tests leave it out and get a pool of their own.
   readonly jobs?: JobWorkerPool;
+  // The OS launches of PDFs (W4.6 S1). Tests leave it out: nothing is delivered then.
+  readonly launches?: LaunchInbox;
 }
 
-export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
+const NO_LAUNCHES = installLaunchInbox(undefined, {
+  failed: () => undefined,
+  tooMany: () => undefined,
+});
+
+export function App({
+  engine,
+  startPrintWorker,
+  jobs: jobsProp,
+  launches = NO_LAUNCHES,
+}: AppProps) {
   const ownPool = useMemo(
     () => createJobWorkerPool({ start: () => startJobWorker(jobWorkerBootOptions()) }),
     [],
@@ -109,6 +123,8 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
+  // Files the OS hands to the app open through the same path as the Open button (W4.6 S1).
+  useEffect(() => launches.attach(docs.openFiles), [launches, docs.openFiles]);
   useEffect(() => {
     // Two frames: the start-up screen is painted before the engine begins to load.
     let frame = requestAnimationFrame(() => {
@@ -161,20 +177,21 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
     };
   }, [scheduler, jobs]);
   const viewRef = useRef<DocumentViewHandle>(null);
-  const thumbnailsOpen = useThumbnailsOpen(activeId);
-  const organizerOpen = useOrganizerOpen(activeId);
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
-  const searchOpen = useSearchOpen(activeId);
-  const bookmarksOpen = useBookmarksOpen(activeId);
-  // One right panel shows at a time: opening the thumbnails, the search or the bookmarks closes the
-  // page organizer.
-  useEffect(() => {
-    if (activeId !== null && (thumbnailsOpen || searchOpen || bookmarksOpen)) {
-      setOrganizerOpen(activeId, false);
-    }
-  }, [activeId, thumbnailsOpen, searchOpen, bookmarksOpen]);
+  // One panel shows at a time (W4.2a S1): the left side's panel, or else the right side's. The left
+  // panels get their own slot in S2.
+  const leftPanelOpen = useOpenPanel('left');
+  const rightPanelOpen = useOpenPanel('right');
+  const shownPanel = leftPanelOpen ?? rightPanelOpen;
+  // Until S2 docks the left panels, a panel on either side closes the other side's, so only one
+  // panel shows at a time, as before the side-panel store.
+  // TODO(W4.2a S2): remove the one-panel bridge once panels sit on their own side.
+  const selectPanel = (key: PanelKey) => {
+    closePanel(PANEL_SIDE[key] === 'left' ? 'right' : 'left');
+    togglePanel(key);
+  };
   // The search hits the document view draws, with the tab they belong to (W5.4).
   const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
     null,
@@ -227,45 +244,69 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
       }
       rightRail={
         <>
-          <ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />
-          <BookmarksRailButton tabId={activeId} disabled={!documentShown} />
-          <OrganizerRailButton tabId={activeId} disabled={!documentShown} />
-          <SearchRailButton tabId={activeId} disabled={!documentShown} />
+          <RailButton
+            panel="pages"
+            label={t('thumbnails.title')}
+            icon={RAIL_ICONS.pages}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
+            onToggle={selectPanel}
+          />
+          <RailButton
+            panel="bookmarks"
+            label={t('bookmarks.title')}
+            icon={RAIL_ICONS.bookmarks}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
+            onToggle={selectPanel}
+          />
+          <RailButton
+            panel="organizer"
+            label={t('organizer.title')}
+            icon={RAIL_ICONS.organizer}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
+            onToggle={selectPanel}
+          />
+          <RailButton
+            panel="search"
+            label={t('search.title')}
+            icon={RAIL_ICONS.search}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
+            onToggle={selectPanel}
+          />
         </>
       }
       rightPanel={
-        documentShown && searchOpen && activeId !== null && session !== null ? (
+        documentShown && shownPanel === 'search' && activeId !== null && session !== null ? (
           <SearchPanel
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
             onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
             onGoTo={goTo}
-            onClose={() => setSearchOpen(activeId, false)}
+            onClose={() => closePanel(PANEL_SIDE.search)}
           />
-        ) : documentShown && bookmarksOpen && activeId !== null && session !== null ? (
+        ) : documentShown && shownPanel === 'bookmarks' && activeId !== null && session !== null ? (
           <BookmarksPanel
             key={`bookmarks-${structureRevision}`}
             rpc={session.rpc}
             handle={session.handle}
             tabId={activeId}
             onSelect={goTo}
-            onClose={() => {
-              if (activeId !== null) setBookmarksOpen(activeId, false);
-            }}
+            onClose={() => closePanel(PANEL_SIDE.bookmarks)}
           />
-        ) : documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
+        ) : documentShown && shownPanel === 'pages' && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
             key={`thumbs-${structureRevision}`}
             rpc={session.rpc}
             handle={session.handle}
             scheduler={scheduler}
             onSelect={goTo}
-            onClose={() => {
-              if (activeId !== null) setThumbnailsOpen(activeId, false);
-            }}
+            onClose={() => closePanel(PANEL_SIDE.pages)}
           />
-        ) : documentShown && organizerOpen && session !== null ? (
+        ) : documentShown && shownPanel === 'organizer' && session !== null ? (
           <OrganizerPanel
             rpc={session.rpc}
             handle={session.handle}
@@ -278,9 +319,7 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
               // The dialogs and the status bar read the tab's page count, so it follows the change.
               if (activeId !== null) docs.setPages(activeId, pageCount);
             }}
-            onClose={() => {
-              if (activeId !== null) setOrganizerOpen(activeId, false);
-            }}
+            onClose={() => closePanel(PANEL_SIDE.organizer)}
           />
         ) : undefined
       }
@@ -303,7 +342,14 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
         </>
       }
     >
-      <PreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
+      <PreferencesDialog
+        isOpen={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        // Any open tab counts, including one still loading or behind the start page (Open Recent):
+        // clearing reloads the page, which would lose its unsaved edits. A file still queued or
+        // opening (docs.pending) counts too: it can finish while the confirmation is showing.
+        hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
+      />
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
         <SplitDialog
           isOpen={splitOpen}

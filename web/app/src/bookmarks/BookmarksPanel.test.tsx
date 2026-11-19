@@ -5,17 +5,18 @@ import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import type { OutlineEntry } from '../rpc/generated';
 import { BookmarksPanel } from './BookmarksPanel';
-import { BookmarksRailButton } from './BookmarksRailButton';
-import {
-  expandedOf,
-  forgetBookmarksTab,
-  isBookmarksOpen,
-  setBookmarksOpen,
-  setExpandedOf,
-  useBookmarksOpen,
-} from './openState';
+import { RailButton } from '../layout/RailButton';
+import { RAIL_ICONS } from '../layout/railIcons';
+import { closePanel, openPanel, useOpenPanel } from '../layout/sidePanels';
+import { expandedOf, forgetBookmarksTab, setExpandedOf } from './expansion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => {
+  // The side-panel store is module state: every test starts with both sides closed.
+  closePanel('left');
+  closePanel('right');
+});
 
 function entry(title: string, level: number, page: number | null, is_open = false): OutlineEntry {
   return { title, level, page, is_open };
@@ -70,7 +71,7 @@ function Harness({
   rpc: PageRpc;
   onSelect: (index: number) => void;
 }) {
-  const open = useBookmarksOpen(tabId);
+  const open = useOpenPanel('left') === 'bookmarks';
   let panel: ReactNode = null;
   if (open) {
     panel = (
@@ -79,13 +80,13 @@ function Harness({
         handle="h"
         tabId={tabId}
         onSelect={onSelect}
-        onClose={() => setBookmarksOpen(tabId, false)}
+        onClose={() => closePanel('left')}
       />
     );
   }
   return (
     <div>
-      <BookmarksRailButton tabId={tabId} disabled={false} />
+      <RailButton panel="bookmarks" label={t('bookmarks.title')} icon={RAIL_ICONS.bookmarks} />
       {panel}
     </div>
   );
@@ -112,7 +113,7 @@ function toggleOf(title: string): HTMLElement {
 }
 
 function railButton(): HTMLButtonElement {
-  const found = host.querySelector<HTMLButtonElement>('button.bookmarks-rail-button');
+  const found = host.querySelector<HTMLButtonElement>('button[data-panel="bookmarks"]');
   if (found === null) throw new Error('no rail button');
   return found;
 }
@@ -141,7 +142,7 @@ async function mount(tabId: number, rpc: PageRpc, onSelect = vi.fn()): Promise<v
 describe('bookmarks side panel', () => {
   it('renders the outline as a tree that starts collapsed', async () => {
     const { rpc, call } = fakeRpc(outline);
-    setBookmarksOpen(1, true);
+    openPanel('bookmarks');
     await mount(1, rpc);
     expect(call).toHaveBeenCalledWith('session.outline', { handle: 'h' });
     expect(host.querySelector('[role="tree"]')).not.toBeNull();
@@ -152,7 +153,7 @@ describe('bookmarks side panel', () => {
 
   it('expands and collapses the nested levels', async () => {
     const { rpc } = fakeRpc(outline);
-    setBookmarksOpen(2, true);
+    openPanel('bookmarks');
     await mount(2, rpc);
     await click(toggleOf('Part One'));
     expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Part Two']);
@@ -166,7 +167,7 @@ describe('bookmarks side panel', () => {
   it('a click on an entry asks for its page, and an entry without a page is disabled', async () => {
     const { rpc } = fakeRpc(outline);
     const onSelect = vi.fn();
-    setBookmarksOpen(3, true);
+    openPanel('bookmarks');
     await mount(3, rpc, onSelect);
     await click(toggleOf('Part One'));
     await click(toggleOf('Chapter 1.1'));
@@ -180,7 +181,7 @@ describe('bookmarks side panel', () => {
   it('moves the focus and opens or closes entries with the keys', async () => {
     const { rpc } = fakeRpc(outline);
     const onSelect = vi.fn();
-    setBookmarksOpen(9, true);
+    openPanel('bookmarks');
     await mount(9, rpc, onSelect);
     item('Part One').focus();
     await key(item('Part One'), 'ArrowRight');
@@ -203,7 +204,7 @@ describe('bookmarks side panel', () => {
 
   it('gives only the focused row a tab stop', async () => {
     const { rpc } = fakeRpc(outline);
-    setBookmarksOpen(10, true);
+    openPanel('bookmarks');
     await mount(10, rpc);
     expect(items().map((element) => element.tabIndex)).toEqual([0, -1]);
     await key(item('Part One'), 'End');
@@ -212,14 +213,14 @@ describe('bookmarks side panel', () => {
 
   it('starts expanded where the file flags the entry as open', async () => {
     const { rpc } = fakeRpc([entry('Open part', 1, 0, true), entry('Its child', 2, 1)]);
-    setBookmarksOpen(4, true);
+    openPanel('bookmarks');
     await mount(4, rpc);
     expect(titles()).toEqual(['Open part', 'Its child']);
   });
 
   it('shows the empty message when the document has no outline', async () => {
     const { rpc } = fakeRpc([]);
-    setBookmarksOpen(5, true);
+    openPanel('bookmarks');
     await mount(5, rpc);
     expect(host.textContent).toContain(t('bookmarks.empty'));
     expect(host.querySelector('[role="tree"]')).toBeNull();
@@ -229,37 +230,35 @@ describe('bookmarks side panel', () => {
     const rpc = {
       call: vi.fn(() => Promise.reject(new Error('gone'))),
     } as unknown as PageRpc;
-    setBookmarksOpen(6, true);
+    openPanel('bookmarks');
     await mount(6, rpc);
     expect(host.querySelector('[role="alert"]')?.textContent).toBe(t('bookmarks.loadFailed'));
   });
 
-  it('keeps the open state and the expansion per tab', async () => {
+  it('keeps the open panel, and the expansion per tab', async () => {
     const { rpc } = fakeRpc(outline);
     await mount(7, rpc);
     await click(railButton());
-    expect(railButton().getAttribute('aria-pressed')).toBe('true');
+    expect(railButton().getAttribute('aria-expanded')).toBe('true');
     await flush();
     await click(toggleOf('Part One'));
     expect(titles()).toContain('Chapter 1.1');
 
-    // Another tab starts with the panel closed.
+    // The open panel is global: another tab shows it open too.
     await mount(8, rpc);
-    expect(railButton().getAttribute('aria-pressed')).toBe('false');
+    expect(railButton().getAttribute('aria-expanded')).toBe('true');
 
     // Back on the first tab, the panel is still open and still expanded.
     await mount(7, rpc);
-    expect(railButton().getAttribute('aria-pressed')).toBe('true');
+    expect(railButton().getAttribute('aria-expanded')).toBe('true');
     expect(titles()).toContain('Chapter 1.1');
   });
 
   it('forgets a closed tab, and an outline of another length starts from the file flags', () => {
-    setBookmarksOpen(20, true);
     setExpandedOf(20, 4, new Set([0]));
     expect(expandedOf(20, 4)).toEqual(new Set([0]));
     expect(expandedOf(20, 5)).toBeUndefined();
     forgetBookmarksTab(20);
-    expect(isBookmarksOpen(20)).toBe(false);
     expect(expandedOf(20, 4)).toBeUndefined();
   });
 });

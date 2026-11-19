@@ -1,26 +1,6 @@
-/* The bookmarks side panel (W5.2) and its rail button. Colours and spacing come from the theme
+/* The bookmarks side panel (W5.2). Colours and spacing come from the theme
    tokens (W4.4a). The indent is a data attribute per depth, so no style attribute is needed. */
 
-.bookmarks-rail-button {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-small);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.bookmarks-rail-button[aria-pressed='true'] {
-  background: var(--color-surface-alt);
-  border-color: var(--color-focus-ring);
-}
-
-.bookmarks-rail-button:disabled {
-  color: var(--color-text-disabled);
-}
-
-.bookmarks-rail-button:focus-visible,
 .bookmarks-list:focus-visible,
 .bookmarks-row:focus-visible {
   outline: 2px solid var(--color-focus-ring);

@@ -82,6 +82,8 @@ export interface CommandDef {
   // Set only for an id the shared table has no icon for (web-only ids, and desktop commands with no
   // icon); otherwise the desktop icon name from the shared table applies.
   readonly icon?: IconName;
+  // Search aliases (W4.3b D3): the palette also matches words in this message. Never shown.
+  readonly keywordsId?: MessageId;
 }
 
 export interface Registry {

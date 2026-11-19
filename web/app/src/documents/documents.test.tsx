@@ -11,6 +11,7 @@ import { RpcError } from '../rpc/client';
 import { fitWidthZoom } from '../view/layout';
 import { APP_VERSION } from '../version';
 import { passwordPrompt } from './passwordRequest';
+import { installLaunchInbox, type LaunchFileHandleLike, type LaunchQueueLike } from '../pwa/launch';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -490,7 +491,9 @@ describe('document tabs', () => {
     expect(
       host.querySelector(`[aria-label="${t('view.pageNumber', { page: 1, total: 3 })}"]`),
     ).not.toBeNull();
+    // The view and the Pages panel, which is open by default (W4.2a S1), each ask once.
     expect(calls.filter((call) => call.method === 'session.pages')).toEqual([
+      { method: 'session.pages', params: { handle: 'doc-1' } },
       { method: 'session.pages', params: { handle: 'doc-1' } },
     ]);
   });
@@ -555,5 +558,80 @@ describe('document tabs', () => {
         .querySelectorAll<HTMLElement>('.doc-tabs [role="tab"]')[1]
         ?.getAttribute('aria-selected'),
     ).toBe('true');
+  });
+});
+
+describe('files handed over by the OS (W4.6 S1)', () => {
+  // A launch as the browser builds it: handles whose getFile() returns the File.
+  function launchOf(files: File[]): LaunchFileHandleLike[] {
+    return files.map((file) => ({ kind: 'file', name: file.name, getFile: async () => file }));
+  }
+
+  // Renders the app with a launch inbox whose consumer the test calls with a launch.
+  function renderWithLaunches(): { launch(files: File[]): void } {
+    let consumer: ((params: { files: LaunchFileHandleLike[] }) => void) | null = null;
+    const queue: LaunchQueueLike = {
+      setConsumer: (next) => {
+        consumer = next;
+      },
+    };
+    const inbox = installLaunchInbox(queue, { failed: () => undefined, tooMany: () => undefined });
+    act(() => {
+      root.render(<App engine={engine} launches={inbox} />);
+    });
+    return {
+      launch(files) {
+        consumer?.({ files: launchOf(files) });
+      },
+    };
+  }
+
+  it('opens a launched PDF through session.open, as the Open button does', async () => {
+    const { launch } = renderWithLaunches();
+    launch([pdf('opened-from-os.pdf')]);
+    await until(() => tabNames().length === 1);
+    expect(tabNames()).toEqual(['opened-from-os.pdf']);
+    expect(openCalls()[0]?.params).toMatchObject({ name: 'opened-from-os.pdf', password: null });
+  });
+
+  it('gives a launched .txt the not-a-PDF toast and opens no tab', async () => {
+    const { launch } = renderWithLaunches();
+    launch([new File(['hello'], 'notes.txt', { type: 'text/plain' })]);
+    await until(() => errorToasts().length > 0);
+    expect(tabNames()).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(errorToasts()).toEqual([t('open.notPdf', { name: 'notes.txt' })]);
+  });
+
+  it('refuses a launched file over the size limit before any read', async () => {
+    const { launch } = renderWithLaunches();
+    const huge = pdf('huge.pdf');
+    Object.defineProperty(huge, 'size', { value: 1024 * 1024 * 1024 + 1 });
+    const read = vi.spyOn(huge, 'arrayBuffer');
+    launch([huge]);
+    await until(() => errorToasts().length > 0);
+    expect(errorToasts()).toHaveLength(1);
+    expect(read).not.toHaveBeenCalled();
+    expect(tabNames()).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it('queues a launch made while the engine loads, under "Waiting to open"', async () => {
+    const slot: { consumer?: (params: { files: LaunchFileHandleLike[] }) => void } = {};
+    const inbox = installLaunchInbox(
+      {
+        setConsumer: (next) => {
+          slot.consumer = next;
+        },
+      },
+      { failed: () => undefined, tooMany: () => undefined },
+    );
+    act(() => {
+      root.render(<App engine={fakeEngine()} launches={inbox} />);
+    });
+    slot.consumer?.({ files: launchOf([pdf('waiting.pdf')]) });
+    await until(() => host.querySelector('.start-pending') !== null);
+    expect(host.querySelector('.start-pending')?.textContent).toContain(t('start.pending.heading'));
+    expect(host.querySelector('.start-pending')?.textContent).toContain('waiting.pdf');
   });
 });

@@ -65,16 +65,16 @@
   cursor: pointer;
 }
 
-.app-rail > button[aria-pressed='true'] {
+.app-rail > button[aria-expanded='true'] {
   background: var(--color-surface-alt);
   font-weight: 600;
 }
 
-.app-rail-left > button[aria-pressed='true'] {
+.app-rail-left > button[aria-expanded='true'] {
   box-shadow: inset -3px 0 0 var(--color-accent);
 }
 
-.app-rail-right > button[aria-pressed='true'] {
+.app-rail-right > button[aria-expanded='true'] {
   box-shadow: inset 3px 0 0 var(--color-accent);
 }
 

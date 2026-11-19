@@ -25,7 +25,7 @@ const READABLE_ATTRIBUTE =
 describe('search and text layer strings go through t()', () => {
   it('scans the search and text components', () => {
     expect(FILES.map((file) => file.split(/[\\/]/).pop())).toEqual(
-      expect.arrayContaining(['SearchPanel.tsx', 'SearchRailButton.tsx', 'PageTextLayer.tsx']),
+      expect.arrayContaining(['SearchPanel.tsx', 'PageTextLayer.tsx']),
     );
   });
 

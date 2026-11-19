@@ -67,6 +67,12 @@ export const GROUPS: readonly GroupDef[] = [
   { id: 'app.help', tab: null, labelId: 'ribbon.group.app.help' },
 ];
 
+// Adds search aliases to a declared command (W4.3b D3). A keyword only widens what the palette
+// finds; the desktop has none.
+function aliased(def: CommandDef, keywordsId: MessageId): CommandDef {
+  return { ...def, keywordsId };
+}
+
 // A command with no document needed (or its own rule) takes the enabled rule as `enabled`.
 function cmd(
   id: string,
@@ -105,12 +111,15 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('open', 'command.open.label', 'home.file', OPEN_ANYTIME),
   cmd('save', 'command.save.label', 'home.file'),
   cmd('print', 'command.print.label', 'home.file'),
-  cmd('document-properties', 'command.document-properties.label', 'home.file'),
+  aliased(
+    cmd('document-properties', 'command.document-properties.label', 'home.file'),
+    'command.document-properties.keywords',
+  ),
   cmd('undo', 'command.undo.label', 'home.history', CAN_UNDO),
   cmd('redo', 'command.redo.label', 'home.history', CAN_REDO),
   cmd('select-tool', 'command.select-tool.label', 'home.tools'),
   cmd('hand-tool', 'command.hand-tool.label', 'home.tools'),
-  cmd('find', 'command.find.label', 'home.search'),
+  aliased(cmd('find', 'command.find.label', 'home.search'), 'command.find.keywords'),
   cmd('back', 'command.back.label', 'home.navigate'),
   cmd('forward', 'command.forward.label', 'home.navigate'),
   cmd('previous-page', 'command.previous-page.label', 'home.navigate'),
@@ -130,18 +139,27 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   // Organize
   cmd('organize-pages', 'command.organize-pages.label', 'organize.organize'),
   cmd('insert-pages', 'command.insert-pages.label', 'organize.pages'),
-  cmd('delete-pages', 'command.delete-pages.label', 'organize.pages'),
+  aliased(
+    cmd('delete-pages', 'command.delete-pages.label', 'organize.pages'),
+    'command.delete-pages.keywords',
+  ),
   cmd('duplicate-pages', 'command.duplicate-pages.label', 'organize.pages'),
   cmd('rotate-pages-left', 'command.rotate-pages-left.label', 'organize.pages'),
   cmd('rotate-pages-right', 'command.rotate-pages-right.label', 'organize.pages'),
   cmd('extract-pages', 'command.extract-pages.label', 'organize.assemble'),
   cmd('replace-pages', 'command.replace-pages.label', 'organize.assemble'),
-  cmd('split-document', 'command.split-document.label', 'organize.assemble'),
-  cmd(
-    'combine-files-into-pdf',
-    'command.combine-files-into-pdf.label',
-    'organize.assemble',
-    OPEN_ANYTIME,
+  aliased(
+    cmd('split-document', 'command.split-document.label', 'organize.assemble'),
+    'command.split-document.keywords',
+  ),
+  aliased(
+    cmd(
+      'combine-files-into-pdf',
+      'command.combine-files-into-pdf.label',
+      'organize.assemble',
+      OPEN_ANYTIME,
+    ),
+    'command.combine-files-into-pdf.keywords',
   ),
   cmd('crop-pages', 'command.crop-pages.label', 'organize.setup'),
   cmd('page-labels', 'command.page-labels.label', 'organize.setup'),
@@ -151,14 +169,23 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('add-background', 'command.add-background.label', 'organize.marks'),
 
   // Protect
-  cmd('redact', 'command.redact.label', 'protect.redact'),
+  aliased(cmd('redact', 'command.redact.label', 'protect.redact'), 'command.redact.keywords'),
   cmd('mark-text', 'command.mark-text.label', 'protect.redact'),
   cmd('mark-whole-pages', 'command.mark-whole-pages.label', 'protect.redact'),
   cmd('redaction-properties', 'command.redaction-properties.label', 'protect.redact'),
   cmd('apply-redactions', 'command.apply-redactions.label', 'protect.redact'),
-  cmd('sanitize-document', 'command.sanitize-document.label', 'protect.cleanup'),
-  cmd('encrypt-with-password', 'command.encrypt-with-password.label', 'protect.security'),
-  cmd('remove-security', 'command.remove-security.label', 'protect.security'),
+  aliased(
+    cmd('sanitize-document', 'command.sanitize-document.label', 'protect.cleanup'),
+    'command.sanitize-document.keywords',
+  ),
+  aliased(
+    cmd('encrypt-with-password', 'command.encrypt-with-password.label', 'protect.security'),
+    'command.encrypt-with-password.keywords',
+  ),
+  aliased(
+    cmd('remove-security', 'command.remove-security.label', 'protect.security'),
+    'command.remove-security.keywords',
+  ),
   cmd(
     'place-signature',
     'command.place-signature.label',
@@ -225,7 +252,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     OPEN_ANYTIME,
     'office_import',
   ),
-  cmd('reduce-file-size', 'command.reduce-file-size.label', 'tools.optimize'),
+  aliased(
+    cmd('reduce-file-size', 'command.reduce-file-size.label', 'tools.optimize'),
+    'command.reduce-file-size.keywords',
+  ),
   cmd('space-usage', 'command.space-usage.label', 'tools.optimize'),
   cmd('compare-files', 'command.compare-files.label', 'tools.compare'),
   cmd(
