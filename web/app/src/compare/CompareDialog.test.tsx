@@ -183,7 +183,9 @@ describe('CompareDialog', () => {
     act(() => findButton(t('compare.submit')).click());
     await flush();
 
-    expect(call.mock.calls.map((entry) => entry[0])).toEqual(['jobs.prepare', 'jobs.apply']);
+    expect(
+      call.mock.calls.map((entry) => entry[0]).filter((name) => name !== 'system.memory'),
+    ).toEqual(['jobs.prepare', 'jobs.apply']);
     const prepare = call.mock.calls[0] as unknown as [string, { args: { other: unknown } }];
     expect(prepare[1]).toMatchObject({
       handle: 'doc-1',

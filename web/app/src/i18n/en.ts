@@ -263,6 +263,9 @@ export const EN = {
   'job.working': 'Working',
   'job.percent': '{percent}% done',
   'job.done': 'Done: {label}',
+  // The engine heap warning (W3.9 section 4): a notice, never a refusal.
+  'memory.warning':
+    'Elanero is using {size} of memory. Close documents you are not using to keep it running smoothly.',
   // Document properties (W7.6).
   'properties.title': 'Document properties',
   'properties.field.title': 'Title',

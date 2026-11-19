@@ -7,7 +7,7 @@ import { mapRpcError } from '../rpc/errors';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
 
-export type ToastKind = 'info' | 'success' | 'error';
+export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
 export interface Toast {
   readonly id: number;
