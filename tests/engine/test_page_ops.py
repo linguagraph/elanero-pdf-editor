@@ -268,6 +268,32 @@ def test_page_labels_none_style_is_empty_strings(ops: Engine, fixture_pdf, tmp_p
     doc.close()
 
 
+class _NoPrivateLabelRead:
+    """Hides MuPDF's private ``_get_page_labels``, so ``page_labels`` takes the fallback."""
+
+    def __init__(self, real: object) -> None:
+        self._real = real
+
+    def __getattr__(self, name: str) -> object:
+        if name == "_get_page_labels":
+            raise AttributeError(name)
+        return getattr(self._real, name)
+
+
+def test_page_labels_fallback_matches_primary(
+    ops: Engine, fixture_pdf, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fallback (for a PyMuPDF without the private read) must give the same labels as the
+    # primary path on a file covering roman, prefixed decimal, prefix-only and alphabetic past Z.
+    doc, _path = _open(ops, fixture_pdf, tmp_path, "page_labels")
+    expected = ["i", "ii", "A-1", "A-2", "A-3", "Cover", "Z", "AA"]
+    assert doc.page_labels() == expected
+    monkeypatch.setattr(type(doc), "fz", property(lambda self: _NoPrivateLabelRead(self._fz)))
+    assert not hasattr(doc.fz, "_get_page_labels")
+    assert doc.page_labels() == expected
+    doc.close()
+
+
 def test_text_width(ops: Engine) -> None:
     assert ops.text_width("", "helv", 10) == 0
     assert ops.text_width("MMMM", "helv", 20) > ops.text_width("iiii", "helv", 20) > 0
