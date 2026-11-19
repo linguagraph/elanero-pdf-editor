@@ -103,11 +103,13 @@ from pdfeditor.webapi import jobworker as _jobworker
 def _pdfeditor_job_call(request, joined, sizes, on_notice):
     buffers = []
     if joined is not None:
-        raw = bytes(joined)
+        # Each slice is copied once, from a view, so the request's bytes are not copied first.
+        view = memoryview(joined)
         start = 0
         for size in sizes:
-            buffers.append(raw[start:start + int(size)])
-            start += int(size)
+            end = start + int(size)
+            buffers.append(bytes(view[start:end]))
+            start = end
     def notify(notice):
         on_notice(_json.dumps(notice, allow_nan=False, separators=(",", ":")))
     reply, out = _jobworker.dispatch(request, buffers, notify)

@@ -1,9 +1,8 @@
 // Main-thread side of the workers. It holds no PDF logic: it creates a worker, relays requests
 // and replies, and forwards stage events. Nothing here starts a worker at import time.
 import { CallError, EngineLoadError } from './errors';
-import type { CallResult } from './loader';
+import type { CallResult, Notice } from './loader';
 import type { ErrorMessage, ReplyMessage, Stage, WorkerOutbound } from './protocol';
-import type { Notice } from './loader';
 
 export interface StartOptions {
   // Absolute or same-origin URL of the worker module (engine.worker.ts or jobworker.ts, built).

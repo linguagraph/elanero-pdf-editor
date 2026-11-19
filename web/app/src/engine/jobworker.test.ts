@@ -8,9 +8,11 @@ type Listener = (event: { data: unknown }) => void;
 function fakeScope() {
   const listeners: Listener[] = [];
   const posted: unknown[] = [];
+  const transfers: (Transferable[] | undefined)[] = [];
   const scope: WorkerScope = {
-    postMessage: (message) => {
+    postMessage: (message, transfer) => {
       posted.push(message);
+      transfers.push(transfer);
     },
     addEventListener: (_type, listener) => {
       listeners.push(listener);
@@ -19,7 +21,7 @@ function fakeScope() {
   const send = (data: unknown) => {
     for (const listener of listeners) listener({ data });
   };
-  return { scope, posted, send };
+  return { scope, posted, transfers, send };
 }
 
 const snapshot = () =>
@@ -107,6 +109,28 @@ describe('job worker network lockdown', () => {
     ]);
     const reply = posted[1] as { buffer: ArrayBuffer };
     expect(Array.from(new Uint8Array(reply.buffer))).toEqual([7, 8]);
+  });
+
+  it('sends a reply with two buffers, both in the transfer list', async () => {
+    const { scope, posted, transfers, send } = fakeScope();
+    const first = new Uint8Array([1]).buffer;
+    const second = new Uint8Array([2, 3]).buffer;
+    serveJobWorker(scope, async () => ({
+      dispatch: () => ({ reply: '{"ok":true}', buffers: [first, second] }),
+    }));
+    send({ kind: 'init', baseUrl: 'http://localhost/engine/' });
+    send({ id: 6, method: 'dispatch', request: '{}' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const index = posted.findIndex((message) => (message as { id?: number }).id === 6);
+    const reply = posted[index] as { buffers: ArrayBuffer[] };
+    expect(reply.buffers).toHaveLength(2);
+    expect(reply.buffers[0]).toBe(first);
+    expect(reply.buffers[1]).toBe(second);
+    const transfer = transfers[index] ?? [];
+    expect(transfer).toHaveLength(2);
+    expect(transfer[0]).toBe(first);
+    expect(transfer[1]).toBe(second);
   });
 
   it('answers only the dispatch method', async () => {
