@@ -17,7 +17,7 @@ from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Page, PasswordRequired
 from pdfeditor.model.metadata import EncryptionMethod
-from pdfeditor.model.outline import flatten
+from pdfeditor.model.outline import OutlineItem, flatten
 from pdfeditor.model.platform import current as platform_current
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.errors import (
@@ -111,16 +111,28 @@ def document_outline(params: dto.HandleParams) -> dto.OutlineResult:
     session = REGISTRY.get(params.handle)
     with session.lock:
         items = session.document.outline()
-    entries = tuple(
+        page_count = session.document.page_count
+    return dto.OutlineResult(entries=outline_entries(items, page_count))
+
+
+def outline_entries(items: list[OutlineItem], page_count: int) -> tuple[dto.OutlineEntry, ...]:
+    """The flat, depth-first entries of an outline. A destination past the end has no page."""
+    return tuple(
         dto.OutlineEntry(
             title=item.title,
             level=level,
-            page=item.dest.page_index if item.dest is not None else None,
+            page=_page_or_none(item, page_count),
             is_open=item.is_open,
         )
         for level, item in flatten(items)
     )
-    return dto.OutlineResult(entries=entries)
+
+
+def _page_or_none(item: OutlineItem, page_count: int) -> int | None:
+    if item.dest is None:
+        return None
+    index = item.dest.page_index
+    return index if 0 <= index < page_count else None
 
 
 def unlock_owner(params: dto.UnlockParams) -> dto.UnlockResult:

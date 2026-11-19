@@ -144,6 +144,24 @@ def outline() -> None:
     _save(doc, "outline.pdf")
 
 
+def outline_irregular() -> None:
+    doc = pymupdf.open()
+    for i in range(5):
+        page = doc.new_page(width=A4.width, height=A4.height)
+        page.insert_text((72, 72), f"Page {i + 1}", fontsize=16)
+    # Three levels deep, a step back up to level 2, then a bookmark with no destination (-1).
+    doc.set_toc(
+        [
+            [1, "Deep A", 1],
+            [2, "Deep B", 2],
+            [3, "Deep C", 3],
+            [2, "Back to B level", 4],
+            [1, "No destination", -1],
+        ]
+    )
+    _save(doc, "outline_irregular.pdf")
+
+
 def encrypted() -> None:
     doc = pymupdf.open()
     page = doc.new_page(width=A4.width, height=A4.height)
@@ -1034,6 +1052,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "annotations": annotations,
     "annotations_unnamed": annotations_unnamed,
     "outline": outline,
+    "outline_irregular": outline_irregular,
     "encrypted": encrypted,
     "hybrid_xref": hybrid_xref,
     "rotated_pages": rotated_pages,

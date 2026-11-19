@@ -22,7 +22,7 @@
 
 .bookmarks-rail-button:focus-visible,
 .bookmarks-list:focus-visible,
-.bookmarks-row button:focus-visible {
+.bookmarks-row:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -96,7 +96,7 @@
   cursor: pointer;
 }
 
-.bookmarks-title:disabled {
+.bookmarks-row[aria-disabled='true'] .bookmarks-title {
   color: var(--color-text-disabled);
   cursor: default;
 }
