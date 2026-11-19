@@ -57,6 +57,23 @@
   outline-offset: 2px;
 }
 
+/* A plain action button, not a dismiss: the shortcuts list opens from here, so it must not read as Close. */
+.prefs-action {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.prefs-action[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 .prefs-apply {
   background: var(--color-accent);
   color: var(--color-on-accent);

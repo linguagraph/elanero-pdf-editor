@@ -5,6 +5,7 @@ import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
 import { DocumentView } from './DocumentView';
+import { computeColumn, computeSpreads, scrollTopForPage, scrollTopForSpread } from './layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -441,6 +442,44 @@ describe('DocumentView layouts and night reading', () => {
       writePreferences({ ...readPreferences(), pageLayout: 'twoPage' });
     });
     expect(pressed('Single column')).toBe('true');
+  });
+
+  it('keeps the current page in view when a changed default layout is applied (W4.5 S2)', async () => {
+    const { rpc } = fakeRpc(10);
+    const pages: { page: number }[] = [];
+    act(() => {
+      root.render(
+        <DocumentView rpc={rpc} handle="doc-1" onViewChange={(state) => pages.push(state)} />,
+      );
+    });
+    await flush();
+    const scroller = host.querySelector<HTMLElement>('.doc-view-scroll');
+    if (scroller === null) throw new Error('no scroll element');
+    // jsdom has no layout; a plain property lets the test move the view and read what the view wrote.
+    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true });
+
+    // Reader is on page 5 (index 4) in the continuous column.
+    const column = computeColumn(
+      Array.from({ length: 10 }, () => ({ width: 612, height: 792 })),
+      1,
+    );
+    scroller.scrollTop = scrollTopForPage(column.boxes, 4, 1) ?? -1;
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(pages.at(-1)?.page).toBe(5);
+
+    // The saved default changes to two pages; page 5 must still be the page at the top of the view.
+    act(() => {
+      writePreferences({ ...readPreferences(), pageLayout: 'twoPage' });
+    });
+    const spreads = computeSpreads(
+      Array.from({ length: 10 }, () => ({ width: 612, height: 792 })),
+      1,
+      false,
+    );
+    expect(scroller.scrollTop).toBeCloseTo(scrollTopForSpread(spreads.boxes, 4, 1, false) ?? -1);
+    expect(pages.at(-1)?.page).toBe(5);
   });
 
   it('zooms with Ctrl+wheel through the desktop steps and stops the browser zoom', async () => {

@@ -262,7 +262,7 @@ function PreferencesForm({
           {t('prefs.section.shortcuts')}
         </h3>
         <span className="prefs-hint">{t('prefs.shortcuts.hint')}</span>
-        <button type="button" className="overlay-close" onClick={onShowShortcuts}>
+        <button type="button" className="prefs-action" onClick={onShowShortcuts}>
           {t('prefs.shortcuts.open')}
         </button>
       </section>

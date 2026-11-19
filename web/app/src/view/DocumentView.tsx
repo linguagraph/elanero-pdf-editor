@@ -154,6 +154,10 @@ export function DocumentView({
   const wheelPending = useRef(0);
   // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
   const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
+  // The page at the top of the view, kept up to date, and the page a changed default layout must
+  // keep in view once the new layout is laid out (W4.5 S2: the layout change must not lose place).
+  const topPage = useRef(0);
+  const pendingPage = useRef<number | null>(null);
   const [scroll, setScroll] = useState({ top: 0, height: 0, width: 0 });
   // Bumped whenever the scheduler finished a render; the queue is re-planned then.
   const [tick, setTick] = useState(0);
@@ -269,6 +273,7 @@ export function DocumentView({
         if (choice === appliedLayout.current) return;
         appliedLayout.current = choice;
         const next = layoutForChoice(choice);
+        pendingPage.current = topPage.current;
         setViewLayout(next.layout);
         setFirstAlone(next.firstAlone);
       }),
@@ -339,10 +344,29 @@ export function DocumentView({
     setScroll(viewportOf(element));
   }, [zoom]);
 
+  // Keeps the page that was at the top in view when the default layout changed: the new layout is
+  // laid out here, so the page's new top is known. Spreads are scrolled to by their row.
+  useLayoutEffect(() => {
+    const index = pendingPage.current;
+    const element = scrollRef.current;
+    if (index === null || element === null) return;
+    pendingPage.current = null;
+    const top =
+      viewLayout === 'twoPage'
+        ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
+        : scrollTopForPage(layout.boxes, index, zoom);
+    if (top === null) return;
+    element.scrollTop = top;
+    setScroll(viewportOf(element));
+  }, [viewLayout, firstAlone, layout, zoom]);
+
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
   const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
+  useEffect(() => {
+    topPage.current = currentPage - 1;
+  }, [currentPage]);
   useEffect(() => {
     onViewChange?.({ page: currentPage, zoom, layout: viewLayout, labels });
   }, [currentPage, zoom, viewLayout, labels, onViewChange]);
