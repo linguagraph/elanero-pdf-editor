@@ -117,7 +117,12 @@ function PreferencesForm({
   // The reload is the reset: the theme, accent, recent list and every in-memory copy start from the
   // defaults. It runs only when everything was removed; a partial clear stays on the page, with the
   // message, because the state a reload would show is then unknown.
+  // The ref, not the state, is the guard: two clicks in one tick both run before React re-renders
+  // and disables the button.
+  const clearingRef = useRef(false);
   const clearAll = async () => {
+    if (clearingRef.current) return;
+    clearingRef.current = true;
     setClearing(true);
     setClearFailed(false);
     const outcome = await clearData().catch(() => ({ keysRemoved: 0, complete: false }));
@@ -125,6 +130,7 @@ function PreferencesForm({
       reloadPage();
       return;
     }
+    clearingRef.current = false;
     setClearing(false);
     setConfirming(false);
     setClearFailed(true);
