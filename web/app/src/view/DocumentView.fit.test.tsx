@@ -5,7 +5,7 @@ import type { PageRpc } from '../engine/engineConnection';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
 import { DocumentView } from './DocumentView';
 import { fitPageZoom, fitWidthZoom } from './layout';
-import { scaleMilli, stepZoom } from './zoom';
+import { MAX_RENDER_SCALE_MILLI, quantizeScale, scaleMilli, stepZoom } from './zoom';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -13,7 +13,9 @@ import { scaleMilli, stepZoom } from './zoom';
 const LETTER = { width: 612, height: 792 };
 
 // A fake engine: session.pages answers at once; render.page is recorded and never answered.
-function fakeRpc() {
+// With rejectRenders, a render is recorded and then fails at once, so the scheduler's in-flight
+// slots free up and the queue reaches the renders planned after a zoom change.
+function fakeRpc({ rejectRenders = false }: { rejectRenders?: boolean } = {}) {
   const renders: { scale_milli: number }[] = [];
   const rpc = {
     call: vi.fn((method: string, params: unknown) => {
@@ -21,7 +23,11 @@ function fakeRpc() {
         return Promise.resolve({ pages: [{ ...LETTER, rotation: 0 }], labels: [] });
       }
       if (method === 'text.layer') return new Promise(() => undefined);
-      if (method === 'render.page') renders.push(params as { scale_milli: number });
+      // A page over 4 MP is planned as tiles, so both kinds of render carry the scale.
+      if (method === 'render.page' || method === 'render.tile') {
+        renders.push(params as { scale_milli: number });
+        if (rejectRenders) return Promise.reject(new Error('render stub'));
+      }
       return new Promise(() => undefined);
     }),
   };
@@ -272,6 +278,49 @@ describe('DocumentView fit modes (W5.1e)', () => {
     });
     expect(zoomText()).toBe(`${Math.round(stepZoom(fitted, 1) * 100)}%`);
     expect(button('Fit width')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('clamps the render scale when zoom 64 on a high pixel-ratio screen would exceed the engine limit', async () => {
+    savePreferences({ defaultZoom: 'actual' });
+    const { rpc, renders } = fakeRpc({ rejectRenders: true });
+    const original = window.devicePixelRatio;
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 4 });
+    try {
+      act(() => {
+        root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      });
+      await flush();
+      // Zoom in from 100 % to the maximum: 1, 1.25, 1.5, 2, 3, 4, 6, 8, 12, 16, 32, 64.
+      for (let i = 0; i < 11; i += 1) {
+        act(() => {
+          button('Zoom in')?.click();
+        });
+      }
+      await flush();
+      await flush();
+      expect(zoomText()).toBe('6400%');
+      expect(renders.length).toBeGreaterThan(0);
+      // The unclamped device scale is about 341 (64 x 96/72 x 4), over the 256 limit.
+      expect(quantizeScale(64 * (4 / 3) * 4)).toBeGreaterThan(MAX_RENDER_SCALE_MILLI);
+      // Every render asked for after the zoom is at the clamped scale, and none above it.
+      const zoomed = renders.filter((r) => r.scale_milli === MAX_RENDER_SCALE_MILLI);
+      expect(zoomed.length).toBeGreaterThan(0);
+      expect(renders.every((r) => r.scale_milli <= MAX_RENDER_SCALE_MILLI)).toBe(true);
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: original });
+    }
+  });
+
+  it('leaves the render scale of a normal zoom unchanged', async () => {
+    savePreferences({ defaultZoom: 'actual' });
+    const { rpc, renders } = fakeRpc();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    await flush();
+    expect(renders[0]?.scale_milli).toBe(scaleMilli(1, window.devicePixelRatio || 1));
+    expect(renders[0]?.scale_milli).toBeLessThan(MAX_RENDER_SCALE_MILLI);
   });
 
   it('fits the width of two pages side by side in the two-page layout', async () => {
