@@ -19,7 +19,7 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.webapi import actions, dto, jobs, memory, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
-from pdfeditor.webapi.events import CallRecorder, call_events, state_of
+from pdfeditor.webapi.events import CallRecorder, call_events, event, state_of
 from pdfeditor.webapi.limits import MAX_JSON_DEPTH
 from pdfeditor.webapi.registry import REGISTRY
 
@@ -122,7 +122,7 @@ class _CallScope:
         if self._method == "session.close":
             if result is None or self._handle is None:
                 return []
-            return [{"kind": "closed", "handle": self._handle}]
+            return [event("closed", dto.ClosedEvent(self._handle), out)]
         if self._session is None or self._recorder is None or self._before is None:
             return []
         try:
