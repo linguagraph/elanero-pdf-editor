@@ -104,6 +104,8 @@ export const EN = {
   'palette.back': 'Back to commands',
   'palette.shortcutsList': 'Keyboard shortcuts',
   'palette.noShortcuts': 'No keyboard shortcuts yet.',
+  'palette.recent': 'Recent',
+  'palette.menuLocation': 'App menu',
 
   // Command labels, keyed by command id (W1.6 section 11). Shortcuts are not text here: they come
   // from the shared table.

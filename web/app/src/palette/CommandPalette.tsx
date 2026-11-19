@@ -12,10 +12,18 @@ import {
   type CommandState,
   DISABLED_REASON_LABELS,
   type Registry,
+  TAB_LABELS,
 } from '../commands/registry';
-import { type CommandHandlers, isVisible, runCommand } from '../commands/run';
+import {
+  type CommandHandlers,
+  commandDisabledReason,
+  isVisible,
+  runCommand,
+} from '../commands/run';
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
+import { rankCommands } from './match';
+import { readRecentCommands, recordRecentCommand } from './recentCommands';
 import './palette.css';
 
 // The registry command that opens the keyboard shortcuts list inside the palette.
@@ -30,26 +38,6 @@ export interface CommandPaletteProps {
 }
 
 type View = 'commands' | 'shortcuts';
-
-// The visible commands whose labels contain every word of the query (case-insensitive), in the
-// registry's order. An empty query lists them all.
-export function filterCommands(
-  registry: Registry,
-  state: CommandState,
-  query: string,
-): CommandDef[] {
-  const words = query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((word) => word !== '');
-  return registry.commands
-    .filter((def) => isVisible(def, state))
-    .filter((def) => {
-      const label = t(def.labelId).toLowerCase();
-      return words.every((word) => label.includes(word));
-    });
-}
 
 // Keys typed into a field are text, not shortcuts (the palette's own keys are handled apart).
 function isTextEntry(target: EventTarget | null): boolean {
@@ -96,9 +84,10 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
       setView('shortcuts');
       return;
     }
-    if (def.enabled(state) !== null) return;
+    if (commandDisabledReason(def, state, handlers) !== null) return;
     setIsOpen(false);
-    runCommand(registry, def.id, state, handlers);
+    // Only a run from the palette counts as recent (W4.3b D2), and only once it has happened.
+    if (runCommand(registry, def.id, state, handlers)) recordRecentCommand(def.id);
   }
 
   return (
@@ -109,7 +98,7 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
       showCloseButton={false}
     >
       {view === 'commands' ? (
-        <CommandList registry={registry} state={state} onRun={run} />
+        <CommandList registry={registry} state={state} handlers={handlers} onRun={run} />
       ) : (
         <ShortcutList registry={registry} state={state} onBack={() => setView('commands')} />
       )}
@@ -120,16 +109,26 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
 interface CommandListProps {
   registry: Registry;
   state: CommandState;
+  handlers: CommandHandlers;
   onRun: (def: CommandDef) => void;
+}
+
+// The ribbon tab a command lives on, or the app menu for a group that has no tab.
+function locationLabel(registry: Registry, def: CommandDef): string {
+  const tab = registry.groups.find((group) => group.id === def.group)?.tab ?? null;
+  return tab === null ? t('palette.menuLocation') : t(TAB_LABELS[tab]);
 }
 
 // The search box and the list. The input keeps focus and drives the list through
 // aria-activedescendant (the combobox pattern), so the arrow keys move the highlight, not the focus.
-function CommandList({ registry, state, onRun }: CommandListProps) {
+// The list is read once per opening (the Overlay unmounts it when closed), so a run shows next time.
+function CommandList({ registry, state, handlers, onRun }: CommandListProps) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [recent] = useState(() => readRecentCommands());
   const listId = useId();
-  const rows = filterCommands(registry, state, query);
+  const matches = rankCommands(registry, state, query, recent);
+  const rows = matches.map((match) => match.def);
   const index = rows.length === 0 ? -1 : Math.min(active, rows.length - 1);
   const optionId = (position: number): string => `${listId}-${position}`;
 
@@ -177,9 +176,10 @@ function CommandList({ registry, state, onRun }: CommandListProps) {
         <p className="palette-empty">{t('palette.empty')}</p>
       ) : (
         <ul id={listId} role="listbox" aria-label={t('palette.commands')} className="palette-list">
-          {rows.map((def, position) => {
-            const reason = def.enabled(state);
+          {matches.map(({ def, recentRank }, position) => {
+            const reason = commandDisabledReason(def, state, handlers);
             const keys = effectiveKeys(def.id);
+            const isRecent = recentRank !== Infinity;
             return (
               <li
                 key={def.id}
@@ -189,11 +189,14 @@ function CommandList({ registry, state, onRun }: CommandListProps) {
                 aria-disabled={reason === null ? undefined : 'true'}
                 data-command={def.id}
                 data-active={position === index ? 'true' : undefined}
+                data-recent={isRecent ? 'true' : undefined}
                 className="palette-row"
                 onMouseMove={() => setActive(position)}
                 onClick={() => onRun(def)}
               >
                 <span className="palette-label">{t(def.labelId)}</span>
+                {isRecent ? <span className="palette-recent">{t('palette.recent')}</span> : null}
+                <span className="palette-tab">{locationLabel(registry, def)}</span>
                 {keys.length > 0 ? (
                   <span className="palette-shortcut">{displayKeys(keys, IS_MAC)}</span>
                 ) : null}
