@@ -33,9 +33,18 @@ export interface Autosaver {
   // Brings the scheduler in step with the open documents. A dirty document is scheduled; a document
   // that is clean, or no longer open, has its copy deleted.
   sync(docs: readonly AutosaveDocument[]): void;
-  // Deletes every copy of this page load (pagehide, best effort). The next sync schedules the
-  // documents that are still dirty again.
-  dispose(): void;
+}
+
+// Re-syncs when the page comes back from the back-forward cache (pageshow with persisted set). The
+// cached page may have come back without its scheduled writes, so the scheduler is brought in step
+// again. Nothing is deleted on pagehide: a copy is removed only when its document closes or becomes
+// clean, so a restore (or a crash) still finds it. Returns the function that stops the listener.
+export function watchPageShow(target: EventTarget, resync: () => void): () => void {
+  const onPageShow = (event: Event): void => {
+    if ((event as Event & { persisted?: boolean }).persisted === true) resync();
+  };
+  target.addEventListener('pageshow', onPageShow);
+  return () => target.removeEventListener('pageshow', onPageShow);
 }
 
 export interface AutosaverOptions {
@@ -117,6 +126,14 @@ export function createAutosaver(options: AutosaverOptions): Autosaver {
     entry.timer = undefined;
   }
 
+  // The browser cannot keep copies: stop for the rest of the page load, and say so once. Retrying
+  // would only repeat the same failure, so the user is told rather than left unprotected in silence.
+  function stopCopying(): void {
+    off = true;
+    warnOnce('unavailable');
+    for (const entry of entries.values()) cancel(entry);
+  }
+
   function schedule(entry: Entry, delay: number): void {
     if (off || entry.scheduled || entry.running || entry.gone) return;
     if (entry.disabled !== undefined || !entry.doc.dirty) return;
@@ -144,9 +161,7 @@ export function createAutosaver(options: AutosaverOptions): Autosaver {
     }
     storeOk ??= store.available();
     if (!(await storeOk)) {
-      off = true;
-      warnOnce('unavailable');
-      for (const other of entries.values()) cancel(other);
+      stopCopying();
       return;
     }
     const sinceWrite = entry.lastWrite === undefined ? undefined : now() - entry.lastWrite;
@@ -183,8 +198,13 @@ export function createAutosaver(options: AutosaverOptions): Autosaver {
       if (outcome === 'gone') return;
       if (outcome === 'written') {
         entry.lastWrite = now();
+      } else if (outcome === 'unsupported') {
+        stopCopying();
+        return;
       } else {
-        if (outcome === 'no-space') warnOnce('noSpace');
+        // A full disk has its own message. Any other failure gets the unavailable message, once,
+        // and the copy is tried again after a full interval.
+        warnOnce(outcome === 'no-space' ? 'noSpace' : 'unavailable');
         delay = ERROR_RETRY_MS;
       }
     } catch (error: unknown) {
@@ -233,11 +253,6 @@ export function createAutosaver(options: AutosaverOptions): Autosaver {
       for (const [id, entry] of [...entries]) {
         if (!present.has(id)) forget(id, entry);
       }
-    },
-
-    dispose() {
-      for (const [id, entry] of [...entries]) forget(id, entry);
-      void serial(() => store.removeTab(tabId));
     },
   };
 }

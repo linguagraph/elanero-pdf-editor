@@ -32,13 +32,18 @@ export interface StorageEstimateLike {
   readonly usage?: number;
 }
 
+// Thrown when the browser lacks part of the private-storage API (no getDirectory, or no
+// createWritable as in older Safari). The store reports it as 'unsupported', so the autosaver stops
+// and warns once, rather than retrying a write that can never succeed.
+export class StorageUnsupportedError extends Error {}
+
 // The browser's private root, or a rejection when the browser has no OPFS.
 export function privateRoot(): Promise<DirectoryLike> {
   try {
     const storage = (globalThis as { navigator?: { storage?: { getDirectory?: unknown } } })
       .navigator?.storage;
     if (typeof storage?.getDirectory !== 'function') {
-      return Promise.reject(new Error('the browser has no private file storage'));
+      return Promise.reject(new StorageUnsupportedError('the browser has no private file storage'));
     }
     return (storage.getDirectory as () => Promise<DirectoryLike>).call(storage);
   } catch (error) {

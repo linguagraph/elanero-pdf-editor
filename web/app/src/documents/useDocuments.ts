@@ -13,7 +13,7 @@ import { reportRpcError, toasts } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import { addRecentFile, readRecentFiles, type RecentFile } from '../recent/recentFiles';
-import { type AutosaveWarning, createAutosaver } from '../storage/autosaver';
+import { type AutosaveWarning, createAutosaver, watchPageShow } from '../storage/autosaver';
 import { createAutosaveStore } from '../storage/autosaveStore';
 import { browserTabId } from '../storage/tabId';
 import {
@@ -116,7 +116,7 @@ export function useDocuments(engine: EngineConnection): Documents {
       tabId: browserTabId(),
       store: createAutosaveStore(),
       client: () => engine.client(),
-      warn: (warning) => toasts.push('info', t(AUTOSAVE_MESSAGES[warning])),
+      warn: (warning) => toasts.push('warning', t(AUTOSAVE_MESSAGES[warning])),
     }),
   );
 
@@ -124,17 +124,12 @@ export function useDocuments(engine: EngineConnection): Documents {
   useEffect(() => (dirty ? guardUnload(window) : undefined), [dirty]);
 
   // Keeps the autosave copies in step with the open tabs: a dirty tab is copied, and a closed or
-  // clean tab loses its copy.
+  // clean tab loses its copy. A restore from the back-forward cache re-syncs the same way. Leaving
+  // the page deletes nothing: the copies are for a restore after a crash or a cache restore.
   useEffect(() => {
     autosaver.sync(tabs.tabs);
+    return watchPageShow(window, () => autosaver.sync(tabs.tabs));
   }, [autosaver, tabs]);
-
-  // Leaving the page deletes this page's copies, best effort (W1.1 section 6).
-  useEffect(() => {
-    const onPageHide = (): void => autosaver.dispose();
-    window.addEventListener('pagehide', onPageHide);
-    return () => window.removeEventListener('pagehide', onPageHide);
-  }, [autosaver]);
 
   const showPending = useCallback(() => {
     setPending(

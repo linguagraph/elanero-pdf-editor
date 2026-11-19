@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AutosaveMeta } from './autosaveStore';
 import { createAutosaveStore, fitsQuota } from './autosaveStore';
 import type { BlobLike, DirectoryLike, FileLike, StorageEstimateLike, WritableLike } from './opfs';
+import { StorageUnsupportedError } from './opfs';
 
 // The bytes of a Blob. FileReader is used because jsdom's Blob is not the one Response reads.
 function readBlob(blob: Blob): Promise<ArrayBuffer> {
@@ -174,6 +175,25 @@ describe('autosave store', () => {
     };
     const store = createAutosaveStore(async () => quotaRoot);
     expect(await store.write('tab-a', 4, bytesOf('x'), META)).toBe('no-space');
+  });
+
+  it('reports unsupported, and writes nothing, when the browser has no createWritable', async () => {
+    // Older Safari: the file handle exists but cannot be written.
+    const noWritable: DirectoryLike = {
+      getDirectoryHandle: async () => noWritable,
+      getFileHandle: async () => ({}) as FileLike,
+      removeEntry: async () => undefined,
+    };
+    const store = createAutosaveStore(async () => noWritable);
+    expect(await store.write('tab-a', 5, bytesOf('x'), META)).toBe('unsupported');
+  });
+
+  it('reports unsupported when the browser has no private storage API at all', async () => {
+    const store = createAutosaveStore(async () => {
+      throw new StorageUnsupportedError('no OPFS');
+    });
+    expect(await store.available()).toBe(false);
+    expect(await store.write('tab-a', 1, bytesOf('x'), META)).toBe('unsupported');
   });
 
   it('reports unavailable without throwing when the browser has no private storage', async () => {

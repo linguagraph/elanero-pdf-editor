@@ -35,6 +35,10 @@
   border-left-color: var(--color-success);
 }
 
+.toast-warning {
+  border-left-color: var(--color-warning);
+}
+
 .toast-error {
   border-left-color: var(--color-danger);
 }

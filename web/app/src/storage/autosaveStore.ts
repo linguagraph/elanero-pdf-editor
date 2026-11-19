@@ -4,7 +4,7 @@
 // and one whose size differs from the size the .json recorded (a write that was cut off).
 // Every access is wrapped in try/catch: a failure is a result, never a throw, so the page works
 // without autosave.
-import { type DirectoryLike, privateRoot, storageEstimate } from './opfs';
+import { type DirectoryLike, privateRoot, StorageUnsupportedError, storageEstimate } from './opfs';
 
 export const AUTOSAVE_FOLDER = 'autosave';
 const FORMAT = 1;
@@ -22,8 +22,9 @@ export interface AutosaveCopy {
 }
 
 // "written" when both files are in place; "no-space" when the estimate says the copy would not fit
-// (or the disk refused it); "failed" for any other error. None of them throws.
-export type WriteOutcome = 'written' | 'no-space' | 'failed';
+// (or the disk refused it); "unsupported" when the browser lacks the storage API, which no retry
+// will fix; "failed" for any other error. None of them throws.
+export type WriteOutcome = 'written' | 'no-space' | 'unsupported' | 'failed';
 
 export interface AutosaveStore {
   // False when the browser has no private storage. Checked before anything else is attempted.
@@ -86,6 +87,10 @@ async function removeIfPresent(dir: DirectoryLike, name: string): Promise<void> 
 async function writeFile(dir: DirectoryLike, name: string, data: Blob): Promise<void> {
   // A writable stream commits on close(), so the old file stays whole until the new one is complete.
   const handle = await dir.getFileHandle(name, { create: true });
+  // Older Safari has no createWritable: say so, rather than failing the same way every minute.
+  if (typeof handle.createWritable !== 'function') {
+    throw new StorageUnsupportedError('the browser cannot write to private storage');
+  }
   const writable = await handle.createWritable();
   await writable.write(data);
   await writable.close();
@@ -122,8 +127,7 @@ export function createAutosaveStore(
 
     async write(tabId, docId, bytes, meta) {
       try {
-        const base = await rootOrUndefined();
-        if (base === undefined) return 'failed';
+        const base = await root();
         if (!fitsQuota(bytes.byteLength, await estimate())) return 'no-space';
         const dir = await tabFolder(base, tabId, true);
         const names = docNames(docId);
@@ -132,6 +136,7 @@ export function createAutosaveStore(
         await writeFile(dir, names.json, new Blob([sidecar], { type: 'application/json' }));
         return 'written';
       } catch (error) {
+        if (error instanceof StorageUnsupportedError) return 'unsupported';
         return isQuotaError(error) ? 'no-space' : 'failed';
       }
     },

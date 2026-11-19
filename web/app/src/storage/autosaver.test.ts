@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineClient } from '../engine/engineConnection';
 import { RpcError } from '../rpc/client';
 import type { AutosaveDocument, AutosaveWarning } from './autosaver';
-import { AUTOSAVE_INTERVAL_MS, BUSY_RETRY_MS, createAutosaver, ERROR_RETRY_MS } from './autosaver';
+import {
+  AUTOSAVE_INTERVAL_MS,
+  BUSY_RETRY_MS,
+  createAutosaver,
+  ERROR_RETRY_MS,
+  watchPageShow,
+} from './autosaver';
 import type { AutosaveMeta, AutosaveStore, WriteOutcome } from './autosaveStore';
 
 type Reply = { data: ArrayBuffer; size: number; skipped: string | null };
@@ -254,13 +260,48 @@ describe('autosaver', () => {
     expect(call).toHaveBeenLastCalledWith('save.autosave_bytes', { handle: 'doc-9' });
   });
 
-  it('removes every copy of this page load on dispose', async () => {
-    const { autosaver, removedTabs, removes } = setup();
+  it('warns once and stops when the browser cannot write (no createWritable)', async () => {
+    const { autosaver, call, warnings } = setup({ store: { outcome: 'unsupported' } });
     autosaver.sync([doc()]);
     await advance(SETTLE_MS);
-    autosaver.dispose();
+    expect(warnings).toEqual(['unavailable']);
+    autosaver.sync([doc({ id: 2, handle: 'doc-2' })]);
+    await advance(AUTOSAVE_INTERVAL_MS * 3);
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(warnings).toEqual(['unavailable']);
+  });
+
+  it('warns once on a write failure, and keeps trying every interval without warning again', async () => {
+    const { autosaver, call, warnings } = setup({ store: { outcome: 'failed' } });
+    autosaver.sync([doc()]);
     await advance(SETTLE_MS);
-    expect(removes).toEqual([{ tabId: 'tab-a', docId: 1 }]);
-    expect(removedTabs).toEqual(['tab-a']);
+    expect(warnings).toEqual(['unavailable']);
+    await advance(ERROR_RETRY_MS);
+    expect(call).toHaveBeenCalledTimes(2);
+    await advance(ERROR_RETRY_MS);
+    expect(call).toHaveBeenCalledTimes(3);
+    expect(warnings).toEqual(['unavailable']);
+  });
+
+  it('keeps every copy on pagehide, and re-syncs after a restore from the back-forward cache', async () => {
+    const { autosaver, removes, removedTabs, call } = setup();
+    const page = new EventTarget();
+    const docs = [doc()];
+    const resync = vi.fn(() => autosaver.sync(docs));
+    watchPageShow(page, resync);
+    autosaver.sync(docs);
+    await advance(SETTLE_MS);
+    page.dispatchEvent(new Event('pagehide'));
+    await advance(SETTLE_MS);
+    expect(removes).toEqual([]);
+    expect(removedTabs).toEqual([]);
+    expect(call).toHaveBeenCalledTimes(1);
+
+    const restored = new Event('pageshow');
+    Object.defineProperty(restored, 'persisted', { value: true });
+    page.dispatchEvent(restored);
+    expect(resync).toHaveBeenCalledTimes(1);
+    page.dispatchEvent(new Event('pageshow'));
+    expect(resync).toHaveBeenCalledTimes(1);
   });
 });
