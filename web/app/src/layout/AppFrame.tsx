@@ -14,6 +14,8 @@ export interface AppFrameProps {
   rightPanel?: ReactNode;
   rightRail?: ReactNode;
   statusBar?: ReactNode;
+  // The start page replaces the rails too (W1.6 section 1), so they are hidden while it shows.
+  readonly railsHidden?: boolean;
 }
 
 // The app's region frame, in the desktop order (W1.6 section 1). The regions are always in the
@@ -27,6 +29,7 @@ export function AppFrame({
   rightPanel,
   rightRail,
   statusBar,
+  railsHidden = false,
 }: AppFrameProps) {
   const regions = layoutForWidth(useViewportWidth());
   const hasLeftPanel = leftPanel !== undefined && leftPanel !== null && leftPanel !== false;
@@ -40,12 +43,18 @@ export function AppFrame({
       data-left-rail={regions.leftRail ? 'shown' : 'hidden'}
       data-left-panel={hasLeftPanel ? regions.leftPanel : 'none'}
       data-right-panel={hasRightPanel ? regions.rightPanel : 'none'}
+      data-rails={railsHidden ? 'hidden' : 'shown'}
     >
       <header className="app-frame-header">{header}</header>
       <div className="app-frame-body">
-        <nav className="app-rail app-rail-left" aria-label={t('layout.leftRail')}>
+        <div
+          className="app-rail app-rail-left"
+          role="toolbar"
+          aria-orientation="vertical"
+          aria-label={t('layout.leftRail')}
+        >
           {leftRail}
-        </nav>
+        </div>
         {hasLeftPanel ? (
           <aside
             id="app-panel-left"
@@ -67,9 +76,14 @@ export function AppFrame({
             {rightPanel}
           </aside>
         ) : null}
-        <nav className="app-rail app-rail-right" aria-label={t('layout.rightRail')}>
+        <div
+          className="app-rail app-rail-right"
+          role="toolbar"
+          aria-orientation="vertical"
+          aria-label={t('layout.rightRail')}
+        >
           {rightRail}
-        </nav>
+        </div>
       </div>
       {statusBar ? (
         <footer className="app-frame-status" aria-label={t('layout.statusBar')}>

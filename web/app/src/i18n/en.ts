@@ -23,12 +23,15 @@ export const EN = {
   'about.source': 'Source code',
 
   // Layout regions (W1.6 sections 1 and 12) and panel frames (section 4).
-  'layout.leftRail': 'Left rail',
+  'layout.leftRail': 'Left panels',
   'layout.leftPanel': 'Left panel',
   'layout.document': 'Document',
   'layout.rightPanel': 'Right panel',
-  'layout.rightRail': 'Right rail',
+  'layout.rightRail': 'Right panels',
   'layout.statusBar': 'Status bar',
+  // A rail button's name with its count badge (W4.2a S2): "Search, 1 item", "Search, 5 items".
+  'rail.count': { one: '{panel}, 1 item', other: '{panel}, {count} items' },
+  'rail.badgeOverflow': '99+',
   'panel.close': 'Close {title}',
   'panel.state.expanded': 'Expanded',
   'panel.state.collapsed': 'Collapsed',

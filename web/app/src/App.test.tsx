@@ -7,6 +7,7 @@ import { type EngineClient, setTabSession } from './engine/engineConnection';
 import { fakeEngine } from './engine/testEngine';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
+import { closePanel, openPanel } from './layout/sidePanels';
 
 // jsdom has no CSS.escape, and react-aria calls it when a tab takes focus.
 if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'function') {
@@ -305,5 +306,88 @@ describe('App: Clear all is disabled while a tab is open', () => {
       return found;
     });
     expect(clear.disabled).toBe(true);
+  });
+});
+
+describe('App side rails (W4.2a S2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    // The side-panel store is module state: each test starts with Pages open on the left only.
+    closePanel('left');
+    openPanel('pages');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    window.localStorage.clear();
+  });
+
+  function frame(): HTMLElement {
+    const element = host.querySelector<HTMLElement>('.app-frame');
+    if (element === null) throw new Error('no app frame');
+    return element;
+  }
+
+  it('hides both rails on the start page', () => {
+    act(() => {
+      root.render(<App engine={fakeEngine()} />);
+    });
+    expect(frame().dataset.rails).toBe('hidden');
+  });
+
+  it('shows the navigation panels on the left and Organize on the right once a document opens, and Ctrl+F opens Search', async () => {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(scripted.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('rails.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+    expect(frame().dataset.rails).toBe('shown');
+
+    const leftPanels = [...host.querySelectorAll<HTMLElement>('.app-rail-left [data-panel]')].map(
+      (button) => button.dataset.panel,
+    );
+    expect(leftPanels).toEqual(['pages', 'bookmarks', 'search']);
+    expect(
+      [...host.querySelectorAll<HTMLElement>('.app-rail-right [data-panel]')].map(
+        (button) => button.dataset.panel,
+      ),
+    ).toEqual(['organizer']);
+
+    // Pages is open by default, and its button names the panel it controls.
+    const pages = host.querySelector<HTMLElement>('[data-panel="pages"]');
+    expect(pages?.getAttribute('aria-expanded')).toBe('true');
+    expect(pages?.getAttribute('aria-controls')).toBe('app-panel-left');
+    expect(host.querySelector('#app-panel-left')).not.toBeNull();
+
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }),
+      );
+    });
+    expect(host.querySelector('[data-panel="search"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('search.title'));
+    expect(host.querySelector('[data-panel="pages"]')?.getAttribute('aria-expanded')).toBe('false');
   });
 });
