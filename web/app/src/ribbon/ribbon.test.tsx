@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -129,6 +132,75 @@ describe('Ribbon', () => {
   it('gives the shortcut from the shared table in the description', () => {
     render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
     expect(describedText(button('save'))).toBe('Ctrl+S');
+  });
+});
+
+describe('Ribbon in a narrow window', () => {
+  const realWidth = window.innerWidth;
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function narrow(width: number): void {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  it('shows one row of tabs, with no tab panels, below the tablet breakpoint', () => {
+    narrow(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon-collapsed')).not.toBeNull();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelectorAll('.ribbon-tabs > button')).toHaveLength(
+      ribbonLayout(REGISTRY, withDoc).length,
+    );
+  });
+
+  it('opens a tab group in a popover, and closes it once a command runs', () => {
+    narrow(390);
+    const save = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ save }} />);
+    const homeTab = host.querySelector<HTMLButtonElement>('.ribbon-tabs > button');
+    expect(homeTab?.textContent).toBe(t(TAB_LABELS.home));
+    act(() => {
+      homeTab?.click();
+    });
+    const popover = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(popover?.textContent).toContain(t('command.save.label'));
+    act(() => {
+      document.querySelector<HTMLElement>('[data-command="save"]')?.click();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('does not run a disabled command from the popover', () => {
+    narrow(390);
+    const save = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={noDoc} handlers={{ save }} />);
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-tabs > button')?.click();
+    });
+    const el = document.querySelector<HTMLElement>('[data-command="save"]');
+    expect(el?.getAttribute('aria-disabled')).toBe('true');
+    act(() => {
+      el?.click();
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+});
+
+// Every string the ribbon shows or reads goes through t() (W4.7). Class names and ids are not text.
+describe('ribbon strings go through t()', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const JSX_TEXT = />([^<>{}\n]*\p{L}[^<>{}\n]*)</gu;
+  const READABLE_ATTRIBUTE =
+    /\b(aria-label|aria-description|title|alt|placeholder)=("[^"]*"|'[^']*')/g;
+
+  it.each(['Ribbon.tsx', 'AppMenu.tsx'])('%s has no literal user text', (file) => {
+    const text = readFileSync(resolve(here, file), 'utf8');
+    expect([...text.matchAll(JSX_TEXT)].map((m) => m[1])).toEqual([]);
+    expect([...text.matchAll(READABLE_ATTRIBUTE)].map((m) => m[0])).toEqual([]);
   });
 });
 

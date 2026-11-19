@@ -16,6 +16,8 @@ import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
 import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
+import { AppMenu } from './ribbon/AppMenu';
+import { Ribbon } from './ribbon/Ribbon';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
 import { CombineDialog } from './combine/CombineDialog';
 import { PropertiesDialog } from './properties/PropertiesDialog';
@@ -55,8 +57,8 @@ import type { SearchMarks } from './search/search';
 import { APP_VERSION } from './version';
 import './app.css';
 
-// No document is open yet, so the state every command reads is empty.
-const NO_DOCUMENT_STATE: CommandState = {
+// The command state every command reads before the document fields are filled in (see `state`).
+const BASE_COMMAND_STATE: CommandState = {
   hasDocument: false,
   hasRecentFiles: false,
   canUndo: false,
@@ -99,7 +101,6 @@ export function App({ engine, startPrintWorker }: AppProps) {
       engine.dispose();
     };
   }, [engine]);
-  const state: CommandState = { ...NO_DOCUMENT_STATE, hasRecentFiles: docs.recent.length > 0 };
   const handlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
     print: () => setPrintOpen(true),
@@ -161,6 +162,13 @@ export function App({ engine, startPrintWorker }: AppProps) {
     if (activeId === null) return;
     const page = stepTabHistory(activeId, direction);
     if (page !== null) viewRef.current?.scrollToPage(page);
+  };
+  // The commands read the document as it is shown now, so the ribbon enables the document commands
+  // only while one is open.
+  const state: CommandState = {
+    ...BASE_COMMAND_STATE,
+    hasDocument: documentShown,
+    hasRecentFiles: docs.recent.length > 0,
   };
   return (
     <AppFrame
@@ -234,16 +242,22 @@ export function App({ engine, startPrintWorker }: AppProps) {
         ) : undefined
       }
       header={
-        <div className="app-header">
-          <BrandMark />
-          <button
-            type="button"
-            onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
-          >
-            {t('command.preferences.label')}
-          </button>
-          <ThemeSwitch />
-        </div>
+        <>
+          <div className="app-header">
+            <div className="app-header-start">
+              <AppMenu registry={REGISTRY} state={state} handlers={handlers} />
+              <BrandMark />
+            </div>
+            <button
+              type="button"
+              onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
+            >
+              {t('command.preferences.label')}
+            </button>
+            <ThemeSwitch />
+          </div>
+          <Ribbon registry={REGISTRY} state={state} handlers={handlers} />
+        </>
       }
     >
       <PreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />

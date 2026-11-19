@@ -28,7 +28,9 @@ export default defineConfig({
           timeout: 60_000,
         },
         {
-          command: `npx vite build && npx vite preview --port ${APP_PORT} --strictPort`,
+          // The test build is served at "/": with the deploy base (W9.2) `vite preview` answers the
+          // module requests with 404. The base changes only the asset URLs, not the CSP under test.
+          command: `npx vite build --base=/ && npx vite preview --port ${APP_PORT} --strictPort`,
           url: `http://localhost:${APP_PORT}/`,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
