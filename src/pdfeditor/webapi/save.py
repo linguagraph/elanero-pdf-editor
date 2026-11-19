@@ -12,11 +12,46 @@ unsigned one a full rewrite (W1.1 section 4). ``copy`` is always a full rewrite.
 
 from __future__ import annotations
 
+from pdfeditor.model.metadata import EncryptionMethod
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.errors import BUSY, FILE_TOO_LARGE, STALE_OBJECT, RpcFailure
 from pdfeditor.webapi.events import state_of
-from pdfeditor.webapi.jobs import document_fingerprint
+from pdfeditor.webapi.jobs import DECRYPTED_COPY_OPTIONS, document_fingerprint
 from pdfeditor.webapi.registry import REGISTRY
+
+
+def autosave_bytes(params: dto.HandleParams) -> dto.AutosaveResult:
+    """A snapshot of the document for the browser's private autosave copy (W3.9, S1).
+
+    The copy is written without encryption, so a password-protected or encrypted document is
+    never returned: it is skipped as "protected" (W3.9 decision D2). A document above
+    ``limits.FILE_WARN_BYTES`` is skipped as "too_large" (decision D5), since the copy and the
+    wasm heap it needs would be large. The bytes are read under the lock and nothing else changes:
+    no dirty flag, undo step, saved fingerprint or event, so an autosave is invisible to the user.
+    Like the snapshots, the bytes are not verified.
+    """
+    session = REGISTRY.get(params.handle)
+    busy = session.busy
+    if busy:
+        # The writer retries on its next idle turn (W1.2 section 12), so a busy document is not
+        # an error the user sees.
+        raise RpcFailure(BUSY, "a task is working on the document", {"task": busy})
+    password = REGISTRY.password(params.handle)
+    with session.lock:
+        encrypted = session.document.info().encryption is not EncryptionMethod.NONE
+        if password is not None or encrypted:
+            return dto.AutosaveResult(data=b"", size=0, skipped="protected")
+        data = session.document.to_bytes(DECRYPTED_COPY_OPTIONS)
+    size = len(data)
+    if size > limits.MAX_SAVE_BYTES:
+        raise RpcFailure(
+            FILE_TOO_LARGE,
+            "the document is too large to autosave",
+            {"max_bytes": limits.MAX_SAVE_BYTES, "size": size},
+        )
+    if size > limits.FILE_WARN_BYTES:
+        return dto.AutosaveResult(data=b"", size=0, skipped="too_large")
+    return dto.AutosaveResult(data=data, size=size, skipped=None)
 
 
 def save_bytes(params: dto.SaveParams) -> dto.SaveResult:

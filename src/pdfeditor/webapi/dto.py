@@ -323,6 +323,27 @@ class SaveResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class AutosaveResult:
+    """``save.autosave_bytes`` (W1.2 section 12): an unverified snapshot for the browser's private
+    copy. ``skipped`` names why no bytes came back: "protected" (a password or encryption) or
+    "too_large" (above the autosave cap); ``data`` is then empty and ``size`` is 0."""
+
+    data: bytes  # the snapshot, decrypted; a $bin buffer
+    size: int  # len(data)
+    skipped: str | None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MemoryResult:
+    """``system.memory`` (W1.2 section 12): what the front end needs for the heap warning."""
+
+    wasm_heap_bytes: int | None  # the wasm linear memory; None where it cannot be read
+    heap_warn_bytes: int  # the limit the front end compares with (limits.HEAP_WARN_BYTES)
+    snapshot_bytes: int  # the undo snapshots of the open documents, on disk
+    documents: int  # open documents
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class PageImage:
     width: int  # pixels; 0 when the revision changed
     height: int

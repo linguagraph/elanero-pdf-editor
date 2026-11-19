@@ -77,6 +77,10 @@ class DocumentRegistry:
         for handle in list(self._entries):
             self.close(handle)
 
+    def sessions(self) -> list[DocumentSession]:
+        """The open documents (for the memory report); a closed one is skipped."""
+        return [entry.session for entry in self._entries.values() if not entry.session.closed]
+
     def passwords_kept(self) -> int:
         """How many open documents hold a password (for tests and the memory report)."""
         return sum(1 for entry in self._entries.values() if entry.password is not None)
