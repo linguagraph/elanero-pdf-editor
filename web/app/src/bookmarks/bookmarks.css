@@ -28,7 +28,6 @@
 }
 
 .bookmarks-list {
-  height: min(70vh, 40rem);
   overflow-y: auto;
   padding: var(--space-1) 0;
   background: var(--color-surface);

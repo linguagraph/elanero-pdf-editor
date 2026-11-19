@@ -102,7 +102,12 @@ function BookmarkTree({ rpc, handle, tabId, onSelect }: Omit<BookmarksPanelProps
   };
 
   return (
-    <div ref={listRef} role="tree" className="bookmarks-list" aria-label={t('bookmarks.list')}>
+    <div
+      ref={listRef}
+      role="tree"
+      className="bookmarks-list panel-fill"
+      aria-label={t('bookmarks.list')}
+    >
       {rows.map((row) => (
         <div
           key={row.index}

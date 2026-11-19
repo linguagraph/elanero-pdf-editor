@@ -214,7 +214,7 @@ export function OrganizerPanel({
           {t('organizer.loading')}
         </p>
       ) : (
-        <div className="organizer">
+        <div className="organizer panel-fill">
           <p className="organizer-status" aria-live="polite">
             {t('organizer.selected', { count: picked.length, total })}
           </p>

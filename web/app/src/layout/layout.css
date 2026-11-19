@@ -116,11 +116,15 @@
   overflow: auto;
 }
 
+/* A panel fills the full height of its region (the frame's body row); its list scrolls inside it. */
 .app-panel {
+  display: flex;
   flex: 0 0 var(--layout-panel-width);
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--color-surface);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .app-panel-left {
@@ -162,8 +166,10 @@
 
 .panel {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .panel-header {
@@ -206,8 +212,24 @@
   stroke-width: 1.5;
 }
 
+/* The body takes the rest of the panel. Its list (.panel-fill) takes the rest of the body and scrolls;
+   the other children (status lines, forms) keep their own height. */
 .panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   padding: var(--space-3);
+}
+
+.panel-body > * {
+  flex: 0 0 auto;
+}
+
+.panel-body > .panel-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .panel-body[hidden] {

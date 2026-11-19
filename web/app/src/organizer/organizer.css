@@ -23,6 +23,7 @@
 .organizer {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: var(--space-2);
 }
 
@@ -50,7 +51,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: var(--space-2);
-  max-height: min(70vh, 40rem);
   overflow-y: auto;
   padding: var(--space-1);
   background: var(--color-surface-alt);

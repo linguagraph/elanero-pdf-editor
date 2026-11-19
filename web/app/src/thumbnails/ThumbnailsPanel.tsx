@@ -126,7 +126,7 @@ function ThumbnailList({
   return (
     <div
       ref={scrollRef}
-      className="thumbs-scroll"
+      className="thumbs-scroll panel-fill"
       tabIndex={0}
       aria-label={t('thumbnails.list')}
       onScroll={measure}

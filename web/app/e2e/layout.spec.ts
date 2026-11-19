@@ -93,3 +93,64 @@ test('phone width (390 px): the ribbon shows the collapsed form, no horizontal p
   ).toHaveCount(7);
   expect(await horizontalOverflow(page)).toBe(0);
 });
+
+// An open right panel fills the full height of its region, and its list scrolls inside it. No
+// document can be opened here (the engine assets are not staged), so the panel markup of the real
+// components is put into the frame, and the real stylesheet measures it. This checks the CSS chain
+// from the frame down to the list, which is what the panels depend on.
+async function mountPanel(page: import('@playwright/test').Page) {
+  await page.evaluate(() => {
+    // Built with createElement: the page enforces Trusted Types, so innerHTML is not allowed.
+    const make = (tag: string, className = '', text = '') => {
+      const el = document.createElement(tag);
+      if (className !== '') el.className = className;
+      if (text !== '') el.textContent = text;
+      return el;
+    };
+    const body = document.querySelector('.app-frame-body');
+    const rail = document.querySelector('.app-rail-right');
+    if (body === null || rail === null) throw new Error('no frame');
+    const panel = make('aside', 'app-panel app-panel-right');
+    panel.setAttribute('aria-label', 'Test panel');
+    const section = make('section', 'panel');
+    const header = make('header', 'panel-header');
+    header.append(make('button', 'panel-toggle', 'Pages'), make('button', 'panel-close', 'x'));
+    const panelBody = make('div', 'panel-body');
+    const list = make('div', 'thumbs-scroll panel-fill');
+    panelBody.append(make('p', 'thumbs-status', 'Status'), list);
+    section.append(header, panelBody);
+    panel.append(section);
+    for (let i = 0; i < 200; i += 1) {
+      const row = make('div');
+      row.style.height = '120px';
+      list.append(row);
+    }
+    body.insertBefore(panel, rail);
+  });
+}
+
+const PANEL_WINDOWS: readonly { width: number; height: number }[] = [
+  { width: 1366, height: 768 },
+  { width: 1280, height: 500 },
+];
+
+for (const { width, height } of PANEL_WINDOWS) {
+  test(`panel fills the window height and scrolls its list at ${width}x${height}`, async ({
+    page,
+  }) => {
+    await openAtWidth(page, width, height);
+    await mountPanel(page);
+    const panel = page.locator('.app-panel-right');
+    const list = page.locator('.app-panel-right .panel-fill');
+    const viewport = page.viewportSize();
+    const panelBox = await panel.boundingBox();
+    const listBox = await list.boundingBox();
+    if (panelBox === null || listBox === null || viewport === null) throw new Error('no boxes');
+    // The panel's bottom edge is the window's bottom edge (no status bar without a document).
+    expect(Math.abs(panelBox.y + panelBox.height - viewport.height)).toBeLessThan(1);
+    expect(listBox.y + listBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height);
+    // The list is the scroller: it holds more than it shows, and it stays inside the panel.
+    const scrolls = await list.evaluate((el) => el.scrollHeight > el.clientHeight);
+    expect(scrolls).toBe(true);
+  });
+}
