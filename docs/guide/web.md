@@ -59,7 +59,10 @@ is reloaded until you press it.
   - **General**: the language (English is the only one for now) and the **Author name** shown on the
     comments you add.
   - **Appearance**: the theme, and **Reduce motion**, which turns off animations.
-  - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%), used when a document is opened.
+  - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%) and **Default page layout** (Single
+    column, Two pages, or Two pages with page 1 alone), both used when a document is opened.
+  - **Shortcuts**: **Keyboard Shortcuts…** lists every keyboard shortcut. It opens on top of
+    Preferences, and your unsaved changes there are kept.
   - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and
     uploaded fonts from this browser, then reloads the page. It is turned off while a document is
     open; close the documents first. Your files are not touched, and the recovery copies of other
@@ -84,6 +87,7 @@ is reloaded until you press it.
   cursor to the page box in the status bar. The web version will use
   the desktop's keys wherever the browser allows, and will list them in
   [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming soon).
+  **Keyboard Shortcuts…** in the app menu and in Preferences shows the list that is available now.
 
 ## Side panels
 
@@ -173,7 +177,7 @@ full policy, with what the desktop app stores, is in the
 | Feature | Desktop | Web version |
 |---|---|---|
 | Light, dark and system theme | Yes | Yes |
-| Preferences: language, author name, reduce motion, default zoom | Yes | Saved; default zoom applies now, author name comes with comments (coming soon) |
+| Preferences: language, author name, reduce motion, default zoom, default page layout | Yes | Saved; default zoom and page layout apply now, author name comes with comments (coming soon) |
 | Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |

@@ -13,10 +13,12 @@ import {
 } from '../theme/theme';
 import {
   AUTHOR_NAME_MAX_LENGTH,
+  PAGE_LAYOUT_CHOICES,
   readPreferences,
   writePreferences,
   ZOOM_CHOICES,
   type LanguageChoice,
+  type PageLayoutChoice,
   type Preferences,
   type ZoomChoice,
 } from './store';
@@ -31,6 +33,8 @@ export interface PreferencesDialogProps {
   // Injected for tests; the app uses the defaults.
   clearData?: ClearAction;
   reloadPage?: () => void;
+  // Opens the Keyboard Shortcuts dialog above this one; the draft here is kept (W4.5 D3).
+  onShowShortcuts?: () => void;
 }
 
 const THEME_LABELS: Readonly<Record<ThemeChoice, MessageId>> = {
@@ -49,6 +53,12 @@ const LANGUAGE_LABELS: Readonly<Record<LanguageChoice, MessageId>> = {
   en: 'prefs.language.english',
 };
 
+const PAGE_LAYOUT_LABELS: Readonly<Record<PageLayoutChoice, MessageId>> = {
+  continuous: 'prefs.layout.continuous',
+  twoPage: 'prefs.layout.twoPage',
+  twoPageCover: 'prefs.layout.twoPageCover',
+};
+
 // Preferences (W1.6 section 9, W4.5). Changes are drafts until Apply. The theme is the exception:
 // it previews at once through the theme module, and Cancel, Escape or a tap outside puts back the
 // saved one. The sections follow the desktop PreferencesDialog where they apply on the web.
@@ -58,6 +68,7 @@ export function PreferencesDialog({
   hasDocuments,
   clearData = () => clearLocalData(),
   reloadPage = () => window.location.reload(),
+  onShowShortcuts = () => undefined,
 }: PreferencesDialogProps) {
   const cancel = () => {
     applyTheme(readStoredTheme());
@@ -71,6 +82,7 @@ export function PreferencesDialog({
         hasDocuments={hasDocuments}
         clearData={clearData}
         reloadPage={reloadPage}
+        onShowShortcuts={onShowShortcuts}
       />
     </Overlay>
   );
@@ -82,6 +94,7 @@ interface PreferencesFormProps {
   hasDocuments: boolean;
   clearData: ClearAction;
   reloadPage: () => void;
+  onShowShortcuts: () => void;
 }
 
 // Mounted only while the dialog is open (the overlay renders nothing when closed), so every open
@@ -92,6 +105,7 @@ function PreferencesForm({
   hasDocuments,
   clearData,
   reloadPage,
+  onShowShortcuts,
 }: PreferencesFormProps) {
   const [draft, setDraft] = useState<Preferences>(readPreferences);
   const [confirming, setConfirming] = useState(false);
@@ -225,6 +239,32 @@ function PreferencesForm({
           </select>
           <span className="prefs-hint">{t('prefs.zoom.hint')}</span>
         </label>
+        <label className="prefs-field" htmlFor={`${ids}-layout`}>
+          <span className="prefs-label">{t('prefs.layout.label')}</span>
+          <select
+            id={`${ids}-layout`}
+            className="prefs-select"
+            value={draft.pageLayout}
+            onChange={(event) => update('pageLayout', event.target.value as PageLayoutChoice)}
+          >
+            {PAGE_LAYOUT_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {t(PAGE_LAYOUT_LABELS[choice])}
+              </option>
+            ))}
+          </select>
+          <span className="prefs-hint">{t('prefs.layout.hint')}</span>
+        </label>
+      </section>
+
+      <section className="prefs-section" aria-labelledby={`${ids}-shortcuts`}>
+        <h3 id={`${ids}-shortcuts`} className="prefs-heading">
+          {t('prefs.section.shortcuts')}
+        </h3>
+        <span className="prefs-hint">{t('prefs.shortcuts.hint')}</span>
+        <button type="button" className="prefs-action" onClick={onShowShortcuts}>
+          {t('prefs.shortcuts.open')}
+        </button>
       </section>
 
       <section className="prefs-section" aria-labelledby={`${ids}-privacy`}>
