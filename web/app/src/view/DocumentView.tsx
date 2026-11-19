@@ -28,6 +28,11 @@ import {
 import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
 import { PageTextLayer } from '../text/PageTextLayer';
+import { CommentLayer } from '../comments/CommentLayer';
+import { CommentToolbar } from '../comments/CommentToolbar';
+import type { PageRect } from '../comments/coordinates';
+import { placeComment } from '../comments/placement';
+import type { CommentToolId } from '../comments/tools';
 import { TextLayerCache } from '../text/textLayerCache';
 import { CachedCanvas } from './pixels';
 import { RenderScheduler } from './renderScheduler';
@@ -98,6 +103,8 @@ export function DocumentView({
   const [ownScheduler] = useState(() => new RenderScheduler(rpc, handle));
   const scheduler = shared ?? ownScheduler;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The comment tool on, if any (W7.1a): a click or drag on a page then places a comment.
+  const [commentTool, setCommentTool] = useState<CommentToolId | null>(null);
   // The text layers of this document, one per page and revision (W5.4).
   const textLayers = useMemo(() => new TextLayerCache(rpc, handle), [rpc, handle]);
 
@@ -240,6 +247,11 @@ export function DocumentView({
   const total = layout.boxes.length;
   const percent = Math.round(zoom * 100);
 
+  const commentDeps = { rpc, handle, scheduler };
+  const place = (page: number, rect: PageRect, text: string) => {
+    if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
+  };
+
   const chooseNight = (on: boolean) => {
     setNight(on);
     writePreferences({ ...readPreferences(), nightReading: on });
@@ -295,6 +307,7 @@ export function DocumentView({
         <button type="button" aria-pressed={night} onClick={() => chooseNight(!night)}>
           {t('view.night')}
         </button>
+        <CommentToolbar tool={commentTool} onChoose={setCommentTool} />
       </div>
       {sizes === null ? (
         <p role="status" className="doc-view-status">
@@ -358,6 +371,15 @@ export function DocumentView({
                     })
                   )}
                   <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
+                  {commentTool !== null && sizes !== null ? (
+                    <CommentLayer
+                      tool={commentTool}
+                      zoom={zoom}
+                      widthPt={sizes[box.index]?.width ?? 0}
+                      heightPt={sizes[box.index]?.height ?? 0}
+                      onPlace={(rect, text) => place(box.index, rect, text)}
+                    />
+                  ) : null}
                   <PageTextLayer
                     cache={textLayers}
                     page={box.index}

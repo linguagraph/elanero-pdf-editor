@@ -97,7 +97,7 @@ version yet:
 - opening, viewing, searching and saving PDF files, and the start page with recent files;
 - the ribbon, the command palette and keyboard shortcuts;
 - editing text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files;
-- comments, redaction, stamps and watermarks, password protection, and comparing files;
+- comments other than sticky notes, rectangles and highlights, the Comments panel, redaction, stamps and watermarks, password protection, and comparing files;
 - printing, and translation (which will be turned on only when you ask for it);
 - the **Install App** command and the **What's Different on the Web** menu entry.
 
@@ -138,7 +138,8 @@ full policy, with what the desktop app stores, is in the
 | Open, view, search and save PDFs | Yes | Coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Coming soon |
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
-| Comments, redaction, stamps, watermarks, security, compare | Yes | Coming soon |
+| Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
+| Other comments, redaction, stamps, watermarks, security, compare | Yes | Coming soon |
 | Print | Yes | Coming soon |
 | Translation (opt-in) | Yes | Coming soon |
 | OCR and batch OCR | Yes | Desktop only (for now) |

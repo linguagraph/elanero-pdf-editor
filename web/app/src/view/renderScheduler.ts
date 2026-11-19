@@ -78,6 +78,19 @@ export class RenderScheduler {
     return this.revisions.get(page) ?? 0;
   }
 
+  // Records the revisions a change reported (W1.2 section 7), so the changed pages are drawn again.
+  // The keys are page indexes as strings, as the JSON carries them.
+  noteRevisions(revisions: Readonly<Record<string, number>>): void {
+    let moved = false;
+    for (const [key, revision] of Object.entries(revisions)) {
+      const page = Number(key);
+      if (this.revisions.get(page) === revision) continue;
+      this.revisions.set(page, revision);
+      moved = true;
+    }
+    if (moved) this.notify();
+  }
+
   // The cache key a page, a tile of a page or a thumbnail is drawn from, at the revision the
   // scheduler knows.
   cacheKeyOf(kind: RenderKind, page: number, scaleMilli: number, tile?: TileIndex): string {
