@@ -34,7 +34,7 @@ from pdfeditor.services.comments import (
     summary_html,
     type_label,
 )
-from pdfeditor.services.xfdf import export_xfdf
+from pdfeditor.services.xfdf import MAX_XFDF_BYTES, export_xfdf
 from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.panels.base import EmptyState, ViewPanel
@@ -306,6 +306,10 @@ class CommentsPanel(ViewPanel):
                 return 0
             path = Path(chosen)
         try:
+            # The size is checked before the file is read, so a huge file is never loaded.
+            if path.stat().st_size > MAX_XFDF_BYTES:
+                QMessageBox.warning(self, "Import Comments", comments.XFDF_TOO_LARGE_MESSAGE)
+                return 0
             text = path.read_text(encoding="utf-8")
             session = self.view.session
             result = run_action(lambda: comments.import_xfdf(session, comments.ImportXfdf(text)))

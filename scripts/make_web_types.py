@@ -60,6 +60,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "hello": "instant",
     "jobs.abort": "instant",
     "jobs.apply": "action",
+    "comments.xfdf_preview": "action",  # parsing up to 8 MiB under Pyodide can pass 3 s
     "jobs.prepare": "action",
     "marks.list": "instant",
     "render.page": "render",

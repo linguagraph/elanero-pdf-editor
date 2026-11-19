@@ -14,8 +14,9 @@ from typing import Any
 import pytest
 
 from pdfeditor.model import platform as model_platform
+from pdfeditor.services.xfdf import MAX_XFDF_BYTES
 from pdfeditor.webapi import dispatch, jobs, jobworker
-from pdfeditor.webapi.errors import REFUSED
+from pdfeditor.webapi.errors import FILE_TOO_LARGE, REFUSED
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.hostcheck import record
@@ -148,6 +149,16 @@ def test_an_exported_comment_and_its_reply_import_into_another_document(
     record("page_count_pikepdf", saved, pages=page_total(target))
     record("render_width_pdfium", saved, scale=0.5)
 
+    # The saved bytes reopen with the comments and the reply link intact.
+    reopened = open_data(saved, "saved.pdf")
+    annots = annotations_of(reopened)
+    replies = [a for a in annots if a.in_reply_to is not None]
+    assert len(annots) == 2
+    assert len(replies) == 1
+    parent = next(a for a in annots if a.id == replies[0].in_reply_to)
+    assert parent.contents == "Please check the total"
+    assert replies[0].contents == "Checked, it is right"
+
 
 def test_a_malformed_or_entity_xfdf_is_refused_and_changes_nothing(
     web: None, fixture_pdf: Any
@@ -162,3 +173,38 @@ def test_a_malformed_or_entity_xfdf_is_refused_and_changes_nothing(
         err = error(import_xfdf(target, text))
         assert err["code"] == REFUSED
     assert (len(annotations_of(target)), session.undo_stack.is_clean) == before
+
+
+def preview(handle: str, text: str) -> dict[str, Any]:
+    return call("comments.xfdf_preview", {"handle": handle, "text": text})
+
+
+def test_preview_counts_match_the_import_and_change_nothing(web: None, fixture_pdf: Any) -> None:
+    target = open_data(text_fixture(fixture_pdf), "target.pdf")
+    session = REGISTRY.get(target)
+    before = (len(annotations_of(target)), session.undo_stack.is_clean)
+
+    counted = ok(preview(target, SOURCE_XFDF))
+    assert counted == {"comments": 2, "replies": 1, "pages": [0]}
+    assert (len(annotations_of(target)), session.undo_stack.is_clean) == before
+    assert not session.undo_stack.can_undo
+
+    assert ok(import_xfdf(target, SOURCE_XFDF))["value"] == counted["comments"]
+
+
+def test_preview_refuses_what_import_refuses(web: None, fixture_pdf: Any) -> None:
+    target = open_data(text_fixture(fixture_pdf), "target.pdf")
+    for text in (
+        "<xfdf><annots>",  # not well-formed
+        '<?xml version="1.0"?><!DOCTYPE xfdf [<!ENTITY e "x">]><xfdf/>',  # DOCTYPE guard
+    ):
+        assert error(preview(target, text))["code"] == REFUSED
+
+
+def test_preview_refuses_a_text_over_the_size_limit_before_parsing(
+    web: None, fixture_pdf: Any
+) -> None:
+    target = open_data(text_fixture(fixture_pdf), "target.pdf")
+    err = error(preview(target, "x" * (MAX_XFDF_BYTES + 1)))
+    assert err["code"] == FILE_TOO_LARGE
+    assert not REGISTRY.get(target).undo_stack.can_undo

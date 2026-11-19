@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 
 from pdfeditor.core.commands import AddAnnotationCommand, MacroCommand
@@ -39,6 +40,25 @@ _TAGS = {
     AnnotationType.INK: "ink",
 }
 _TYPES = {tag: t for t, tag in _TAGS.items()}
+
+# The largest XFDF text either app imports. Checked before anything is parsed, so a huge file
+# costs one length test. The web mirrors this value in web/app/src/commentsImport (S4b).
+MAX_XFDF_BYTES = 8 * 1024 * 1024
+
+
+class XfdfTooLarge(ValueError):
+    """The text is over ``MAX_XFDF_BYTES`` in UTF-8. A ``ValueError``, so callers that only
+    catch that still refuse the file; the actions layer catches it first for its own message."""
+
+
+def check_size(text: str) -> None:
+    """Refuse ``text`` when its UTF-8 form is over ``MAX_XFDF_BYTES``.
+
+    A character is at least one byte, so ``len(text)`` over the limit refuses without encoding;
+    otherwise the text is encoded once to measure its exact UTF-8 size.
+    """
+    if len(text) > MAX_XFDF_BYTES or len(text.encode("utf-8")) > MAX_XFDF_BYTES:
+        raise XfdfTooLarge(f"XFDF is larger than {MAX_XFDF_BYTES} bytes")
 
 
 def _n(v: float) -> str:
@@ -193,10 +213,12 @@ def _geometry_out(el: ET.Element, a: AnnotationModel, m: Matrix) -> None:
 def parse_xfdf(text: str, doc: Document) -> list[AnnotationModel]:
     """Parse XFDF into models in visible space. Replies carry ``extra["irt_name"]``.
 
-    Raises ``ValueError`` for input that is not XFDF, and ``ET.ParseError`` for malformed XML.
+    Raises ``XfdfTooLarge`` for text over ``MAX_XFDF_BYTES`` (before anything else runs),
+    ``ValueError`` for input that is not XFDF, and ``ET.ParseError`` for malformed XML.
     A DOCTYPE or ENTITY declaration is refused outright: XFDF never needs one, and entity
     declarations are the usual vehicle for XML amplification attacks.
     """
+    check_size(text)
     lowered = text.lower()
     if "<!doctype" in lowered or "<!entity" in lowered:
         raise ValueError("not XFDF: DOCTYPE and ENTITY declarations are not allowed")
@@ -246,6 +268,29 @@ def parse_xfdf(text: str, doc: Document) -> list[AnnotationModel]:
         _geometry_in(el, model, inverse)
         out.append(model)
     return out
+
+
+@dataclass(frozen=True, slots=True)
+class XfdfPreview:
+    """What importing a file would add. ``comments`` counts every comment, replies included,
+    so it equals the number ``import_command`` adds for the same document; ``replies`` is the
+    part of it that answers another comment. ``pages`` are the 0-based pages, ascending."""
+
+    comments: int
+    replies: int
+    pages: tuple[int, ...]
+
+
+def preview_xfdf(text: str, doc: Document) -> XfdfPreview:
+    """Count what :func:`import_command` would add, without changing the document.
+
+    Uses :func:`parse_xfdf` itself, so the rules (size, DOCTYPE, unknown tags, pages out of
+    range) are the import's rules and the counts cannot drift from it.
+    """
+    models = parse_xfdf(text, doc)
+    replies = sum(1 for m in models if m.extra.get("irt_name"))
+    pages = tuple(sorted({m.page_index for m in models}))
+    return XfdfPreview(comments=len(models), replies=replies, pages=pages)
 
 
 def import_command(text: str, doc: Document) -> MacroCommand:
