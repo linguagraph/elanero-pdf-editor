@@ -299,6 +299,37 @@ describe('start page', () => {
     expect(opened.map((call) => call.params['password'])).toEqual([null, 'secret']);
   });
 
+  it('keeps opening the queue when one file fails after its open, and reports that file', async () => {
+    const { engine: loading, queued } = renderLoading();
+    const real = queued.client as unknown as {
+      call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+    };
+    // The reply for broken.pdf throws while the app reads it, after the engine has opened the file
+    // (here at the pages field), so the failure comes after the open, not in it.
+    const client = {
+      call: (method: string, params: Record<string, unknown>) => {
+        if (method === 'session.open' && params['name'] === 'broken.pdf') {
+          return Promise.resolve({
+            handle: 'doc-broken',
+            get pages(): number {
+              throw new Error('boom');
+            },
+            warning: null,
+          });
+        }
+        return real.call(method, params);
+      },
+    } as unknown as EngineClient;
+    dropFiles([pdf('broken.pdf'), pdf('good.pdf')]);
+    act(() => {
+      loading.setClient(client);
+    });
+    await until(() => tabNames().length === 1 && errorToasts().length === 1);
+    expect(tabNames()).toEqual(['good.pdf']);
+    expect(errorToasts()).toHaveLength(1);
+    expect(host.querySelector('.start-pending')).toBeNull();
+  });
+
   it('refuses a non-PDF and a too-large file at once, without queueing them', () => {
     renderLoading();
     const big = pdf('big.pdf');

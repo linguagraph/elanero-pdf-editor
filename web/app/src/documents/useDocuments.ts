@@ -30,8 +30,9 @@ export function isPdfFile(file: File): boolean {
   return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
 }
 
-// The most file bytes read ahead while the engine loads (W3.1). A file that would go past it is
-// read when its turn comes, so a big file is not held in memory twice.
+// The most file bytes read ahead while the engine loads (W3.1). This is a total across all the
+// queued files, not a limit per file. A file that would go past it is read when its turn comes, so
+// a big file is not held in memory twice.
 export const PREFETCH_MAX_BYTES = 256 * 1024 * 1024;
 
 // A file picked while the engine loads, shown on the start page until its turn comes.
@@ -161,7 +162,13 @@ export function useDocuments(engine: EngineConnection): Documents {
         queueRef.current = rest;
         releaseBudget(prefetchBudgetRef.current, entry);
         showPending();
-        await openEntry(client, entry);
+        try {
+          await openEntry(client, entry);
+        } catch (error) {
+          // A failure after the open (recording the tab, the session) is reported like any other
+          // open failure. It must not stop the drain: the files behind it still open.
+          reportRpcError(toasts, asRpcError(error));
+        }
       }
     } finally {
       drainingRef.current = false;
