@@ -269,3 +269,25 @@ def test_save_bytes_after_security_remove_gives_bytes_that_open_without_a_passwo
     record("page_count_pikepdf", result.data, pages=pages)
     record("page_count_pdfium", result.data, pages=pages)
     session.close()
+
+
+def test_both_passwords_set_verifies_the_user_password_too(
+    fixture_pdf: Callable[[str], Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With a user and an owner password both set, the saved bytes must open with the user
+    password the user types, so the check runs for each of them, not only the owner's
+    (W7.5 review fix). The spy records which passwords are checked, never logging them."""
+    session = DocumentSession.open(fixture_pdf("report"))
+    assert session.execute(SetSecurityCommand(_encrypt_settings()))
+    checked: list[str | None] = []
+    real_verify = session._verify_bytes
+
+    def spy(data: bytes, pages: int, password: str | None) -> None:
+        checked.append(password)
+        real_verify(data, pages, password)
+
+    monkeypatch.setattr(session, "_verify_bytes", spy)
+    result = session.save_bytes("copy")
+    assert checked == ["open me", "boss"]
+    record("encrypted_pages_pikepdf", result.data, pages=session.page_count, password="open me")
+    session.close()
