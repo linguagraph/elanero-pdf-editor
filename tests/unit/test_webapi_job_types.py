@@ -16,17 +16,20 @@ import json
 import re
 import zipfile
 from collections.abc import Iterator
+from dataclasses import replace
 from typing import Any
 
 import pytest
 from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.engine import mupdf as mupdf_engine
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
     CANCELLED,
     INVALID_ARGS,
+    NOT_SUPPORTED,
     RENDER_TOO_LARGE,
 )
 from pdfeditor.webapi.platform import configure_web
@@ -401,11 +404,26 @@ def test_merge_leaves_the_open_documents_alone(web: None, fixture_pdf: Any) -> N
     pdf = text_fixture(fixture_pdf)
     handle = open_data(pdf, "text.pdf")
     session = REGISTRY.get(handle)
+    # Raw save bytes differ between two saves of the same document (see the read-only test), so the
+    # open document is compared by what it contains after a reopen.
     before = saved_bytes(handle)
+    before_state = reopened_state(before)
+    version = session.structure_version
+    undo_depth = len(session.undo_stack)
     args = {"sources": [{"name": "first.pdf", "data": {"$bin": 0}}]}
     reply, _ = run_without_document("merge", args, [pdf])
     assert ok(reply)["kind"] == "new_document"
-    assert saved_bytes(handle) == before
+    after = saved_bytes(handle)
+    assert reopened_state(after) == before_state  # page count and each page's text
+    assert before_state[0] == page_total(handle)
+    record(
+        "same_object_count_pikepdf",
+        after,
+        reference=base64.b64encode(before).decode("ascii"),
+    )  # the same number of objects in the saved file
+    assert session.structure_version == version
+    assert len(session.undo_stack) == undo_depth
+    assert session.is_dirty is False
     assert session.busy == ""
 
 
@@ -594,3 +612,181 @@ def test_an_unknown_job_type_is_invalid_args_at_prepare_and_run(
     err = error(run_on_copy("no_such_job", {}, text_fixture(fixture_pdf))[0])
     assert err["code"] == INVALID_ARGS
     assert err["details"]["path"] == "params.job"
+
+
+# -- comments_export: the Comments panel's three exports, read-only -------------------------------
+
+ANNOTATED = "annotations"  # one page with a sticky note ("A sticky note") and other annotations
+CSV_HEADER = "Page,Type,Author,Date,Status,Comment,Reply to"
+
+
+def comments_handle(fixture_pdf: Any, name: str = ANNOTATED) -> str:
+    return open_data(fixture_pdf(name).read_bytes(), "notes.pdf")
+
+
+def export_comments(handle: str, fmt: str, name: str = "notes.pdf") -> tuple[dict[str, Any], bytes]:
+    """Prepares and runs comments_export on a copy; returns the job's result and its file."""
+    args = {"format": fmt, "name": name}
+    _, copy = prepare(handle, "comments_export", args)
+    reply, out = run_on_copy("comments_export", args, copy)
+    ((_, _, data),) = files_of(ok(reply), out)
+    return ok(reply), data
+
+
+@pytest.mark.parametrize(
+    ("fmt", "file_name", "mime"),
+    [
+        ("xfdf", "notes.xfdf", "application/vnd.adobe.xfdf"),
+        ("csv", "notes-comments.csv", "text/csv"),
+        ("pdf", "notes-comments.pdf", "application/pdf"),
+    ],
+)
+def test_comments_export_gives_one_named_file_per_format(
+    web: None, fixture_pdf: Any, fmt: str, file_name: str, mime: str
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    result, data = export_comments(handle, fmt)
+    ((name, got_mime, _),) = files_of(result, [data])
+    assert (name, got_mime) == (file_name, mime)
+    assert len(data) > 0
+    assert result["kind"] == "files"
+
+
+def test_the_csv_export_has_a_bom_and_the_panels_header(web: None, fixture_pdf: Any) -> None:
+    handle = comments_handle(fixture_pdf)
+    _, data = export_comments(handle, "csv")
+    assert data.startswith(bytes([0xEF, 0xBB, 0xBF]))  # the BOM the desktop writes
+    lines = data.decode("utf-8-sig").splitlines()
+    assert lines[0] == CSV_HEADER
+    assert any("A sticky note" in line for line in lines[1:])
+
+
+def test_the_xfdf_export_names_the_document_and_holds_the_comment(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    _, data = export_comments(handle, "xfdf", name="Quarterly Review.pdf")
+    text = data.decode("utf-8")
+    assert text.startswith("<?xml")
+    assert "A sticky note" in text
+    assert '<f href="Quarterly Review.pdf"' in text
+    assert 'xmlns="http://ns.adobe.com/xfdf/"' in text
+
+
+def test_the_summary_pdf_holds_the_comment_text(web: None, fixture_pdf: Any) -> None:
+    handle = comments_handle(fixture_pdf)
+    _, data = export_comments(handle, "pdf")
+    assert data.startswith(b"%PDF")
+    record("text_contains_pdfium", data, page=0, text="A sticky note")
+    record("page_count_pikepdf", data, pages=1)
+
+
+def test_an_empty_document_still_exports_its_summary(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    _, data = export_comments(handle, "csv", name="text.pdf")
+    lines = data.decode("utf-8-sig").splitlines()
+    assert lines == [CSV_HEADER]
+
+
+def annotations_of(handle: str) -> list[tuple[int, Any]]:
+    """Every page's annotations, in page order, read through the open document."""
+    session = REGISTRY.get(handle)
+    with session.lock:
+        return [
+            (index, annotation)
+            for index in range(session.document.page_count)
+            for annotation in session.document.page(index).annotations()
+        ]
+
+
+def test_a_comments_export_leaves_the_document_and_its_undo_stack_alone(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    session = REGISTRY.get(handle)
+    before = (
+        page_total(handle),
+        session.undo_stack.is_clean,
+        session.structure_version,
+        saved_bytes(handle),
+        annotations_of(handle),
+    )
+    assert before[4], "the fixture should carry annotations for this check to mean anything"
+    args = {"format": "xfdf", "name": "notes.pdf"}
+    prepared, copy = prepare(handle, "comments_export", args)
+    assert prepared["mutating"] is False
+    reply, _ = run_on_copy("comments_export", args, copy)
+    assert ok(reply)["kind"] == "files"
+    applied = ok(apply_read_only(handle, prepared["token"]))
+    assert applied["applied"] is False
+    after = (
+        page_total(handle),
+        session.undo_stack.is_clean,
+        session.structure_version,
+        saved_bytes(handle),
+        annotations_of(handle),
+    )
+    assert after == before
+
+
+def test_an_empty_name_exports_under_the_document_fallback(web: None, fixture_pdf: Any) -> None:
+    handle = comments_handle(fixture_pdf)
+    result, data = export_comments(handle, "csv", name="")
+    ((name, _, _),) = files_of(result, [data])
+    assert name == "document-comments.csv"
+
+
+def test_the_pdf_export_is_refused_when_the_engine_cannot_lay_out_html(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    args = {"format": "pdf", "name": "notes.pdf"}
+    _, copy = prepare(handle, "comments_export", args)
+    # The engine reads its capability set from this module at each access, so the job's
+    # worker (same process here) sees the switched-off flag.
+    monkeypatch.setattr(
+        mupdf_engine,
+        "_CAPABILITIES",
+        replace(mupdf_engine._CAPABILITIES, html_layout=False),
+    )
+    reply, _ = run_on_copy("comments_export", args, copy)
+    assert error(reply)["code"] == NOT_SUPPORTED
+
+
+def test_a_comments_export_of_an_encrypted_document_uses_the_decrypted_copy(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    prepared, copy = prepare(handle, "comments_export", {"format": "csv", "name": "encrypted.pdf"})
+    assert "password" not in prepared
+    reply, out = run_on_copy("comments_export", {"format": "csv", "name": "encrypted.pdf"}, copy)
+    ((name, _, data),) = files_of(ok(reply), out)
+    assert name == "encrypted-comments.csv"
+    assert data.decode("utf-8-sig").splitlines()[0] == CSV_HEADER
+
+
+def test_a_comments_export_cancelled_before_it_starts_is_cancelled(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    args = {"format": "pdf", "name": "notes.pdf"}
+    _, copy = prepare(handle, "comments_export", args)
+    token = CancelToken()
+    token.cancel()
+    reply, _ = run_on_copy("comments_export", args, copy, cancel=token)
+    assert error(reply)["code"] == CANCELLED
+
+
+def test_a_comments_export_with_an_unknown_format_is_invalid_args(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    err = error(
+        call(
+            "jobs.prepare",
+            {"handle": handle, "job": "comments_export", "args": {"format": "docx", "name": "a"}},
+        )
+    )
+    assert err["code"] == INVALID_ARGS
+    assert err["details"]["path"] == "args.format"
+    assert len(jobs.PREPARED) == 0
