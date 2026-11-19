@@ -267,6 +267,76 @@ describe('useReorderDrag', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('after a cancelled drag, a keyboard click with no pointerdown is not swallowed', () => {
+    const onClick = vi.fn();
+    render({ picked: [], onClick });
+    act(() => pointer(option(container, 1), 'pointerdown', 150, 50));
+    act(() => pointer(option(container, 1), 'pointermove', 80, 250));
+    act(() => pointer(option(container, 1), 'pointercancel', 80, 250));
+    // Enter or Space: a keydown, then a click, with no pointerdown and no pointerup in between.
+    act(() => {
+      option(container, 1).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      );
+    });
+    act(() => option(container, 1).click());
+    expect(onClick).toHaveBeenCalledWith(1);
+  });
+
+  it('after an Escape-cancelled drag, a keyboard click is not swallowed either', () => {
+    const onClick = vi.fn();
+    render({ picked: [], onClick });
+    act(() => pointer(option(container, 1), 'pointerdown', 150, 50));
+    act(() => pointer(option(container, 1), 'pointermove', 80, 250));
+    act(() => {
+      option(container, 1).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    });
+    act(() => {
+      option(container, 1).dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    });
+    act(() => option(container, 1).click());
+    expect(onClick).toHaveBeenCalledWith(1);
+  });
+
+  it('pointercancel and Escape release pointer capture, and a drop releases it too', () => {
+    const release = vi.fn();
+    render({ picked: [] });
+    const grid = listbox(container);
+    Object.defineProperty(grid, 'releasePointerCapture', { value: release, configurable: true });
+    act(() => pointer(option(container, 1), 'pointerdown', 150, 50));
+    act(() => pointer(option(container, 1), 'pointermove', 80, 250));
+    act(() => pointer(option(container, 1), 'pointercancel', 80, 250));
+    expect(release).toHaveBeenCalledWith(1);
+    release.mockClear();
+    act(() => pointer(option(container, 1), 'pointerdown', 150, 50));
+    act(() => pointer(option(container, 1), 'pointermove', 80, 250));
+    act(() => {
+      option(container, 1).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    });
+    expect(release).toHaveBeenCalledWith(1);
+    release.mockClear();
+    act(() => pointer(option(container, 1), 'pointerdown', 150, 50));
+    act(() => pointer(option(container, 1), 'pointermove', 80, 250));
+    act(() => pointer(option(container, 1), 'pointerup', 80, 250));
+    expect(release).toHaveBeenCalledWith(1);
+  });
+
+  it('a missing releasePointerCapture (jsdom) does not break a cancel', () => {
+    const onDrop = vi.fn();
+    render({ picked: [], onDrop });
+    expect(
+      (listbox(container) as { releasePointerCapture?: unknown }).releasePointerCapture,
+    ).toBeUndefined();
+    act(() => pointer(option(container, 1), 'pointerdown', 150, 50));
+    act(() => pointer(option(container, 1), 'pointermove', 80, 250));
+    act(() => pointer(option(container, 1), 'pointercancel', 80, 250));
+    expect(listbox(container).dataset.dragging).toBeUndefined();
+  });
+
   it('touch presses are ignored', () => {
     const onPick = vi.fn();
     render({ picked: [], onPick });

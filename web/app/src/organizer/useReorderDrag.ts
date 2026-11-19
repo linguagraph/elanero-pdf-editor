@@ -82,6 +82,16 @@ function sameSlot(a: DropSlot, b: DropSlot): boolean {
 
 // Cell boxes in scroll-content coordinates, taken once per drag: re-measuring every cell on each
 // pointermove would force a layout per move on a large document.
+// Releases the pointer capture taken at the drag threshold. Every end path calls it explicitly, so
+// capture never outlives the press; it may already be gone (lost, or never taken), hence the catch.
+function releaseCapture(press: Press): void {
+  try {
+    press.grid.releasePointerCapture(press.pointerId);
+  } catch {
+    // Nothing to release: the pointer is no longer captured by this grid.
+  }
+}
+
 function measureCells(grid: HTMLElement): CellBox[] {
   const origin = grid.getBoundingClientRect();
   const found: { page: number; box: CellBox }[] = [];
@@ -167,6 +177,7 @@ export function useReorderDrag(options: ReorderDragOptions): ReorderDrag {
   const cancelDrag = useCallback((): boolean => {
     const press = pressRef.current;
     pressRef.current = null;
+    if (press) releaseCapture(press);
     const live = press?.live;
     stopFrame();
     if (!live) return false;
@@ -235,6 +246,7 @@ export function useReorderDrag(options: ReorderDragOptions): ReorderDrag {
   function onPointerUp(event: PointerEvent<HTMLElement>): void {
     const press = pressRef.current;
     if (press === null || press.pointerId !== event.pointerId) return;
+    releaseCapture(press);
     const live = press.live;
     if (live === null) {
       pressRef.current = null;
@@ -262,6 +274,9 @@ export function useReorderDrag(options: ReorderDragOptions): ReorderDrag {
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    // A key press is followed by a click with no pointerdown (Enter, Space). A flag left by a
+    // cancelled drag, which no click follows, must not swallow that click.
+    suppressClickRef.current = false;
     if (event.key !== 'Escape') return;
     if (!cancelDrag()) return;
     suppressClickRef.current = true;
