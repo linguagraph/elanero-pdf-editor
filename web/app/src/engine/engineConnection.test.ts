@@ -400,4 +400,26 @@ describe('engine restart and reporting (W3.9)', () => {
     await expect(pending).rejects.toMatchObject({ code: 'OUT_OF_MEMORY' });
     expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'OUT_OF_MEMORY' }));
   });
+
+  it('a call of a replaced worker that times out after the restart is not reported', async () => {
+    const { engine, report } = await readyEngine();
+    // A short deadline, so the timer fires within the test.
+    const pending = engine.client()!.call('system.memory', {}, { timeoutMs: 5 });
+    const old = workers[0]!;
+    expect(engine.restart()).toBe(true);
+    workers[1]!.answerHello();
+    await settle();
+
+    await expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' });
+    expect(old.terminate).toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('a timeout of the current worker is still reported', async () => {
+    const { engine, report } = await readyEngine();
+    const pending = engine.client()!.call('system.memory', {}, { timeoutMs: 5 });
+
+    await expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' });
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'TIMEOUT' }));
+  });
 });

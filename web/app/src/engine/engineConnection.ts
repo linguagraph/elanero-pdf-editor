@@ -112,7 +112,12 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
 
     // hello waits for the load and checks the protocol, so its answer is the readiness signal.
     const rpcClient = createRpcClient(next);
-    const client = observed(rpcClient, report);
+    // A call of a replaced worker still has its deadline timer: it can time out after the restart.
+    // That is no fault of the engine now running, so the report is dropped (the caller still gets
+    // its own rejection).
+    const client = observed(rpcClient, (error) => {
+      if (isCurrent()) report(error);
+    });
     rpcClient.call('hello', {}, { timeoutMs: LOAD_TIMEOUT_MS }).then(
       () => {
         if (!isCurrent()) return;

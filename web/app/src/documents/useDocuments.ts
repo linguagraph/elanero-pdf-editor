@@ -134,10 +134,18 @@ export function useDocuments(engine: EngineConnection): Documents {
         tabs: tabs.tabs,
         tabId: browserTabId(),
         store: autosaveStore,
-        isProtected: (id) => autosaver.isProtected(id),
+        // Encrypted by its open result, or copied as protected by the autosaver (D2).
+        isProtected: (id) =>
+          tabs.tabs.some((tab) => tab.id === id && tab.encrypted) || autosaver.isProtected(id),
         reopened: (id, client, opened) => {
           commitTabs((state) => replaceHandle(state, id, opened.handle, opened.pages));
           setTabSession(id, { rpc: client, handle: opened.handle });
+        },
+        // A document that could not come back: its tab closes and its old session is detached.
+        lost: (id) => {
+          commitTabs((state) => closeTabState(state, id));
+          setTabSession(id, null);
+          forgetBookmarksTab(id);
         },
       }),
     );
@@ -185,7 +193,8 @@ export function useDocuments(engine: EngineConnection): Documents {
       if (warning !== null) toasts.push('info', t('open.largeFile', { name: file.name }));
       // The tab id is the one addTab gives the new tab. Its session lets the document view mount.
       const id = tabsRef.current.nextId;
-      commitTabs((state) => addTab(state, { name: file.name, handle, pages }));
+      const encrypted = outcome.result.info.encrypted;
+      commitTabs((state) => addTab(state, { name: file.name, handle, pages, encrypted }));
       setTabSession(id, { rpc: client, handle });
       void memoryWarner.check(client, 'open');
       setRecent(addRecentFile(file.name));

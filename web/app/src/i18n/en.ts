@@ -252,8 +252,10 @@ export const EN = {
   'engine.restart.lost': 'Could not reopen {names}. Lost: {items}.',
   'engine.restart.lost.protected':
     '{names} is password-protected, so no autosave copy was kept. Open it again to continue.',
-  'engine.restart.failed':
-    'The engine could not be restarted. The current engine is still running.',
+  'engine.restart.failed': 'The engine could not be restarted.',
+  'engine.restart.busy':
+    'A job is still running, so the engine was not restarted. Try again when it finishes.',
+  'engine.restart.jobCancelled': 'A running job was cancelled.',
   'engine.restart.unavailable': 'The engine is not running, so there is nothing to restart.',
 
   // Start-up screen, toasts and job progress (W1.6 section 10, W4.4b).

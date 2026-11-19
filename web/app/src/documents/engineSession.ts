@@ -16,6 +16,9 @@ export interface RestartSessionInput {
   readonly isProtected: (tabId: number) => boolean;
   // Called once the copy is open in the new engine, with the tab and the engine's answer.
   readonly reopened: (tabId: number, client: EngineClient, opened: OpenResult) => void;
+  // Called for a document that cannot come back: its tab closes, so no handle of the old engine
+  // is kept (W3.9 S3).
+  readonly lost: (tabId: number) => void;
 }
 
 export function restartSession(input: RestartSessionInput): EngineSession {
@@ -28,6 +31,7 @@ export function restartSession(input: RestartSessionInput): EngineSession {
       return copy?.bytes;
     },
     isProtected: (documentId) => input.isProtected(Number(documentId)),
+    lost: (document) => input.lost(Number(document.id)),
     async reopen(document, bytes, client) {
       const opened = await client.call('session.open', {
         name: document.name,

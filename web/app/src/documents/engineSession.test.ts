@@ -1,13 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createEngineLoadStore } from '../feedback/engineLoad';
+import { createNotRespondingStore } from '../feedback/notResponding';
+import { createToastStore } from '../feedback/toasts';
 import type { EngineClient, EngineConnection } from '../engine/engineConnection';
 import type { OpenResult } from '../rpc/generated';
 import type { AutosaveStore } from '../storage/autosaveStore';
-import type { DocumentTab } from '../tabs/tabState';
+import {
+  addTab,
+  closeTab,
+  type DocumentTab,
+  EMPTY_TABS,
+  replaceHandle,
+  type TabState,
+} from '../tabs/tabState';
 import { restartSession } from './engineSession';
 
 const TABS: DocumentTab[] = [
-  { id: 1, name: 'a.pdf', dirty: true, handle: 'h1', pages: 2 },
-  { id: 2, name: 'b.pdf', dirty: false, handle: 'h2', pages: 3 },
+  { id: 1, name: 'a.pdf', dirty: true, handle: 'h1', pages: 2, encrypted: false },
+  { id: 2, name: 'b.pdf', dirty: false, handle: 'h2', pages: 3, encrypted: false },
 ];
 
 // A store that holds a copy for tab 1 only: the other document has none.
@@ -34,6 +44,7 @@ describe('restartSession (W3.9 restart)', () => {
       store: storeWithCopyOf1(new ArrayBuffer(1)),
       isProtected: () => false,
       reopened: vi.fn(),
+      lost: vi.fn(),
     });
 
     expect(session.documents).toEqual([
@@ -52,6 +63,7 @@ describe('restartSession (W3.9 restart)', () => {
       store,
       isProtected: () => false,
       reopened: vi.fn(),
+      lost: vi.fn(),
     });
 
     expect(await session.bytesOf('1')).toBe(bytes);
@@ -71,6 +83,7 @@ describe('restartSession (W3.9 restart)', () => {
       store: storeWithCopyOf1(new ArrayBuffer(1)),
       isProtected: () => false,
       reopened,
+      lost: vi.fn(),
     });
     const bytes = new ArrayBuffer(4);
 
@@ -93,9 +106,53 @@ describe('restartSession (W3.9 restart)', () => {
       store: storeWithCopyOf1(new ArrayBuffer(1)),
       isProtected,
       reopened: vi.fn(),
+      lost: vi.fn(),
     });
 
     expect(session.isProtected('2')).toBe(true);
     expect(session.isProtected('1')).toBe(false);
+  });
+});
+
+describe('the tabs after a restart (W3.9 S3)', () => {
+  it('a reopened tab takes its new handle, and a tab that cannot come back is closed', async () => {
+    // Two documents: a.pdf has an autosave copy, b.pdf has none.
+    let state: TabState = addTab(addTab(EMPTY_TABS, { name: 'a.pdf', handle: 'h1', pages: 2 }), {
+      name: 'b.pdf',
+      handle: 'h2',
+      pages: 3,
+    });
+    const opened = { handle: 'h-new', pages: 2, warning: null } as OpenResult;
+    const client = { call: vi.fn(() => Promise.resolve(opened)) } as unknown as EngineClient;
+    const engine = {
+      store: createEngineLoadStore(),
+      restart: () => true,
+      whenReady: () => Promise.resolve(client),
+    } as unknown as EngineConnection;
+    const session = restartSession({
+      engine,
+      tabs: state.tabs,
+      tabId: 'browser-tab',
+      store: storeWithCopyOf1(new ArrayBuffer(4)),
+      isProtected: () => false,
+      reopened: (id, _client, result) => {
+        state = replaceHandle(state, id, result.handle, result.pages);
+      },
+      lost: (id) => {
+        state = closeTab(state, id);
+      },
+    });
+    const notResponding = createNotRespondingStore({
+      restart: () => ({ ok: true, reopen: session.documents, lost: { items: [], text: '' } }),
+      toasts: createToastStore(),
+    });
+    notResponding.setSession(session);
+
+    await notResponding.restart();
+
+    expect(state.tabs).toEqual([
+      { id: 1, name: 'a.pdf', dirty: true, handle: 'h-new', pages: 2, encrypted: false },
+    ]);
+    expect(state.activeId).toBe(1);
   });
 });

@@ -2,10 +2,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineClient } from '../engine/engineConnection';
+import { EngineLoadError } from '../engine/errors';
 import type { RestartOptions, RestartResult } from '../engine/restart';
 import { t } from '../i18n/t';
 import { RpcError, RpcTimeoutError } from '../rpc/client';
 import { NotRespondingHost } from './NotRespondingHost';
+import { createEngineLoadStore } from './engineLoad';
+import { type AbortClient, createJobProgressStore, type JobProgressStore } from './jobRun';
 import { createNotRespondingStore, type EngineSession } from './notResponding';
 import { lostItemsText } from './lostWork';
 import { createToastStore, type ToastStore } from './toasts';
@@ -28,21 +31,39 @@ const DOCS = [
 ];
 const CLIENT = { call: vi.fn() } as unknown as EngineClient;
 
-// A session whose engine restarts, and whose documents have the given autosave copies.
+// A session whose engine restarts, and whose documents have the given autosave copies. The engine's
+// load store is real, so a test can fail the new engine's load the way the connection does.
 function session(
   bytes: Record<string, ArrayBuffer>,
-  options: { reopen?: EngineSession['reopen']; protectedIds?: string[] } = {},
+  options: {
+    reopen?: EngineSession['reopen'];
+    protectedIds?: string[];
+    whenReady?: EngineSession['engine']['whenReady'];
+    documents?: EngineSession['documents'];
+  } = {},
 ): EngineSession {
   return {
     engine: {
+      store: createEngineLoadStore(),
       restart: vi.fn(() => true),
-      whenReady: vi.fn(() => Promise.resolve(CLIENT)),
+      whenReady: options.whenReady ?? vi.fn(() => Promise.resolve(CLIENT)),
     },
-    documents: DOCS,
-    bytesOf: (id) => Promise.resolve(bytes[id]),
+    documents: options.documents ?? DOCS,
+    bytesOf: vi.fn((id: string) => Promise.resolve(bytes[id])),
     isProtected: (id) => options.protectedIds?.includes(id) ?? false,
     reopen: options.reopen ?? vi.fn(() => Promise.resolve()),
+    lost: vi.fn(),
   };
+}
+
+// The restart's job, as a job store holds it: a job of the old engine, whose abort the test answers.
+function runningJob(jobs: JobProgressStore, abort: () => Promise<unknown>): void {
+  jobs.begin({
+    token: 'job-1',
+    label: 'Compress',
+    handle: 'doc-h',
+    client: { call: abort as AbortClient['call'] },
+  });
 }
 
 function restartOk(): RestartResult {
@@ -167,6 +188,139 @@ describe('the not-responding state', () => {
 
     expect(restart).not.toHaveBeenCalled();
     expect(toastTexts(toasts)).toEqual([t('engine.restart.unavailable')]);
+  });
+});
+
+describe('the restart of the engine (W3.9 S3)', () => {
+  it('closes a document whose copy is missing, and reopens the others', async () => {
+    const reopen = vi.fn<EngineSession['reopen']>(() => Promise.resolve());
+    const current = session({ a: new ArrayBuffer(1) }, { reopen });
+    const store = createNotRespondingStore({
+      restart: () => restartOk(),
+      toasts: createToastStore(),
+    });
+    store.setSession(current);
+
+    await store.restart();
+
+    expect(reopen).toHaveBeenCalledTimes(1);
+    expect(reopen).toHaveBeenCalledWith(DOCS[0], expect.any(ArrayBuffer), CLIENT);
+    expect(current.lost).toHaveBeenCalledTimes(1);
+    expect(current.lost).toHaveBeenCalledWith(DOCS[1]);
+  });
+
+  it('never reads or reopens a protected document from its copy', async () => {
+    const reopen = vi.fn<EngineSession['reopen']>(() => Promise.resolve());
+    const toasts = createToastStore();
+    const current = session(
+      { a: new ArrayBuffer(1), b: new ArrayBuffer(1) },
+      { reopen, protectedIds: ['a'] },
+    );
+    const store = createNotRespondingStore({ restart: () => restartOk(), toasts });
+    store.setSession(current);
+
+    await store.restart();
+
+    // The protection is checked first: the copy of a protected document is not even read.
+    expect(current.bytesOf).not.toHaveBeenCalledWith('a');
+    expect(reopen).toHaveBeenCalledTimes(1);
+    expect(reopen).toHaveBeenCalledWith(DOCS[1], expect.any(ArrayBuffer), CLIENT);
+    expect(current.lost).toHaveBeenCalledWith(DOCS[0]);
+    expect(toastTexts(toasts)).toEqual([
+      t('engine.restart.lost.protected', { names: 'Report.pdf' }),
+    ]);
+  });
+
+  it('reads the documents after the new engine is ready, so a tab closed meanwhile is not reopened', async () => {
+    let resolveReady: (client: EngineClient) => void = () => undefined;
+    const reopenOld = vi.fn<EngineSession['reopen']>(() => Promise.resolve());
+    const reopenNew = vi.fn<EngineSession['reopen']>(() => Promise.resolve());
+    const old = session(
+      { a: new ArrayBuffer(1), b: new ArrayBuffer(1) },
+      {
+        reopen: reopenOld,
+        whenReady: () =>
+          new Promise<EngineClient>((resolve) => {
+            resolveReady = resolve;
+          }),
+      },
+    );
+    const store = createNotRespondingStore({
+      restart: () => restartOk(),
+      toasts: createToastStore(),
+    });
+    store.setSession(old);
+
+    const pending = store.restart();
+    // The user closes Report.pdf while the new engine loads: the session is rebuilt without it.
+    store.setSession(
+      session({ b: new ArrayBuffer(1) }, { reopen: reopenNew, documents: [DOCS[1]!] }),
+    );
+    resolveReady(CLIENT);
+    await pending;
+
+    expect(reopenOld).not.toHaveBeenCalled();
+    expect(reopenNew).toHaveBeenCalledTimes(1);
+    expect(reopenNew).toHaveBeenCalledWith(DOCS[1], expect.any(ArrayBuffer), CLIENT);
+  });
+
+  it('a new engine that fails to load ends the restart with one message and closes the documents', async () => {
+    const reopen = vi.fn<EngineSession['reopen']>(() => Promise.resolve());
+    const toasts = createToastStore();
+    const current = session(
+      { a: new ArrayBuffer(1), b: new ArrayBuffer(1) },
+      { reopen, whenReady: () => new Promise<EngineClient>(() => undefined) },
+    );
+    const store = createNotRespondingStore({ restart: () => restartOk(), toasts });
+    store.setSession(current);
+
+    const pending = store.restart();
+    // The load of the new engine fails: the store keeps the failure for Try again.
+    current.engine.store.fail(new EngineLoadError('pyodide', 'the engine did not load'));
+    await pending;
+
+    expect(reopen).not.toHaveBeenCalled();
+    expect(current.lost).toHaveBeenCalledTimes(2);
+    expect(toastTexts(toasts)).toEqual([
+      t('engine.restart.failed'),
+      t('engine.restart.lost', { names: 'Report.pdf, Invoice.pdf', items: lostItemsText() }),
+    ]);
+  });
+
+  it('cancels a running job through its abort before replacing the engine, and says so', async () => {
+    const toasts = createToastStore();
+    const jobs = createJobProgressStore({ toasts: createToastStore() });
+    const abort = vi.fn(() => Promise.resolve(undefined));
+    runningJob(jobs, abort);
+    const restart = vi.fn<(options: RestartOptions) => RestartResult>(() => restartOk());
+    const store = createNotRespondingStore({ restart, toasts, jobs });
+    store.setSession(session({ a: new ArrayBuffer(1), b: new ArrayBuffer(1) }));
+
+    await store.restart();
+
+    expect(abort).toHaveBeenCalledWith('jobs.abort', { handle: 'doc-h', token: 'job-1' });
+    expect(abort.mock.invocationCallOrder[0]!).toBeLessThan(restart.mock.invocationCallOrder[0]!);
+    expect(jobs.getState().job).toBeUndefined();
+    expect(toastTexts(toasts)).toEqual([
+      `${t('engine.restart.jobCancelled')} ${t('engine.restart.done', { items: lostItemsText() })}`,
+    ]);
+  });
+
+  it('refuses the restart when the running job cannot be cancelled', async () => {
+    const toasts = createToastStore();
+    const jobs = createJobProgressStore({ toasts: createToastStore() });
+    runningJob(jobs, () => Promise.reject(new Error('the engine did not answer')));
+    const restart = vi.fn<(options: RestartOptions) => RestartResult>(() => restartOk());
+    const current = session({ a: new ArrayBuffer(1) });
+    const store = createNotRespondingStore({ restart, toasts, jobs });
+    store.setSession(current);
+
+    await store.restart();
+
+    expect(restart).not.toHaveBeenCalled();
+    expect(current.engine.restart).not.toHaveBeenCalled();
+    expect(jobs.getState().job).toBeDefined();
+    expect(toastTexts(toasts)).toEqual([t('engine.restart.busy')]);
   });
 });
 
