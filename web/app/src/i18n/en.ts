@@ -330,14 +330,14 @@ export const EN = {
   'commentsImport.choose.button': 'Choose file',
   'commentsImport.reading': 'Reading the file...',
   'commentsImport.preview':
-    '{count} comments ({replies} replies) on {pages} pages will be added to this document.',
+    'Comments: {count} (replies: {replies}), pages: {pages}. They will be added to this document.',
   'commentsImport.empty': 'The file has no comments to import.',
   'commentsImport.invalid': 'This file is not a valid XFDF file of comments.',
   'commentsImport.tooLarge': 'The file is larger than {limit} MB.',
   'commentsImport.import': 'Import',
   'commentsImport.importing': 'Importing the comments...',
   'commentsImport.cancel': 'Cancel',
-  'commentsImport.done': '{count} comments imported. Undo removes them.',
+  'commentsImport.done': 'Comments imported: {count}. Undo removes them.',
   'commentsImport.failed': 'The comments could not be imported. Try again.',
 
   // Sanitize (W7.4): the dialog's items, its confirmation and the report.
