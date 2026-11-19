@@ -205,11 +205,11 @@ describe('CompressDialog', () => {
     await flush();
 
     expect(document.body.textContent).toContain(
-      t('compress.notSmaller', { before: '1000 bytes', after: '1.2 KB' }),
+      t('compress.notSmaller', { before: '1000 B', after: '1.2 KB' }),
     );
     expect(document.body.querySelector('a.compress-download')).toBeNull();
     expect(document.body.textContent).not.toContain(
-      t('compress.result.sizes', { before: '1000 bytes', after: '1.2 KB', percent: 0 }),
+      t('compress.result.sizes', { before: '1000 B', after: '1.2 KB', percent: 0 }),
     );
 
     act(() => findButton(t('compress.keep')).click());
@@ -247,6 +247,104 @@ describe('CompressDialog', () => {
 
     expect(document.body.textContent).toContain(t('compress.failed'));
     expect(document.body.querySelector('a.compress-download')).toBeNull();
+  });
+});
+
+describe('CompressDialog controls', () => {
+  function radio(label: string): HTMLInputElement {
+    const found = [...document.body.querySelectorAll('input[type="radio"]')].find(
+      (candidate) => candidate.closest('label')?.textContent === label,
+    ) as HTMLInputElement | undefined;
+    if (found === undefined) throw new Error(`no option ${label}`);
+    return found;
+  }
+
+  function pressEscape() {
+    act(() => {
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    });
+  }
+
+  it('disables the presets and ignores a second submit while the job runs', async () => {
+    const { call, engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, startWorker: () => job.worker });
+
+    submit();
+    await flush();
+
+    expect(radio(t('compress.preset.print')).disabled).toBe(true);
+    expect(findButton(t('compress.submit')).disabled).toBe(true);
+    const form = document.body.querySelector('form.compress');
+    act(() => {
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await flush();
+
+    expect(call.mock.calls.filter((entry) => entry[0] === 'jobs.prepare')).toHaveLength(1);
+    expect(job.worker.call).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not close on Escape while the job runs, and does once it has finished', async () => {
+    const { engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const onClose = vi.fn();
+    render({ engine, progress, onClose, startWorker: () => job.worker });
+
+    submit();
+    await flush();
+    pressEscape();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => job.finish(reduceReply(2_000_000, 500_000)));
+    await flush();
+    pressEscape();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('Close calls onClose before any job has run', () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const onClose = vi.fn();
+    render({ engine, progress, onClose });
+
+    act(() => findButton(t('compress.close')).click());
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Keep the original calls onClose when the copy is not smaller', async () => {
+    const { engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const onClose = vi.fn();
+    render({ engine, progress, onClose, startWorker: () => job.worker });
+
+    submit();
+    await flush();
+    await act(async () => job.finish(reduceReply(1000, 1200)));
+    await flush();
+    act(() => findButton(t('compress.keep')).click());
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts from the defaults when the dialog is opened again', async () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const full = render({ engine, progress });
+    choose(t('compress.preset.print'));
+    expect(radio(t('compress.preset.print')).checked).toBe(true);
+
+    act(() => root.render(<CompressDialog {...full} isOpen={false} />));
+    act(() => root.render(<CompressDialog {...full} isOpen={true} />));
+
+    expect(radio(t('compress.preset.ebook')).checked).toBe(true);
+    expect(radio(t('compress.preset.print')).checked).toBe(false);
   });
 });
 

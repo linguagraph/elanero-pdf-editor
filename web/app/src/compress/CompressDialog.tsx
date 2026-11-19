@@ -63,25 +63,42 @@ export function formatSize(bytes: number): string {
 // The compress dialog on the Overlay host. Its form is mounted only while the dialog is open, so
 // each open starts from the defaults.
 export function CompressDialog(props: CompressDialogProps) {
+  // Lifted here so the Overlay's Escape or tap-outside can see whether a job is running.
+  const [running, setRunning] = useState(false);
   return (
     <Overlay
       isOpen={props.isOpen}
-      onClose={props.onClose}
+      // A running compress is not closed unseen: Cancel is the way out while it runs.
+      onClose={() => {
+        if (!running) props.onClose();
+      }}
       title={t('compress.title')}
       showCloseButton={false}
     >
-      <CompressForm {...props} />
+      <CompressForm {...props} running={running} setRunning={setRunning} />
     </Overlay>
   );
 }
 
-function CompressForm({ onClose, engine, handle, startWorker, progress }: CompressDialogProps) {
+interface CompressFormProps extends CompressDialogProps {
+  readonly running: boolean;
+  readonly setRunning: (running: boolean) => void;
+}
+
+function CompressForm({
+  onClose,
+  engine,
+  handle,
+  startWorker,
+  progress,
+  running,
+  setRunning,
+}: CompressFormProps) {
   const ids = useId();
   const store = progress ?? jobProgress;
   const runningJob = useJobProgress(store).job;
   const [preset, setPreset] = useState<CompressPreset>('ebook');
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const mounted = useRef(true);
 
@@ -166,14 +183,19 @@ function CompressForm({ onClose, engine, handle, startWorker, progress }: Compre
 
       {running ? (
         <div className="compress-status">
-          <p>{t('compress.running')}</p>
+          <p id={`${ids}-running`}>{t('compress.running')}</p>
           <progress
             className="compress-progress"
             max={100}
             value={percent}
-            aria-labelledby={`${ids}-percent`}
+            aria-labelledby={`${ids}-running`}
+            aria-valuetext={
+              percent === undefined
+                ? t('compress.progress.unknown')
+                : t('compress.progress.percent', { percent: Math.round(percent) })
+            }
           />
-          <span id={`${ids}-percent`} className="compress-hint">
+          <span className="compress-hint" aria-hidden="true">
             {percent === undefined
               ? t('compress.progress.unknown')
               : t('compress.progress.percent', { percent: Math.round(percent) })}
@@ -188,7 +210,7 @@ function CompressForm({ onClose, engine, handle, startWorker, progress }: Compre
           </h3>
           {isSmaller(outcome.before, outcome.after) ? (
             <>
-              <p>
+              <p role="status">
                 {t('compress.result.sizes', {
                   before: formatSize(outcome.before),
                   after: formatSize(outcome.after),
