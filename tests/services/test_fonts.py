@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -9,15 +10,21 @@ import pytest
 
 from pdfeditor.core.jobs import Cancelled, CancelToken
 from pdfeditor.model.fonts import FontRef
-from pdfeditor.services import fonts as fonts_service
-from pdfeditor.services.fonts import (
-    FontCatalog,
-    installed_ref_for_font_name,
-    normalize_font_name,
-    read_faces,
-    system_font_dirs,
-    text_scripts,
-)
+
+# The web package excludes the desktop font catalog (scripts/web_package.py), so the import is
+# guarded. Every test here is desktop_only, so the web run never reaches a name it did not bind.
+with contextlib.suppress(ImportError):
+    from pdfeditor.services import fonts as fonts_service
+    from pdfeditor.services.fonts import (
+        FontCatalog,
+        installed_ref_for_font_name,
+        normalize_font_name,
+        read_faces,
+        system_font_dirs,
+        text_scripts,
+    )
+
+pytestmark = pytest.mark.desktop_only
 
 
 @pytest.fixture

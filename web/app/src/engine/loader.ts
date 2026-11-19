@@ -42,6 +42,9 @@ export interface EngineHandle {
 
 export type LoadEngine = (options: LoadOptions) => Promise<EngineHandle>;
 
+// The Pyodide package the engine imports at module level (see scripts/stage_engine_assets.mjs).
+export const PILLOW_PACKAGE = 'pillow';
+
 // Python run once after the packages. The zip carries the pdfeditor package at its top level.
 const UNPACK_PY = `
 import os, sys, zipfile
@@ -136,6 +139,9 @@ export async function loadEngine(options: LoadOptions): Promise<EngineHandle> {
 
   emit('packages');
   await attempt('packages', async () => {
+    // Pillow is a Pyodide package, not part of the wheel: the engine imports it at module level,
+    // so it is named here and resolved from the staged pyodide-lock.json (same folder as Pyodide).
+    await pyodide.loadPackage(PILLOW_PACKAGE);
     await pyodide.loadPackage(new URL(PYMUPDF_WHEEL_FILE, base).href);
     // Pyodide logs a wheel it cannot fetch and still resolves, so the import is the real check
     // that PyMuPDF arrived. The engine's hello alone would pass without it.

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EngineLoadError } from './errors';
-import { loadEngine, type PyodideLike, type PyodideModule } from './loader';
+import { loadEngine, PILLOW_PACKAGE, type PyodideLike, type PyodideModule } from './loader';
 import { PYMUPDF_WHEEL_FILE, WEBAPI_PROTOCOL } from './pins';
 import type { Stage } from './protocol';
 
@@ -96,7 +96,9 @@ describe('loadEngine', () => {
     );
     expect(importPyodide).toHaveBeenCalledWith(`${BASE}pyodide.mjs`);
     expect(pyodide.loadPackage).toHaveBeenCalledWith(`${BASE}${PYMUPDF_WHEEL_FILE}`);
+    expect(pyodide.loadPackage).toHaveBeenCalledWith(PILLOW_PACKAGE);
     expect(log).toEqual([
+      `loadPackage ${PILLOW_PACKAGE}`,
       `loadPackage ${BASE}${PYMUPDF_WHEEL_FILE}`,
       'import pymupdf',
       `fetch ${BASE}pdfeditor-web.zip`,
@@ -105,6 +107,28 @@ describe('loadEngine', () => {
       'beforeEngine',
       'adapter',
     ]);
+  });
+
+  it('loads Pillow by package name before the wheel, and fails the packages stage without it', async () => {
+    const log: string[] = [];
+    const { pyodide } = fakePyodide({ log });
+    await loadEngine(
+      options({ importPyodide: async () => fakeModule(pyodide as unknown as PyodideLike) }),
+    );
+    expect(pyodide.loadPackage).toHaveBeenCalledWith(PILLOW_PACKAGE);
+    expect(log.indexOf(`loadPackage ${PILLOW_PACKAGE}`)).toBeLessThan(
+      log.indexOf(`loadPackage ${BASE}${PYMUPDF_WHEEL_FILE}`),
+    );
+
+    const failing = fakePyodide();
+    failing.pyodide.loadPackage.mockImplementation(async (name: string) => {
+      if (name === PILLOW_PACKAGE) throw new Error('no pillow');
+    });
+    const error = await loadEngine(
+      options({ importPyodide: async () => fakeModule(failing.pyodide as unknown as PyodideLike) }),
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(EngineLoadError);
+    expect((error as EngineLoadError).stage).toBe('packages');
   });
 
   it('runs beforeEngine after the packages and before any engine code', async () => {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 from dataclasses import replace
 
@@ -9,7 +10,11 @@ import pytest
 
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.platform import PlatformCapabilities, configure, current
-from pdfeditor.services.fonts import system_font_dirs
+
+# The web package excludes the desktop font catalog (scripts/web_package.py); the two tests that
+# read it are desktop_only, so the web run never calls the name this guard leaves unbound.
+with contextlib.suppress(ImportError):
+    from pdfeditor.services.fonts import system_font_dirs
 
 
 @pytest.fixture
@@ -45,11 +50,13 @@ def test_configure_changes_what_current_returns(set_platform) -> None:
     assert current().signing is True  # the other flags keep their values
 
 
+@pytest.mark.desktop_only
 def test_system_font_dirs_empty_without_system_fonts(set_platform) -> None:
     set_platform(system_fonts=False)
     assert system_font_dirs() == []
 
 
+@pytest.mark.desktop_only
 def test_system_font_dirs_unchanged_with_system_fonts(set_platform) -> None:
     expected = system_font_dirs()
     set_platform(system_fonts=True)

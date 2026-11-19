@@ -108,6 +108,15 @@ def test_engine_open_path_does_not_need_fonttools() -> None:
 
 
 @pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
+def test_web_modules_import_without_fonttools() -> None:
+    # The web set includes services/export (Word export, webapi/jobs); fontTools is read only
+    # inside the functions that use it, so the set imports without it.
+    modules = list(dict.fromkeys([*wp.web_modules(), "pdfeditor.engine.mupdf"]))
+    failures = _import_failures(modules, blocked=(*BLOCKED, "fontTools"))
+    assert failures == {}, failures
+
+
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
 def test_guard_catches_a_module_that_imports_pikepdf(tmp_path: Path) -> None:
     # Negative control: the same check must fail on a leaky module and pass on a clean one.
     fake = tmp_path / "fakepkg"

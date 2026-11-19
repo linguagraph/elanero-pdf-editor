@@ -18,7 +18,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from fontTools.ttLib import TTFont
 from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
@@ -153,6 +152,8 @@ class _Widths:
         self._fonts: dict[str, tuple[dict[int, str], Any, int] | None] = {}
 
     def _font(self, name: str) -> tuple[dict[int, str], Any, int] | None:
+        from fontTools.ttLib import TTFont  # lazy: the web build ships without fontTools
+
         if name not in self._fonts:
             program = self._page.font_program(name)
             try:
