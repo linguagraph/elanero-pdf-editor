@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
 import { MAX_RENDER_ATTEMPTS, RenderScheduler } from './renderScheduler';
+import { cacheBudgetBytes } from './tiles';
 
 type Reply = Methods['render.page']['result'];
 type Pending = {
@@ -134,5 +135,37 @@ describe('RenderScheduler', () => {
     scheduler.plan('thumb', []);
     expect(renders).toHaveLength(2);
     expect(renders.every((r) => r.params.scale_milli === 1000)).toBe(true);
+  });
+});
+
+describe('RenderScheduler tiles and prefetch (W5.1b)', () => {
+  it('asks render.tile for a tile, with its place in the grid and the tile size', () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    scheduler.plan('page', [
+      { page: 3, scaleMilli: 1000, visible: true, distance: 0, tileX: 2, tileY: 1 },
+    ]);
+    expect(renders).toHaveLength(1);
+    expect(renders[0]?.params).toMatchObject({ page: 3, scale_milli: 1000 });
+    const tile = renders[0]?.params as unknown as Record<string, unknown>;
+    expect(tile.tile_x).toBe(2);
+    expect(tile.tile_y).toBe(1);
+    expect(tile.tile_px).toBe(1024);
+  });
+
+  it('sends the visible renders before the prefetch pages outside the window', () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    scheduler.plan('page', [
+      { page: 9, scaleMilli: 1000, visible: false, distance: 0 },
+      { page: 4, scaleMilli: 1000, visible: true, distance: 300 },
+      { page: 5, scaleMilli: 1000, visible: true, distance: 20 },
+    ]);
+    // Two slots: the visible pages go first, nearest first; the prefetch page waits its turn.
+    expect(renders.map((r) => r.params.page)).toEqual([5, 4]);
+  });
+
+  it('takes the byte budget from the device memory', () => {
+    expect(cacheBudgetBytes(2)).toBeLessThan(cacheBudgetBytes(16));
   });
 });

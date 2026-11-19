@@ -126,6 +126,7 @@ export interface PageRpc {
     M extends
       | 'session.pages'
       | 'render.page'
+      | 'render.tile'
       | 'text.layer'
       | 'actions.run'
       | 'actions.undo'

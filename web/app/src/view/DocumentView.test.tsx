@@ -395,3 +395,49 @@ describe('DocumentView layouts and night reading', () => {
     expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('100%');
   });
 });
+
+// A fake engine with the page sizes given: render.page and render.tile wait until the test answers.
+function fakeSizedRpc(sizes: { width: number; height: number }[]) {
+  const calls: { method: string; params: Record<string, unknown> }[] = [];
+  const rpc = {
+    call: vi.fn((method: string, params: unknown) => {
+      if (method === 'session.pages') {
+        return Promise.resolve({ pages: sizes.map((size) => ({ ...size, rotation: 0 })) });
+      }
+      if (method === 'text.layer') return new Promise(() => undefined);
+      calls.push({ method, params: params as Record<string, unknown> });
+      return new Promise(() => undefined);
+    }),
+  };
+  return { rpc: rpc as unknown as PageRpc, calls };
+}
+
+describe('DocumentView tiles (W5.1b)', () => {
+  it('draws a page above 4 MP as tiles of its visible part, never as one image', async () => {
+    // 1600 pt square at 100 %: about 4.5 MP on the device, so it is tiled.
+    const { rpc, calls } = fakeSizedRpc([{ width: 1600, height: 1600 }]);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const renders = calls.filter((call) => call.method.startsWith('render.'));
+    expect(renders.some((call) => call.method === 'render.page')).toBe(false);
+    // Two requests are in flight; both are tiles of the first row, which is the visible one.
+    expect(renders.map((call) => call.method)).toEqual(['render.tile', 'render.tile']);
+    for (const call of renders) {
+      expect(call.params.tile_px).toBe(1024);
+      expect(call.params.tile_y).toBe(0);
+    }
+  });
+
+  it('draws a page at or under 4 MP as one image, with no tile requests', async () => {
+    const { rpc, calls } = fakeSizedRpc([{ width: 612, height: 792 }]);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const methods = calls.map((call) => call.method);
+    expect(methods).toContain('render.page');
+    expect(methods).not.toContain('render.tile');
+  });
+});

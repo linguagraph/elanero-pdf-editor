@@ -1,6 +1,6 @@
 // Drawing cached pixels onto a canvas, shared by the document view and the thumbnails panel. The
 // placeholder beneath the canvas shows until the pixels are there (W1.4 sections 6 and 9).
-import { useEffect, useRef } from 'react';
+import { type CSSProperties, useEffect, useRef } from 'react';
 import type { PageCache } from './pageCache';
 
 export interface CachedDraw {
@@ -23,17 +23,19 @@ export function drawPixels(canvas: HTMLCanvasElement, cached: CachedDraw): void 
 }
 
 // A sharp layer that draws from the cache once the pixels are there. `version` changes whenever
-// the cache may hold new pixels, so the effect runs again.
+// the cache may hold new pixels, so the effect runs again. `style` places a tile within its page.
 export function CachedCanvas({
   cache,
   cacheKey,
   version,
   className,
+  style,
 }: {
   cache: PageCache;
   cacheKey: string;
   version: number;
   className: string;
+  style?: CSSProperties;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -41,5 +43,5 @@ export function CachedCanvas({
     const cached = cache.get(cacheKey);
     if (canvas !== null && cached !== undefined) drawPixels(canvas, cached);
   }, [cache, cacheKey, version]);
-  return <canvas ref={ref} className={className} />;
+  return <canvas ref={ref} className={className} style={style} />;
 }
