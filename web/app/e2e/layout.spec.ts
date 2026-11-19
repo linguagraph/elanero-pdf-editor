@@ -18,32 +18,75 @@ async function horizontalOverflow(page: import('@playwright/test').Page): Promis
   );
 }
 
-test('phone width (390 px): no horizontal scroll, left rail hidden, right rail kept', async ({
+// The start page replaces the rails too (W1.6 section 1), so both rails are hidden there. No document
+// can be opened in these checks, so the rails are shown by setting the frame's data-rails, the way
+// the app sets it once a document is open.
+async function showRails(page: import('@playwright/test').Page) {
+  await page.locator('.app-frame').evaluate((el) => el.setAttribute('data-rails', 'shown'));
+}
+
+for (const [width, height] of [
+  [1366, 768],
+  [1100, 700],
+  [800, 1024],
+  [390, 844],
+] as const) {
+  test(`start page at ${width} px: both rails hidden, no horizontal scroll`, async ({ page }) => {
+    await openAtWidth(page, width, height);
+    await expect(page.locator('.app-frame')).toHaveAttribute('data-rails', 'hidden');
+    await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeHidden();
+    await expect(page.getByRole('toolbar', { name: 'Right panels' })).toBeHidden();
+    expect(await horizontalOverflow(page)).toBe(0);
+  });
+}
+
+test('phone width (390 px): no horizontal scroll, left panels rail hidden by the tier', async ({
   page,
 }) => {
   await openAtWidth(page, 390, 844);
   await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'phone');
   expect(await horizontalOverflow(page)).toBe(0);
-  await expect(page.getByRole('navigation', { name: 'Left rail' })).toBeHidden();
-  await expect(page.getByRole('navigation', { name: 'Right rail' })).toBeVisible();
+  await showRails(page);
+  await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeHidden();
+  await expect(page.getByRole('toolbar', { name: 'Right panels' })).toBeVisible();
 });
 
-test('desktop width (1366 px): no horizontal scroll, both rails shown and panels docked', async ({
+test('desktop width (1366 px): both rails at their edges, panels docked', async ({ page }) => {
+  await openAtWidth(page, 1366, 768);
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'wide');
+  await showRails(page);
+  expect(await horizontalOverflow(page)).toBe(0);
+  const left = page.getByRole('toolbar', { name: 'Left panels' });
+  const right = page.getByRole('toolbar', { name: 'Right panels' });
+  await expect(left).toBeVisible();
+  await expect(right).toBeVisible();
+  await expect(page.locator('.app-frame')).toHaveAttribute('data-left-rail', 'shown');
+  // The left rail sits at the window's left edge, 48 px plus its 1 px border.
+  const leftBox = await left.boundingBox();
+  expect(leftBox?.x).toBeCloseTo(0, 0);
+  expect(leftBox?.width).toBeCloseTo(49, 0);
+  const rightBox = await right.boundingBox();
+  expect((rightBox?.x ?? 0) + (rightBox?.width ?? 0)).toBeCloseTo(1366, 0);
+});
+
+test('desktop width: the left rail holds Pages, Bookmarks and Search, in that order', async ({
   page,
 }) => {
   await openAtWidth(page, 1366, 768);
-  await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'wide');
-  expect(await horizontalOverflow(page)).toBe(0);
-  await expect(page.getByRole('navigation', { name: 'Left rail' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Right rail' })).toBeVisible();
-  await expect(page.locator('.app-frame')).toHaveAttribute('data-left-rail', 'shown');
+  await showRails(page);
+  const buttons = page.getByRole('toolbar', { name: 'Left panels' }).locator('button');
+  await expect(buttons).toHaveCount(3);
+  await expect(buttons.nth(0)).toHaveAttribute('data-panel', 'pages');
+  await expect(buttons.nth(1)).toHaveAttribute('data-panel', 'bookmarks');
+  await expect(buttons.nth(2)).toHaveAttribute('data-panel', 'search');
 });
 
 test('tablet width (800 px): left rail shown, no horizontal scroll', async ({ page }) => {
   await openAtWidth(page, 800, 1024);
   await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'tablet');
+  await showRails(page);
   expect(await horizontalOverflow(page)).toBe(0);
-  await expect(page.getByRole('navigation', { name: 'Left rail' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeVisible();
 });
 
 // The rail buttons show icons, with the name as the tooltip and for screen readers. At the real rail
@@ -52,13 +95,14 @@ test('desktop width: every right rail button fits its rail and shows its icon', 
   page,
 }) => {
   await openAtWidth(page, 1366, 768);
-  const rail = page.getByRole('navigation', { name: 'Right rail' });
+  await showRails(page);
+  const rail = page.getByRole('toolbar', { name: 'Right panels' });
   const buttons = rail.locator('button');
-  await expect(buttons).toHaveCount(4);
+  await expect(buttons).toHaveCount(1);
   const railBox = await rail.boundingBox();
   // 48 px of rail plus its 1 px border.
   expect(railBox?.width).toBeCloseTo(49, 0);
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 1; i += 1) {
     const button = buttons.nth(i);
     const box = await button.boundingBox();
     expect(

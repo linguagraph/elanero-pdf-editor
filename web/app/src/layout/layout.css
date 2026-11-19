@@ -12,10 +12,21 @@
   max-width: 100%;
   overflow: hidden;
   --drawer-left: 0px;
+  --rail-right-width: 0px;
 }
 
-.app-frame[data-left-rail='shown'] {
+/* The rails take their width only while they show: the start page hides both (W1.6 section 1). The
+   drawer and the overlay offsets follow the rails, so they sit beside them and not under them. */
+.app-frame[data-rails='shown'] {
+  --rail-right-width: var(--layout-rail-width);
+}
+
+.app-frame[data-rails='shown'][data-left-rail='shown'] {
   --drawer-left: var(--layout-rail-width);
+}
+
+.app-frame[data-rails='hidden'] .app-rail {
+  display: none;
 }
 
 .app-frame-header {
@@ -47,6 +58,7 @@
    is marked with an accent bar on the side that faces the open panel. The feature stylesheets set
    the boxes, so these rules are written to win over them. */
 .app-rail > button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,6 +101,24 @@
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* The count badge (desktop RailButton): a small pill over the icon's corner. */
+.rail-badge {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
 }
 
 .app-rail > button:disabled {
@@ -150,7 +180,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  right: var(--layout-rail-width);
+  right: var(--rail-right-width);
   z-index: 2;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
 }
