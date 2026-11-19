@@ -50,7 +50,16 @@ export function quantizeScale(scale: number): number {
   return Math.max(1, roundHalfEven(1000 * step ** n));
 }
 
-// scale_milli for render.page: zoom x 96/72 x devicePixelRatio, quantized (W1.4 section 3).
+// The largest scale_milli the engine renders (webapi/limits.py MAX_RENDER_SCALE_MILLI, device
+// scale 256). Above it render.page refuses with RENDER_TOO_LARGE, so the viewer clamps first:
+// zoom 64 on a DPR 4 screen would otherwise show a blank page. Mirror any change on the engine side.
+export const MAX_RENDER_SCALE_MILLI = 256_000;
+
+// scale_milli for render.page: zoom x 96/72 x devicePixelRatio, quantized (W1.4 section 3) and
+// clamped to MAX_RENDER_SCALE_MILLI.
 export function scaleMilli(zoom: number, devicePixelRatio: number): number {
-  return quantizeScale(zoom * CSS_PX_PER_POINT * devicePixelRatio);
+  return Math.min(
+    MAX_RENDER_SCALE_MILLI,
+    quantizeScale(zoom * CSS_PX_PER_POINT * devicePixelRatio),
+  );
 }
