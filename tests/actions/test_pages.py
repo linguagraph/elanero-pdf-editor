@@ -137,6 +137,32 @@ def test_move_without_change_is_not_executed(open_copy: Opener) -> None:
     assert s.undo() and rotations(s) == before_rotation  # the rotation was the last step
 
 
+def test_move_scattered_pages_to_the_end_and_undo_restores(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    result = page_actions.move(s, MovePages((0, 2), before=5))
+    assert result == ActionResult("Move 2 Pages", (3, 4))
+    assert texts(s) == [before[1], before[3], before[4], before[0], before[2]]
+    assert s.undo() and texts(s) == before
+
+
+def test_move_pages_to_the_front(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    result = page_actions.move(s, MovePages((3, 4), before=0))
+    assert result == ActionResult("Move 2 Pages", (0, 1))
+    assert texts(s) == [before[3], before[4], before[0], before[1], before[2]]
+
+
+def test_move_before_inside_the_moved_block(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    result = page_actions.move(s, MovePages((1, 3), before=2))
+    assert result == ActionResult("Move 2 Pages", (1, 2))
+    assert result.executed
+    assert texts(s) == [before[0], before[1], before[3], before[2], before[4]]
+
+
 def test_duplicate_repeats_pages_in_place_and_undo_restores(open_copy: Opener) -> None:
     s = open_copy("text_multipage")
     before = texts(s)
@@ -418,6 +444,20 @@ def test_round_trip_move(open_copy: Opener, tmp_path: Path) -> None:
     reopened = DocumentSession.open(out)
     try:
         assert texts(reopened) == [before[1], before[2], before[0], *before[3:]]
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    assert_reads_everywhere(out, len(before))
+
+
+def test_round_trip_move_scattered(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    page_actions.move(s, MovePages((0, 2), before=5))
+    out = s.save(tmp_path / "moved_scattered.pdf")
+    reopened = DocumentSession.open(out)
+    try:
+        assert texts(reopened) == [before[1], before[3], before[4], before[0], before[2]]
     finally:
         with reopened.lock:
             reopened.document.close()

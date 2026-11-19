@@ -11,15 +11,18 @@ engine object leaves this module.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.base import Change
 from pdfeditor.core.session import EventKind, SessionEvent
 from pdfeditor.model.pages import MarkKind
 from pdfeditor.services import stamping
 from pdfeditor.services.comments import flattenable as flattenable_comments
+from pdfeditor.services.xfdf import XfdfTooLarge, preview_xfdf
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.dto import BufferTable, from_json
-from pdfeditor.webapi.errors import BUSY, INVALID_ARGS, RpcFailure
+from pdfeditor.webapi.errors import BUSY, FILE_TOO_LARGE, INVALID_ARGS, REFUSED, RpcFailure
 from pdfeditor.webapi.events import changed_of, state_of
 from pdfeditor.webapi.registry import REGISTRY
 
@@ -69,6 +72,24 @@ def flattenable(params: dto.HandleParams) -> dto.FlattenableResult:
     with session.lock:
         count, pages = flattenable_comments(session.document)
     return dto.FlattenableResult(count=count, pages=pages)
+
+
+def xfdf_preview(params: dto.XfdfPreviewParams) -> dto.XfdfPreviewResult:
+    """What importing this XFDF text would add, read-only: the web asks before the import so the
+    user sees the count. The same parser as ``annotations.import_xfdf``, so the counts match it.
+
+    The size bound is the service's (``MAX_XFDF_BYTES``), so an over-size text is refused here
+    with ``FILE_TOO_LARGE`` before any parsing. Any other text that is not XFDF is ``REFUSED``.
+    """
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        try:
+            found = preview_xfdf(params.text, session.document)
+        except XfdfTooLarge as exc:
+            raise RpcFailure(FILE_TOO_LARGE, "the XFDF file is too large") from exc
+        except (ET.ParseError, ValueError) as exc:
+            raise RpcFailure(REFUSED, "This file is not valid XFDF.") from exc
+    return dto.XfdfPreviewResult(comments=found.comments, replies=found.replies, pages=found.pages)
 
 
 def list_marks(params: dto.HandleParams) -> dto.MarksResult:

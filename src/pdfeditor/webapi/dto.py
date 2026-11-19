@@ -92,6 +92,19 @@ class FlattenableResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class XfdfPreviewParams:
+    handle: str
+    text: str  # the XFDF file's text, as annotations.import_xfdf takes it (at most 8 MiB)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class XfdfPreviewResult:
+    comments: int  # every comment the import would add, replies included
+    replies: int  # the part of those that answer another comment
+    pages: tuple[int, ...]  # the 0-based pages they are on, ascending
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class PagesResult:
     pages: tuple[PageSize, ...]
     # The page labels, one per page; empty when the document has none, and "" for a page with

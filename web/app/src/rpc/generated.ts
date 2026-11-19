@@ -496,6 +496,21 @@ export interface UnlockResult {
   unlocked: boolean;
 }
 
+export interface XfdfPreviewParams {
+  handle: string;
+  /** the XFDF file's text, as annotations.import_xfdf takes it (at most 8 MiB) */
+  text: string;
+}
+
+export interface XfdfPreviewResult {
+  /** every comment the import would add, replies included */
+  comments: number;
+  /** the part of those that answer another comment */
+  replies: number;
+  /** the 0-based pages they are on, ascending */
+  pages: number[];
+}
+
 /** Each call: its params, result and deadline class. */
 export interface Methods {
   'actions.available': { params: HandleParams; result: AvailableResult; deadline: 'instant' };
@@ -503,6 +518,7 @@ export interface Methods {
   'actions.run': { params: RunParams; result: RunResult; deadline: 'action' };
   'actions.undo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
+  'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
@@ -533,6 +549,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'actions.run': 'action',
   'actions.undo': 'edit',
   'comments.flattenable': 'instant',
+  'comments.xfdf_preview': 'action',
   'hello': 'instant',
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
@@ -568,6 +585,7 @@ export const RESULT_DECODERS: {
   'actions.run': decodeRunResult,
   'actions.undo': decodeHistoryResult,
   'comments.flattenable': decodeFlattenableResult,
+  'comments.xfdf_preview': decodeXfdfPreviewResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
@@ -1323,5 +1341,32 @@ export function decodeUnlockResult(
   checkKeys(o, ['unlocked'], path);
   return {
     unlocked: expectBoolean(field(o, 'unlocked', path), `${path}.unlocked`),
+  };
+}
+
+export function decodeXfdfPreviewParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): XfdfPreviewParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'text'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    text: expectString(field(o, 'text', path), `${path}.text`),
+  };
+}
+
+export function decodeXfdfPreviewResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): XfdfPreviewResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['comments', 'replies', 'pages'], path);
+  return {
+    comments: expectInteger(field(o, 'comments', path), `${path}.comments`),
+    replies: expectInteger(field(o, 'replies', path), `${path}.replies`),
+    pages: expectArray(field(o, 'pages', path), `${path}.pages`).map((item1, index1) => expectInteger(item1, `${`${path}.pages`}[${index1}]`)),
   };
 }
