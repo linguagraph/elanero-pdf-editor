@@ -30,6 +30,7 @@ import { startJobWorker } from './engine/start';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
+import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
@@ -72,6 +73,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [compressOpen, setCompressOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -100,6 +102,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'open-recent': () => docs.showStartPage(),
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
+    'reduce-file-size': () => setCompressOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
@@ -240,6 +243,15 @@ export function App({ engine, startPrintWorker }: AppProps) {
           handle={session.handle}
           pageCount={activeTab.pages}
           currentPage={viewState.page}
+          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+        />
+      ) : null}
+      {documentShown && session !== null && rpc !== undefined ? (
+        <CompressDialog
+          isOpen={compressOpen}
+          onClose={() => setCompressOpen(false)}
+          engine={rpc}
+          handle={session.handle}
           startWorker={() => startJobWorker(jobWorkerBootOptions())}
         />
       ) : null}

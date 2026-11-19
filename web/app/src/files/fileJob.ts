@@ -47,10 +47,22 @@ export class FileJobCancelled extends Error {
   }
 }
 
+// What a file job returns: its files, and the job's own value (the reduce's sizes, for one), as
+// the job worker wrote it. The value is null when the job has none.
+export interface FileJobOutput {
+  readonly files: ResultFile[];
+  readonly value: unknown;
+}
+
 // Reads the job worker's reply to job.run. A failure comes back as an error reply; a result is
 // kind "files". The reply carries one binary value at most, so one file is the most it can hold:
 // a job with several files packs them into one (the export writes a ZIP).
 export function readFilesReply(result: CallResult, job: string): ResultFile[] {
+  return readFileJobOutput(result, job).files;
+}
+
+// The same reply, with the job's value as well (see FileJobOutput).
+export function readFileJobOutput(result: CallResult, job: string): FileJobOutput {
   let parsed: unknown;
   try {
     parsed = JSON.parse(result.reply);
@@ -83,7 +95,7 @@ export function readFilesReply(result: CallResult, job: string): ResultFile[] {
     throw new RpcError('INTERNAL', `a ${job} job with more than one file cannot be returned yet`);
   }
   const buffer = result.buffer;
-  return items.map((item) => {
+  const files = items.map((item) => {
     const entry = expectObject(item, 'result.files[]');
     const ref = expectObject(field(entry, 'data', 'result.files[]'), 'result.files[].data');
     if (buffer === undefined || expectInteger(field(ref, '$bin', 'data'), 'data.$bin') !== 0) {
@@ -95,6 +107,7 @@ export function readFilesReply(result: CallResult, job: string): ResultFile[] {
       data: buffer,
     };
   });
+  return { files, value: field(value, 'value', 'result') ?? null };
 }
 
 // Runs one file job. Resolves with the files; rejects with an RpcError, or FileJobCancelled.
@@ -104,6 +117,16 @@ export async function runFileJob(
   job: string,
   args: Record<string, unknown>,
 ): Promise<ResultFile[]> {
+  return (await runFileJobOutput(deps, handle, job, args)).files;
+}
+
+// Runs one file job and returns its files with the job's value (see FileJobOutput).
+export async function runFileJobOutput(
+  deps: FileJobDeps,
+  handle: string,
+  job: string,
+  args: Record<string, unknown>,
+): Promise<FileJobOutput> {
   const progress = deps.progress ?? jobProgress;
   const { engine } = deps;
   const prepared = await engine.call('jobs.prepare', { handle, job, args });
@@ -141,7 +164,7 @@ export async function runFileJob(
       params: { job, args, document: { $bin: 0 } },
     });
     const result = await Promise.race([worker.call(request, [prepared.document]), cancelled]);
-    const files = readFilesReply(result, job);
+    const output = readFileJobOutput(result, job);
     await engine.call('jobs.apply', {
       handle,
       token,
@@ -150,7 +173,7 @@ export async function runFileJob(
       require_full_save: false,
     });
     progress.finish(token, { ok: true });
-    return files;
+    return output;
   } catch (error) {
     if (error instanceof FileJobCancelled) throw error;
     // Frees the prepared job. Best effort: the engine drops unused jobs on the next prepare.
