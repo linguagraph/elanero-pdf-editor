@@ -310,6 +310,26 @@ export const EN = {
   'thumbnails.loading': 'Loading thumbnails…',
   'thumbnails.loadFailed': 'The thumbnails could not be read. Try opening the file again.',
 
+  // Page organizer side panel (W6.1). Rotate and delete reuse the command labels; the undo labels
+  // are the engine's, shown in English in v1.
+  'organizer.title': 'Organize pages',
+  'organizer.pages': 'Pages of the document',
+  'organizer.pageNumber': 'Page {page} of {total}',
+  'organizer.loading': 'Loading pages…',
+  'organizer.loadFailed': 'The pages could not be read. Try opening the file again.',
+  'organizer.selected': '{count} of {total} pages selected',
+  'organizer.keepOne': 'A document keeps at least one page.',
+  'organizer.actions': 'Page actions',
+  'organizer.moveUp': 'Move up',
+  'organizer.moveDown': 'Move down',
+  'organizer.rotated': 'Rotated {count} page(s)',
+  'organizer.moved': 'Moved {count} page(s)',
+  'organizer.deleted': 'Deleted {count} page(s)',
+  'organizer.failed': 'The change could not be made.',
+  'organizer.deleteTitle': 'Delete pages?',
+  'organizer.deleteBody': 'Delete {count} page(s) from the document? You can undo this.',
+  'organizer.deleteConfirm': 'Delete',
+  'organizer.cancel': 'Cancel',
   // Search side panel (W5.4). The rail button and the panel heading share the name.
   'search.title': 'Search',
   'search.query': 'Search text',

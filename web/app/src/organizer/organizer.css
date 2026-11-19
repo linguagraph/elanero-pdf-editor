@@ -1,0 +1,123 @@
+/* The page organizer panel (W6.1) and its rail button. Colours and spacing come from the theme
+   tokens (W4.4a); each thumbnail's box is sized by the grid, and the canvas fills the box. */
+
+.organizer-rail-button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.organizer-rail-button[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-focus-ring);
+}
+
+.organizer-rail-button:disabled {
+  color: var(--color-text-disabled);
+}
+
+.organizer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.organizer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.organizer-actions button,
+.organizer-confirm button {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.organizer-actions button:disabled {
+  color: var(--color-text-disabled);
+}
+
+.organizer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-2);
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  padding: var(--space-1);
+  background: var(--color-surface-alt);
+}
+
+.organizer-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 2px solid transparent;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.organizer-item[data-selected='true'] {
+  border-color: var(--color-focus-ring);
+  background: var(--color-surface);
+}
+
+.organizer-item:focus-visible,
+.organizer-actions button:focus-visible,
+.organizer-confirm button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.organizer-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.organizer-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.organizer-number {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.organizer-confirm {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.organizer-danger {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.organizer-status {
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+}

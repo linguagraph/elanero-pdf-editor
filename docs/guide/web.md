@@ -70,6 +70,12 @@ is reloaded until you press it.
   every page. Click a preview to go to that page. The panel opens and closes for each open
   document separately, and it is not remembered after a reload. Bookmarks, attachments and layers
   are not available yet.
+- **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
+  thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
+  Shift-click to select a range. Then rotate the selected pages left or right, move them up or
+  down, or delete them (after a confirmation; a document always keeps one page). Each change can
+  be undone from the notice that follows it. Inserting, duplicating and extracting pages, and
+  dragging pages, are not available yet.
 
 ## Going to a page
 
@@ -90,7 +96,7 @@ version yet:
 
 - opening, viewing, searching and saving PDF files, and the start page with recent files;
 - the ribbon, the command palette and keyboard shortcuts;
-- editing text and images, adding and organizing pages, combining, splitting and compressing files;
+- editing text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files;
 - comments, redaction, stamps and watermarks, password protection, and comparing files;
 - printing, and translation (which will be turned on only when you ask for it);
 - the **Install App** command and the **What's Different on the Web** menu entry.
@@ -131,7 +137,7 @@ full policy, with what the desktop app stores, is in the
 | Works offline | Yes | The app's files yes; documents need the engine's offline files (coming soon) |
 | Open, view, search and save PDFs | Yes | Coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Coming soon |
-| Edit text and images, page organizer, split, combine, compress | Yes | Coming soon |
+| Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments, redaction, stamps, watermarks, security, compare | Yes | Coming soon |
 | Print | Yes | Coming soon |
 | Translation (opt-in) | Yes | Coming soon |

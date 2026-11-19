@@ -588,7 +588,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W6 Required features, #139**
 
-- [ ] **W6.1** R2 Page organizer
+- [ ] **W6.1** R2 Page organizer _(partial: organizer panel with thumbnails, multi-select, rotate, move up/down and delete, each undoable and tested with a fake engine (Vitest); pending: insert blank, duplicate, extract, insert from file, drag-and-drop reorder)_
 - [ ] **W6.2** R3 Split dialog
 - [ ] **W6.3** R6 Combine dialog
 - [ ] **W6.4** R5 Compress dialog

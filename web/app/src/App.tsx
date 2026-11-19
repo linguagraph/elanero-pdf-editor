@@ -30,6 +30,9 @@ import { RenderScheduler } from './view/renderScheduler';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
 import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
+import { OrganizerPanel } from './organizer/OrganizerPanel';
+import { OrganizerRailButton } from './organizer/OrganizerRailButton';
+import { setOrganizerOpen, useOrganizerOpen } from './organizer/openState';
 import { SearchPanel } from './search/SearchPanel';
 import { SearchRailButton } from './search/SearchRailButton';
 import { setSearchOpen, useSearchOpen } from './search/openState';
@@ -85,7 +88,15 @@ export function App({ engine }: AppProps) {
   );
   const viewRef = useRef<DocumentViewHandle>(null);
   const thumbnailsOpen = useThumbnailsOpen(activeId);
+  const organizerOpen = useOrganizerOpen(activeId);
+  // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
+  // and read the page list from the engine.
+  const [structureRevision, setStructureRevision] = useState(0);
   const searchOpen = useSearchOpen(activeId);
+  // One right panel shows at a time: opening the thumbnails or the search closes the page organizer.
+  useEffect(() => {
+    if (activeId !== null && (thumbnailsOpen || searchOpen)) setOrganizerOpen(activeId, false);
+  }, [activeId, thumbnailsOpen, searchOpen]);
   // The search hits the document view draws, with the tab they belong to (W5.4).
   const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
     null,
@@ -128,6 +139,7 @@ export function App({ engine }: AppProps) {
       rightRail={
         <>
           <ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />
+          <OrganizerRailButton tabId={activeId} disabled={!documentShown} />
           <SearchRailButton tabId={activeId} disabled={!documentShown} />
         </>
       }
@@ -143,12 +155,26 @@ export function App({ engine }: AppProps) {
           />
         ) : documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
+            key={`thumbs-${structureRevision}`}
             rpc={session.rpc}
             handle={session.handle}
             scheduler={scheduler}
             onSelect={goTo}
             onClose={() => {
               if (activeId !== null) setThumbnailsOpen(activeId, false);
+            }}
+          />
+        ) : documentShown && organizerOpen && session !== null ? (
+          <OrganizerPanel
+            rpc={session.rpc}
+            handle={session.handle}
+            onChanged={() => {
+              // The search marks name pages by index, which a change may have moved.
+              setSearchMarks(null);
+              setStructureRevision((value) => value + 1);
+            }}
+            onClose={() => {
+              if (activeId !== null) setOrganizerOpen(activeId, false);
             }}
           />
         ) : undefined
@@ -188,7 +214,7 @@ export function App({ engine }: AppProps) {
         ) : null}
         {documentShown && session !== null && scheduler !== null ? (
           <DocumentView
-            key={activeId}
+            key={`${activeId}-${structureRevision}`}
             ref={viewRef}
             rpc={session.rpc}
             handle={session.handle}
