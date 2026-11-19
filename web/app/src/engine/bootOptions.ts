@@ -14,7 +14,7 @@ export function engineBootOptions(): StartOptions {
   };
 }
 
-// The job worker's start options: the same assets, its own module (W3.7). Read only by App.
+// The job worker (W3.7) loads the same assets, so only its script differs.
 export function jobWorkerBootOptions(): StartOptions {
   return { ...engineBootOptions(), workerUrl: jobWorkerUrl };
 }

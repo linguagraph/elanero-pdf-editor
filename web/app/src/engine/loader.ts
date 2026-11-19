@@ -37,7 +37,8 @@ export interface CallResult {
 }
 
 export interface EngineHandle {
-  dispatch(request: string, buffer?: ArrayBuffer): CallResult;
+  // The request's binary values, in $bin order, and the reply's one buffer (if any).
+  dispatch(request: string, buffers?: readonly ArrayBuffer[]): CallResult;
 }
 
 export type LoadEngine = (options: LoadOptions) => Promise<EngineHandle>;
@@ -56,13 +57,20 @@ if "/home/pyodide" not in sys.path:
     sys.path.insert(0, "/home/pyodide")
 `;
 
-// Python run once before the first call. It holds the only function the JS side calls: bytes in,
-// bytes out, at most one buffer each way.
+// Python run once before the first call. It holds the only function the JS side calls: the
+// request's binary values in, at most one buffer out. The values travel joined in one buffer, and
+// `sizes` gives each one's length, so the adapter can split them back apart.
 const ADAPTER_PY = `
 from pdfeditor.webapi import dispatch as _dispatch
 
-def _pdfeditor_call(request, buffer):
-    buffers = [] if buffer is None else [bytes(buffer)]
+def _pdfeditor_call(request, joined, sizes):
+    buffers = []
+    if joined is not None:
+        raw = bytes(joined)
+        start = 0
+        for size in sizes:
+            buffers.append(raw[start:start + int(size)])
+            start += int(size)
     reply, out = _dispatch(request, buffers)
     if len(out) > 1:
         raise ValueError("a reply carries at most one buffer")
@@ -71,7 +79,7 @@ def _pdfeditor_call(request, buffer):
 
 const HELLO_REQUEST = JSON.stringify({ v: WEBAPI_PROTOCOL, id: 1, method: 'hello', params: {} });
 
-type PyCallable = (request: string, buffer: PyProxyLike | undefined) => unknown;
+type PyCallable = (request: string, joined: PyProxyLike | undefined, sizes: PyProxyLike) => unknown;
 
 const defaultImport = (url: string): Promise<PyodideModule> =>
   import(/* @vite-ignore */ url) as Promise<PyodideModule>;
@@ -104,12 +112,15 @@ function asProxy(value: unknown): PyProxyLike {
 }
 
 function makeDispatch(pyodide: PyodideLike, call: PyCallable): EngineHandle['dispatch'] {
-  return (request, buffer) => {
+  return (request, buffers = []) => {
     let input: PyProxyLike | undefined;
+    let sizes: PyProxyLike | undefined;
     let output: PyProxyLike | undefined;
     try {
-      input = buffer === undefined ? undefined : pyodide.toPy(new Uint8Array(buffer));
-      output = asProxy(call(request, input));
+      const joined = joinBuffers(buffers);
+      input = joined === undefined ? undefined : pyodide.toPy(joined);
+      sizes = pyodide.toPy(buffers.map((buffer) => buffer.byteLength));
+      output = asProxy(call(request, input, sizes));
       const [reply, bytes] = output.toJs() as [unknown, unknown];
       if (typeof reply !== 'string') throw new Error('the reply is not a string');
       if (bytes === undefined || bytes === null) return { reply };
@@ -118,9 +129,25 @@ function makeDispatch(pyodide: PyodideLike, call: PyCallable): EngineHandle['dis
       return { reply, buffer: bytes.slice().buffer as ArrayBuffer };
     } finally {
       input?.destroy();
+      sizes?.destroy();
       output?.destroy();
     }
   };
+}
+
+// The request's binary values as one buffer, or undefined when there are none. A copy is made only
+// when there is more than one value; a single one is passed as it is.
+function joinBuffers(buffers: readonly ArrayBuffer[]): Uint8Array | undefined {
+  if (buffers.length === 0) return undefined;
+  if (buffers.length === 1) return new Uint8Array(buffers[0] as ArrayBuffer);
+  const total = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const buffer of buffers) {
+    joined.set(new Uint8Array(buffer), offset);
+    offset += buffer.byteLength;
+  }
+  return joined;
 }
 
 // Loads the pinned Pyodide, installs PyMuPDF and the web package, and checks the engine with a

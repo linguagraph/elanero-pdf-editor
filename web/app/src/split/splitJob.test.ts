@@ -118,12 +118,13 @@ describe('runSplit', () => {
       label: '',
       require_full_save: false,
     });
-    const [request, buffer] = worker.call.mock.calls[0] as [string, ArrayBuffer];
+    const [request, buffers] = worker.call.mock.calls[0] as [string, ArrayBuffer[]];
     expect(JSON.parse(request)).toMatchObject({
       method: 'job.run',
       params: { job: 'split', document: { $bin: 0 } },
     });
-    expect(buffer.byteLength).toBe(PDF_BYTES.byteLength);
+    expect(buffers).toHaveLength(1);
+    expect(buffers[0]?.byteLength).toBe(PDF_BYTES.byteLength);
     expect(files).toEqual([{ name: 'split/part-1.pdf', mime: 'application/pdf', data: PDF_BYTES }]);
     expect(progress.getState().job).toBeUndefined();
     expect(worker.terminate).toHaveBeenCalled();

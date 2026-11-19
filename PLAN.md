@@ -590,9 +590,9 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 - [ ] **W6.1** R2 Page organizer _(partial: organizer panel with thumbnails, multi-select, rotate, move up/down and delete, each undoable and tested with a fake engine (Vitest); pending: insert blank, duplicate, extract, insert from file, drag-and-drop reorder)_
 - [ ] **W6.2** R3 Split dialog _(partial: split dialog on the Overlay host (Split command) with the four modes (every N pages, page ranges, top-level bookmarks, largest size), validation before any job starts, the prepare, run and apply flow with progress and Cancel, and one download per file, all tested with a fake engine (Vitest); pending: the browser's job worker does not serve `job.run` (the adapter uses the engine's method table), so a split cannot finish in the real app yet; the reply carries one binary value, so a split into several files cannot come back; ZIP; a percentage (the job reports none to the browser yet); the preview of the resulting files)_
-- [ ] **W6.3** R6 Combine dialog
+- [ ] **W6.3** R6 Combine dialog _(partial: source list (add PDFs and images, drag and drop), reordering, remove, output name, and the combine flow through the merge job with progress, Cancel and download, tested with a fake job worker (Vitest); pending: page ranges per source; merged bookmarks are always on, with no toggle; progress is indeterminate because the job worker's progress notices are not sent to the page yet; Cancel terminates the job worker, since merge has no prepare and so no jobs.abort)_
 - [ ] **W6.4** R5 Compress dialog
-- [ ] **W6.5** R7 Print
+- [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi and the browser print path are built and tested; the job run is not end to end yet: the job worker's adapter answers only engine methods, `job.run` is not in the generated catalogue, and a reply carries one binary value, so multi-page output cannot cross; print_pages sends no partial notices, so the pages come in the final result)_
 - [ ] **W6.6** R4 Translate
 - [ ] **W6.7a** R1a select, move and delete page objects
 - [ ] **W6.7b** R1a add shapes; add, replace and export images

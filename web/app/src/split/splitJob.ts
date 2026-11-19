@@ -25,9 +25,9 @@ export interface SplitEngine {
   ): Promise<Methods[M]['result']>;
 }
 
-// One job worker. call() sends one request with at most one binary value, as the engine's does.
+// One job worker. call() sends one request with its binary values, as the engine channel does.
 export interface JobWorker {
-  call(request: string, buffer?: ArrayBuffer): Promise<CallResult>;
+  call(request: string, buffers?: readonly ArrayBuffer[]): Promise<CallResult>;
   terminate(): void;
 }
 
@@ -166,7 +166,7 @@ export async function runSplit(
       method: 'job.run',
       params: { job: 'split', args, document: { $bin: 0 } },
     });
-    const result = await Promise.race([worker.call(request, prepared.document), cancelled]);
+    const result = await Promise.race([worker.call(request, [prepared.document]), cancelled]);
     const files = readRunReply(result);
     await engine.call('jobs.apply', {
       handle,

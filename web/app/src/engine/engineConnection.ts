@@ -122,7 +122,16 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
 // The calls the document view, the thumbnails panel and the page organizer make. RpcClient satisfies
 // this; tests pass a fake.
 export interface PageRpc {
-  call<M extends 'session.pages' | 'render.page' | 'text.layer' | 'actions.run' | 'actions.undo'>(
+  call<
+    M extends
+      | 'session.pages'
+      | 'render.page'
+      | 'text.layer'
+      | 'actions.run'
+      | 'actions.undo'
+      | 'jobs.prepare'
+      | 'jobs.abort',
+  >(
     method: M,
     params: Methods[M]['params'],
   ): Promise<Methods[M]['result']>;

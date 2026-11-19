@@ -9,12 +9,13 @@ export interface InitMessage {
   baseUrl: string;
 }
 
-// main -> worker: one request. The request is the JSON envelope; buffer carries its bytes.
+// main -> worker: one request. The request is the JSON envelope; buffers carries its binary values,
+// in the order its $bin markers name them (W1.2 section 5).
 export interface DispatchMessage {
   id: number;
   method: 'dispatch';
   request: string;
-  buffer?: ArrayBuffer;
+  buffers?: ArrayBuffer[];
 }
 
 // worker -> main: a load step has started (or, for 'ready', finished).

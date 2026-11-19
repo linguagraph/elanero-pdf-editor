@@ -1,0 +1,57 @@
+/* The combine dialog's layout (W6.3). */
+.combine {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(480px, 100%);
+}
+
+.combine-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.combine-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.combine-name {
+  flex: 1 1 160px;
+  overflow-wrap: anywhere;
+}
+
+.combine-output {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combine-output input {
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.combine-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.combine-button {
+  padding: 4px 10px;
+  font: inherit;
+}
+
+.combine-primary {
+  font-weight: 600;
+}
+
+.combine-message {
+  margin: 0;
+}

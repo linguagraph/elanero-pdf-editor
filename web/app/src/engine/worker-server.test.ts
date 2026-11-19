@@ -65,6 +65,26 @@ describe('serveEngine', () => {
     expect(last?.transfer).toEqual([out]);
   });
 
+  it('hands every request buffer to the engine, in order', async () => {
+    const { scope, send } = fakeScope();
+    const seen: ArrayBuffer[][] = [];
+    serveEngine(scope, {
+      load: async () => ({
+        dispatch: (_request, buffers = []) => {
+          seen.push([...buffers]);
+          return { reply: 'R' };
+        },
+      }),
+    });
+    send({ kind: 'init', baseUrl: 'http://localhost/engine/' });
+    const first = new Uint8Array([1]).buffer;
+    const second = new Uint8Array([2]).buffer;
+    send({ id: 8, method: 'dispatch', request: '{}', buffers: [first, second] });
+    await flush();
+
+    expect(seen).toEqual([[first, second]]);
+  });
+
   it('answers with the load stage when the engine did not come up', async () => {
     const { scope, posted, send } = fakeScope();
     serveEngine(scope, {
