@@ -11,11 +11,12 @@ from pathlib import Path
 import pytest
 
 from pdfeditor.actions import run
-from pdfeditor.actions.base import Busy, Refused
+from pdfeditor.actions.base import Busy, Refused, StaleObject
 from pdfeditor.actions.redaction import (
     ApplyRedactions,
     MarkForRedaction,
     RemoveRedactionMarks,
+    RestyleRedactionMarks,
 )
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import SaveError
@@ -31,10 +32,12 @@ from tests.hostcheck import record
 BUSY_CASES = {
     "redaction.mark": MarkForRedaction((RedactionArea(0, Rect(0, 0, 10, 10)),)),
     "redaction.remove_marks": RemoveRedactionMarks((MarkRef(0, "x"),)),
+    "redaction.restyle_marks": RestyleRedactionMarks((MarkRef(0, "x"),), fill=WHITE),
     "redaction.apply": ApplyRedactions(),
 }
 
 STYLE = MarkStyle(Color(0.2, 0.4, 0.6), "REDACTED", WHITE)
+RED = Color(1, 0, 0)
 UNKNOWN = "A redaction mark to apply no longer exists."
 UNNAMED = (
     "Some of the selected marks come from another application and can't be applied one at a "
@@ -398,3 +401,160 @@ def test_applied_file_leaks_nothing(open_copy: Opener, tmp_path: Path) -> None:
     record("doc_text_lacks_pdfium", out, text="123-45-6789")
     record("doc_text_contains_pdfium", out, text="Public paragraph that must survive.")
     record("render_size_pdfium", out, page=0, scale=1)
+
+
+# -- redaction.restyle_marks (W7.4b) -------------------------------------------------------
+
+
+def _style(mark: AnnotationModel) -> tuple[str, str, str]:
+    return (mark.fill.to_hex(), mark.overlay_text, mark.text_color.to_hex())
+
+
+def test_restyle_one_mark_is_one_undo_step_and_undo_redo_restore_it(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    (ref,) = _mark_hits(s, ["Email addresses"])
+    before = _marks(s)[0]
+    result = run(
+        s,
+        "redaction.restyle_marks",
+        RestyleRedactionMarks((ref,), fill=RED, overlay_text="EXEMPT", text_color=WHITE),
+    )
+    assert result.label == "Edit Redaction Mark" and result.executed
+    assert result.value == (ref,)
+    (after,) = _marks(s)
+    assert _style(after) == (RED.to_hex(), "EXEMPT", WHITE.to_hex())
+    assert after.rect == before.rect and after.contents == before.contents
+
+    s.undo()
+    assert _style(_marks(s)[0]) == _style(before)
+    s.redo()
+    assert _style(_marks(s)[0]) == (RED.to_hex(), "EXEMPT", WHITE.to_hex())
+
+
+def test_restyle_two_marks_is_one_plural_undo_step(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    refs = _mark_hits(s, ["Email addresses", "US Social Security numbers"])
+    result = run(s, "redaction.restyle_marks", RestyleRedactionMarks(refs, fill=RED))
+    assert result.label == "Edit Redaction Marks" and len(result.value) == 2
+    assert all(_style(m)[0] == RED.to_hex() for m in _marks(s))
+    s.undo()
+    assert all(_style(m)[0] == STYLE.fill.to_hex() for m in _marks(s))
+    s.undo()  # the mark's creation is the only step left
+    assert _marks(s) == []
+
+
+def test_restyle_with_nothing_to_change_does_nothing(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    (ref,) = _mark_hits(s, ["Email addresses"])
+    empty = run(s, "redaction.restyle_marks", RestyleRedactionMarks((ref,)))
+    assert empty.executed is False and empty.value == ()
+    same = run(s, "redaction.restyle_marks", RestyleRedactionMarks((ref,), fill=STYLE.fill))
+    assert same.executed is False and same.value == ()
+    s.undo()  # no step was pushed, so the next undo removes the mark's own creation
+    assert _marks(s) == []
+
+
+def test_restyle_skips_a_locked_mark_and_changes_the_others(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    (free,) = _mark_hits(s, ["Email addresses"])
+    with s.lock:
+        locked_model = mark_for_area(0, Rect(60, 300, 200, 316), STYLE, "")
+        locked_model.locked = True
+        locked = s.document.page(0).add_annotation(locked_model)
+    result = run(
+        s,
+        "redaction.restyle_marks",
+        RestyleRedactionMarks((MarkRef(0, locked.name), free), fill=RED),
+    )
+    assert result.value == (free,) and result.executed
+    styles = {m.name: _style(m) for m in _marks(s)}
+    assert styles[locked.name][0] == STYLE.fill.to_hex()
+    assert styles[free.name][0] == RED.to_hex()
+
+
+def test_restyle_of_a_gone_mark_is_stale_object(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    _mark_hits(s, ["Email addresses"])  # one step on the stack, which must stay the last
+    with pytest.raises(StaleObject) as info:
+        run(s, "redaction.restyle_marks", RestyleRedactionMarks((MarkRef(0, "gone"),), fill=RED))
+    assert info.value.code == "STALE_OBJECT"
+    s.undo()  # the stale call pushed no step, so this removes the mark's creation
+    assert _marks(s) == []
+
+
+def test_restyle_ref_made_before_a_full_save_still_resolves(open_copy: Opener) -> None:
+    s = open_copy("annotations_unnamed")
+    (mark,) = _marks(s, page=1)
+    before = MarkRef(1, mark.name)
+    s.save()  # a full save gives the unnamed mark a real /NM
+    result = run(s, "redaction.restyle_marks", RestyleRedactionMarks((before,), fill=RED))
+    assert result.executed and result.value
+    (after,) = _marks(s, page=1)
+    assert after.fill.to_hex() == RED.to_hex()
+
+
+def test_restyle_overlay_text_over_the_limit_is_refused(open_copy: Opener) -> None:
+    s = open_copy("sensitive")
+    (ref,) = _mark_hits(s, ["Email addresses"])
+    with pytest.raises(Refused, match=r"The overlay text is too long\."):
+        run(s, "redaction.restyle_marks", RestyleRedactionMarks((ref,), overlay_text="x" * 501))
+    s.undo()  # only the mark's creation is on the stack
+    assert _marks(s) == []
+
+
+def test_restyled_mark_round_trips_through_save(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("sensitive")
+    (ref,) = _mark_hits(s, ["Email addresses"])
+    run(
+        s,
+        "redaction.restyle_marks",
+        RestyleRedactionMarks((ref,), fill=RED, overlay_text="EXEMPT", text_color=WHITE),
+    )
+    out = s.save(tmp_path / "restyled.pdf")
+    check = DocumentSession.open(out)
+    try:
+        (back,) = _marks(check)
+        assert _style(back) == (RED.to_hex(), "EXEMPT", WHITE.to_hex())
+    finally:
+        with check.lock:
+            check.document.close()
+
+    record("page_count_pikepdf", out, pages=1)
+    record(
+        "redact_annot_pikepdf",
+        out,
+        page=0,
+        mark=ref.name,
+        fill=[1, 0, 0],
+        overlay="EXEMPT",
+        text=[1, 1, 1],
+    )
+    record("render_size_pdfium", out, page=0, scale=1)
+
+
+def test_restyled_then_applied_mark_leaks_nothing(open_copy: Opener, tmp_path: Path) -> None:
+    """Leak test (AGENTS.md): the restyled mark is applied, then the file is checked by MuPDF,
+    pikepdf and pypdfium2. The secret is gone, the new fill is drawn, and the overlay is there."""
+    s = open_copy("sensitive")
+    (ref,) = _mark_hits(s, ["Email addresses"])
+    run(
+        s, "redaction.restyle_marks", RestyleRedactionMarks((ref,), fill=RED, overlay_text="EXEMPT")
+    )
+    rect = _marks(s)[0].rect
+    result = run(s, "redaction.apply", ApplyRedactions((ref,)))
+    assert result.value.ok, result.value.leaks
+
+    out = s.save(tmp_path / "restyled-applied.pdf")
+    check = DocumentSession.open(out)
+    try:
+        assert "jane.example" not in _text(check)
+    finally:
+        with check.lock:
+            check.document.close()
+
+    record("page_count_pikepdf", out, pages=1)
+    record("streams_lack_pikepdf", out, needle="jane.example@example.com")
+    record("doc_text_lacks_pdfium", out, text="jane.example")
+    record("doc_text_contains_pdfium", out, text="EXEMPT")
+    clip = [rect.x0, rect.y0, rect.x1, rect.y1]
+    record("red_pixels_pdfium", out, page=0, clip=clip, minimum=100)

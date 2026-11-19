@@ -6,6 +6,7 @@ Marks are named by their page and /NM name (:class:`MarkRef`); engine object ids
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -13,15 +14,22 @@ from pdfeditor.actions import action
 from pdfeditor.actions.base import (
     ActionResult,
     Refused,
+    StaleObject,
     current_name,
     ensure_idle,
     execute_all,
     snapshot,
 )
-from pdfeditor.core.commands import AddAnnotationCommand, Command, DeleteAnnotationsCommand
+from pdfeditor.core.commands import (
+    AddAnnotationCommand,
+    Command,
+    DeleteAnnotationsCommand,
+    UpdateAnnotationCommand,
+)
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Document
 from pdfeditor.model.annotations import AnnotationModel
+from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.redaction import MarkRef, RedactionArea, RedactOptions
 from pdfeditor.services.redaction import (
@@ -39,6 +47,8 @@ UNNAMED_MARK = (
     "time. Choose “All redaction marks” instead."
 )
 DUPLICATE_NAME = "Two redaction marks share a name; apply all marks instead."
+OVERLAY_TOO_LONG = "The overlay text is too long."
+MAX_OVERLAY_TEXT = 500  # a box shows a short code; the limit keeps a pasted essay out of it
 
 # -- argument types ------------------------------------------------------------------------
 
@@ -60,6 +70,17 @@ class RemoveRedactionMarks:
 class ApplyRedactions:
     marks: tuple[MarkRef, ...] | None = None  # None: every mark in the document
     options: RedactOptions = field(default_factory=RedactOptions)
+
+
+@dataclass(frozen=True, slots=True)
+class RestyleRedactionMarks:
+    """New box colour, overlay text and/or text colour for the marks; None leaves a field alone
+    and "" clears the overlay text."""
+
+    marks: tuple[MarkRef, ...]
+    fill: Color | None = None
+    overlay_text: str | None = None
+    text_color: Color | None = None
 
 
 # -- helpers -------------------------------------------------------------------------------
@@ -99,6 +120,31 @@ def _chosen_marks(
             seen.add(key)
             chosen.append(found[0])
     return chosen
+
+
+def _same_colour(a: Color | None, b: Color | None) -> bool:
+    if a is None or b is None:
+        return a is b
+    return a.to_hex() == b.to_hex()  # the engine stores colours as floats: compare as hex
+
+
+def _restyled(before: AnnotationModel, args: RestyleRedactionMarks) -> AnnotationModel | None:
+    """``before`` with the patch applied, or None when it changes nothing or the mark is locked."""
+    if before.locked:
+        return None
+    after = dataclasses.replace(before)
+    if args.fill is not None:
+        after.fill = args.fill
+    if args.overlay_text is not None:
+        after.overlay_text = args.overlay_text
+    if args.text_color is not None:
+        after.text_color = args.text_color
+    unchanged = (
+        _same_colour(after.fill, before.fill)
+        and after.overlay_text == before.overlay_text
+        and _same_colour(after.text_color, before.text_color)
+    )
+    return None if unchanged else after
 
 
 # -- actions -------------------------------------------------------------------------------
@@ -145,6 +191,41 @@ def remove_marks(session: DocumentSession, args: RemoveRedactionMarks) -> Action
     label = "Remove Redaction Mark" if len(commands) == 1 else "Remove Redaction Marks"
     ran = execute_all(session, commands, "Remove Redaction Marks")
     return ActionResult(label, None, executed=ran)
+
+
+@action("redaction.restyle_marks", RestyleRedactionMarks, requires=("annotations_write",))
+def restyle_marks(
+    session: DocumentSession, args: RestyleRedactionMarks
+) -> ActionResult[tuple[MarkRef, ...]]:
+    """Change the style of the named marks as one undo step; the value names the marks changed.
+
+    Unlike Delete, a name that matches no mark is an error (:class:`StaleObject`): the user is
+    editing a mark they can see, so the caller should reload. Locked marks are skipped.
+    """
+    ensure_idle(session)
+    if args.overlay_text is not None and len(args.overlay_text) > MAX_OVERLAY_TEXT:
+        raise Refused(OVERLAY_TOO_LONG)
+    label = "Edit Redaction Mark" if len(args.marks) == 1 else "Edit Redaction Marks"
+    commands: list[Command] = []
+    changed: list[MarkRef] = []
+    with session.lock:
+        marks = {(m.page_index, m.name): m for m in redaction_marks(session.document)}
+        refs = _current_refs(session.document, args.marks)
+        seen: set[tuple[int, str]] = set()
+        for ref in refs:
+            key = (ref.page, ref.name)
+            if key in seen:
+                continue
+            seen.add(key)
+            before = marks.get(key)
+            if before is None:
+                raise StaleObject(f"redaction mark {ref.name} on page {ref.page + 1} is gone")
+            after = _restyled(before, args)
+            if after is not None:
+                commands.append(UpdateAnnotationCommand(before, after, label))
+                changed.append(MarkRef(before.page_index, before.name))
+    ran = execute_all(session, commands, label)
+    return ActionResult(label, tuple(changed), executed=ran)
 
 
 @action("redaction.apply", ApplyRedactions, requires=("redact",), long=True)

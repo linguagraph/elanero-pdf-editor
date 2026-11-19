@@ -562,6 +562,34 @@ def _comments_unnamed_pikepdf(data: bytes) -> None:
         ]
 
 
+@host_check("redact_annot_pikepdf")
+def _redact_annot_pikepdf(
+    data: bytes, page: int, mark: str, fill: list[float], overlay: str, text: list[float]
+) -> None:
+    """The REDACT annotation named ``mark`` on ``page`` has box colour ``fill`` (/IC), overlay
+    text ``overlay`` (absent when empty) and text colour ``text`` (the colour in /DA)."""
+    import pikepdf
+
+    def close(a: list[float], b: list[float]) -> bool:
+        return len(a) == len(b) and all(abs(x - y) < 0.001 for x, y in zip(a, b, strict=True))
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = pdf.pages[page].obj.get("/Annots", [])
+        found = [a for a in annots if str(a.get("/NM", "")) == mark]
+        assert len(found) == 1, f"{len(found)} annotations named {mark}"
+        annot = found[0]
+        assert annot.get("/Subtype") == "/Redact"
+        assert close([float(v) for v in annot.IC], fill), list(annot.IC)
+        overlay_obj = annot.get("/OverlayText")
+        if overlay:
+            assert str(overlay_obj) == overlay, overlay_obj
+        else:
+            assert overlay_obj is None, overlay_obj
+        tokens = str(annot.DA).split()
+        i = tokens.index("rg")
+        assert close([float(t) for t in tokens[i - 3 : i]], text), tokens
+
+
 @host_check("quad_points_pikepdf")
 def _quad_points_pikepdf(data: bytes, subtype: str, corners: list[list[float]]) -> None:
     """The saved /QuadPoints hold ``corners`` (visible space) in PDF space, origin bottom-left."""
