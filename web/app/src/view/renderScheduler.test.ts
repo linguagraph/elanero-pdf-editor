@@ -60,6 +60,24 @@ describe('RenderScheduler', () => {
     expect(renders[2]?.params.scale_milli).toBe(1000);
   });
 
+  it('resolves firstPage on the first page render, and not on a thumbnail', async () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    let resolved = false;
+    void scheduler.firstPage.then(() => {
+      resolved = true;
+    });
+    scheduler.plan('thumb', plan([0], 200));
+    renders[0]?.resolve(reply());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    scheduler.plan('page', plan([1]));
+    renders[1]?.resolve(reply());
+    await scheduler.firstPage;
+    expect(resolved).toBe(true);
+  });
+
   it('holds thumbnails while a page render is waiting for a slot', () => {
     const { rpc, renders } = fakeRpc();
     const scheduler = new RenderScheduler(rpc, 'h');

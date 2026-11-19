@@ -1,11 +1,32 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { APP_VERSION } from './version';
 import { fakeEngine } from './engine/testEngine';
+import type { JobWorkerPool } from './engine/jobPool';
 
 describe('App', () => {
+  it('does not warm the job worker before a document is shown, and disposes the pool on unmount', () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      act(() => {
+        root.render(<App engine={fakeEngine()} jobs={jobs as unknown as JobWorkerPool} />);
+      });
+      expect(jobs.warm).not.toHaveBeenCalled();
+    } finally {
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    }
+    expect(jobs.dispose).toHaveBeenCalled();
+  });
+
   it('renders the app name and the version', () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement('div');

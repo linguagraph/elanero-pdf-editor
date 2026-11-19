@@ -57,6 +57,10 @@ export class RenderScheduler {
   private readonly failed = new Set<string>();
   private readonly listeners = new Set<() => void>();
   private inFlight = 0;
+  // Resolves once, when the first page (not a thumbnail) is drawn into the cache. The job worker
+  // warm-up waits for it (W3.1 slice 2). It never rejects.
+  readonly firstPage: Promise<void>;
+  private resolveFirstPage: () => void = () => undefined;
 
   constructor(
     private readonly rpc: PageRpc,
@@ -64,6 +68,9 @@ export class RenderScheduler {
     cacheBytes: number = cacheBudgetBytes(readDeviceMemory()),
   ) {
     this.cache = new PageCache(cacheBytes);
+    this.firstPage = new Promise<void>((resolve) => {
+      this.resolveFirstPage = resolve;
+    });
   }
 
   // Called after every reply, so the views can redraw and plan again.
@@ -186,6 +193,7 @@ export class RenderScheduler {
             height: reply.height,
             pixels: reply.pixels,
           });
+          if (kind === 'page') this.resolveFirstPage();
         } else {
           // The page changed since the caller last saw it. The reply carries no pixels, so the
           // page is asked for again at the revision the worker reported.

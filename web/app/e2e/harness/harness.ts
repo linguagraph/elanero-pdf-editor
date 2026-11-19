@@ -1,6 +1,7 @@
 // Test-only page script (W3.1): starts the engine and the job worker through the real start.ts,
 // and reports what the browser test needs. The Playwright test reads window.__harness.
 import { EngineLoadError } from '../../src/engine/errors';
+import { createJobWorkerPool, type JobWorkerPool } from '../../src/engine/jobPool';
 import { startEngine, startJobWorker, type WorkerClient } from '../../src/engine/start';
 import type { Stage } from '../../src/engine/protocol';
 import { createJobProgressStore } from '../../src/feedback/jobRun';
@@ -146,6 +147,94 @@ async function runSplitJob(pdfBase64: string, name: string): Promise<SplitReport
   }
 }
 
+// The job worker pool (W3.1 slice 2) over the real job worker. The warm-up runs at once, so the
+// test does not wait on an idle callback. The pool is kept until poolStop(), so the test can look
+// inside the job worker it reused.
+let pool: JobWorkerPool | undefined;
+
+function newPool(): JobWorkerPool {
+  pool?.dispose();
+  pool = createJobWorkerPool({
+    start: () =>
+      startJobWorker({ workerUrl: '/src/engine/jobworker.ts', assetBaseUrl: ASSET_BASE }),
+    schedule: (run) => run(),
+    // The device policy (no warm-up at 2 GB or less) is unit-tested; the browser run checks the
+    // pool itself, whatever memory the test machine reports.
+    lowMemory: () => false,
+  });
+  return pool;
+}
+
+export interface PoolReuseReport {
+  // The number of files each job produced, in run order.
+  files: number[];
+  error?: { name: string; message: string; code?: string };
+}
+
+// Two splits through the pool: the warm worker takes the first job, and the second job reuses the
+// same worker. The engine opens the PDF on its own worker.
+async function poolReuse(pdfBase64: string, name: string): Promise<PoolReuseReport> {
+  const pdf = Uint8Array.from(atob(pdfBase64), (char) => char.charCodeAt(0)).buffer;
+  const engineWorker = startEngine({
+    workerUrl: '/src/engine/engine.worker.ts',
+    assetBaseUrl: ASSET_BASE,
+  });
+  const engine = new RpcClient(engineWorker);
+  const jobs = newPool();
+  const files: number[] = [];
+  try {
+    const opened = await engine.call('session.open', { name, data: pdf, password: null });
+    jobs.warm();
+    for (let run = 0; run < 2; run += 1) {
+      const found = await runSplit(
+        { engine, progress: createJobProgressStore(), startWorker: jobs.acquire },
+        opened.handle,
+        { mode: 'pages', pagesPerFile: 1 },
+      );
+      files.push(found.length);
+    }
+    return { files };
+  } catch (error) {
+    return { files, error: describe(error) };
+  }
+  // The engine worker stays up: the test looks inside the job worker and tells it apart from the
+  // engine by its fetch global, and a terminated worker cannot be read.
+}
+
+export interface PoolCancelReport {
+  // The hello the re-warmed worker answered after the cancelled job.
+  hello?: unknown;
+  error?: { name: string; message: string; code?: string };
+}
+
+// A job is cancelled while its call is pending: the lease terminates the worker, the pool starts
+// another in the background, and that worker answers hello.
+async function poolCancel(): Promise<PoolCancelReport> {
+  const jobs = newPool();
+  jobs.warm();
+  const lease = jobs.acquire();
+  // The first worker answers before the cancel, so the browser has seen it in full.
+  await lease.call(HELLO);
+  // The second call is still pending when the lease terminates: that is a Cancel.
+  const pending = lease.call(HELLO).catch(() => undefined);
+  lease.terminate();
+  await pending;
+  try {
+    // A raw call, not RpcClient: the re-warm may still be loading, and RpcClient's soft deadline
+    // would report a slow start as a failure.
+    const result = await jobs.acquire().call(HELLO);
+    // The reply is the envelope { v, id, ok, result }; the hello answer is its result.
+    return { hello: (JSON.parse(result.reply) as { result: unknown }).result };
+  } catch (error) {
+    return { error: describe(error) };
+  }
+}
+
+function poolStop(): void {
+  pool?.dispose();
+  pool = undefined;
+}
+
 declare global {
   interface Window {
     __harness: {
@@ -154,8 +243,20 @@ declare global {
       stopJob: () => void;
       rawHello: (assetBaseUrl: string) => Promise<BootReport>;
       runSplitJob: (pdfBase64: string, name: string) => Promise<SplitReport>;
+      poolReuse: (pdfBase64: string, name: string) => Promise<PoolReuseReport>;
+      poolCancel: () => Promise<PoolCancelReport>;
+      poolStop: () => void;
     };
   }
 }
 
-window.__harness = { bootEngine, bootJob, stopJob, rawHello, runSplitJob };
+window.__harness = {
+  bootEngine,
+  bootJob,
+  stopJob,
+  rawHello,
+  runSplitJob,
+  poolReuse,
+  poolCancel,
+  poolStop,
+};
