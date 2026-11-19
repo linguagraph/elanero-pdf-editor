@@ -37,7 +37,11 @@ export interface EngineSession {
   // True when the document is encrypted or was opened with a password. Such a document is never
   // reopened from a copy (D2), so this is asked before bytesOf.
   isProtected(documentId: string): boolean;
-  // Opens the copy in the restarted engine and points the document's tab at the new handle.
+  // True while the document's tab is still open. A tab closed during the restart is not reopened,
+  // and no message names it (W3.9 S3).
+  isOpen(document: OpenDocumentRef): boolean;
+  // Opens the copy in the restarted engine and points the document's tab at the new handle. A tab
+  // closed while the copy opens is not re-attached: its new handle is closed instead.
   reopen(document: OpenDocumentRef, bytes: ArrayBuffer, client: EngineClient): Promise<void>;
   // Removes a document that could not come back: its tab closes and its old handle and session
   // are detached, so no call reaches the terminated engine.
@@ -169,9 +173,10 @@ export function createNotRespondingStore(options: NotRespondingOptions = {}): No
         // The new engine did not load. Nothing of the old engine survives, so every document is
         // closed and named once.
         toastStore.push('error', t('engine.restart.failed'));
-        if (live !== undefined) for (const document of documents) live.lost(document);
-        if (documents.length > 0) {
-          const names = documents.map((document) => document.name).join(', ');
+        const open = live === undefined ? [] : documents.filter((d) => live.isOpen(d));
+        if (live !== undefined) for (const document of open) live.lost(document);
+        if (open.length > 0) {
+          const names = open.map((document) => document.name).join(', ');
           toastStore.push('error', t('engine.restart.lost', { names, items: lostItemsText() }));
         }
         return;
@@ -182,6 +187,10 @@ export function createNotRespondingStore(options: NotRespondingOptions = {}): No
       const missing: OpenDocumentRef[] = [];
       const protectedDocs: OpenDocumentRef[] = [];
       for (const document of documents) {
+        // A tab closed since the restart began is skipped silently: it is not reopened, and no
+        // message names it. The check repeats after each await, since the user may close a tab
+        // meanwhile (W3.9 S3).
+        if (!live.isOpen(document)) continue;
         // Protection is checked before the copy is read: a protected document is never reopened
         // from a copy, even one that exists (D2).
         if (live.isProtected(document.id)) {
@@ -190,6 +199,7 @@ export function createNotRespondingStore(options: NotRespondingOptions = {}): No
           continue;
         }
         const bytes = await live.bytesOf(document.id);
+        if (!live.isOpen(document)) continue;
         if (bytes === undefined) {
           missing.push(document);
           live.lost(document);
@@ -198,8 +208,10 @@ export function createNotRespondingStore(options: NotRespondingOptions = {}): No
         try {
           await live.reopen(document, bytes, client);
         } catch {
+          if (!live.isOpen(document)) continue;
           missing.push(document);
           live.lost(document);
+          continue;
         }
       }
       // The undo history is lost on every restart, so the lost list is shown whether or not every

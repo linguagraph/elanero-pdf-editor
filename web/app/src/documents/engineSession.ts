@@ -14,6 +14,9 @@ export interface RestartSessionInput {
   readonly tabId: string;
   readonly store: AutosaveStore;
   readonly isProtected: (tabId: number) => boolean;
+  // True while the tab is still open. It reads the live tab state, not the tabs above, which are
+  // a snapshot: a tab closed during the restart's reopen loop is seen as closed (W3.9 S3).
+  readonly isOpen: (tabId: number) => boolean;
   // Called once the copy is open in the new engine, with the tab and the engine's answer.
   readonly reopened: (tabId: number, client: EngineClient, opened: OpenResult) => void;
   // Called for a document that cannot come back: its tab closes, so no handle of the old engine
@@ -31,14 +34,25 @@ export function restartSession(input: RestartSessionInput): EngineSession {
       return copy?.bytes;
     },
     isProtected: (documentId) => input.isProtected(Number(documentId)),
-    lost: (document) => input.lost(Number(document.id)),
+    isOpen: (document) => input.isOpen(Number(document.id)),
+    lost(document) {
+      // A tab closed meanwhile has nothing to lose: it is left alone.
+      if (input.isOpen(Number(document.id))) input.lost(Number(document.id));
+    },
     async reopen(document, bytes, client) {
+      const id = Number(document.id);
       const opened = await client.call('session.open', {
         name: document.name,
         data: bytes,
         password: null,
       });
-      input.reopened(Number(document.id), client, opened);
+      if (!input.isOpen(id)) {
+        // The tab was closed while the copy opened: nothing may keep the new handle, so it is
+        // closed in the new engine. A failure here leaves only an unused handle in a fresh engine.
+        await client.call('session.close', { handle: opened.handle }).catch(() => undefined);
+        return;
+      }
+      input.reopened(id, client, opened);
     },
   };
 }

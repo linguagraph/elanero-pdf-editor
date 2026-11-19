@@ -137,6 +137,8 @@ export function useDocuments(engine: EngineConnection): Documents {
         // Encrypted by its open result, or copied as protected by the autosaver (D2).
         isProtected: (id) =>
           tabs.tabs.some((tab) => tab.id === id && tab.encrypted) || autosaver.isProtected(id),
+        // The live tab list, not the snapshot above: a tab closed during the restart is seen.
+        isOpen: (id) => tabsRef.current.tabs.some((tab) => tab.id === id),
         reopened: (id, client, opened) => {
           commitTabs((state) => replaceHandle(state, id, opened.handle, opened.pages));
           setTabSession(id, { rpc: client, handle: opened.handle });

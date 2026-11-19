@@ -51,6 +51,7 @@ function session(
     documents: options.documents ?? DOCS,
     bytesOf: vi.fn((id: string) => Promise.resolve(bytes[id])),
     isProtected: (id) => options.protectedIds?.includes(id) ?? false,
+    isOpen: () => true,
     reopen: options.reopen ?? vi.fn(() => Promise.resolve()),
     lost: vi.fn(),
   };
@@ -229,6 +230,29 @@ describe('the restart of the engine (W3.9 S3)', () => {
     expect(toastTexts(toasts)).toEqual([
       t('engine.restart.lost.protected', { names: 'Report.pdf' }),
     ]);
+  });
+
+  it('a tab closed while its copy is read is not reopened and is named by no message', async () => {
+    const openIds = new Set(['a', 'b']);
+    const reopen = vi.fn<EngineSession['reopen']>(() => Promise.resolve());
+    const current = session({ b: new ArrayBuffer(1) }, { reopen });
+    // Report.pdf (a) has no copy, and its tab is closed while the copy is looked up. It is then
+    // neither reopened nor reported as lost.
+    current.bytesOf = vi.fn((id: string) => {
+      if (id === 'a') openIds.delete('a');
+      return Promise.resolve(id === 'b' ? new ArrayBuffer(1) : undefined);
+    });
+    current.isOpen = (document) => openIds.has(document.id);
+    const toasts = createToastStore();
+    const store = createNotRespondingStore({ restart: () => restartOk(), toasts });
+    store.setSession(current);
+
+    await store.restart();
+
+    expect(reopen).toHaveBeenCalledTimes(1);
+    expect(reopen).toHaveBeenCalledWith(DOCS[1], expect.any(ArrayBuffer), CLIENT);
+    expect(current.lost).not.toHaveBeenCalled();
+    expect(toastTexts(toasts)).toEqual([t('engine.restart.done', { items: lostItemsText() })]);
   });
 
   it('reads the documents after the new engine is ready, so a tab closed meanwhile is not reopened', async () => {

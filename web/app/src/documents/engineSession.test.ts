@@ -46,6 +46,7 @@ describe('restartSession (W3.9 restart)', () => {
       tabId: 'browser-tab',
       store: storeWithCopyOf1(new ArrayBuffer(1)),
       isProtected: () => false,
+      isOpen: () => true,
       reopened: vi.fn(),
       lost: vi.fn(),
     });
@@ -65,6 +66,7 @@ describe('restartSession (W3.9 restart)', () => {
       tabId: 'browser-tab',
       store,
       isProtected: () => false,
+      isOpen: () => true,
       reopened: vi.fn(),
       lost: vi.fn(),
     });
@@ -85,6 +87,7 @@ describe('restartSession (W3.9 restart)', () => {
       tabId: 'browser-tab',
       store: storeWithCopyOf1(new ArrayBuffer(1)),
       isProtected: () => false,
+      isOpen: () => true,
       reopened,
       lost: vi.fn(),
     });
@@ -108,6 +111,7 @@ describe('restartSession (W3.9 restart)', () => {
       tabId: 'browser-tab',
       store: storeWithCopyOf1(new ArrayBuffer(1)),
       isProtected,
+      isOpen: () => true,
       reopened: vi.fn(),
       lost: vi.fn(),
     });
@@ -118,6 +122,35 @@ describe('restartSession (W3.9 restart)', () => {
 });
 
 describe('the tabs after a restart (W3.9 S3)', () => {
+  it('a tab closed while its copy opens is not re-attached, and its new handle is closed', async () => {
+    const openIds = new Set([1]);
+    const call = vi.fn((method: string) =>
+      method === 'session.open'
+        ? Promise.resolve({ handle: 'h-new', pages: 2, warning: null } as OpenResult)
+        : Promise.resolve({}),
+    );
+    const client = { call } as unknown as EngineClient;
+    const reopened = vi.fn();
+    const session = restartSession({
+      engine: {} as EngineConnection,
+      tabs: TABS,
+      tabId: 'browser-tab',
+      store: storeWithCopyOf1(new ArrayBuffer(1)),
+      isProtected: () => false,
+      isOpen: (id) => openIds.has(id),
+      reopened,
+      lost: vi.fn(),
+    });
+
+    // The user closes the tab while session.open is pending.
+    const pending = session.reopen({ id: '1', name: 'a.pdf' }, new ArrayBuffer(4), client);
+    openIds.delete(1);
+    await pending;
+
+    expect(reopened).not.toHaveBeenCalled();
+    expect(call).toHaveBeenLastCalledWith('session.close', { handle: 'h-new' });
+  });
+
   it('a reopened tab takes its new handle, and a tab that cannot come back is closed', async () => {
     // Two documents: a.pdf has an autosave copy, b.pdf has none.
     let state: TabState = addTab(addTab(EMPTY_TABS, { name: 'a.pdf', handle: 'h1', pages: 2 }), {
@@ -138,6 +171,7 @@ describe('the tabs after a restart (W3.9 S3)', () => {
       tabId: 'browser-tab',
       store: storeWithCopyOf1(new ArrayBuffer(4)),
       isProtected: () => false,
+      isOpen: () => true,
       reopened: (id, _client, result) => {
         state = replaceHandle(state, id, result.handle, result.pages);
       },
@@ -221,6 +255,7 @@ async function documentsWithCopies() {
         tabId: 'browser-tab',
         store: fake.store,
         isProtected: (id) => autosaver.isProtected(id),
+        isOpen: () => true,
         reopened: (id, _client, opened) => {
           state = replaceHandle(state, id, opened.handle, opened.pages);
         },
