@@ -17,6 +17,7 @@ export function ThumbnailsRailButton({ tabId, disabled }: ThumbnailsRailButtonPr
   return (
     <button
       type="button"
+      title={t('thumbnails.title')}
       className="thumbs-rail-button"
       aria-pressed={open}
       disabled={disabled || tabId === null}
@@ -30,7 +31,12 @@ export function ThumbnailsRailButton({ tabId, disabled }: ThumbnailsRailButtonPr
         setThumbnailsOpen(tabId, !open);
       }}
     >
-      {t('thumbnails.title')}
+      <svg className="rail-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
+        <path d="M9 18a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h7l4 4v10a2 2 0 0 1-2 2Z" />
+        <path d="M3 7.6v12.8A2 2 0 0 0 5 22h9.8" />
+      </svg>
+      <span className="visually-hidden">{t('thumbnails.title')}</span>
     </button>
   );
 }

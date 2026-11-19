@@ -52,6 +52,7 @@ const FORCED_COLOURS: Record<ColourToken, string> = {
   window: 'Canvas',
   surface: 'ButtonFace',
   surfaceAlt: 'ButtonFace',
+  canvas: 'Canvas',
   border: 'CanvasText',
   borderStrong: 'CanvasText',
   text: 'CanvasText',
