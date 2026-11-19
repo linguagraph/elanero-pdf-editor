@@ -6,7 +6,14 @@ import { t } from '../i18n/t';
 import type { OutlineEntry } from '../rpc/generated';
 import { BookmarksPanel } from './BookmarksPanel';
 import { BookmarksRailButton } from './BookmarksRailButton';
-import { setBookmarksOpen, useBookmarksOpen } from './openState';
+import {
+  expandedOf,
+  forgetBookmarksTab,
+  isBookmarksOpen,
+  setBookmarksOpen,
+  setExpandedOf,
+  useBookmarksOpen,
+} from './openState';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,18 +91,23 @@ function Harness({
   );
 }
 
-function titled(title: string): HTMLButtonElement {
-  const found = [...host.querySelectorAll<HTMLButtonElement>('button.bookmarks-title')].find(
-    (button) => button.textContent === title,
-  );
+function items(): HTMLElement[] {
+  return [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+}
+
+function item(title: string): HTMLElement {
+  const found = items().find((element) => element.textContent === title);
   if (found === undefined) throw new Error(`no bookmark ${title}`);
   return found;
 }
 
-function toggle(title: string, expanded: boolean): HTMLButtonElement {
-  const label = t(expanded ? 'bookmarks.collapse' : 'bookmarks.expand', { title });
-  const found = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-  if (found === null) throw new Error(`no toggle ${label}`);
+function titles(): string[] {
+  return items().map((element) => element.textContent ?? '');
+}
+
+function toggleOf(title: string): HTMLElement {
+  const found = item(title).querySelector<HTMLElement>('.bookmarks-toggle');
+  if (found === null) throw new Error(`no toggle on ${title}`);
   return found;
 }
 
@@ -105,15 +117,23 @@ function railButton(): HTMLButtonElement {
   return found;
 }
 
-function titles(): string[] {
-  return [...host.querySelectorAll<HTMLButtonElement>('button.bookmarks-title')].map(
-    (button) => button.textContent ?? '',
-  );
-}
-
 async function click(element: HTMLElement): Promise<void> {
   await act(async () => {
     element.click();
+  });
+  await flush();
+}
+
+async function key(element: HTMLElement, name: string): Promise<void> {
+  await act(async () => {
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
+  });
+  await flush();
+}
+
+async function mount(tabId: number, rpc: PageRpc, onSelect = vi.fn()): Promise<void> {
+  act(() => {
+    root.render(<Harness tabId={tabId} rpc={rpc} onSelect={onSelect} />);
   });
   await flush();
 }
@@ -122,29 +142,24 @@ describe('bookmarks side panel', () => {
   it('renders the outline as a tree that starts collapsed', async () => {
     const { rpc, call } = fakeRpc(outline);
     setBookmarksOpen(1, true);
-    act(() => {
-      root.render(<Harness tabId={1} rpc={rpc} onSelect={vi.fn()} />);
-    });
-    await flush();
+    await mount(1, rpc);
     expect(call).toHaveBeenCalledWith('session.outline', { handle: 'h' });
+    expect(host.querySelector('[role="tree"]')).not.toBeNull();
     expect(titles()).toEqual(['Part One', 'Part Two']);
-    expect(toggle('Part One', false).getAttribute('aria-expanded')).toBe('false');
-    expect(host.querySelectorAll<HTMLElement>('li.bookmarks-row')[0]?.dataset.depth).toBe('1');
+    expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+    expect(item('Part One').getAttribute('aria-level')).toBe('1');
   });
 
   it('expands and collapses the nested levels', async () => {
     const { rpc } = fakeRpc(outline);
     setBookmarksOpen(2, true);
-    act(() => {
-      root.render(<Harness tabId={2} rpc={rpc} onSelect={vi.fn()} />);
-    });
-    await flush();
-    await click(toggle('Part One', false));
+    await mount(2, rpc);
+    await click(toggleOf('Part One'));
     expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Part Two']);
-    await click(toggle('Chapter 1.1', false));
+    await click(toggleOf('Chapter 1.1'));
     expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Section 1.1.1', 'Part Two']);
-    expect(host.querySelectorAll<HTMLElement>('li.bookmarks-row')[2]?.dataset.depth).toBe('3');
-    await click(toggle('Part One', true));
+    expect(item('Section 1.1.1').getAttribute('aria-level')).toBe('3');
+    await click(toggleOf('Part One'));
     expect(titles()).toEqual(['Part One', 'Part Two']);
   });
 
@@ -152,36 +167,62 @@ describe('bookmarks side panel', () => {
     const { rpc } = fakeRpc(outline);
     const onSelect = vi.fn();
     setBookmarksOpen(3, true);
-    act(() => {
-      root.render(<Harness tabId={3} rpc={rpc} onSelect={onSelect} />);
-    });
-    await flush();
-    await click(toggle('Part One', false));
-    await click(toggle('Chapter 1.1', false));
-    await click(titled('Section 1.1.1'));
+    await mount(3, rpc, onSelect);
+    await click(toggleOf('Part One'));
+    await click(toggleOf('Chapter 1.1'));
+    await click(item('Section 1.1.1'));
     expect(onSelect).toHaveBeenLastCalledWith(2);
-    expect(titled('Part Two').disabled).toBe(true);
+    expect(item('Part Two').getAttribute('aria-disabled')).toBe('true');
+    await click(item('Part Two'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves the focus and opens or closes entries with the keys', async () => {
+    const { rpc } = fakeRpc(outline);
+    const onSelect = vi.fn();
+    setBookmarksOpen(9, true);
+    await mount(9, rpc, onSelect);
+    item('Part One').focus();
+    await key(item('Part One'), 'ArrowRight');
+    expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Part Two']);
+    expect(document.activeElement).toBe(item('Part One'));
+    await key(item('Part One'), 'ArrowDown');
+    expect(document.activeElement).toBe(item('Chapter 1.1'));
+    await key(item('Chapter 1.1'), 'ArrowRight');
+    await key(item('Section 1.1.1'), 'ArrowLeft');
+    expect(document.activeElement).toBe(item('Chapter 1.1'));
+    await key(item('Chapter 1.1'), 'Enter');
+    expect(onSelect).toHaveBeenLastCalledWith(1);
+    await key(item('Chapter 1.1'), 'ArrowLeft');
+    expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Part Two']);
+    await key(item('Chapter 1.1'), 'ArrowLeft');
+    expect(document.activeElement).toBe(item('Part One'));
+    await key(item('Part One'), 'ArrowLeft');
+    expect(titles()).toEqual(['Part One', 'Part Two']);
+  });
+
+  it('gives only the focused row a tab stop', async () => {
+    const { rpc } = fakeRpc(outline);
+    setBookmarksOpen(10, true);
+    await mount(10, rpc);
+    expect(items().map((element) => element.tabIndex)).toEqual([0, -1]);
+    await key(item('Part One'), 'End');
+    expect(items().map((element) => element.tabIndex)).toEqual([-1, 0]);
   });
 
   it('starts expanded where the file flags the entry as open', async () => {
     const { rpc } = fakeRpc([entry('Open part', 1, 0, true), entry('Its child', 2, 1)]);
     setBookmarksOpen(4, true);
-    act(() => {
-      root.render(<Harness tabId={4} rpc={rpc} onSelect={vi.fn()} />);
-    });
-    await flush();
+    await mount(4, rpc);
     expect(titles()).toEqual(['Open part', 'Its child']);
   });
 
   it('shows the empty message when the document has no outline', async () => {
     const { rpc } = fakeRpc([]);
     setBookmarksOpen(5, true);
-    act(() => {
-      root.render(<Harness tabId={5} rpc={rpc} onSelect={vi.fn()} />);
-    });
-    await flush();
+    await mount(5, rpc);
     expect(host.textContent).toContain(t('bookmarks.empty'));
-    expect(host.querySelector('ul.bookmarks-list')).toBeNull();
+    expect(host.querySelector('[role="tree"]')).toBeNull();
   });
 
   it('shows an alert when the outline cannot be read', async () => {
@@ -189,36 +230,36 @@ describe('bookmarks side panel', () => {
       call: vi.fn(() => Promise.reject(new Error('gone'))),
     } as unknown as PageRpc;
     setBookmarksOpen(6, true);
-    act(() => {
-      root.render(<Harness tabId={6} rpc={rpc} onSelect={vi.fn()} />);
-    });
-    await flush();
+    await mount(6, rpc);
     expect(host.querySelector('[role="alert"]')?.textContent).toBe(t('bookmarks.loadFailed'));
   });
 
   it('keeps the open state and the expansion per tab', async () => {
     const { rpc } = fakeRpc(outline);
-    act(() => {
-      root.render(<Harness tabId={7} rpc={rpc} onSelect={vi.fn()} />);
-    });
+    await mount(7, rpc);
     await click(railButton());
     expect(railButton().getAttribute('aria-pressed')).toBe('true');
     await flush();
-    await click(toggle('Part One', false));
+    await click(toggleOf('Part One'));
     expect(titles()).toContain('Chapter 1.1');
 
     // Another tab starts with the panel closed.
-    act(() => {
-      root.render(<Harness tabId={8} rpc={rpc} onSelect={vi.fn()} />);
-    });
+    await mount(8, rpc);
     expect(railButton().getAttribute('aria-pressed')).toBe('false');
 
     // Back on the first tab, the panel is still open and still expanded.
-    act(() => {
-      root.render(<Harness tabId={7} rpc={rpc} onSelect={vi.fn()} />);
-    });
-    await flush();
+    await mount(7, rpc);
     expect(railButton().getAttribute('aria-pressed')).toBe('true');
     expect(titles()).toContain('Chapter 1.1');
+  });
+
+  it('forgets a closed tab, and an outline of another length starts from the file flags', () => {
+    setBookmarksOpen(20, true);
+    setExpandedOf(20, 4, new Set([0]));
+    expect(expandedOf(20, 4)).toEqual(new Set([0]));
+    expect(expandedOf(20, 5)).toBeUndefined();
+    forgetBookmarksTab(20);
+    expect(isBookmarksOpen(20)).toBe(false);
+    expect(expandedOf(20, 4)).toBeUndefined();
   });
 });

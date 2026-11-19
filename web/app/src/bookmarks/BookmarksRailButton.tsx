@@ -1,6 +1,7 @@
 // The rail button that opens and closes the bookmarks panel (W5.2, W1.6 section 1). Its pressed
 // state is the panel's open state for the active tab. The right panel shows one panel at a time.
 import { t } from '../i18n/t';
+import { setOrganizerOpen } from '../organizer/openState';
 import { setSearchOpen } from '../search/openState';
 import { setThumbnailsOpen } from '../thumbnails/openState';
 import { setBookmarksOpen, useBookmarksOpen } from './openState';
@@ -25,6 +26,7 @@ export function BookmarksRailButton({ tabId, disabled }: BookmarksRailButtonProp
         if (!open) {
           setThumbnailsOpen(tabId, false);
           setSearchOpen(tabId, false);
+          setOrganizerOpen(tabId, false);
         }
         setBookmarksOpen(tabId, !open);
       }}

@@ -3,6 +3,7 @@
 // engine has opened it. Closing a tab calls session.close. Everything the user reads comes
 // through t().
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { forgetBookmarksTab } from '../bookmarks/openState';
 import { type EngineConnection, setTabSession } from '../engine/engineConnection';
 import { reportRpcError, toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
@@ -124,6 +125,7 @@ export function useDocuments(engine: EngineConnection): Documents {
       commitTabs((state) => closeTabState(state, id));
       // The document view of a closed tab goes with it: no session is kept for it.
       setTabSession(id, null);
+      forgetBookmarksTab(id);
       if (tab === undefined) return;
       const client = engine.client();
       if (client === undefined) return;

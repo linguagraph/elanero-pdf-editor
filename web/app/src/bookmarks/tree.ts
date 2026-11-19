@@ -48,3 +48,57 @@ export function initialExpanded(entries: readonly OutlineEntry[]): Set<number> {
   });
   return open;
 }
+
+// What a key does on the row of the flat outline at `index`, following the ARIA tree pattern: Up and
+// Down move through the visible rows, Right opens a closed entry or steps into an open one, Left
+// closes an open entry or moves to the parent, Home and End go to the first and last row, and Enter
+// or Space goes to the entry's page.
+export type BookmarkAction =
+  | { readonly kind: 'focus'; readonly index: number }
+  | { readonly kind: 'expand' | 'collapse'; readonly index: number }
+  | { readonly kind: 'activate'; readonly index: number }
+  | { readonly kind: 'none' };
+
+const NONE: BookmarkAction = { kind: 'none' };
+
+export function treeAction(
+  rows: readonly BookmarkRow[],
+  key: string,
+  index: number,
+): BookmarkAction {
+  const position = rows.findIndex((row) => row.index === index);
+  const row = rows[position];
+  if (row === undefined) return NONE;
+  const focus = (target: BookmarkRow | undefined): BookmarkAction =>
+    target === undefined ? NONE : { kind: 'focus', index: target.index };
+  switch (key) {
+    case 'ArrowDown':
+      return focus(rows[position + 1]);
+    case 'ArrowUp':
+      return focus(rows[position - 1]);
+    case 'Home':
+      return focus(rows[0]);
+    case 'End':
+      return focus(rows[rows.length - 1]);
+    case 'ArrowRight':
+      if (row.hasChildren && !row.expanded) return { kind: 'expand', index };
+      // An open entry's first child is the next visible row.
+      return row.hasChildren ? focus(rows[position + 1]) : NONE;
+    case 'ArrowLeft': {
+      if (row.expanded) return { kind: 'collapse', index };
+      // The parent is the nearest row above with a smaller level.
+      for (let above = position - 1; above >= 0; above -= 1) {
+        const candidate = rows[above];
+        if (candidate !== undefined && candidate.entry.level < row.entry.level) {
+          return focus(candidate);
+        }
+      }
+      return NONE;
+    }
+    case 'Enter':
+    case ' ':
+      return { kind: 'activate', index };
+    default:
+      return NONE;
+  }
+}
