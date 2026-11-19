@@ -12,6 +12,7 @@ const DOC_STATE = {
   undo_label: '',
   redo_label: '',
   require_full_save: false,
+  history: 0,
 };
 
 function decode(events: unknown): unknown {
