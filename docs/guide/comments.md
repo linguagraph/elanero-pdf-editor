@@ -48,6 +48,9 @@ The **Manage** group:
   moved or edited. Use it when the review is finished and you want the marks to stay as they are.
   In the web version, Flatten asks you to confirm first. You can undo it until you save the file;
   after that, the flattening is permanent for that file.
+- **Export Comments** saves the comments as XFDF (for another PDF editor), as a CSV summary, or as a
+  PDF summary. The file is downloaded and the document is not changed. In the web version, the PDF
+  summary is not available in every browser; the app tells you when it is not.
 
 Select a comment to move or resize it, and copy and paste it (**Ctrl+C** and **Ctrl+V**). The
 **Properties** panel (**Ctrl+E**) changes the color, fill, opacity, border, text and author of the

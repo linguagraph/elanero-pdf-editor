@@ -28,7 +28,10 @@ export interface StartedJob {
   readonly terminate?: () => void;
 }
 
-export type JobOutcome = { readonly ok: true } | { readonly ok: false; readonly error: unknown };
+// quiet: the caller reports the outcome itself, so the bar shows no success or error toast.
+export type JobOutcome =
+  | { readonly ok: true; readonly quiet?: boolean }
+  | { readonly ok: false; readonly error: unknown; readonly quiet?: boolean };
 
 export interface RunningJob extends StartedJob {
   readonly percent?: number;
@@ -94,6 +97,7 @@ export function createJobProgressStore(options: JobProgressOptions = {}): JobPro
       if (state.job === undefined || state.job.token !== token) return;
       const { label } = state.job;
       update({ job: undefined });
+      if (outcome.quiet === true) return;
       if (outcome.ok) {
         toastStore.push('success', t('job.done', { label }));
       } else {
