@@ -1,4 +1,5 @@
-"""The session calls of W3.2: open, close, info, pages, capabilities and unlock_owner.
+"""The session calls of W3.2: open, close, info, pages, capabilities and unlock_owner, and the
+read-only outline (bookmarks) of W5.2.
 
 The limits are read from :mod:`pdfeditor.webapi.limits` at call time, so tests can change them.
 The open password is kept by the registry only while the document is open; it never goes into a
@@ -16,6 +17,7 @@ from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Page, PasswordRequired
 from pdfeditor.model.metadata import EncryptionMethod
+from pdfeditor.model.outline import flatten
 from pdfeditor.model.platform import current as platform_current
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.errors import (
@@ -102,6 +104,23 @@ def document_capabilities(params: dto.HandleParams) -> dto.CapabilitiesResult:
     }
     platform = dto.PlatformFlags(**dataclasses.asdict(platform_current()))
     return dto.CapabilitiesResult(engine=engine, platform=platform)
+
+
+def document_outline(params: dto.HandleParams) -> dto.OutlineResult:
+    """The bookmarks of W5.2, read-only: the desktop's outline model, flattened to levels."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        items = session.document.outline()
+    entries = tuple(
+        dto.OutlineEntry(
+            title=item.title,
+            level=level,
+            page=item.dest.page_index if item.dest is not None else None,
+            is_open=item.is_open,
+        )
+        for level, item in flatten(items)
+    )
+    return dto.OutlineResult(entries=entries)
 
 
 def unlock_owner(params: dto.UnlockParams) -> dto.UnlockResult:

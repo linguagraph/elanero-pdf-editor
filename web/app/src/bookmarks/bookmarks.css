@@ -1,0 +1,107 @@
+/* The bookmarks side panel (W5.2) and its rail button. Colours and spacing come from the theme
+   tokens (W4.4a). The indent is a data attribute per depth, so no style attribute is needed. */
+
+.bookmarks-rail-button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.bookmarks-rail-button[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-focus-ring);
+}
+
+.bookmarks-rail-button:disabled {
+  color: var(--color-text-disabled);
+}
+
+.bookmarks-rail-button:focus-visible,
+.bookmarks-list:focus-visible,
+.bookmarks-row button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.bookmarks-list {
+  height: min(70vh, 40rem);
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+  background: var(--color-surface);
+}
+
+.bookmarks-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding-inline-end: var(--space-2);
+}
+
+.bookmarks-row[data-depth='1'] {
+  padding-inline-start: var(--space-2);
+}
+.bookmarks-row[data-depth='2'] {
+  padding-inline-start: calc(var(--space-2) + 1.25rem);
+}
+.bookmarks-row[data-depth='3'] {
+  padding-inline-start: calc(var(--space-2) + 2.5rem);
+}
+.bookmarks-row[data-depth='4'] {
+  padding-inline-start: calc(var(--space-2) + 3.75rem);
+}
+.bookmarks-row[data-depth='5'] {
+  padding-inline-start: calc(var(--space-2) + 5rem);
+}
+.bookmarks-row[data-depth='6'] {
+  padding-inline-start: calc(var(--space-2) + 6.25rem);
+}
+.bookmarks-row[data-depth='7'] {
+  padding-inline-start: calc(var(--space-2) + 7.5rem);
+}
+.bookmarks-row[data-depth='8'] {
+  padding-inline-start: calc(var(--space-2) + 8.75rem);
+}
+
+.bookmarks-toggle {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.bookmarks-spacer {
+  flex: none;
+  width: 44px;
+}
+
+.bookmarks-title {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.bookmarks-title:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.bookmarks-status {
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+}

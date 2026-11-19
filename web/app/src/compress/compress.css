@@ -1,0 +1,91 @@
+/* The compress dialog (W6.4, W1.6 section 9). Colours and spacing come from the theme tokens. */
+
+.compress {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.compress-intro,
+.compress-hint,
+.compress-status {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.compress-group {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.compress-label {
+  font-weight: 600;
+}
+
+.compress-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.compress-option[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.compress-status {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.compress-progress {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.compress-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.compress-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.compress-submit {
+  min-height: 44px;
+  min-width: 96px;
+  font-weight: 600;
+}
+
+.compress-result {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.compress-heading {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+}
+
+.compress-files {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compress-download {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

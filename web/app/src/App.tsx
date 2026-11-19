@@ -28,8 +28,10 @@ import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
+import { FlattenDialog } from './flatten/FlattenDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
+import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
@@ -37,6 +39,9 @@ import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory'
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
+import { BookmarksPanel } from './bookmarks/BookmarksPanel';
+import { BookmarksRailButton } from './bookmarks/BookmarksRailButton';
+import { setBookmarksOpen, useBookmarksOpen } from './bookmarks/openState';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
 import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
@@ -72,10 +77,12 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [compressOpen, setCompressOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
+  const [flattenOpen, setFlattenOpen] = useState(false);
   // One stable job worker factory for the document's jobs, so a redaction keeps its marks.
   const startJob = useCallback(() => startJobWorker(jobWorkerBootOptions()), []);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -100,10 +107,12 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'open-recent': () => docs.showStartPage(),
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
+    'reduce-file-size': () => setCompressOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
+    'flatten-all-comments': () => setFlattenOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -122,10 +131,14 @@ export function App({ engine, startPrintWorker }: AppProps) {
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
   const searchOpen = useSearchOpen(activeId);
-  // One right panel shows at a time: opening the thumbnails or the search closes the page organizer.
+  const bookmarksOpen = useBookmarksOpen(activeId);
+  // One right panel shows at a time: opening the thumbnails, the search or the bookmarks closes the
+  // page organizer.
   useEffect(() => {
-    if (activeId !== null && (thumbnailsOpen || searchOpen)) setOrganizerOpen(activeId, false);
-  }, [activeId, thumbnailsOpen, searchOpen]);
+    if (activeId !== null && (thumbnailsOpen || searchOpen || bookmarksOpen)) {
+      setOrganizerOpen(activeId, false);
+    }
+  }, [activeId, thumbnailsOpen, searchOpen, bookmarksOpen]);
   // The search hits the document view draws, with the tab they belong to (W5.4).
   const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
     null,
@@ -168,6 +181,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
       rightRail={
         <>
           <ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />
+          <BookmarksRailButton tabId={activeId} disabled={!documentShown} />
           <OrganizerRailButton tabId={activeId} disabled={!documentShown} />
           <SearchRailButton tabId={activeId} disabled={!documentShown} />
         </>
@@ -181,6 +195,17 @@ export function App({ engine, startPrintWorker }: AppProps) {
             onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
             onGoTo={goTo}
             onClose={() => setSearchOpen(activeId, false)}
+          />
+        ) : documentShown && bookmarksOpen && activeId !== null && session !== null ? (
+          <BookmarksPanel
+            key={`bookmarks-${structureRevision}`}
+            rpc={session.rpc}
+            handle={session.handle}
+            tabId={activeId}
+            onSelect={goTo}
+            onClose={() => {
+              if (activeId !== null) setBookmarksOpen(activeId, false);
+            }}
           />
         ) : documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
@@ -243,6 +268,15 @@ export function App({ engine, startPrintWorker }: AppProps) {
           startWorker={() => startJobWorker(jobWorkerBootOptions())}
         />
       ) : null}
+      {documentShown && session !== null && rpc !== undefined ? (
+        <CompressDialog
+          isOpen={compressOpen}
+          onClose={() => setCompressOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+        />
+      ) : null}
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
         <CompareDialog
           isOpen={compareOpen}
@@ -258,6 +292,16 @@ export function App({ engine, startPrintWorker }: AppProps) {
         <SanitizeDialog
           isOpen={sanitizeOpen}
           onClose={() => setSanitizeOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={startJob}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null ? (
+        <FlattenDialog
+          isOpen={flattenOpen}
+          onClose={() => setFlattenOpen(false)}
           engine={session.rpc}
           handle={session.handle}
           startWorker={startJob}

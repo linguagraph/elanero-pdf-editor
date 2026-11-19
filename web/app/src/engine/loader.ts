@@ -194,7 +194,9 @@ function makeDispatch(
       if (bytes === undefined || bytes === null) return { reply };
       // The job adapter returns a list of buffers; the engine returns one or none.
       if (Array.isArray(bytes)) {
-        return { reply, buffers: bytes.map((item) => copyBytes(item)) };
+        // The first buffer is also `buffer`, so a reader of one document still finds it.
+        const list = bytes.map((item) => copyBytes(item));
+        return list.length === 0 ? { reply } : { reply, buffer: list[0], buffers: list };
       }
       return { reply, buffer: copyBytes(bytes) };
     } finally {

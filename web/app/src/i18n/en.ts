@@ -296,6 +296,15 @@ export const EN = {
   'redact.markFailed': 'The area could not be marked. Try again.',
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
 
+  // Flatten annotations (W7.9): the confirmation, then the result.
+  'flatten.title': 'Flatten annotations',
+  'flatten.confirm.body':
+    'Every comment is drawn into its page and stops being a separate, editable annotation. You can undo this until you save. After you save the file, the flattening is permanent for that file.',
+  'flatten.confirm.run': 'Flatten now',
+  'flatten.confirm.cancel': 'Cancel',
+  'flatten.done': 'Annotations flattened.',
+  'flatten.failed': 'The annotations could not be flattened. Try again.',
+
   // Sanitize (W7.4): the dialog's items, its confirmation and the report.
   'sanitize.title': 'Sanitize document',
   'sanitize.intro': 'Choose the hidden data to remove. Nothing is removed until you confirm.',
@@ -411,6 +420,15 @@ export const EN = {
   'thumbnails.goTo': 'Go to page {page} of {total}',
   'thumbnails.loading': 'Loading thumbnails…',
   'thumbnails.loadFailed': 'The thumbnails could not be read. Try opening the file again.',
+
+  // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
+  'bookmarks.title': 'Bookmarks',
+  'bookmarks.list': 'Document bookmarks',
+  'bookmarks.empty': 'This document has no bookmarks.',
+  'bookmarks.loading': 'Loading bookmarks…',
+  'bookmarks.loadFailed': 'The bookmarks could not be read. Try opening the file again.',
+  'bookmarks.expand': 'Expand {title}',
+  'bookmarks.collapse': 'Collapse {title}',
 
   // Page organizer side panel (W6.1). Rotate and delete reuse the command labels; the undo labels
   // are the engine's, shown in English in v1.
@@ -569,6 +587,37 @@ export const EN = {
   'export.running': 'Exporting. The progress bar shows how far it has got.',
   'export.results.heading': 'Files ({count})',
   'export.download': 'Download {name}',
+  'compress.title': 'Reduce file size',
+  'compress.intro': 'Saves a smaller copy; the open document is left unchanged.',
+  'compress.preset.label': 'Preset',
+  'compress.preset.screen': 'Smallest (screen)',
+  'compress.preset.ebook': 'Balanced (ebook)',
+  'compress.preset.print': 'High quality (print)',
+  'compress.preset.lossless': 'Lossless',
+  'compress.hint.screen': 'Images at 72 dpi, JPEG quality 50: for on-screen reading and email.',
+  'compress.hint.ebook':
+    'Images at 150 dpi, JPEG quality 70: good on screen, fine for office printing.',
+  'compress.hint.print':
+    'Images at 300 dpi, JPEG quality 85: keeps print quality, still drops the waste.',
+  'compress.hint.lossless':
+    'Images untouched; subsets fonts, removes unused and duplicate objects, compresses.',
+  'compress.submit': 'Compress',
+  'compress.cancel': 'Cancel',
+  'compress.close': 'Close',
+  'compress.running': 'Compressing. The progress bar shows how far it has got.',
+  'compress.progress.unknown': 'Working',
+  'compress.progress.percent': '{percent}%',
+  'compress.failed': 'The file could not be reduced. Try again.',
+  'compress.result.heading': 'Result',
+  'compress.result.sizes': 'Original: {before}. Reduced: {after}, {percent}% smaller.',
+  'compress.notSmaller':
+    'This preset does not make the file smaller: the original is {before} and the reduced copy would be {after}. The original stays as it is, so there is nothing to download.',
+  'compress.keep': 'Keep the original',
+  'compress.download': 'Download {name}',
+  'compress.size.bytes': '{count} bytes',
+  'compress.size.kb': '{value} KB',
+  'compress.size.mb': '{value} MB',
+  'compress.size.gb': '{value} GB',
   'compare.title': 'Compare documents',
   'compare.current': 'Older document (open now): {name}',
   'compare.newer.label': 'Newer document',

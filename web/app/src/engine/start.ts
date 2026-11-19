@@ -128,7 +128,12 @@ function startWorker(options: StartOptions): WorkerClient {
     } else {
       const reply = data as ReplyMessage;
       if (reply.buffers !== undefined) {
-        waiter.resolve({ reply: reply.reply, buffers: reply.buffers });
+        const [first] = reply.buffers;
+        waiter.resolve({
+          reply: reply.reply,
+          buffers: reply.buffers,
+          ...(first === undefined ? {} : { buffer: first }),
+        });
       } else {
         waiter.resolve(
           reply.buffer === undefined

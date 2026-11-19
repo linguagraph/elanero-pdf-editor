@@ -452,6 +452,15 @@ def _annot_count_pikepdf(data: bytes, page: int, minimum: int) -> None:
         assert len(pdf.pages[page].Annots) >= minimum
 
 
+@host_check("no_annots_pikepdf")
+def _no_annots_pikepdf(data: bytes, page: int) -> None:
+    """The page has no annotations left (an empty /Annots array counts as none)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert not pdf.pages[page].obj.get(pikepdf.Name.Annots)
+
+
 @host_check("annot_keys_pikepdf")
 def _annot_keys_pikepdf(
     data: bytes,
