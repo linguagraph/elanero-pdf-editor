@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum, IntFlag
 from typing import Any, NoReturn, Union, get_args, get_origin
 
+from pdfeditor.model.metadata import EncryptionMethod, Permissions
 from pdfeditor.model.pages import MarkKind
 from pdfeditor.services.assembly import SplitMode
 from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
@@ -156,6 +157,26 @@ class UnlockParams:
 @dataclasses.dataclass(frozen=True, slots=True)
 class UnlockResult:
     unlocked: bool
+
+
+class PendingSecurity(Enum):
+    """The kind of a security change queued for the next save (``session.security``)."""
+
+    ENCRYPT = "encrypt"
+    REMOVE = "remove"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SecurityResult:
+    """``session.security`` (W7.5 section 4): the security state, read-only. It never carries a
+    password, nor the passwords of a pending change."""
+
+    encryption: EncryptionMethod  # the file's own method, as opened
+    permissions: Permissions  # the file's permissions, to prefill the dialog
+    owner_access: bool  # not encrypted, or unlocked with the owner password
+    pending: PendingSecurity | None  # the change queued for the next save, if any
+    pending_method: EncryptionMethod | None  # its method; NONE for a pending removal
+    has_signatures: bool
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
