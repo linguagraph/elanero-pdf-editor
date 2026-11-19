@@ -418,6 +418,12 @@ export const EN = {
   'tabs.unsaved': 'Unsaved changes',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
   'open.largeFile': '{name} is large, so opening and editing may be slow.',
+  'autosave.unavailable':
+    'This browser does not keep an autosave copy, so unsaved changes are lost if the page closes.',
+  'autosave.noSpace':
+    'There is not enough room in this browser for an autosave copy. Save or download your document to keep your changes.',
+  'autosave.tooLarge':
+    'This document is too large to keep an autosave copy. Save or download it to keep your changes.',
   'password.title': 'Password required',
   'password.body': '{name} is protected. Enter its password to open it. The password is not saved.',
   'password.label': 'Password',

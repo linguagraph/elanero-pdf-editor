@@ -130,9 +130,14 @@ says so. Saving is coming soon, so this is not yet working.
 
 ## Where your data is stored
 
-- **Your documents** are held only in the memory of the browser tab while they are open. The web
-  version writes no document to your disk and keeps nothing after the tab closes. Save or download a
-  file before you close the tab.
+- **Your documents** are held in the memory of the browser tab while they are open. While a document
+  has unsaved changes, the web version also keeps an autosave copy in the browser's private storage
+  (not in a folder you can see), about once a minute, so the editor can reopen it if the engine
+  restarts. The copy is deleted when you close the document, when it has no unsaved changes, and
+  when you leave the page. Password-protected documents are never copied, and a document over 200 MB
+  is not copied. If the browser has no such storage, or it is full, the app tells you once and keeps
+  working without the copy. A browser crash can leave a copy behind; the app does not read it, and
+  clearing the site's data removes it. Save or download a file before you close the tab to keep it.
 - **Your theme** is kept in the browser's local storage under the name `elanero.theme`.
 - **Your preferences** (language, author name, reduce motion and default zoom) are kept in the same
   browser's local storage under the name `elanero.prefs`.
@@ -187,8 +192,11 @@ Evidence for the claims on this page (repository paths, checked on main):
   Default zoom): web/app/src/prefs/PreferencesDialog.tsx, web/app/src/i18n/en.ts (prefs.*).
 - Preferences store (key elanero.prefs, refuses secret keys, try/catch): web/app/src/prefs/store.ts.
 - Preferences opened from the top bar: web/app/src/App.tsx, web/app/src/commands/catalog.ts.
-- Storage: no OPFS, IndexedDB or file-picker use in web/app/src, web/app/public or web/app/index.html
-  (grep); the loader unpacks into the engine's memory file system: web/app/src/engine/loader.ts.
+- Autosave copies in the browser's private storage (OPFS): web/app/src/storage/ (opfs.ts,
+  autosaveStore.ts, autosaver.ts, tabId.ts); the copy is read from the engine by save.autosave_bytes
+  (src/pdfeditor/webapi/save.py). No IndexedDB or file-picker use in web/app/src, web/app/public or
+  web/app/index.html (grep); the loader unpacks into the engine's memory file system:
+  web/app/src/engine/loader.ts.
 - About and source link (AGPL section 13): web/app/src/about.tsx.
 - Engine not started yet, loading screen hidden: web/app/src/feedback/LoadingScreen.tsx,
   docs/web/plan.md (W4.4b, W3.1).
