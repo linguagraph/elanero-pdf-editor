@@ -1,12 +1,12 @@
 """Generate the third-party licence notice of the web build (W9.5b).
 
-It reads only committed inputs: the lock of the web app (its runtime npm packages, those without
-``dev: true``), ``web/spike/versions.json`` (the pinned Pyodide and PyMuPDF versions),
-``scripts/web_licences.toml`` (the copyright line of each npm package, and the non-npm components
-of the engine) and ``scripts/licence_texts/`` (the standard text of each licence; AGPL-3.0 is the
-repository's ``LICENSE``). It writes ``web/app/public/THIRD_PARTY_LICENSES.txt``: plain text, so
-the browser shows it without running any script, and copied into ``dist/`` beside the service
-worker so it is precached for offline use.
+It reads only committed inputs: the lock of the web app (its runtime npm packages, those that are
+neither ``dev: true`` nor ``devOptional: true``), ``web/spike/versions.json`` (the pinned Pyodide
+and PyMuPDF versions), ``scripts/web_licences.toml`` (the copyright line and pinned version of each
+npm package, and the non-npm components of the engine) and ``scripts/licence_texts/`` (the standard
+text of each licence; AGPL-3.0 is the repository's ``LICENSE``). It writes
+``web/app/public/THIRD_PARTY_LICENSES.txt``: plain text, so the browser shows it without running any
+script, and copied into ``dist/`` beside the service worker so it is precached for offline use.
 
 Nothing is read from ``node_modules`` and nothing is installed, so the notice can be built on a
 clean checkout. The output is deterministic (sorted, no timestamps), so ``--check`` can compare it
@@ -14,6 +14,11 @@ byte for byte:
 
     uv run python scripts/make_web_licences.py          # rewrite the file
     uv run python scripts/make_web_licences.py --check  # exit 1 when it is out of date
+
+``--verify-installed`` is the one mode that reads ``web/app/node_modules`` (run ``npm ci`` in
+``web/app`` first). It checks that each installed runtime package has the locked version and that
+its copyright line occurs in its own licence file. It is not part of ``--check``, so the check
+still runs on a clean checkout.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_LOCK = ROOT / "web" / "app" / "package-lock.json"
+APP_NODE_MODULES = ROOT / "web" / "app" / "node_modules"
 VERSIONS = ROOT / "web" / "spike" / "versions.json"
 INPUTS = ROOT / "scripts" / "web_licences.toml"
 TEXTS = ROOT / "scripts" / "licence_texts"
@@ -38,6 +44,11 @@ OUTPUT = ROOT / "web" / "app" / "public" / "THIRD_PARTY_LICENSES.txt"
 _TEXT_ID = {"AGPL-3.0-only": "AGPL-3.0", "AGPL-3.0-or-later": "AGPL-3.0"}
 # The version pins of versions.json that the TOML must repeat, with the component to review.
 _PINNED = (("pyodide", "Pyodide"), ("pymupdf", "PyMuPDF"))
+# A copyright value starting with this has not been checked against its source yet. The notice
+# lists it, and --verify-installed lists it without failing (the mark is the honest answer).
+_UNVERIFIED = "To confirm"
+# Installed file names that hold a licence, matched case-insensitively (LICENSE, license.md, ...).
+_LICENCE_FILE_PREFIXES = ("license", "licence", "copying")
 
 _HEADER = """\
 THIRD-PARTY LICENCE NOTICE: ELANERO WEB BUILD
@@ -93,17 +104,40 @@ def _read_text(path: Path) -> str:
     return path.read_bytes().decode("utf-8").replace("\r\n", "\n")
 
 
-def _runtime_packages(lock: Path) -> dict[str, tuple[str, Any]]:
-    """Name -> (version, licence field) of each package the browser ships (not ``dev: true``)."""
+def _runtime_packages(lock: Path, problems: list[str]) -> dict[str, tuple[str, Any]]:
+    """Name -> (version, licence field) of each package the browser ships.
+
+    ``dev`` and ``devOptional`` packages are not shipped. A runtime name at two versions is a
+    problem: the notice names one version per package, and the dict would keep whichever came last.
+    """
     data = json.loads(_read_text(lock))
     packages: dict[str, tuple[str, Any]] = {}
     for key, info in data.get("packages", {}).items():
-        if key == "" or info.get("dev"):
+        if key == "" or info.get("dev") or info.get("devOptional"):
             continue
         # The name follows the last node_modules/ (nested installs, scoped names included).
         name = key.rsplit("node_modules/", 1)[-1]
-        packages[name] = (str(info.get("version", "")), info.get("license"))
+        version = str(info.get("version", ""))
+        if name in packages:
+            if packages[name][0] != version:
+                problems.append(
+                    f"npm package {name!r} is at {packages[name][0]} and at {version} in the "
+                    "runtime lock: the notice names one version, so remove the nested copy or "
+                    "make the two match"
+                )
+            continue
+        packages[name] = (version, info.get("license"))
     return packages
+
+
+def _lock_versions(lock: Path) -> dict[str, str]:
+    """Name -> version of each top-level package in the lock, dev packages included."""
+    packages = json.loads(_read_text(lock)).get("packages", {})
+    return {
+        key.removeprefix("node_modules/"): str(info.get("version", ""))
+        for key, info in packages.items()
+        if key.startswith("node_modules/") and key.count("node_modules/") == 1
+    }
 
 
 def _component(raw: dict[str, Any], problems: list[str]) -> Entry | None:
@@ -152,19 +186,45 @@ def make(
                 f"{key} = {pins.get(key)!r}: review the {label} components"
             )
 
+    lock_versions = _lock_versions(lock)
     components: list[Entry] = []
     for raw in spec.get("component", []):
         entry = _component(raw, problems)
-        if entry is not None:
-            components.append(entry)
-            _check_licence(f"component {entry.name!r}", raw.get("license"), texts, agpl, problems)
+        if entry is None:
+            continue
+        components.append(entry)
+        _check_licence(f"component {entry.name!r}", raw.get("license"), texts, agpl, problems)
+        locked = raw.get("lock")
+        if locked is None:
+            continue
+        if locked not in lock_versions:
+            problems.append(
+                f"component {entry.name!r} names lock package {locked!r}, which the web app "
+                "lock does not have"
+            )
+        elif lock_versions[locked] != entry.version:
+            problems.append(
+                f"component {entry.name!r} is {entry.version} in web_licences.toml but "
+                f"{locked} is {lock_versions[locked]} in the lock: re-read its licence file"
+            )
 
-    runtime = _runtime_packages(lock)
+    runtime = _runtime_packages(lock, problems)
     npm_info: dict[str, Any] = spec.get("npm", {})
     npm: list[Entry] = []
     for name, (version, licence) in runtime.items():
         _check_licence(f"npm package {name!r}", licence, texts, agpl, problems)
         copyright_entry = npm_info.get(name, {})
+        pinned = copyright_entry.get("version")
+        if pinned is None:
+            problems.append(
+                f'npm package {name!r} has no version in [npm."{name}"]: add version = '
+                f'"{version}" once its licence file is read'
+            )
+        elif pinned != version:
+            problems.append(
+                f"npm package {name!r} is {version} in the lock but {pinned} in "
+                "web_licences.toml: re-read its licence file"
+            )
         if "copyright" not in copyright_entry:
             problems.append(f'npm package {name!r} has no [npm."{name}"] copyright entry')
             continue
@@ -174,6 +234,7 @@ def make(
                 version=version,
                 licence=str(licence),
                 copyright=(str(copyright_entry["copyright"]),),
+                note=copyright_entry.get("note"),
             )
         )
     for name in sorted(set(npm_info) - set(runtime)):
@@ -226,10 +287,14 @@ def _render(components: list[Entry], npm: list[Entry], texts: Path, agpl: Path) 
     return "\n".join(out) + "\n"
 
 
-def _report(err: NoticeError) -> None:
-    sys.stderr.write("the third-party licence notice cannot be built:\n")
-    for problem in err.problems:
+def _report_problems(header: str, problems: list[str]) -> None:
+    sys.stderr.write(f"{header}\n")
+    for problem in problems:
         sys.stderr.write(f"  - {problem}\n")
+
+
+def _report(err: NoticeError) -> None:
+    _report_problems("the third-party licence notice cannot be built:", err.problems)
 
 
 def check(path: Path = OUTPUT) -> int:
@@ -248,12 +313,87 @@ def check(path: Path = OUTPUT) -> int:
     return 0
 
 
+def _installed_text(path: Path) -> str:
+    # Installed licence files are not all UTF-8; a byte that is not UTF-8 must not stop the check.
+    return path.read_bytes().decode("utf-8", errors="replace").replace("\r\n", "\n")
+
+
+def verify_installed(
+    lock: Path = APP_LOCK,
+    inputs: Path = INPUTS,
+    node_modules: Path = APP_NODE_MODULES,
+) -> tuple[list[str], list[str], int]:
+    """Check the installed runtime packages against the lock and the TOML.
+
+    Returns (problems, unverified, packages checked). A package whose copyright line is still
+    marked "To confirm" is listed in ``unverified`` and is not a problem.
+    """
+    if not node_modules.is_dir():
+        return [f"{node_modules} is missing: run npm ci in web/app first"], [], 0
+    problems: list[str] = []
+    unverified: list[str] = []
+    runtime = _runtime_packages(lock, problems)
+    npm_info: dict[str, Any] = tomllib.loads(_read_text(inputs)).get("npm", {})
+    for name, (version, _licence) in runtime.items():
+        package_dir = node_modules / name
+        manifest = package_dir / "package.json"
+        if not manifest.is_file():
+            problems.append(f"npm package {name!r} is not installed: run npm ci in web/app")
+            continue
+        installed = json.loads(_installed_text(manifest)).get("version")
+        if installed != version:
+            problems.append(
+                f"npm package {name!r} is {installed} installed but {version} in the lock: "
+                "run npm ci in web/app"
+            )
+        entry = npm_info.get(name, {})
+        copyright_line = entry.get("copyright")
+        if not isinstance(copyright_line, str):
+            continue  # make() reports the missing entry
+        if copyright_line.startswith(_UNVERIFIED):
+            unverified.append(name)
+            continue
+        licence_files = sorted(
+            path
+            for path in package_dir.iterdir()
+            if path.is_file() and path.name.lower().startswith(_LICENCE_FILE_PREFIXES)
+        )
+        if not licence_files:
+            if not entry.get("note"):
+                problems.append(
+                    f"npm package {name!r} has no licence file, so its copyright line cannot be "
+                    f'checked: add a note to [npm."{name}"]'
+                )
+            continue
+        if not any(copyright_line in _installed_text(path) for path in licence_files):
+            found = ", ".join(path.name for path in licence_files)
+            problems.append(
+                f"npm package {name!r}: the copyright line {copyright_line!r} is not in its "
+                f'licence file ({found}): re-read it and correct [npm."{name}"]'
+            )
+    return problems, unverified, len(runtime)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--check", action="store_true", help="exit 1 when the committed notice is out of date"
     )
+    parser.add_argument(
+        "--verify-installed",
+        action="store_true",
+        help="check web/app/node_modules against the lock and the copyright lines (after npm ci)",
+    )
     args = parser.parse_args(argv)
+    if args.verify_installed:
+        problems, unverified, count = verify_installed()
+        if problems:
+            _report_problems("the installed npm packages do not match the notice inputs:", problems)
+            return 1
+        sys.stdout.write(f"checked {count} installed npm packages against the lock\n")
+        if unverified:
+            sys.stdout.write(f"not checked (still 'To confirm'): {', '.join(unverified)}\n")
+        return 0
     if args.check:
         return check(OUTPUT)
     try:

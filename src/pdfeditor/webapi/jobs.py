@@ -16,6 +16,7 @@ same code. Nothing here imports PyMuPDF.
 from __future__ import annotations
 
 import io
+import logging
 import math
 import secrets
 import tempfile
@@ -29,11 +30,11 @@ from typing import Any
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS, SnapshotCommand
 from pdfeditor.core.engine_lock import ENGINE_LOCK
-from pdfeditor.core.jobs import JobContext
+from pdfeditor.core.jobs import JobContext, ProgressFn
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document, PasswordRequired
+from pdfeditor.engine.base import Document, OptimizeOptions, PasswordRequired
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
-from pdfeditor.model.metadata import EncryptionMethod
+from pdfeditor.model.metadata import EncryptionMethod, SpaceUsage
 from pdfeditor.services.assembly import (
     SUPPORTED_SUFFIXES,
     MergeSource,
@@ -68,9 +69,36 @@ from pdfeditor.webapi.errors import (
 from pdfeditor.webapi.events import changed_of, state_of
 from pdfeditor.webapi.registry import REGISTRY
 
+logger = logging.getLogger(__name__)
+
 # How many ended tokens are remembered, so that a repeated jobs.abort is a no-op (idempotent)
 # while an unknown token still gets STALE_JOB (W1.2 section 4).
 _ENDED_TOKENS_KEPT = 64
+
+# The reduce dialog's spin box ranges (ui/dialogs/optimize.py). The desktop file is not edited: the
+# web checks its own spec against these, and make_web_types.py emits them for the dialog's seeds.
+REDUCE_DPI_RANGE = (36, 1200)
+REDUCE_QUALITY_RANGE = (10, 100)
+CUSTOM_PRESET = "custom"
+
+# The stable keys of the space audit's categories, for the front end's t(). The engine labels are
+# English; a label not listed here maps to "other" (logged once), so an engine rename degrades.
+CATEGORY_KEYS: dict[str, str] = {
+    "Images": "images",
+    "Fonts": "fonts",
+    "Page content": "page_content",
+    "Comments and forms": "comments_forms",
+    "Structure (tags)": "tags",
+    "Bookmarks and links": "bookmarks_links",
+    "Embedded files": "embedded_files",
+    "Metadata and thumbnails": "metadata_thumbnails",
+    "Other objects": "other",
+    "File overhead": "file_overhead",
+}
+SPACE_CATEGORY_KEYS = tuple(dict.fromkeys(CATEGORY_KEYS.values()))
+_UNKNOWN_CATEGORIES: set[str] = set()
+# The audit before and after the reduce, plus the reduce's own steps (see _run_reduce).
+_AUDITED_STEPS = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,24 +180,130 @@ def _run_action(session: DocumentSession | None, job: ActionJob, ctx: JobContext
     )
 
 
+def _check_reduce_options(options: dto.ReduceOptionsDto) -> None:
+    dpi_low, dpi_high = REDUCE_DPI_RANGE
+    if options.image_dpi is not None and not dpi_low <= options.image_dpi <= dpi_high:
+        raise RpcFailure(
+            INVALID_ARGS,
+            f"args.options.image_dpi: must be {dpi_low} to {dpi_high}",
+            {"path": "args.options.image_dpi"},
+        )
+    quality_low, quality_high = REDUCE_QUALITY_RANGE
+    if not quality_low <= options.jpeg_quality <= quality_high:
+        raise RpcFailure(
+            INVALID_ARGS,
+            f"args.options.jpeg_quality: must be {quality_low} to {quality_high}",
+            {"path": "args.options.jpeg_quality"},
+        )
+
+
 def _convert_reduce(data: object, buffers: BufferTable) -> dto.ReduceSizeArgs:
     args: dto.ReduceSizeArgs = from_json(dto.ReduceSizeArgs, data, buffers, "args")
-    if not any(item.key == args.preset for item in PRESETS):
+    if args.preset == CUSTOM_PRESET:
+        if args.options is None:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "args.options: a custom preset needs options",
+                {"path": "args.options"},
+            )
+        _check_reduce_options(args.options)
+    elif not any(item.key == args.preset for item in PRESETS):
         raise RpcFailure(INVALID_ARGS, "args.preset: no such preset", {"path": "args.preset"})
+    elif args.options is not None:
+        raise RpcFailure(
+            INVALID_ARGS,
+            "args.options: only a custom preset takes options",
+            {"path": "args.options"},
+        )
     return args
+
+
+def _reduce_options(options: dto.ReduceOptionsDto) -> ReduceOptions:
+    """The desktop dialog's ``options()`` with linearize unchecked: the same options give the same
+    bytes on both, so a custom spec equal to a preset writes that preset's file."""
+    return ReduceOptions(
+        optimize=OptimizeOptions(
+            image_dpi=options.image_dpi,
+            jpeg_quality=options.jpeg_quality,
+            grayscale=options.grayscale,
+            subset_fonts=options.subset_fonts,
+            remove_thumbnails=options.remove_thumbnails,
+            remove_metadata=options.remove_metadata,
+        ),
+        object_streams=options.object_streams,
+    )
+
+
+def _category_key(name: str) -> str:
+    key = CATEGORY_KEYS.get(name)
+    if key is None:
+        if name not in _UNKNOWN_CATEGORIES:
+            _UNKNOWN_CATEGORIES.add(name)
+            logger.warning("space audit category %r has no key; reported as other", name)
+        return "other"
+    return key
+
+
+def _audit_value(usage: SpaceUsage) -> dto.AuditValue:
+    return dto.AuditValue(
+        total=usage.total,
+        categories=tuple(
+            dto.SpaceCategoryDto(key=_category_key(name), name=name, size=size)
+            for name, size in usage.categories.items()
+        ),
+    )
+
+
+def _shifted(progress: ProgressFn) -> ProgressFn:
+    """The reduce's own steps (of 3, linearize off on the web), after the audit-before step."""
+
+    def report(done: int, total: int) -> None:
+        progress(done + 1, _AUDITED_STEPS)
+
+    return report
 
 
 def _run_reduce(
     session: DocumentSession | None, args: dto.ReduceSizeArgs, ctx: JobContext
 ) -> JobOutput:
     owner = _session(session)
-    options: ReduceOptions = preset(args.preset).options
-    with owner.lock:
-        result = reduce_size(owner.document, options, token=ctx.token, progress=ctx.progress)
+    if args.preset == CUSTOM_PRESET:
+        assert args.options is not None  # _convert_reduce checked it
+        options = _reduce_options(args.options)
+    else:
+        options = preset(args.preset).options
+    ctx.token.check()
+    if not args.audit:
+        with owner.lock:
+            result = reduce_size(owner.document, options, token=ctx.token, progress=ctx.progress)
+        audit_before = audit_after = None
+    else:
+        # One job, one progress bar: 0 audit before, 1 to 4 the reduce, 4 audit after, 5 done.
+        ctx.progress(0, _AUDITED_STEPS)
+        with owner.lock:
+            audit_before = _audit_value(space_audit(owner.document))
+        ctx.token.check()
+        with owner.lock:
+            result = reduce_size(
+                owner.document, options, token=ctx.token, progress=_shifted(ctx.progress)
+            )
+        ctx.progress(4, _AUDITED_STEPS)
+        ctx.token.check()
+        with owner.lock:
+            audited = owner.engine.open(result.data, None)
+            try:
+                audit_after = _audit_value(space_audit(audited))
+            finally:
+                audited.close()
+        ctx.progress(_AUDITED_STEPS, _AUDITED_STEPS)
     return JobOutput(
         files=(dto.FileDto(name="reduced.pdf", mime="application/pdf", data=result.data),),
         value=dto.ReduceSizeValue(
-            before=result.before, after=result.after, notes=tuple(result.notes)
+            before=result.before,
+            after=result.after,
+            notes=tuple(result.notes),
+            audit_before=audit_before,
+            audit_after=audit_after,
         ),
     )
 
@@ -268,13 +402,7 @@ def _run_audit(session: DocumentSession | None, args: dto.AuditArgs, ctx: JobCon
     with owner.lock:
         usage = space_audit(owner.document)
     ctx.token.check()
-    value = dto.AuditValue(
-        total=usage.total,
-        categories=tuple(
-            dto.SpaceCategoryDto(name=name, size=size) for name, size in usage.categories.items()
-        ),
-    )
-    return JobOutput(kind="report", value=value)
+    return JobOutput(kind="report", value=_audit_value(usage))
 
 
 def _convert_export(data: object, buffers: BufferTable) -> dto.ExportArgs:
@@ -641,6 +769,14 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
                 REFUSED,
                 "a job that changes an encrypted document is not available in the browser",
                 {"reason": "encrypted_mutating_job"},
+            )
+        if encrypted and kind.name == "reduce_size":
+            # The job's copy is decrypted, so the reduced file would have no password, unlike
+            # the desktop's (which keeps the encryption). Refused rather than written unprotected.
+            raise RpcFailure(
+                REFUSED,
+                "a password-protected file can't be reduced in the browser",
+                {"reason": "encrypted_reduce"},
             )
         if encrypted:
             # Written from a scratch copy: writing without encryption changes the open document's

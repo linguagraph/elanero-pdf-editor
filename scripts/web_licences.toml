@@ -7,6 +7,12 @@
 # - [npm."<name>"]: the copyright line of each runtime npm package in web/app/package-lock.json.
 #   The lock has no copyright holders, so they are kept here after reading each package's licence
 #   file. The generator never reads node_modules.
+#   Each has a version, which must equal the lock's: a lock bump fails the check until the entry is
+#   re-read and its version updated. An optional note is printed under the entry.
+# - [[component]] lock = "<npm name>": the component's version must equal that package's version in
+#   the lock (dev packages included), so a bump of the package fails until the component is re-read.
+#   Use it only for a component that is a copy of an npm package (the Vite preload helper).
+#   Components with no npm package are pinned by hand and are not checked against the lock.
 #
 # A note starting "To confirm" marks a fact that is not verified from this repository (the Pyodide
 # or Emscripten sources, or the wasm build's contents). Do not drop the note until it is checked.
@@ -164,6 +170,7 @@ note = "To confirm: whether the wasm build includes Tesseract and Leptonica at a
 [[component]]
 name = "Vite (preload helper injected into the build)"
 version = "8.3.5"
+lock = "vite"
 license = "MIT"
 url = "https://vite.dev"
 copyright = ["Copyright (c) 2019-present, VoidZero Inc. and Vite contributors"]
@@ -175,49 +182,65 @@ license = "AGPL-3.0-or-later"
 copyright = ["Copyright (c) the Elanero contributors (see the repository's commit history)"]
 
 [npm."react"]
+version = "19.3.1"
 copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
 
 [npm."react-dom"]
+version = "19.3.1"
 copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
 
 [npm."scheduler"]
+version = "0.28.0"
 copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
 
 [npm."use-sync-external-store"]
+version = "1.7.0"
 copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
 
 [npm."aria-hidden"]
+version = "1.2.6"
 copyright = "Copyright (c) 2017 Anton Korzunov"
 
 [npm."clsx"]
+version = "2.1.1"
 copyright = "Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)"
 
 [npm."tslib"]
+version = "2.9.1"
 copyright = "Copyright (c) Microsoft Corporation."
 
 [npm."react-aria"]
+version = "3.53.1"
 copyright = "Copyright 2019 Adobe"
 
 [npm."react-aria-components"]
+version = "1.22.1"
 copyright = "Copyright 2019 Adobe"
 
 [npm."react-stately"]
+version = "3.51.0"
 copyright = "Copyright 2019 Adobe"
 
 [npm."@react-types/shared"]
+version = "3.37.0"
 copyright = "Copyright 2019 Adobe"
 
 [npm."@internationalized/date"]
+version = "3.12.4"
 copyright = "Copyright 2019 Adobe"
 
 [npm."@internationalized/number"]
+version = "3.6.9"
 copyright = "Copyright 2019 Adobe"
 
 [npm."@internationalized/string"]
+version = "3.2.10"
 copyright = "Copyright 2019 Adobe"
 
 [npm."@swc/helpers"]
+version = "0.5.24"
 copyright = "Copyright 2024 SWC contributors."
 
 [npm."client-only"]
+version = "0.0.1"
 copyright = "To confirm: no copyright line in the installed package (its licence file is absent)."
