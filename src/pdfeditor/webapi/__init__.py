@@ -14,7 +14,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from pdfeditor.webapi import actions, dto, jobs, render, save, session, text
+from pdfeditor.webapi import actions, dto, jobs, memory, render, save, session, text
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 from pdfeditor.webapi.events import events_for
@@ -63,6 +63,8 @@ METHODS: dict[str, Method] = {
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
     "save.mark_saved": Method(dto.HandleParams, save.mark_saved),
+    "save.autosave_bytes": Method(dto.HandleParams, save.autosave_bytes),
+    "system.memory": Method(dto.Empty, memory.system_memory),
     "jobs.prepare": Method(dto.JobPrepareParams, jobs.prepare, takes_buffers=True),
     "jobs.apply": Method(dto.JobApplyParams, jobs.apply),
     "jobs.abort": Method(dto.JobAbortParams, jobs.abort),

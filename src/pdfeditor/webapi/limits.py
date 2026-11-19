@@ -36,3 +36,7 @@ MAX_PREPARED_JOBS = 1  # prepared jobs (begun or waiting for their run) per engi
 # Undo snapshots live in the worker's memory file system (W1.1 section 7). Past this budget the
 # oldest snapshots are dropped and the undo history shortens (W2.3); nothing is refused.
 SNAPSHOT_BUDGET_BYTES = 512 * 1024 * 1024
+
+# The engine heap (W1.1 section 7): the front end warns once the wasm linear memory passes this.
+# Linear memory only grows, so this is a high-water mark, and a warning is never an error.
+HEAP_WARN_BYTES = 1536 * 1024**2  # 1.5 GiB

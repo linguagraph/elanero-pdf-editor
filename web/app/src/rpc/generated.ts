@@ -72,6 +72,19 @@ export type MarkKind = 'HeaderFooter' | 'Bates' | 'Watermark' | 'Background';
  */
 export type SaveMode = 'in_place' | 'copy';
 
+/**
+ * ``save.autosave_bytes`` (W1.2 section 12): an unverified snapshot for the browser's private
+ * copy. ``skipped`` names why no bytes came back: "protected" (a password or encryption) or
+ * "too_large" (above the autosave cap); ``data`` is then empty and ``size`` is 0.
+ */
+export interface AutosaveResult {
+  /** the snapshot, decrypted; a $bin buffer */
+  data: ArrayBuffer;
+  /** len(data) */
+  size: number;
+  skipped: string | null;
+}
+
 export interface AvailableResult {
   /** the actions whose capabilities hold on this document and platform */
   names: string[];
@@ -245,6 +258,18 @@ export interface MarkSummaryDto {
 export interface MarksResult {
   /** one per kind present, in MarkKind order */
   items: MarkSummaryDto[];
+}
+
+/** ``system.memory`` (W1.2 section 12): what the front end needs for the heap warning. */
+export interface MemoryResult {
+  /** the wasm linear memory; None where it cannot be read */
+  wasm_heap_bytes: number | null;
+  /** the limit the front end compares with (limits.HEAP_WARN_BYTES) */
+  heap_warn_bytes: number;
+  /** the undo snapshots of the open documents, on disk */
+  snapshot_bytes: number;
+  /** open documents */
+  documents: number;
 }
 
 export interface OpenParams {
@@ -506,6 +531,7 @@ export interface Methods {
   'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
   'render.tile': { params: RenderTileParams; result: PageImage; deadline: 'render' };
+  'save.autosave_bytes': { params: HandleParams; result: AutosaveResult; deadline: 'io' };
   'save.mark_saved': { params: HandleParams; result: MarkSavedResult; deadline: 'instant' };
   'save.save_bytes': { params: SaveParams; result: SaveResult; deadline: 'io' };
   'session.capabilities': { params: HandleParams; result: CapabilitiesResult; deadline: 'instant' };
@@ -515,6 +541,7 @@ export interface Methods {
   'session.outline': { params: HandleParams; result: OutlineResult; deadline: 'instant' };
   'session.pages': { params: HandleParams; result: PagesResult; deadline: 'instant' };
   'session.unlock_owner': { params: UnlockParams; result: UnlockResult; deadline: 'instant' };
+  'system.memory': { params: Empty; result: MemoryResult; deadline: 'instant' };
   'text.extract': { params: ExtractParams; result: ExtractResult; deadline: 'slice' };
   'text.layer': { params: PageParams; result: TextLayerResult; deadline: 'render' };
   'text.search': { params: SearchParams; result: SearchResult; deadline: 'slice' };
@@ -536,6 +563,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'marks.list': 'instant',
   'render.page': 'render',
   'render.tile': 'render',
+  'save.autosave_bytes': 'io',
   'save.mark_saved': 'instant',
   'save.save_bytes': 'io',
   'session.capabilities': 'instant',
@@ -545,6 +573,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.outline': 'instant',
   'session.pages': 'instant',
   'session.unlock_owner': 'instant',
+  'system.memory': 'instant',
   'text.extract': 'slice',
   'text.layer': 'render',
   'text.search': 'slice',
@@ -571,6 +600,7 @@ export const RESULT_DECODERS: {
   'marks.list': decodeMarksResult,
   'render.page': decodePageImage,
   'render.tile': decodePageImage,
+  'save.autosave_bytes': decodeAutosaveResult,
   'save.mark_saved': decodeMarkSavedResult,
   'save.save_bytes': decodeSaveResult,
   'session.capabilities': decodeCapabilitiesResult,
@@ -580,10 +610,25 @@ export const RESULT_DECODERS: {
   'session.outline': decodeOutlineResult,
   'session.pages': decodePagesResult,
   'session.unlock_owner': decodeUnlockResult,
+  'system.memory': decodeMemoryResult,
   'text.extract': decodeExtractResult,
   'text.layer': decodeTextLayerResult,
   'text.search': decodeSearchResult,
 };
+
+export function decodeAutosaveResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): AutosaveResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['data', 'size', 'skipped'], path);
+  return {
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+    size: expectInteger(field(o, 'size', path), `${path}.size`),
+    skipped: orNull(field(o, 'skipped', path), `${path}.skipped`, (v1, p1) => expectString(v1, p1)),
+  };
+}
 
 export function decodeAvailableResult(
   value: unknown,
@@ -895,6 +940,21 @@ export function decodeMarksResult(
   checkKeys(o, ['items'], path);
   return {
     items: expectArray(field(o, 'items', path), `${path}.items`).map((item1, index1) => decodeMarkSummaryDto(item1, ctx, `${`${path}.items`}[${index1}]`)),
+  };
+}
+
+export function decodeMemoryResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): MemoryResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['wasm_heap_bytes', 'heap_warn_bytes', 'snapshot_bytes', 'documents'], path);
+  return {
+    wasm_heap_bytes: orNull(field(o, 'wasm_heap_bytes', path), `${path}.wasm_heap_bytes`, (v1, p1) => expectInteger(v1, p1)),
+    heap_warn_bytes: expectInteger(field(o, 'heap_warn_bytes', path), `${path}.heap_warn_bytes`),
+    snapshot_bytes: expectInteger(field(o, 'snapshot_bytes', path), `${path}.snapshot_bytes`),
+    documents: expectInteger(field(o, 'documents', path), `${path}.documents`),
   };
 }
 
