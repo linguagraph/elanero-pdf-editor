@@ -296,6 +296,15 @@ export const EN = {
   'redact.markFailed': 'The area could not be marked. Try again.',
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
 
+  // Flatten annotations (W7.9): the confirmation, then the result.
+  'flatten.title': 'Flatten annotations',
+  'flatten.confirm.body':
+    'Every comment is drawn into its page and stops being a separate, editable annotation. You can undo this until you save. After you save the file, the flattening is permanent for that file.',
+  'flatten.confirm.run': 'Flatten now',
+  'flatten.confirm.cancel': 'Cancel',
+  'flatten.done': 'Annotations flattened.',
+  'flatten.failed': 'The annotations could not be flattened. Try again.',
+
   // Sanitize (W7.4): the dialog's items, its confirmation and the report.
   'sanitize.title': 'Sanitize document',
   'sanitize.intro': 'Choose the hidden data to remove. Nothing is removed until you confirm.',
