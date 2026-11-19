@@ -12,7 +12,7 @@ export interface StartOptions {
 }
 
 export interface WorkerClient {
-  call(request: string, buffer?: ArrayBuffer): Promise<CallResult>;
+  call(request: string, buffers?: readonly ArrayBuffer[]): Promise<CallResult>;
   onStage(listener: (stage: Stage) => void): () => void;
   terminate(): void;
 }
@@ -134,17 +134,18 @@ function startWorker(options: StartOptions): WorkerClient {
   worker.postMessage({ kind: 'init', baseUrl: assetBase });
 
   return {
-    call(request, buffer) {
+    call(request, buffers = []) {
       if (closed) return Promise.reject(new CallError('the worker has been terminated'));
       const id = nextId++;
       return new Promise<CallResult>((resolve, reject) => {
         pending.set(id, { resolve, reject });
         const message = { id, method: 'dispatch', request };
         try {
-          if (buffer === undefined) {
+          if (buffers.length === 0) {
             worker.postMessage(message);
           } else {
-            worker.postMessage({ ...message, buffer }, [buffer]);
+            // Each buffer is transferred, so the caller's copies are detached.
+            worker.postMessage({ ...message, buffers: [...buffers] }, [...buffers]);
           }
         } catch (error) {
           pending.delete(id);

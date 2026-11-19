@@ -35,7 +35,7 @@ export async function runPrintWorker(
     method: 'job.run',
     params: { job: 'print_pages', args, document: { $bin: 0 } },
   });
-  const result = await worker.call(request, document);
+  const result = await worker.call(request, [document]);
   const reply = objectOf(JSON.parse(result.reply) as unknown, 'reply');
   if (reply.ok !== true) {
     const error = objectOf(reply.error, 'reply.error');

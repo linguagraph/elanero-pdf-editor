@@ -35,7 +35,7 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
     try {
       if (engine === undefined) throw new Error('the engine has not been started');
       const handle = await engine;
-      const result = handle.dispatch(message.request, message.buffer);
+      const result = handle.dispatch(message.request, message.buffers ?? []);
       const reply: ReplyMessage = { id: message.id, reply: result.reply };
       if (result.buffer === undefined) {
         scope.postMessage(reply);

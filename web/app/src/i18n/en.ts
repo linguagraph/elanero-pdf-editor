@@ -260,6 +260,23 @@ export const EN = {
   'job.working': 'Working',
   'job.percent': '{percent}% done',
   'job.done': 'Done: {label}',
+  'combine.title': 'Combine files',
+  'combine.label': 'Combining files',
+  'combine.dropHint':
+    'Drop PDF or image files here, or add them with the button. They are combined in the order listed.',
+  'combine.addFiles': 'Add files',
+  'combine.empty': 'No files yet. Add at least two.',
+  'combine.moveUp': 'Move up',
+  'combine.moveDown': 'Move down',
+  'combine.remove': 'Remove',
+  'combine.outputName': 'Output name',
+  'combine.button': 'Combine',
+  'combine.needTwo': 'Add at least two files to combine.',
+  'combine.unsupported': 'Not a PDF or image file, so not added: {name}',
+  'combine.tooLarge': '{name} is larger than the web version can open.',
+  'combine.busy': 'Another task is running. Wait for it to finish, then combine again.',
+  'combine.done': 'Your combined file is ready.',
+  'combine.download': 'Download {name}',
 
   // Print dialog (W6.5, W1.6 section 5).
   'print.title': 'Print',

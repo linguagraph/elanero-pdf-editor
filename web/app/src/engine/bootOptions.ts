@@ -3,6 +3,7 @@
 // The assets are the same-origin folder that scripts/stage_engine_assets.mjs fills, next to the
 // app's base path. This file is read only by main.tsx, so tests never import the worker URL.
 import engineWorkerUrl from './engine.worker.ts?worker&url';
+import jobWorkerUrl from './jobworker.ts?worker&url';
 import type { StartOptions } from './start';
 
 export function engineBootOptions(): StartOptions {
@@ -13,13 +14,7 @@ export function engineBootOptions(): StartOptions {
   };
 }
 
-// Where the built job worker is (W3.7). Read only by main.tsx, like the engine's options above.
-import jobWorkerUrl from './jobworker.ts?worker&url';
-
+// The job worker (W3.7) loads the same assets, so only its script differs.
 export function jobWorkerBootOptions(): StartOptions {
-  const page = new URL(import.meta.env.BASE_URL, globalThis.location.href);
-  return {
-    workerUrl: jobWorkerUrl,
-    assetBaseUrl: new URL('engine-assets/', page).href,
-  };
+  return { ...engineBootOptions(), workerUrl: jobWorkerUrl };
 }

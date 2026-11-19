@@ -17,6 +17,7 @@ import { AppFrame } from './layout/AppFrame';
 import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
+import { CombineDialog } from './combine/CombineDialog';
 import { CommandPalette } from './palette/CommandPalette';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
@@ -63,6 +64,7 @@ export interface AppProps {
 export function App({ engine, startPrintWorker }: AppProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const [combineOpen, setCombineOpen] = useState(false);
   const docs = useDocuments(engine);
   useEffect(() => {
     // Two frames: the start-up screen is painted before the engine begins to load.
@@ -82,6 +84,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     print: () => setPrintOpen(true),
     open: () => docs.openPicker(),
     'open-recent': () => docs.showStartPage(),
+    'combine-files-into-pdf': () => setCombineOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -207,6 +210,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
         currentPage={viewState.page}
         startWorker={startPrintWorker}
       />
+      <CombineDialog isOpen={combineOpen} onClose={() => setCombineOpen(false)} />
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
       <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
