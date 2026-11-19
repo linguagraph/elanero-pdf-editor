@@ -244,6 +244,17 @@ describe('autosaver', () => {
     expect(call).toHaveBeenCalledTimes(1);
   });
 
+  it('a released document keeps its copy when its tab closes, and is not copied again', async () => {
+    const { autosaver, removes, call } = setup();
+    autosaver.sync([doc()]);
+    await advance(SETTLE_MS);
+    autosaver.release(1);
+    autosaver.sync([]);
+    await advance(AUTOSAVE_INTERVAL_MS * 2);
+    expect(removes).toEqual([]);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
   it('drops a write that finishes after its document was closed', async () => {
     let release: (value: Reply) => void = () => undefined;
     const { autosaver, writes, removes } = setup({

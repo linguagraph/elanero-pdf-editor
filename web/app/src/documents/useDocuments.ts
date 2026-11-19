@@ -142,7 +142,10 @@ export function useDocuments(engine: EngineConnection): Documents {
           setTabSession(id, { rpc: client, handle: opened.handle });
         },
         // A document that could not come back: its tab closes and its old session is detached.
+        // The copy stays in the store: it is the recovery copy of a document the restart could not
+        // reopen, so the autosaver must not delete it when the tab goes (W3.9 S3).
         lost: (id) => {
+          autosaver.release(id);
           commitTabs((state) => closeTabState(state, id));
           setTabSession(id, null);
           forgetBookmarksTab(id);

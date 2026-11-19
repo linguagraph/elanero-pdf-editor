@@ -1,16 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEngineLoadStore } from '../feedback/engineLoad';
 import { createNotRespondingStore } from '../feedback/notResponding';
 import { createToastStore } from '../feedback/toasts';
 import type { EngineClient, EngineConnection } from '../engine/engineConnection';
+import { EngineLoadError } from '../engine/errors';
 import type { OpenResult } from '../rpc/generated';
-import type { AutosaveStore } from '../storage/autosaveStore';
+import { type AutosaveCopy, type AutosaveStore } from '../storage/autosaveStore';
+import { createAutosaver } from '../storage/autosaver';
 import {
   addTab,
   closeTab,
   type DocumentTab,
   EMPTY_TABS,
   replaceHandle,
+  setDirty,
   type TabState,
 } from '../tabs/tabState';
 import { restartSession } from './engineSession';
@@ -154,5 +157,147 @@ describe('the tabs after a restart (W3.9 S3)', () => {
       { id: 1, name: 'a.pdf', dirty: true, handle: 'h-new', pages: 2, encrypted: false },
     ]);
     expect(state.activeId).toBe(1);
+  });
+});
+
+// A store that really holds the copies, so a test can see which ones survive a restart.
+function mapStore() {
+  const copies = new Map<number, AutosaveCopy>();
+  const removes: number[] = [];
+  const store: AutosaveStore = {
+    available: async () => true,
+    write: async (_tab, docId, bytes, meta) => {
+      copies.set(docId, { bytes, meta });
+      return 'written';
+    },
+    read: async (_tab, docId) => copies.get(docId),
+    remove: async (_tab, docId) => {
+      removes.push(docId);
+      copies.delete(docId);
+    },
+    removeTab: async () => undefined,
+  };
+  return { store, copies, removes };
+}
+
+// Two dirty documents, each with a copy the autosaver wrote through the old engine. The wiring
+// follows useDocuments: a lost document is released by the autosaver before its tab closes, and
+// the autosaver is then synced with the tabs that remain.
+async function documentsWithCopies() {
+  const fake = mapStore();
+  const oldEngine = {
+    call: vi.fn(async () => ({ data: new ArrayBuffer(4), size: 4, skipped: null })),
+  };
+  const autosaver = createAutosaver({
+    tabId: 'browser-tab',
+    store: fake.store,
+    client: () => oldEngine as unknown as Pick<EngineClient, 'call'>,
+    warn: () => undefined,
+  });
+  let state: TabState = setDirty(
+    setDirty(
+      addTab(addTab(EMPTY_TABS, { name: 'a.pdf', handle: 'h1', pages: 2 }), {
+        name: 'b.pdf',
+        handle: 'h2',
+        pages: 3,
+      }),
+      1,
+      true,
+    ),
+    2,
+    true,
+  );
+  autosaver.sync(state.tabs);
+  await vi.advanceTimersByTimeAsync(10);
+  expect([...fake.copies.keys()].sort()).toEqual([1, 2]);
+  return {
+    fake,
+    autosaver,
+    tabs: () => state,
+    restartWith(engine: EngineConnection) {
+      const session = restartSession({
+        engine,
+        tabs: state.tabs,
+        tabId: 'browser-tab',
+        store: fake.store,
+        isProtected: (id) => autosaver.isProtected(id),
+        reopened: (id, _client, opened) => {
+          state = replaceHandle(state, id, opened.handle, opened.pages);
+        },
+        lost: (id) => {
+          autosaver.release(id);
+          state = closeTab(state, id);
+        },
+      });
+      return session;
+    },
+    settle: async () => {
+      autosaver.sync(state.tabs);
+      await vi.advanceTimersByTimeAsync(10);
+    },
+  };
+}
+
+describe('a restart keeps the copies it does not reopen (W3.9 S3)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a new engine that fails to load leaves every copy in the store', async () => {
+    const docs = await documentsWithCopies();
+    const loadStore = createEngineLoadStore();
+    const engine = {
+      store: loadStore,
+      restart: () => true,
+      whenReady: () => new Promise<EngineClient>(() => undefined),
+    } as unknown as EngineConnection;
+    const notResponding = createNotRespondingStore({
+      restart: () => ({ ok: true, reopen: [], lost: { items: [], text: '' } }),
+      toasts: createToastStore(),
+    });
+    notResponding.setSession(docs.restartWith(engine));
+
+    const pending = notResponding.restart();
+    loadStore.fail(new EngineLoadError('pyodide', 'the engine did not load'));
+    await pending;
+    await docs.settle();
+
+    expect(docs.tabs().tabs).toEqual([]);
+    expect(docs.fake.removes).toEqual([]);
+    expect([...docs.fake.copies.keys()].sort()).toEqual([1, 2]);
+  });
+
+  it('a document that cannot be reopened keeps its copy, and the others reopen', async () => {
+    const docs = await documentsWithCopies();
+    const opened = { handle: 'h-new', pages: 3, warning: null } as OpenResult;
+    const client = {
+      call: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('session.open failed'))
+        .mockResolvedValueOnce(opened),
+    } as unknown as EngineClient;
+    const engine = {
+      store: createEngineLoadStore(),
+      restart: () => true,
+      whenReady: () => Promise.resolve(client),
+    } as unknown as EngineConnection;
+    const notResponding = createNotRespondingStore({
+      restart: () => ({ ok: true, reopen: [], lost: { items: [], text: '' } }),
+      toasts: createToastStore(),
+    });
+    notResponding.setSession(docs.restartWith(engine));
+
+    await notResponding.restart();
+    await docs.settle();
+
+    // a.pdf (id 1) failed to reopen: its tab is closed and its copy is the one the user can recover.
+    expect(docs.tabs().tabs.map((tab) => tab.id)).toEqual([2]);
+    expect(docs.tabs().tabs[0]?.handle).toBe('h-new');
+    expect(docs.fake.removes).not.toContain(1);
+    expect(docs.fake.copies.has(1)).toBe(true);
   });
 });
