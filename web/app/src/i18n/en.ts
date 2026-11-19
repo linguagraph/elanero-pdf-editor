@@ -426,6 +426,8 @@ export const EN = {
   'tabs.unsaved': 'Unsaved changes',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
   'open.largeFile': '{name} is large, so opening and editing may be slow.',
+  'open.launchFailed': '{name} could not be opened. Open it again from the app.',
+  'open.launchTooMany': 'Only the first {max} files were opened. Open the others from the app.',
   'autosave.unavailable':
     'This browser does not keep an autosave copy, so unsaved changes are lost if the page closes.',
   'autosave.noSpace':

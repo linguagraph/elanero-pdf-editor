@@ -7,6 +7,9 @@ import { createJobWorkerPool } from './engine/jobPool';
 import { startJobWorker } from './engine/start';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
+import { installLaunchInbox, launchQueueOf } from './pwa/launch';
+import { toasts } from './feedback/toasts';
+import { t } from './i18n/t';
 import { initTheme } from './theme/theme';
 import './theme/tokens.css';
 
@@ -23,9 +26,15 @@ if (shouldRefuse(window)) {
   const engine = createEngineConnection({ boot: engineBootOptions() });
   // One job worker pool per tab (W3.1 slice 2): it starts no worker until App warms it.
   const jobs = createJobWorkerPool({ start: () => startJobWorker(jobWorkerBootOptions()) });
+  // The OS "Open with" launches (W4.6 S1). The consumer is set here, before the first render, so a
+  // launch is not held by the browser; App attaches the sink that opens the files.
+  const launches = installLaunchInbox(launchQueueOf(window), {
+    failed: (name) => toasts.push('error', t('open.launchFailed', { name })),
+    tooMany: (max) => toasts.push('warning', t('open.launchTooMany', { max })),
+  });
   createRoot(root).render(
     <StrictMode>
-      <App engine={engine} jobs={jobs} startPrintWorker={jobs.acquire} />
+      <App engine={engine} jobs={jobs} startPrintWorker={jobs.acquire} launches={launches} />
     </StrictMode>,
   );
   // Production only: the dev server's modules must not sit behind a service worker cache.
