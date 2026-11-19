@@ -160,7 +160,8 @@ export interface PageRpc {
       | 'jobs.abort'
       | 'comments.flattenable'
       | 'comments.xfdf_preview'
-      | 'marks.list',
+      | 'marks.list'
+      | 'system.memory',
   >(
     method: M,
     params: Methods[M]['params'],

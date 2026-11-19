@@ -7,8 +7,6 @@ import { mapRpcError } from '../rpc/errors';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
 
-// A warning is something that may cost the user work (the copy that could not be kept), shown in the
-// warning colour. It times out like info; only an error stays until dismissed.
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
 export interface Toast {

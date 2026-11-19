@@ -142,7 +142,9 @@ describe('runCompare', () => {
       OPTIONS,
     );
 
-    expect(engine.call.mock.calls.map((entry) => entry[0])).toEqual(['jobs.prepare', 'jobs.apply']);
+    expect(
+      engine.call.mock.calls.map((entry) => entry[0]).filter((name) => name !== 'system.memory'),
+    ).toEqual(['jobs.prepare', 'jobs.apply']);
     expect(engine.call.mock.calls[0]?.[1]).toMatchObject({
       handle: 'doc-1',
       job: 'compare',

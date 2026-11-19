@@ -5,6 +5,7 @@
 // job bar. The action's own name and arguments are sent unchanged, as the actions layer takes them.
 import type { CallResult } from '../engine/loader';
 import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
+import { memoryWarner } from '../feedback/memoryWarning';
 import { RpcError, type RpcErrorCode } from '../rpc/client';
 import { type ChangedDto, ERROR_CODES, type Methods, PROTOCOL_VERSION } from '../rpc/generated';
 import {
@@ -20,7 +21,7 @@ import {
 
 // The engine calls the flow makes. The RPC client satisfies it; tests pass a fake.
 export interface ActionJobEngine {
-  call<M extends 'jobs.prepare' | 'jobs.apply' | 'jobs.abort'>(
+  call<M extends 'jobs.prepare' | 'jobs.apply' | 'jobs.abort' | 'system.memory'>(
     method: M,
     params: Methods[M]['params'],
   ): Promise<Methods[M]['result']>;
@@ -126,6 +127,8 @@ export async function runActionJob(
     args: { name, args },
   });
   const { token } = prepared;
+  // The job worker's copy counts against the heap warning (W3.9 D4). Read before the copy is sent.
+  void memoryWarner.check(engine, 'job', prepared.document.byteLength);
 
   const worker = deps.startWorker();
   let cancel: () => void = () => undefined;
@@ -167,6 +170,7 @@ export async function runActionJob(
       label: reply.label,
       require_full_save: reply.requireFullSave,
     });
+    void memoryWarner.check(engine, 'job');
     progress.finish(token, { ok: true });
     return { label: reply.label, changed: applied.changed, value: reply.value };
   } catch (error) {

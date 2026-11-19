@@ -101,6 +101,7 @@ describe('runPrintJob', () => {
       [expect.objectContaining({ name: 'page-01.png', mime: 'image/png' })],
       { dpi: 300 },
     );
+    expect(call.mock.calls.map((entry) => entry[0])).toContain('system.memory');
     expect(call).toHaveBeenLastCalledWith('jobs.abort', { handle: 'h1', token: 'tok-1' });
     expect(store.getState().job).toBeUndefined();
     expect(worker.terminate).toHaveBeenCalled();

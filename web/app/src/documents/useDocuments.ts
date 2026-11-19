@@ -9,6 +9,7 @@ import {
   type EngineConnection,
   setTabSession,
 } from '../engine/engineConnection';
+import { memoryWarner } from '../feedback/memoryWarning';
 import { reportRpcError, toasts } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
@@ -163,6 +164,7 @@ export function useDocuments(engine: EngineConnection): Documents {
       const id = tabsRef.current.nextId;
       commitTabs((state) => addTab(state, { name: file.name, handle, pages }));
       setTabSession(id, { rpc: client, handle });
+      void memoryWarner.check(client, 'open');
       setRecent(addRecentFile(file.name));
       setShowStart(false);
       setPickHint(null);

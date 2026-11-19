@@ -17,11 +17,12 @@ import {
   ReplyShapeError,
 } from '../rpc/shape';
 import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
+import { memoryWarner } from '../feedback/memoryWarning';
 import type { ResultFile } from './downloads';
 
 // The engine calls the flow makes. The RPC client satisfies it; tests pass a fake.
 export interface FileJobEngine {
-  call<M extends 'jobs.prepare' | 'jobs.apply' | 'jobs.abort'>(
+  call<M extends 'jobs.prepare' | 'jobs.apply' | 'jobs.abort' | 'system.memory'>(
     method: M,
     params: Methods[M]['params'],
   ): Promise<Methods[M]['result']>;
@@ -146,6 +147,8 @@ export async function runFileJobOutput(
   const { engine } = deps;
   const prepared = await engine.call('jobs.prepare', { handle, job, args });
   const { token } = prepared;
+  // The job worker's copy counts against the heap warning (W3.9 D4). Read before the copy is sent.
+  void memoryWarner.check(engine, 'job', prepared.document.byteLength);
 
   const worker = deps.startWorker();
   let cancel: () => void = () => undefined;
@@ -194,6 +197,7 @@ export async function runFileJobOutput(
       label: '',
       require_full_save: false,
     });
+    void memoryWarner.check(engine, 'job');
     progress.finish(token, { ok: true, quiet });
     return output;
   } catch (error) {
