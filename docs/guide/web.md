@@ -61,6 +61,10 @@ is reloaded until you press it.
   theme. The default zoom applies to the open document at once, and to each document you open. The
   author name is saved now and used once comments are available in the web version (coming soon).
 
+  Zoom above 100% on a high-density screen can ask for more pixels than a page can be drawn at. The
+  viewer then draws the page at the largest size it supports, so the page stays visible rather than
+  going blank.
+
 ## Ribbon and keyboard shortcuts
 
 - **Ribbon.** The ribbon's seven tabs (Home, Edit, Organize, Protect, Comment, View and Tools) are

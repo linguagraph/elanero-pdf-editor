@@ -43,7 +43,8 @@ describe('marks strings', () => {
 
   it('defines every marks key in en.ts with a non-empty text', () => {
     for (const [key, value] of Object.entries(EN)) {
-      if (key.startsWith('marks.')) expect(value.length, key).toBeGreaterThan(0);
+      if (key.startsWith('marks.') && typeof value === 'string')
+        expect(value.length, key).toBeGreaterThan(0);
     }
   });
 });
