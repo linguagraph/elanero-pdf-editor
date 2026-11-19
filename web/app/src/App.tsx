@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
 import { type CommandHandlers, runCommand } from './commands/run';
@@ -21,7 +21,11 @@ import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
-import { DocumentView } from './view/DocumentView';
+import { type DocumentViewHandle, DocumentView } from './view/DocumentView';
+import { RenderScheduler } from './view/renderScheduler';
+import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
+import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
+import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
 import { APP_VERSION } from './version';
 import './app.css';
 
@@ -65,8 +69,31 @@ export function App({ engine }: AppProps) {
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
   const session = useTabSession(activeId);
+  // One scheduler per open session: the document view and the thumbnails panel share its cache and
+  // its render limit (W5.2).
+  const scheduler = useMemo(
+    () => (session === null ? null : new RenderScheduler(session.rpc, session.handle)),
+    [session],
+  );
+  const viewRef = useRef<DocumentViewHandle>(null);
+  const thumbnailsOpen = useThumbnailsOpen(activeId);
+  const documentShown = !showStart && activeId !== null && session !== null && scheduler !== null;
   return (
     <AppFrame
+      rightRail={<ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />}
+      rightPanel={
+        documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
+          <ThumbnailsPanel
+            rpc={session.rpc}
+            handle={session.handle}
+            scheduler={scheduler}
+            onSelect={(index) => viewRef.current?.scrollToPage(index)}
+            onClose={() => {
+              if (activeId !== null) setThumbnailsOpen(activeId, false);
+            }}
+          />
+        ) : undefined
+      }
       header={
         <div className="app-header">
           <BrandMark />
@@ -100,8 +127,14 @@ export function App({ engine }: AppProps) {
             onFiles={docs.openFiles}
           />
         ) : null}
-        {!showStart && activeId !== null && session !== null ? (
-          <DocumentView key={activeId} rpc={session.rpc} handle={session.handle} />
+        {documentShown && session !== null && scheduler !== null ? (
+          <DocumentView
+            key={activeId}
+            ref={viewRef}
+            rpc={session.rpc}
+            handle={session.handle}
+            scheduler={scheduler}
+          />
         ) : null}
         <h1>{t('app.name')}</h1>
         <p>{t('app.version', { version: APP_VERSION })}</p>

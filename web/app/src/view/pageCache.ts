@@ -24,6 +24,12 @@ export function pageCacheKey(key: PageKey): string {
   return [key.handle, key.page, key.revision, key.scaleMilli, key.rotation].join('|');
 }
 
+// Thumbnails are whole pages at a small scale, so they share the page key with a suffix. The suffix
+// keeps a thumbnail from ever answering a page lookup, even when the two scales happen to match.
+export function thumbnailCacheKey(key: PageKey): string {
+  return `${pageCacheKey(key)}|thumb`;
+}
+
 export class PageCache {
   // Map keeps insertion order, so the first entry is the least recently used.
   private readonly items = new Map<string, CachedPage>();

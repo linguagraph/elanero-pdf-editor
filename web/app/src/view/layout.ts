@@ -86,6 +86,18 @@ export function isInViewport(box: PageBox, scrollTop: number, viewportHeight: nu
   return box.top < scrollTop + viewportHeight && box.top + box.height > scrollTop;
 }
 
+// The scroll position that puts a page's top edge at the top of the viewport, with the page gap
+// above it, so the gap shows as it does between two pages. Null for a page index out of range.
+export function scrollTopForPage(
+  boxes: readonly PageBox[],
+  index: number,
+  zoom: number,
+): number | null {
+  const box = boxes[index];
+  if (box === undefined) return null;
+  return Math.max(0, box.top - PAGE_GAP_PT * zoom * CSS_PX_PER_POINT);
+}
+
 // Distance from the centre of a page to the centre of the viewport, in CSS pixels.
 export function distanceToCentre(box: PageBox, scrollTop: number, viewportHeight: number): number {
   return Math.abs(box.top + box.height / 2 - (scrollTop + viewportHeight / 2));

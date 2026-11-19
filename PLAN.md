@@ -582,7 +582,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W5.1a** Document view: virtualised page list _(partial: a continuous single-column list, placeholders, the virtualised window, render queue, page cache and zoom are built and tested with a fake engine client (Vitest); pending: single and fit layouts, the scaled scroll space above 8 million px, the layout vectors, and the engine-backed render, which needs an engine session per tab (not wired yet) and the staged engine assets, so it is not verified here)_
 - [ ] **W5.1b** HiDPI tiles, render cache and prefetch
 - [ ] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
-- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers
+- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails panel built and tested with a fake engine (Vitest); pending: bookmarks, attachments, layers)_
 - [ ] **W5.3** Links, navigation history, page jump, page labels
 - [ ] **W5.4** Text selection and copy; search panel
 

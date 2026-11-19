@@ -1,0 +1,63 @@
+/* The thumbnails side panel (W5.2) and its rail button. Colours and spacing come from the theme
+   tokens (W4.4a); the box of each thumbnail is sized from the layout in CSS pixels, set inline. */
+
+.thumbs-rail-button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.thumbs-rail-button[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-focus-ring);
+}
+
+.thumbs-rail-button:disabled {
+  color: var(--color-text-disabled);
+}
+
+.thumbs-rail-button:focus-visible,
+.thumbs-scroll:focus-visible,
+.thumbs-item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.thumbs-scroll {
+  position: relative;
+  height: min(70vh, 40rem);
+  overflow-y: auto;
+  background: var(--color-surface-alt);
+}
+
+.thumbs-content {
+  position: relative;
+  width: 100%;
+}
+
+.thumbs-item {
+  position: absolute;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.thumbs-placeholder,
+.thumbs-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.thumbs-status {
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+}
