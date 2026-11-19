@@ -3,8 +3,8 @@
 // zoom. The page and zoom come from the document view, which reports them.
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/t';
+import type { ViewLayout } from './layout';
 import { pageLabelFor, parsePageInput } from './navigation';
-import type { ViewLayout } from './DocumentView';
 import './documentView.css';
 
 export interface DocumentStatusBarProps {
@@ -12,8 +12,9 @@ export interface DocumentStatusBarProps {
   readonly page: number;
   readonly total: number;
   readonly zoom: number;
-  // The page layout the reader chose; shown at the right end, after the zoom.
-  readonly layout?: ViewLayout;
+  // The page layout the reader chose; shown at the right end, after the zoom. Required, so a caller
+  // cannot leave the status bar on its default.
+  readonly layout: ViewLayout;
   // The document's page labels, when it has them (one per page, empty for none).
   readonly labels?: readonly string[];
   readonly canBack: boolean;
@@ -28,7 +29,7 @@ export function DocumentStatusBar({
   page,
   total,
   zoom,
-  layout = 'continuous',
+  layout,
   labels,
   canBack,
   canForward,

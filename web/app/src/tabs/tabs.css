@@ -3,7 +3,7 @@
 .doc-tabs {
   overflow-x: auto;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-alt);
+  background: var(--color-window);
 }
 
 .doc-tabs-list {
@@ -20,18 +20,21 @@
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border);
   border-bottom: 0;
+  /* A 2 px top edge on every tab, transparent unless selected, so selecting a tab never moves it. */
+  border-top: 2px solid transparent;
   border-radius: var(--radius-base) var(--radius-base) 0 0;
-  background: var(--color-surface);
+  background: var(--color-surface-alt);
   color: var(--color-text);
   font-size: var(--font-size-body);
   cursor: pointer;
   white-space: nowrap;
 }
 
-/* The active tab is the surface colour, with an accent line along its top edge (desktop tab bar). */
+/* The active tab is the surface colour with an accent line along its top edge (desktop tab bar); the
+   inactive tabs keep the darker alt surface, so the active one stands out. */
 .doc-tab[aria-selected='true'] {
   background: var(--color-surface);
-  border-top: 2px solid var(--color-accent);
+  border-top-color: var(--color-accent);
   font-weight: 600;
 }
 

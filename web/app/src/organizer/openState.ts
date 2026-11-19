@@ -12,6 +12,10 @@ export function setOrganizerOpen(tabId: number, value: boolean): void {
   for (const listener of [...listeners]) listener();
 }
 
+export function isOrganizerOpen(tabId: number): boolean {
+  return open.has(tabId);
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => {

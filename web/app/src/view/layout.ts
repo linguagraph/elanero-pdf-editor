@@ -3,6 +3,9 @@
 // single column, and two-page spreads (the desktop's two-up modes, core/layout.py compute_layout).
 import { CSS_PX_PER_POINT } from './zoom';
 
+// The page layouts the reader can choose (the toolbar and the status bar show them).
+export type ViewLayout = 'continuous' | 'twoPage';
+
 // The gap between pages and around the column, in points (core/layout.py PAGE_GAP).
 export const PAGE_GAP_PT = 12;
 

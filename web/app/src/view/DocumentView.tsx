@@ -23,6 +23,7 @@ import {
   type PageSizePt,
   scrollTopForPage,
   scrollTopForSpread,
+  type ViewLayout,
   visibleRange,
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
@@ -48,7 +49,6 @@ import './documentView.css';
 export { MAX_RENDER_ATTEMPTS } from './renderScheduler';
 
 // The page layouts the toolbar offers: the continuous single column, or two-page spreads.
-export type ViewLayout = 'continuous' | 'twoPage';
 
 // What the parent can ask the view to do. Scrolling is the only action for now.
 export interface DocumentViewHandle {

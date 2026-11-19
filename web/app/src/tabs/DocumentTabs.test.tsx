@@ -110,6 +110,29 @@ describe('document tabs', () => {
     expect(onSelect).toHaveBeenLastCalledWith(1);
   });
 
+  it('jumps to the first and last tab with Home and End', () => {
+    const { onSelect } = render(activateTab(threeTabs(), 2));
+    key(tabs()[1] as HTMLElement, 'Home');
+    expect(onSelect).toHaveBeenLastCalledWith(1);
+    key(tabs()[0] as HTMLElement, 'End');
+    expect(onSelect).toHaveBeenLastCalledWith(3);
+  });
+
+  it('marks only the active tab as aria-selected after the selection changes', () => {
+    render(activateTab(threeTabs(), 1));
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'true',
+      'false',
+      'false',
+    ]);
+    render(activateTab(threeTabs(), 2));
+    expect(tabs().map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+  });
+
   it('selects a tab when it is clicked', () => {
     const { onSelect } = render(threeTabs());
     act(() => {

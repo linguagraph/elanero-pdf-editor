@@ -171,6 +171,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
             page={viewState.page}
             total={activeTab?.pages ?? 0}
             zoom={viewState.zoom}
+            layout={viewState.layout}
             canBack={canGoBack(history)}
             canForward={canGoForward(history)}
             onGoTo={goTo}

@@ -31,7 +31,13 @@ export function OrganizerRailButton({ tabId, disabled }: OrganizerRailButtonProp
         setOrganizerOpen(tabId, !open);
       }}
     >
-      {t('organizer.title')}
+      <svg className="rail-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="14" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+      </svg>
+      <span className="visually-hidden">{t('organizer.title')}</span>
     </button>
   );
 }

@@ -14,6 +14,7 @@ function props(overrides: Partial<DocumentStatusBarProps> = {}): DocumentStatusB
     page: 1,
     total: 10,
     zoom: 1,
+    layout: 'continuous',
     canBack: false,
     canForward: false,
     onGoTo: vi.fn(),
@@ -160,8 +161,8 @@ describe('desktop order', () => {
     expect(host.querySelector('.doc-status-mode')?.textContent).toBe(t('view.layoutTwoPage'));
   });
 
-  it('shows the single column layout by default', () => {
-    render(props());
+  it('shows the single column layout when the reader has it', () => {
+    render(props({ layout: 'continuous' }));
     expect(host.querySelector('.doc-status-mode')?.textContent).toBe(t('view.layoutSingle'));
   });
 });
