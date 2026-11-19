@@ -79,6 +79,14 @@ class HandleParams:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class UndoParams:
+    handle: str
+    # The ``history`` of the reply whose step this undo offers (W4.4b). The undo runs only when the
+    # history has not moved since; None undoes the newest step, as before.
+    expect_history: int | None = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class PageSize:
     width: float  # points, visible space (after /Rotate and the CropBox)
     height: float
@@ -389,6 +397,9 @@ class DocStateDto:
     undo_label: str
     redo_label: str
     require_full_save: bool
+    # The undo stack's version: it moves on every do, undo and redo, not on save, so an Undo offer
+    # can tell whether its step is still the newest one (W4.4b).
+    history: int
 
 
 # The change events of a reply (W1.2 section 7). Each one is built from its dataclass by

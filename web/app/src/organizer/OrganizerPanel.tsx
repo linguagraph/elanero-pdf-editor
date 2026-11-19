@@ -137,7 +137,7 @@ export function OrganizerPanel({
   const undoChange = async () => {
     setBusy(true);
     try {
-      const reply = await rpc.call('actions.undo', { handle });
+      const reply = await rpc.call('actions.undo', { handle, expect_history: null });
       if (reply.done) await reload();
     } catch (error) {
       reportFailure(error);
