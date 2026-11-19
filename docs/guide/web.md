@@ -29,6 +29,10 @@ live when the web version is published. Until then the button does not work yet;
 The first visit loads the editor's engine, which takes a little while. Later visits are faster
 because the browser keeps the app's files.
 
+You don't have to wait for the engine. You can open or drop a PDF while Elanero starts: it is listed
+under "Waiting to open" and opens as soon as the engine is ready. To drop a waiting file, press
+**Don't open** beside its name.
+
 ## Install the app
 
 Use your browser's own install option. In Chrome and Edge, use the install icon in the address bar

@@ -207,6 +207,100 @@ describe('engine connection', () => {
   });
 });
 
+describe('whenReady', () => {
+  let workers: FakeWorker[];
+  let startWorker: ReturnType<typeof vi.fn<(options: StartOptions) => WorkerClient>>;
+
+  beforeEach(() => {
+    workers = [];
+    startWorker = vi.fn(() => {
+      const worker = new FakeWorker();
+      workers.push(worker);
+      return worker;
+    });
+  });
+
+  it('resolves with the client once hello succeeds', async () => {
+    const engine = createEngineConnection({
+      boot: BOOT,
+      store: createEngineLoadStore(),
+      startWorker,
+    });
+    engine.start();
+    let ready: unknown;
+    void engine.whenReady().then((client) => {
+      ready = client;
+    });
+    await settle();
+    expect(ready).toBeUndefined();
+
+    workers[0]!.answerHello();
+    await settle();
+    expect(ready).toBe(engine.client());
+    expect(ready).toBeDefined();
+  });
+
+  it('resolves at once when the engine is already ready', async () => {
+    const engine = createEngineConnection({
+      boot: BOOT,
+      store: createEngineLoadStore(),
+      startWorker,
+    });
+    engine.start();
+    workers[0]!.answerHello();
+    await settle();
+    await expect(engine.whenReady()).resolves.toBe(engine.client());
+  });
+
+  it('stays pending through a failed load, then resolves after a retry', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    const ready = vi.fn();
+    void engine.whenReady().then(ready);
+    workers[0]!.pending[0]!.reject(new Error('down'));
+    await settle();
+    expect(store.getState()).toEqual({ status: 'failed', stage: 'pyodide' });
+    expect(ready).not.toHaveBeenCalled();
+
+    store.retry();
+    workers[1]!.answerHello();
+    await settle();
+    expect(ready).toHaveBeenCalledWith(engine.client());
+    expect(ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects on dispose, with the connection-disposed error', async () => {
+    const engine = createEngineConnection({
+      boot: BOOT,
+      store: createEngineLoadStore(),
+      startWorker,
+    });
+    engine.start();
+    const waiting = engine.whenReady();
+    engine.dispose();
+    await expect(waiting).rejects.toThrow('the engine connection was disposed');
+  });
+
+  it('never resolves with the client of a worker a restart has replaced', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    engine.start();
+    const ready = vi.fn();
+    void engine.whenReady().then(ready);
+    const old = workers[0]!;
+    engine.start();
+    old.answerHello();
+    await settle();
+    expect(ready).not.toHaveBeenCalled();
+    expect(engine.client()).toBeUndefined();
+
+    workers[1]!.answerHello();
+    await settle();
+    expect(ready).toHaveBeenCalledWith(engine.client());
+  });
+});
+
 const session: EngineSession = {
   rpc: { call: () => Promise.reject(new Error('not used')) } as unknown as EngineSession['rpc'],
   handle: 'doc-1',
