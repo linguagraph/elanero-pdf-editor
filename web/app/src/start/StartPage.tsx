@@ -1,5 +1,6 @@
 import { type ReactNode, useId } from 'react';
 import type { PendingOpen } from '../documents/useDocuments';
+import { formatDate } from '../i18n/format';
 import { t } from '../i18n/t';
 import type { RecentFile } from '../recent/recentFiles';
 import './start.css';
@@ -121,7 +122,5 @@ export function StartPage({
 
 // The local date and time of an opening, in the browser's own format.
 export function formatOpened(openedAt: number): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(openedAt),
-  );
+  return formatDate(openedAt);
 }
