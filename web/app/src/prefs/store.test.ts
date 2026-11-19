@@ -16,6 +16,7 @@ const SAVED: Preferences = {
   authorName: 'Ada Lovelace',
   defaultZoom: 'actual',
   reduceMotion: true,
+  nightReading: true,
 };
 
 afterEach(() => {
@@ -38,6 +39,7 @@ describe('preferences round trip', () => {
       authorName: 'Ada Lovelace',
       defaultZoom: 'actual',
       reduceMotion: true,
+      nightReading: true,
     });
   });
 
@@ -67,7 +69,13 @@ describe('corrupt or invalid stored values', () => {
   it('falls back field by field for values of the wrong type or outside the choices', () => {
     window.localStorage.setItem(
       PREFS_STORAGE_KEY,
-      JSON.stringify({ language: 'fr', authorName: 5, defaultZoom: 'huge', reduceMotion: 'yes' }),
+      JSON.stringify({
+        language: 'fr',
+        authorName: 5,
+        defaultZoom: 'huge',
+        reduceMotion: 'yes',
+        nightReading: 'on',
+      }),
     );
     expect(readPreferences()).toEqual({ ...DEFAULT_PREFERENCES });
   });
@@ -75,6 +83,19 @@ describe('corrupt or invalid stored values', () => {
   it('falls back to the system theme for an unknown stored theme', () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, 'sepia');
     expect(readPreferences().theme).toBe('system');
+  });
+});
+
+describe('night reading preference', () => {
+  it('is off by default', () => {
+    expect(readPreferences().nightReading).toBe(false);
+  });
+
+  it('round-trips through the preferences key without touching the other values', () => {
+    writePreferences({ ...SAVED, nightReading: true });
+    expect(readPreferences().nightReading).toBe(true);
+    writePreferences({ ...readPreferences(), nightReading: false });
+    expect(readPreferences()).toEqual({ ...SAVED, nightReading: false });
   });
 });
 

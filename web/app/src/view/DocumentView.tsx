@@ -3,25 +3,40 @@
 // viewport are mounted; the visible ones are rendered through render.page, queued and cached by the
 // render scheduler, which the thumbnails panel of the same tab shares. No annotations, text layer or
 // tiles here (W5.1b and later).
-import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  type Ref,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
+import { readPreferences, writePreferences } from '../prefs/store';
 import {
   computeColumn,
+  computeSpreads,
   currentPageIndex,
   distanceToCentre,
   isInViewport,
   type PageSizePt,
   scrollTopForPage,
+  scrollTopForSpread,
   visibleRange,
 } from './layout';
 import { pageCacheKey } from './pageCache';
 import { CachedCanvas } from './pixels';
 import { type PlannedRender, RenderScheduler } from './renderScheduler';
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, scaleMilli, stepZoom } from './zoom';
+import { anchoredScroll, isZoomWheel, takeWheelSteps, wheelDeltaPixels } from './wheel';
 import './documentView.css';
 
 export { MAX_RENDER_ATTEMPTS } from './renderScheduler';
+
+// The page layouts the toolbar offers: the continuous single column, or two-page spreads.
+type ViewLayout = 'continuous' | 'twoPage';
 
 // What the parent can ask the view to do. Scrolling is the only action for now.
 export interface DocumentViewHandle {
@@ -62,6 +77,15 @@ export function DocumentView({
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const [viewLayout, setViewLayout] = useState<ViewLayout>('continuous');
+  const [firstAlone, setFirstAlone] = useState(false);
+  // Night reading is a saved preference: read once here, written when the toggle changes.
+  const [night, setNight] = useState(() => readPreferences().nightReading);
+  // The zoom as the latest wheel event left it, so a burst of events builds on each other.
+  const zoomRef = useRef(zoom);
+  const wheelPending = useRef(0);
+  // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
+  const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
   const [scroll, setScroll] = useState({ top: 0, height: 0 });
   // Bumped whenever the scheduler finished a render; the queue is re-planned then.
   const [tick, setTick] = useState(0);
@@ -86,7 +110,13 @@ export function DocumentView({
 
   useEffect(() => scheduler.subscribe(() => setTick((value) => value + 1)), [scheduler]);
 
-  const layout = useMemo(() => computeColumn(sizes ?? [], zoom), [sizes, zoom]);
+  const layout = useMemo(
+    () =>
+      viewLayout === 'twoPage'
+        ? computeSpreads(sizes ?? [], zoom, firstAlone)
+        : computeColumn(sizes ?? [], zoom),
+    [sizes, zoom, viewLayout, firstAlone],
+  );
 
   // Reads the scroll position and the viewport height into state: on scroll, on resize and once
   // the pages are known.
@@ -105,14 +135,63 @@ export function DocumentView({
     () => ({
       scrollToPage(index: number) {
         const element = scrollRef.current;
-        const top = scrollTopForPage(layout.boxes, index, zoom);
+        const top =
+          viewLayout === 'twoPage'
+            ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
+            : scrollTopForPage(layout.boxes, index, zoom);
         if (element === null || top === null) return;
         element.scrollTop = top;
         setScroll({ top, height: viewportHeightOf(element) });
       },
     }),
-    [layout, zoom],
+    [layout, zoom, viewLayout, firstAlone],
   );
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  // Ctrl+wheel (Cmd on macOS) steps the zoom through the desktop's steps and keeps the point under
+  // the pointer in place. The listener is native and not passive, so preventDefault stops the
+  // browser from zooming the whole page.
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (element === null || sizes === null) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!isZoomWheel(event)) return;
+      event.preventDefault();
+      const step = takeWheelSteps(wheelPending.current, wheelDeltaPixels(event));
+      wheelPending.current = step.pending;
+      if (step.direction === null) return;
+      const from = zoomRef.current;
+      const to = stepZoom(from, step.direction);
+      if (to === from) return;
+      const rect = element.getBoundingClientRect();
+      pendingAnchor.current = anchoredScroll({
+        scrollLeft: element.scrollLeft,
+        scrollTop: element.scrollTop,
+        pointerX: event.clientX - rect.left,
+        pointerY: event.clientY - rect.top,
+        fromZoom: from,
+        toZoom: to,
+      });
+      zoomRef.current = to;
+      setZoom(to);
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [sizes]);
+
+  // Applies the anchor after the new zoom is in the DOM, so the scroll range already has the new size.
+  useLayoutEffect(() => {
+    const anchor = pendingAnchor.current;
+    const element = scrollRef.current;
+    if (anchor === null || element === null) return;
+    pendingAnchor.current = null;
+    element.scrollLeft = anchor.left;
+    element.scrollTop = anchor.top;
+    setScroll({ top: element.scrollTop, height: viewportHeightOf(element) });
+  }, [zoom]);
 
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
@@ -151,8 +230,16 @@ export function DocumentView({
   const total = layout.boxes.length;
   const percent = Math.round(zoom * 100);
 
+  const chooseNight = (on: boolean) => {
+    setNight(on);
+    writePreferences({ ...readPreferences(), nightReading: on });
+  };
+
   return (
-    <section className="doc-view" aria-label={t('view.label')}>
+    <section
+      className={night ? 'doc-view doc-view--night' : 'doc-view'}
+      aria-label={t('view.label')}
+    >
       <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.zoomLabel')}>
         <button
           type="button"
@@ -170,6 +257,33 @@ export function DocumentView({
           disabled={zoom >= MAX_ZOOM}
         >
           {t('view.zoomIn')}
+        </button>
+        <div role="group" aria-label={t('view.layoutLabel')}>
+          <button
+            type="button"
+            aria-pressed={viewLayout === 'continuous'}
+            onClick={() => setViewLayout('continuous')}
+          >
+            {t('view.layoutSingle')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={viewLayout === 'twoPage'}
+            onClick={() => setViewLayout('twoPage')}
+          >
+            {t('view.layoutTwoPage')}
+          </button>
+        </div>
+        <button
+          type="button"
+          aria-pressed={firstAlone}
+          disabled={viewLayout !== 'twoPage'}
+          onClick={() => setFirstAlone(!firstAlone)}
+        >
+          {t('view.coverAlone')}
+        </button>
+        <button type="button" aria-pressed={night} onClick={() => chooseNight(!night)}>
+          {t('view.night')}
         </button>
       </div>
       {sizes === null ? (

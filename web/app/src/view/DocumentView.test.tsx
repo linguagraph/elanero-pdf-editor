@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
+import { readPreferences, writePreferences } from '../prefs/store';
 import { DocumentView } from './DocumentView';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -270,5 +271,123 @@ describe('DocumentView render retries', () => {
     await settle();
     expect(renderCalls(call)).toBe(1);
     expect(host.querySelector('.doc-page-error')).toBeNull();
+  });
+});
+
+describe('DocumentView layouts and night reading', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  const button = (label: string) =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === label);
+
+  it('pairs pages into two-page spreads and puts page 1 alone when asked', async () => {
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const pages = () => [...host.querySelectorAll<HTMLElement>('.doc-page')];
+    expect(pages()).toHaveLength(2);
+    const continuousTops = pages().map((p) => p.style.top);
+    expect(continuousTops[0]).not.toBe(continuousTops[1]);
+
+    act(() => {
+      button('Two pages')?.click();
+    });
+    expect(button('Two pages')?.getAttribute('aria-pressed')).toBe('true');
+    // Pages 1 and 2 share one spread, so they share a top edge.
+    expect(pages()[0]?.style.top).toBe(pages()[1]?.style.top);
+
+    act(() => {
+      button('Page 1 alone')?.click();
+    });
+    expect(button('Page 1 alone')?.getAttribute('aria-pressed')).toBe('true');
+    // Page 1 is alone on the right of the first spread, so page 2 starts the next row.
+    expect(pages()[0]?.style.top).not.toBe(pages()[1]?.style.top);
+    expect(pages()[1]?.style.left).not.toBe(pages()[0]?.style.left);
+  });
+
+  it('disables the page 1 control outside the two-page layout', async () => {
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    expect((button('Page 1 alone') as HTMLButtonElement).disabled).toBe(true);
+    act(() => {
+      button('Two pages')?.click();
+    });
+    expect((button('Page 1 alone') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('turns night reading on and off with a class on the view, and saves the choice', async () => {
+    const { rpc } = fakeRpc(1);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const view = () => host.querySelector('.doc-view');
+    expect(view()?.classList.contains('doc-view--night')).toBe(false);
+
+    act(() => {
+      button('Night reading')?.click();
+    });
+    expect(view()?.classList.contains('doc-view--night')).toBe(true);
+    expect(button('Night reading')?.getAttribute('aria-pressed')).toBe('true');
+    expect(readPreferences().nightReading).toBe(true);
+
+    act(() => {
+      button('Night reading')?.click();
+    });
+    expect(view()?.classList.contains('doc-view--night')).toBe(false);
+    expect(readPreferences().nightReading).toBe(false);
+  });
+
+  it('starts in night reading when the saved preference says so', async () => {
+    writePreferences({ ...readPreferences(), nightReading: true });
+    const { rpc } = fakeRpc(1);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    expect(host.querySelector('.doc-view--night')).not.toBeNull();
+    window.localStorage.clear();
+  });
+
+  it('zooms with Ctrl+wheel through the desktop steps and stops the browser zoom', async () => {
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');
+    const wheel = new WheelEvent('wheel', {
+      deltaY: -100,
+      ctrlKey: true,
+      cancelable: true,
+      bubbles: true,
+    });
+    act(() => {
+      scroll?.dispatchEvent(wheel);
+    });
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('125%');
+  });
+
+  it('leaves a plain wheel to the browser', async () => {
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');
+    const wheel = new WheelEvent('wheel', { deltaY: -100, cancelable: true, bubbles: true });
+    act(() => {
+      scroll?.dispatchEvent(wheel);
+    });
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('100%');
   });
 });

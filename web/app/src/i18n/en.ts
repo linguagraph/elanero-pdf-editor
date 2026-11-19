@@ -292,6 +292,11 @@ export const EN = {
   'view.zoomPercent': '{percent}%',
   'view.pageNumber': 'Page {page} of {total}',
   'view.renderFailed': 'This page could not be drawn.',
+  'view.layoutLabel': 'Page layout',
+  'view.layoutSingle': 'Single column',
+  'view.layoutTwoPage': 'Two pages',
+  'view.coverAlone': 'Page 1 alone',
+  'view.night': 'Night reading',
 
   // Thumbnails side panel (W5.2). The rail button shows the panel's name.
   'thumbnails.title': 'Thumbnails',

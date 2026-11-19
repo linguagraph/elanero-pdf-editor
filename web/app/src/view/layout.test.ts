@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { CSS_PX_PER_POINT } from './zoom';
 import {
   computeColumn,
+  computeSpreads,
   currentPageIndex,
   distanceToCentre,
   isInViewport,
   PAGE_GAP_PT,
   type PageBox,
+  scrollTopForSpread,
   visibleRange,
 } from './layout';
 
@@ -124,5 +127,43 @@ describe('currentPageIndex', () => {
 
   it('is 0 for an empty document', () => {
     expect(currentPageIndex([], 0, 100)).toBe(0);
+  });
+});
+
+describe('currentPageIndex in two-page spreads', () => {
+  // Four equal pages make two rows of two. Both pages of a row share a centre line, so the page
+  // reported at the middle of a row is its left page.
+  const sizes = [0, 1, 2, 3].map(() => ({ width: 100, height: 100 }));
+  const { boxes } = computeSpreads(sizes, 1, false);
+
+  it('reports the left page of the spread at the middle of the viewport', () => {
+    const second = boxes[2];
+    if (second === undefined) throw new Error('missing page 3');
+    const viewport = 100;
+    const scrollTop = second.top + second.height / 2 - viewport / 2;
+    expect(currentPageIndex(boxes, scrollTop, viewport)).toBe(2);
+  });
+
+  it('reports the first spread at the top of the document', () => {
+    expect(currentPageIndex(boxes, 0, 100)).toBe(0);
+  });
+});
+
+describe('scrollTopForSpread', () => {
+  it('scrolls to the top of the row holding the page, not the page itself', () => {
+    // Page 1 is shorter than page 0: it is centred in the row, so its own top is lower.
+    const sizes = [
+      { width: 100, height: 200 },
+      { width: 100, height: 100 },
+      { width: 100, height: 200 },
+      { width: 100, height: 200 },
+    ];
+    const { boxes } = computeSpreads(sizes, 1, false);
+    const rowTop = boxes[0]?.top ?? 0;
+    expect(boxes[1]?.top).toBeGreaterThan(rowTop);
+    expect(scrollTopForSpread(boxes, 1, 1, false)).toBe(
+      Math.max(0, rowTop - PAGE_GAP_PT * CSS_PX_PER_POINT),
+    );
+    expect(scrollTopForSpread(boxes, 9, 1, false)).toBeNull();
   });
 });
