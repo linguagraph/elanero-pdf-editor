@@ -84,6 +84,12 @@ class PageSize:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class FlattenableResult:
+    count: int  # the comments Flatten would burn in (services.comments.flattenable)
+    pages: int  # the pages those comments are on
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class PagesResult:
     pages: tuple[PageSize, ...]
 

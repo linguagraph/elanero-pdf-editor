@@ -299,8 +299,11 @@ export const EN = {
 
   // Flatten annotations (W7.9): the confirmation, then the result.
   'flatten.title': 'Flatten annotations',
+  'flatten.counting': 'Checking the comments...',
+  'flatten.none': 'There are no comments to flatten.',
+  'flatten.close': 'Close',
   'flatten.confirm.body':
-    'Every comment is drawn into its page and stops being a separate, editable annotation. You can undo this until you save. After you save the file, the flattening is permanent for that file.',
+    'Every comment is drawn into its page, and comments can no longer be edited as comments. Form fields and signatures are not changed. You can undo this until you save. After you save, the flattening is permanent for that file. If the document is signed, a save over the original is refused, so save a copy instead.',
   'flatten.confirm.run': 'Flatten now',
   'flatten.confirm.cancel': 'Cancel',
   'flatten.done': 'Annotations flattened.',

@@ -14,6 +14,7 @@ from __future__ import annotations
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.base import Change
 from pdfeditor.core.session import EventKind, SessionEvent
+from pdfeditor.services.comments import flattenable as flattenable_comments
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.dto import BufferTable, from_json
 from pdfeditor.webapi.errors import BUSY, INVALID_ARGS, RpcFailure
@@ -57,6 +58,15 @@ def run_action(params: dto.RunParams, buffers: BufferTable) -> dto.RunResult:
         changed=changed,
         state=state,
     )
+
+
+def flattenable(params: dto.HandleParams) -> dto.FlattenableResult:
+    """How many comments Flatten All would burn in, read-only: the web asks before it runs the
+    job, so a document with no comments gets a message and no undo step."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        count, pages = flattenable_comments(session.document)
+    return dto.FlattenableResult(count=count, pages=pages)
 
 
 def undo(params: dto.HandleParams) -> dto.HistoryResult:

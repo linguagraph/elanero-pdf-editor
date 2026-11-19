@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionJobWorker } from '../actionJob/actionJob';
 import type { PageRpc } from '../engine/engineConnection';
-import { createJobProgressStore } from '../feedback/jobRun';
+import { createJobProgressStore, type JobProgressStore } from '../feedback/jobRun';
 import { createToastStore, type ToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
@@ -47,6 +47,11 @@ function workerReply(): ActionJobWorker {
   };
 }
 
+// A worker that never answers, so the job stays running until the test cancels it.
+function hangingWorker(): ActionJobWorker {
+  return { call: vi.fn(() => new Promise<never>(() => undefined)), terminate: vi.fn() };
+}
+
 // A fake engine: each method answers from the table the test gives, and every call is recorded.
 function fakeEngine(answers: Record<string, (params: unknown) => unknown>) {
   const call = vi.fn(async (method: string, params: unknown) => {
@@ -58,6 +63,7 @@ function fakeEngine(answers: Record<string, (params: unknown) => unknown>) {
 }
 
 const READY = {
+  'comments.flattenable': () => ({ count: 6, pages: 1 }),
   'jobs.prepare': () => ({
     token: 'j1',
     label: 'annotations.flatten',
@@ -70,6 +76,7 @@ const READY = {
     changed: { revisions: { '0': 5 }, pages: [0] },
     state: {},
   }),
+  'jobs.abort': () => ({}),
 };
 
 let container: HTMLDivElement;
@@ -86,7 +93,7 @@ afterEach(() => {
   container.remove();
 });
 
-// Lets the job's promises settle, inside act so React sees the updates.
+// Lets the promises settle, inside act so React sees the updates.
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -104,12 +111,17 @@ function buttonNamed(text: string): HTMLButtonElement {
   return found;
 }
 
+function hasButton(text: string): boolean {
+  return [...document.querySelectorAll('button')].some((button) => button.textContent === text);
+}
+
 function setup(
   answers: Record<string, (params: unknown) => unknown> = READY,
   overrides: Partial<FlattenDialogProps> = {},
 ) {
   const { call, rpc } = fakeEngine(answers);
   const store: ToastStore = createToastStore();
+  const progress: JobProgressStore = createJobProgressStore({ toasts: store });
   const onClose = vi.fn();
   const onChanged = vi.fn();
   const startWorker = vi.fn(workerReply);
@@ -121,12 +133,15 @@ function setup(
     startWorker,
     onChanged,
     store,
-    progress: createJobProgressStore({ toasts: store }),
+    progress,
     ...overrides,
   };
   act(() => root.render(<FlattenDialog {...props} />));
-  return { call, store, onClose, onChanged, startWorker };
+  return { call, store, progress, onClose, onChanged, startWorker };
 }
+
+const jobCalls = (call: ReturnType<typeof vi.fn>) =>
+  call.mock.calls.filter(([method]) => method === 'jobs.prepare' || method === 'jobs.apply');
 
 describe('FlattenDialog (W7.9)', () => {
   it('asks for confirmation before any job runs', async () => {
@@ -134,9 +149,17 @@ describe('FlattenDialog (W7.9)', () => {
     await settle();
 
     expect(document.body.textContent).toContain(t('flatten.confirm.body'));
-    expect(buttonNamed(t('flatten.confirm.run'))).toBeTruthy();
-    expect(call).not.toHaveBeenCalled();
+    expect(hasButton(t('flatten.confirm.run'))).toBe(true);
+    expect(call).toHaveBeenCalledWith('comments.flattenable', { handle: 'h1' });
+    expect(jobCalls(call)).toEqual([]);
     expect(startWorker).not.toHaveBeenCalled();
+  });
+
+  it('puts the focus on Cancel when it opens', async () => {
+    setup();
+    await settle();
+
+    expect(document.activeElement).toBe(buttonNamed(t('flatten.confirm.cancel')));
   });
 
   it('cancel closes the dialog and does nothing', async () => {
@@ -147,7 +170,7 @@ describe('FlattenDialog (W7.9)', () => {
     await settle();
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(call).not.toHaveBeenCalled();
+    expect(jobCalls(call)).toEqual([]);
     expect(startWorker).not.toHaveBeenCalled();
     expect(onChanged).not.toHaveBeenCalled();
     expect(store.getState().visible).toEqual([]);
@@ -171,13 +194,30 @@ describe('FlattenDialog (W7.9)', () => {
       expect.objectContaining({ handle: 'h1', token: 'j1', label: 'Flatten Comments' }),
     );
     expect(onChanged).toHaveBeenCalledWith({ revisions: { '0': 5 }, pages: [0] });
-    const visible = store.getState().visible;
-    expect(visible.map((toast) => toast.text)).toContain(t('flatten.done'));
-    expect(visible.find((toast) => toast.text === t('flatten.done'))?.kind).toBe('info');
+    const done = store.getState().visible.find((toast) => toast.text === t('flatten.done'));
+    expect(done?.kind).toBe('info');
+  });
+
+  it('with no comments it says so and runs no job, no undo step and no redraw', async () => {
+    const { call, startWorker, onChanged, store } = setup({
+      ...READY,
+      'comments.flattenable': () => ({ count: 0, pages: 0 }),
+    });
+    await settle();
+
+    expect(document.body.textContent).toContain(t('flatten.none'));
+    expect(document.body.textContent).not.toContain(t('flatten.confirm.body'));
+    expect(hasButton(t('flatten.close'))).toBe(true);
+    expect(hasButton(t('flatten.confirm.run'))).toBe(false);
+    expect(jobCalls(call)).toEqual([]);
+    expect(startWorker).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(store.getState().visible).toEqual([]);
   });
 
   it('shows the encrypted-document message when the browser refuses the job', async () => {
     const { store, onChanged } = setup({
+      ...READY,
       'jobs.prepare': () => {
         throw new RpcError('REFUSED', 'refused', { reason: 'encrypted_mutating_job' });
       },
@@ -191,5 +231,42 @@ describe('FlattenDialog (W7.9)', () => {
       t('job.encryptedRefused'),
     ]);
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('shows the generic failure toast and redraws nothing when the job fails', async () => {
+    const { store, onChanged } = setup({
+      ...READY,
+      'jobs.prepare': () => {
+        throw new Error('boom');
+      },
+    });
+    await settle();
+
+    act(() => buttonNamed(t('flatten.confirm.run')).click());
+    await settle();
+
+    const toast = store.getState().visible.find((item) => item.text === t('flatten.failed'));
+    expect(toast?.kind).toBe('error');
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('redraws nothing when the user cancels the running job', async () => {
+    const { call, store, progress, onChanged, startWorker } = setup();
+    startWorker.mockImplementation(hangingWorker);
+    await settle();
+
+    act(() => buttonNamed(t('flatten.confirm.run')).click());
+    await settle();
+    expect(progress.getState().job).toBeDefined();
+
+    await act(async () => {
+      await progress.cancel();
+    });
+    await settle();
+
+    expect(call).toHaveBeenCalledWith('jobs.abort', expect.objectContaining({ handle: 'h1' }));
+    expect(call).not.toHaveBeenCalledWith('jobs.apply', expect.anything());
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(store.getState().visible.map((toast) => toast.text)).not.toContain(t('flatten.done'));
   });
 });

@@ -126,6 +126,13 @@ export interface ExtractResult {
   done: boolean;
 }
 
+export interface FlattenableResult {
+  /** the comments Flatten would burn in (services.comments.flattenable) */
+  count: number;
+  /** the pages those comments are on */
+  pages: number;
+}
+
 export interface HandleParams {
   handle: string;
 }
@@ -438,6 +445,7 @@ export interface Methods {
   'actions.redo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
   'actions.run': { params: RunParams; result: RunResult; deadline: 'action' };
   'actions.undo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
+  'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
@@ -465,6 +473,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'actions.redo': 'edit',
   'actions.run': 'action',
   'actions.undo': 'edit',
+  'comments.flattenable': 'instant',
   'hello': 'instant',
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
@@ -497,6 +506,7 @@ export const RESULT_DECODERS: {
   'actions.redo': decodeHistoryResult,
   'actions.run': decodeRunResult,
   'actions.undo': decodeHistoryResult,
+  'comments.flattenable': decodeFlattenableResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
@@ -649,6 +659,19 @@ export function decodeExtractResult(
     pages_done: expectInteger(field(o, 'pages_done', path), `${path}.pages_done`),
     total: expectInteger(field(o, 'total', path), `${path}.total`),
     done: expectBoolean(field(o, 'done', path), `${path}.done`),
+  };
+}
+
+export function decodeFlattenableResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FlattenableResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['count', 'pages'], path);
+  return {
+    count: expectInteger(field(o, 'count', path), `${path}.count`),
+    pages: expectInteger(field(o, 'pages', path), `${path}.pages`),
   };
 }
 
