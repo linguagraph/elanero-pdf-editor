@@ -224,6 +224,19 @@ export interface OpenResult {
   state: DocStateDto;
 }
 
+export interface OutlineEntry {
+  title: string;
+  /** 1 for a top-level bookmark */
+  level: number;
+  page: number | null;
+  /** the file's own "open" flag for the entry (its initial expansion) */
+  is_open: boolean;
+}
+
+export interface OutlineResult {
+  entries: OutlineEntry[];
+}
+
 export interface PageImage {
   /** pixels; 0 when the revision changed */
   width: number;
@@ -437,6 +450,7 @@ export interface Methods {
   'session.close': { params: HandleParams; result: Empty; deadline: 'instant' };
   'session.info': { params: HandleParams; result: DocInfo; deadline: 'instant' };
   'session.open': { params: OpenParams; result: OpenResult; deadline: 'io' };
+  'session.outline': { params: HandleParams; result: OutlineResult; deadline: 'instant' };
   'session.pages': { params: HandleParams; result: PagesResult; deadline: 'instant' };
   'session.unlock_owner': { params: UnlockParams; result: UnlockResult; deadline: 'instant' };
   'text.extract': { params: ExtractParams; result: ExtractResult; deadline: 'slice' };
@@ -463,6 +477,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.close': 'instant',
   'session.info': 'instant',
   'session.open': 'io',
+  'session.outline': 'instant',
   'session.pages': 'instant',
   'session.unlock_owner': 'instant',
   'text.extract': 'slice',
@@ -494,6 +509,7 @@ export const RESULT_DECODERS: {
   'session.close': decodeEmpty,
   'session.info': decodeDocInfo,
   'session.open': decodeOpenResult,
+  'session.outline': decodeOutlineResult,
   'session.pages': decodePagesResult,
   'session.unlock_owner': decodeUnlockResult,
   'text.extract': decodeExtractResult,
@@ -802,6 +818,33 @@ export function decodeOpenResult(
     pages: expectInteger(field(o, 'pages', path), `${path}.pages`),
     warning: orNull(field(o, 'warning', path), `${path}.warning`, (v1, p1) => expectString(v1, p1)),
     state: decodeDocStateDto(field(o, 'state', path), ctx, `${path}.state`),
+  };
+}
+
+export function decodeOutlineEntry(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): OutlineEntry {
+  const o = expectObject(value, path);
+  checkKeys(o, ['title', 'level', 'page', 'is_open'], path);
+  return {
+    title: expectString(field(o, 'title', path), `${path}.title`),
+    level: expectInteger(field(o, 'level', path), `${path}.level`),
+    page: orNull(field(o, 'page', path), `${path}.page`, (v1, p1) => expectInteger(v1, p1)),
+    is_open: expectBoolean(field(o, 'is_open', path), `${path}.is_open`),
+  };
+}
+
+export function decodeOutlineResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): OutlineResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['entries'], path);
+  return {
+    entries: expectArray(field(o, 'entries', path), `${path}.entries`).map((item1, index1) => decodeOutlineEntry(item1, ctx, `${`${path}.entries`}[${index1}]`)),
   };
 }
 

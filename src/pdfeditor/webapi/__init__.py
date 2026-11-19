@@ -48,6 +48,7 @@ METHODS: dict[str, Method] = {
     "session.pages": Method(dto.HandleParams, session.document_pages),
     "session.capabilities": Method(dto.HandleParams, session.document_capabilities),
     "session.unlock_owner": Method(dto.UnlockParams, session.unlock_owner),
+    "session.outline": Method(dto.HandleParams, session.document_outline),
     "text.layer": Method(dto.PageParams, text.text_layer),
     "text.extract": Method(dto.ExtractParams, text.extract),
     "text.search": Method(dto.SearchParams, text.search),

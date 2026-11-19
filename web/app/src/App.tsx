@@ -37,6 +37,9 @@ import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory'
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
+import { BookmarksPanel } from './bookmarks/BookmarksPanel';
+import { BookmarksRailButton } from './bookmarks/BookmarksRailButton';
+import { setBookmarksOpen, useBookmarksOpen } from './bookmarks/openState';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
 import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
@@ -122,10 +125,14 @@ export function App({ engine, startPrintWorker }: AppProps) {
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
   const searchOpen = useSearchOpen(activeId);
-  // One right panel shows at a time: opening the thumbnails or the search closes the page organizer.
+  const bookmarksOpen = useBookmarksOpen(activeId);
+  // One right panel shows at a time: opening the thumbnails, the search or the bookmarks closes the
+  // page organizer.
   useEffect(() => {
-    if (activeId !== null && (thumbnailsOpen || searchOpen)) setOrganizerOpen(activeId, false);
-  }, [activeId, thumbnailsOpen, searchOpen]);
+    if (activeId !== null && (thumbnailsOpen || searchOpen || bookmarksOpen)) {
+      setOrganizerOpen(activeId, false);
+    }
+  }, [activeId, thumbnailsOpen, searchOpen, bookmarksOpen]);
   // The search hits the document view draws, with the tab they belong to (W5.4).
   const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
     null,
@@ -168,6 +175,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
       rightRail={
         <>
           <ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />
+          <BookmarksRailButton tabId={activeId} disabled={!documentShown} />
           <OrganizerRailButton tabId={activeId} disabled={!documentShown} />
           <SearchRailButton tabId={activeId} disabled={!documentShown} />
         </>
@@ -181,6 +189,17 @@ export function App({ engine, startPrintWorker }: AppProps) {
             onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
             onGoTo={goTo}
             onClose={() => setSearchOpen(activeId, false)}
+          />
+        ) : documentShown && bookmarksOpen && activeId !== null && session !== null ? (
+          <BookmarksPanel
+            key={`bookmarks-${structureRevision}`}
+            rpc={session.rpc}
+            handle={session.handle}
+            tabId={activeId}
+            onSelect={goTo}
+            onClose={() => {
+              if (activeId !== null) setBookmarksOpen(activeId, false);
+            }}
           />
         ) : documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
