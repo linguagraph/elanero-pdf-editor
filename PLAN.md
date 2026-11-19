@@ -561,7 +561,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W3.6** `webapi.save`: save_bytes, full or incremental
 - [x] **W3.7** `webapi.jobs` and job worker protocol _(complete; print's partial notices (W1.2 section 17.4) are tracked under W6.5)_
 - [x] **W3.8** TypeScript RPC client with generated types
-- [ ] **W3.9** Resource limits and guarded errors _(partial: limit audit done. Each limit is checked at an inclusive boundary with its W1.2 code and details; those whose size is known up front (file size, query, scale, pixels, job bytes) are checked before the work, and the page count and save size on its result. The open reply carries the size warning. A refused open, job or apply leaves no document open and no task running. In the RPC client, out-of-memory text from the worker maps to `OUT_OF_MEMORY`, and `web/app/src/engine/restart.ts` starts a new worker and lists the documents to reopen, with the lost-work text. Done since: the OPFS autosave and the reopen of documents after a restart (slices 2 and 3), and the warning when the engine heap passes 1.5 GiB (slice 4). Pending: the viewer's render-scale cap of 256,000 (slice 5); the 16 MP per-tile limit is already in `render.tile` (W5.1b).)_
+- [x] **W3.9** Resource limits and guarded errors _(slices 1-5: #294, #299, #298, #302, #304)_
 
 **W4 Front-end shell, #137**
 
