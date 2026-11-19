@@ -159,6 +159,7 @@ export const EN = {
   'command.delete-comment.label': 'Delete',
   'command.flatten-all-comments.label': 'Flatten',
   'command.export-comments.label': 'Export Comments',
+  'command.import-comments.label': 'Import Comments',
   'command.zoom-out.label': 'Zoom Out',
   'command.zoom-in.label': 'Zoom In',
   'command.fit-width.label': 'Fit Width',
@@ -323,6 +324,21 @@ export const EN = {
   'commentsExport.done': 'Comments exported.',
   'commentsExport.pdfUnavailable': 'The PDF summary is not available in this browser.',
   'commentsExport.failed': 'The comments could not be exported. Try again.',
+  'commentsImport.title': 'Import comments',
+  'commentsImport.choose':
+    'Choose an XFDF file of comments, such as one exported from another PDF editor.',
+  'commentsImport.choose.button': 'Choose file',
+  'commentsImport.reading': 'Reading the file...',
+  'commentsImport.preview':
+    'Comments: {count} (replies: {replies}), pages: {pages}. They will be added to this document.',
+  'commentsImport.empty': 'The file has no comments to import.',
+  'commentsImport.invalid': 'This file is not a valid XFDF file of comments.',
+  'commentsImport.tooLarge': 'The file is larger than {limit} MB.',
+  'commentsImport.import': 'Import',
+  'commentsImport.importing': 'Importing the comments...',
+  'commentsImport.cancel': 'Cancel',
+  'commentsImport.done': 'Comments imported: {count}. Undo removes them.',
+  'commentsImport.failed': 'The comments could not be imported. Try again.',
 
   // Sanitize (W7.4): the dialog's items, its confirmation and the report.
   'sanitize.title': 'Sanitize document',
