@@ -98,6 +98,7 @@ version yet:
 - the ribbon, the command palette and keyboard shortcuts;
 - editing text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files;
 - comments other than sticky notes, rectangles and highlights, the Comments panel, redaction, stamps and watermarks, password protection, and comparing files;
+- the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
 - printing, and translation (which will be turned on only when you ask for it);
 - the **Install App** command and the **What's Different on the Web** menu entry.
 
@@ -139,6 +140,7 @@ full policy, with what the desktop app stores, is in the
 | Ribbon, command palette and keyboard shortcuts | Yes | Coming soon |
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
+| Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
 | Other comments, redaction, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |

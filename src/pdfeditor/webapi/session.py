@@ -120,6 +120,13 @@ def _info(session: DocumentSession) -> dto.DocInfo:
         has_signatures=info.has_signatures,
         page_count=info.page_count,
         title=metadata.title,
+        author=metadata.author,
+        subject=metadata.subject,
+        keywords=metadata.keywords,
+        creator=metadata.creator,
+        producer=metadata.producer,
+        creation_date=metadata.creation_date,
+        mod_date=metadata.mod_date,
     )
 
 

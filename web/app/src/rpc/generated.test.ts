@@ -67,7 +67,19 @@ function decodeResult<M extends MethodName>(
   return RESULT_DECODERS[method](value, ctxWith(...buffers), 'result');
 }
 
-const DOC_INFO = { encrypted: false, has_signatures: false, page_count: 2, title: 'a' };
+const DOC_INFO = {
+  encrypted: false,
+  has_signatures: false,
+  page_count: 2,
+  title: 'a',
+  author: '',
+  subject: '',
+  keywords: '',
+  creator: '',
+  producer: '',
+  creation_date: '',
+  mod_date: '',
+};
 const DOC_STATE = {
   page_count: 2,
   structure_version: 1,

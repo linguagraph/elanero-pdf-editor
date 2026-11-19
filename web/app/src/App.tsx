@@ -18,6 +18,7 @@ import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
 import { CombineDialog } from './combine/CombineDialog';
+import { PropertiesDialog } from './properties/PropertiesDialog';
 import { CommandPalette } from './palette/CommandPalette';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
@@ -73,6 +74,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [exportOpen, setExportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   // One stable job worker factory for the document's jobs, so a redaction keeps its marks.
   const startJob = useCallback(() => startJobWorker(jobWorkerBootOptions()), []);
@@ -99,6 +101,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
+    'document-properties': () => setPropertiesOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
   };
@@ -270,6 +273,14 @@ export function App({ engine, startPrintWorker }: AppProps) {
         startWorker={startPrintWorker}
       />
       <CombineDialog isOpen={combineOpen} onClose={() => setCombineOpen(false)} />
+      {documentShown && session !== null ? (
+        <PropertiesDialog
+          isOpen={propertiesOpen}
+          onClose={() => setPropertiesOpen(false)}
+          rpc={session.rpc}
+          handle={session.handle}
+        />
+      ) : null}
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
       <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />

@@ -79,6 +79,13 @@ export interface DocInfo {
   has_signatures: boolean;
   page_count: number;
   title: string;
+  author: string;
+  subject: string;
+  keywords: string;
+  creator: string;
+  producer: string;
+  creation_date: string;
+  mod_date: string;
 }
 
 export interface DocStateDto {
@@ -551,12 +558,19 @@ export function decodeDocInfo(
   path: string,
 ): DocInfo {
   const o = expectObject(value, path);
-  checkKeys(o, ['encrypted', 'has_signatures', 'page_count', 'title'], path);
+  checkKeys(o, ['encrypted', 'has_signatures', 'page_count', 'title', 'author', 'subject', 'keywords', 'creator', 'producer', 'creation_date', 'mod_date'], path);
   return {
     encrypted: expectBoolean(field(o, 'encrypted', path), `${path}.encrypted`),
     has_signatures: expectBoolean(field(o, 'has_signatures', path), `${path}.has_signatures`),
     page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
     title: expectString(field(o, 'title', path), `${path}.title`),
+    author: expectString(field(o, 'author', path), `${path}.author`),
+    subject: expectString(field(o, 'subject', path), `${path}.subject`),
+    keywords: expectString(field(o, 'keywords', path), `${path}.keywords`),
+    creator: expectString(field(o, 'creator', path), `${path}.creator`),
+    producer: expectString(field(o, 'producer', path), `${path}.producer`),
+    creation_date: expectString(field(o, 'creation_date', path), `${path}.creation_date`),
+    mod_date: expectString(field(o, 'mod_date', path), `${path}.mod_date`),
   };
 }
 

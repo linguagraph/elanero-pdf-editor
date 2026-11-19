@@ -1,0 +1,60 @@
+/* The document properties dialog's layout (W7.6). */
+.properties {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(440px, 100%);
+}
+
+.properties-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.properties-field input {
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.properties-readonly {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.properties-readonly dt {
+  font-weight: 600;
+}
+
+.properties-readonly dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.properties-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.properties-button {
+  padding: 4px 10px;
+  font: inherit;
+}
+
+.properties-primary {
+  font-weight: 600;
+}
+
+.properties-message,
+.properties-hint {
+  margin: 0;
+}
