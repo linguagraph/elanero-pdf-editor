@@ -1,9 +1,10 @@
 """The change events of a reply (W1.2 section 7), and the ``changed`` and ``state`` DTOs they carry.
 
-A call that changes content returns ``changed`` and ``state`` in its result (the W3.5 action
-results), and the dispatch puts the same two objects in the reply's ``events`` list. Both come from
-here, so the event data and the result fields cannot drift apart. The functions that build the DTOs
-expect the caller to hold the session lock.
+The registry arms one :class:`CallRecorder` per open document while a call runs; the dispatch
+reads what it recorded and what the document's state was before the call, and builds the reply's
+``events`` list here. A call that changed content gives ``changed`` (the same object as the
+result's ``changed`` field); ``state`` is sent when the document state differs from before the
+call. The functions that read a session expect the caller to hold the session lock.
 """
 
 from __future__ import annotations
@@ -11,12 +12,39 @@ from __future__ import annotations
 from typing import Any
 
 from pdfeditor.core.commands.base import Change, ChangeKind
-from pdfeditor.core.session import DocumentSession
+from pdfeditor.core.session import DocumentSession, EventKind, SessionEvent
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.dto import to_json
 
-# Results that carry the ``changed`` and ``state`` of a content change (W3.5 actions, W3.2 jobs).
-_CONTENT_RESULTS = (dto.RunResult, dto.HistoryResult, dto.JobApplyResult)
+
+class CallRecorder:
+    """A session listener that keeps what the session emitted while a call is armed.
+
+    Outside a call (not armed) it records nothing, so a later call starts from an empty record.
+    """
+
+    def __init__(self, session: DocumentSession) -> None:
+        self._session = session
+        self._armed = False
+        self.changes: list[Change] = []
+        # The busy label of the first refused edit of the call, or None when none was refused.
+        self.blocked_task: str | None = None
+
+    def arm(self) -> None:
+        self.changes = []
+        self.blocked_task = None
+        self._armed = True
+
+    def disarm(self) -> None:
+        self._armed = False
+
+    def __call__(self, event: SessionEvent) -> None:
+        if not self._armed:
+            return
+        if event.kind is EventKind.CHANGED:
+            self.changes.extend(event.changes)
+        elif event.kind is EventKind.BLOCKED and self.blocked_task is None:
+            self.blocked_task = self._session.busy
 
 
 def changed_of(session: DocumentSession, changes: list[Change]) -> dto.ChangedDto | None:
@@ -62,46 +90,37 @@ def state_of(session: DocumentSession) -> dto.DocStateDto:
     )
 
 
-def events_for(
-    method: str, params: object, result: object, out: list[bytes]
+def call_events(
+    handle: str,
+    session: DocumentSession,
+    recorder: CallRecorder,
+    before: dto.DocStateDto,
+    result: object | None,
+    out: list[bytes],
 ) -> list[dict[str, Any]]:
-    """The events of one successful reply (W1.2 section 7), in the order they happened.
+    """The events of one call on ``handle``, in the order they happened (W1.2 section 7).
 
-    A call that changed content gives a ``changed`` event (its change list and the new revision
-    of each page as strings, and ``structure_version`` in ``state``) and then a ``state`` event.
-    ``session.close`` gives ``closed``. A job call that changed the busy flag (jobs.prepare of a
-    mutating job, jobs.abort that ended one) gives ``state`` alone. A read-only call gives none.
-    Failures carry no events: the error envelope is unchanged, and a refused edit is reported by
-    its BUSY error.
-    Bytes in an event are appended to ``out``, the reply's buffers.
+    ``result`` is the handler's result, or None for a failed call. Order: ``changed``, ``blocked``,
+    ``saved``, then ``state`` last, so a listener sees the final state. ``state`` is sent once,
+    and only when the document state after the call differs from ``before``. Bytes in an event
+    are appended to ``out``.
     """
-    handle = getattr(params, "handle", None)
-    if not isinstance(handle, str):
-        return []
-    if method == "session.close":
-        return [{"kind": "closed", "handle": handle}]
-    if isinstance(result, dto.JobPrepareResult | dto.JobAbortResult):
-        # A job call gives a state event only when it changed the busy flag (its state is set).
-        if result.state is None:
-            return []
-        return [{"kind": "state", "handle": handle, "state": to_json(result.state, out)}]
-    if isinstance(result, dto.MarkSavedResult):
-        # Only a call that cleared the flag says so; a clean document gives no event.
-        if not result.saved:
-            return []
-        return [
-            {"kind": "saved", "handle": handle},
-            {"kind": "state", "handle": handle, "state": to_json(result.state, out)},
-        ]
-    if not isinstance(result, _CONTENT_RESULTS) or result.changed is None:
-        return []
-    changed = result.changed
-    return [
-        {
-            "kind": "changed",
-            "handle": handle,
-            "changes": to_json(changed.changes, out),
-            "revisions": to_json(changed.revisions, out),
-        },
-        {"kind": "state", "handle": handle, "state": to_json(result.state, out)},
-    ]
+    events: list[dict[str, Any]] = []
+    changed = changed_of(session, recorder.changes)
+    if changed is not None:
+        events.append(
+            {
+                "kind": "changed",
+                "handle": handle,
+                "changes": to_json(changed.changes, out),
+                "revisions": to_json(changed.revisions, out),
+            }
+        )
+    if recorder.blocked_task is not None:
+        events.append({"kind": "blocked", "handle": handle, "task": recorder.blocked_task})
+    if isinstance(result, dto.MarkSavedResult) and result.saved:
+        events.append({"kind": "saved", "handle": handle})
+    after = state_of(session)
+    if after != before:
+        events.append({"kind": "state", "handle": handle, "state": to_json(after, out)})
+    return events

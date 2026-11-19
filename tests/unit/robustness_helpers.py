@@ -3,7 +3,8 @@
 One definition of a pass, used by every fuzz test:
 
 - the reply is a well-formed envelope: ``ok`` true with ``result`` and ``events``, or ``ok``
-  false with an ``error`` that has a W1.2 ``code``, a ``message`` and ``details``;
+  false with an ``error`` that has a W1.2 ``code``, a ``message`` and ``details``, and ``events``
+  (a list, empty when the call caused none, W1.2 section 2);
 - the code is never ``INTERNAL``: dispatch turns any exception it did not expect into
   ``INTERNAL``, so that code is how a crash shows up here and it fails the test;
 - the call returns within a bound (:func:`run_bounded`), so a hang fails instead of stalling.
@@ -26,7 +27,7 @@ T = TypeVar("T")
 CASE_SECONDS = 10.0
 
 _OK_KEYS = frozenset({"v", "id", "ok", "result", "events"})
-_ERROR_KEYS = frozenset({"v", "id", "ok", "error"})
+_ERROR_KEYS = frozenset({"v", "id", "ok", "error", "events"})
 _CODES = frozenset(ALL_CODES) - {INTERNAL}
 
 
@@ -55,6 +56,7 @@ def check_reply(reply_json: str, label: str) -> dict[str, Any]:
     assert code in _CODES, f"{label}: {code!r} is not a W1.2 error code"
     assert isinstance(error["message"], str) and error["message"], f"{label}: empty message"
     assert isinstance(error["details"], dict), f"{label}: details is not an object"
+    assert isinstance(reply["events"], list), f"{label}: events is not a list"
     return reply
 
 
