@@ -3,6 +3,7 @@ import { THEME_STORAGE_KEY } from '../theme/theme';
 import {
   DEFAULT_PREFERENCES,
   isSecretKey,
+  PAGE_LAYOUT_CHOICES,
   PREFS_STORAGE_KEY,
   readPreferences,
   writePreferences,
@@ -17,6 +18,7 @@ const SAVED: Preferences = {
   defaultZoom: 'actual',
   reduceMotion: true,
   nightReading: true,
+  pageLayout: 'twoPage',
 };
 
 afterEach(() => {
@@ -40,6 +42,7 @@ describe('preferences round trip', () => {
       defaultZoom: 'actual',
       reduceMotion: true,
       nightReading: true,
+      pageLayout: 'twoPage',
     });
   });
 
@@ -83,6 +86,35 @@ describe('corrupt or invalid stored values', () => {
   it('falls back to the system theme for an unknown stored theme', () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, 'sepia');
     expect(readPreferences().theme).toBe('system');
+  });
+});
+
+describe('default page layout preference (W4.5 S2)', () => {
+  it('defaults to a single column of pages', () => {
+    expect(DEFAULT_PREFERENCES.pageLayout).toBe('continuous');
+    expect(readPreferences().pageLayout).toBe('continuous');
+  });
+
+  it('offers only the layouts that exist (single-page waits for W5.1a)', () => {
+    expect(PAGE_LAYOUT_CHOICES).toEqual(['continuous', 'twoPage', 'twoPageCover']);
+  });
+
+  it('keeps a valid stored choice and falls back for anything else', () => {
+    for (const value of ['twoPage', 'twoPageCover']) {
+      window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ pageLayout: value }));
+      expect(readPreferences().pageLayout).toBe(value);
+    }
+    for (const value of ['single', 'TwoPage', 42, null]) {
+      window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ pageLayout: value }));
+      expect(readPreferences().pageLayout).toBe('continuous');
+    }
+  });
+
+  it('writes a valid choice and cleans an invalid one to the default', () => {
+    writePreferences({ ...SAVED, pageLayout: 'twoPageCover' });
+    expect(readPreferences().pageLayout).toBe('twoPageCover');
+    writePreferences({ ...SAVED, pageLayout: 'single' as Preferences['pageLayout'] });
+    expect(readPreferences().pageLayout).toBe('continuous');
   });
 });
 

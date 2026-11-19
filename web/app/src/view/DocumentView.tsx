@@ -19,6 +19,7 @@ import {
   onPreferencesChanged,
   readPreferences,
   writePreferences,
+  type PageLayoutChoice,
   type ZoomChoice,
 } from '../prefs/store';
 import {
@@ -111,6 +112,14 @@ function fitForChoice(choice: ZoomChoice): FitMode | null {
   return null;
 }
 
+// The saved default page layout as the view's two settings. Two pages with the first page alone is
+// the cover layout (W4.5 S2); the single-page layout (W5.1a) is not offered yet.
+function layoutForChoice(choice: PageLayoutChoice): { layout: ViewLayout; firstAlone: boolean } {
+  if (choice === 'twoPage') return { layout: 'twoPage', firstAlone: false };
+  if (choice === 'twoPageCover') return { layout: 'twoPage', firstAlone: true };
+  return { layout: 'continuous', firstAlone: false };
+}
+
 export function DocumentView({
   rpc,
   handle,
@@ -130,8 +139,14 @@ export function DocumentView({
   const [fit, setFit] = useState<FitMode | null>(() => fitForChoice(readPreferences().defaultZoom));
   // The default the view last applied, so a save that leaves it unchanged does not reset the zoom.
   const appliedChoice = useRef<ZoomChoice>(readPreferences().defaultZoom);
-  const [viewLayout, setViewLayout] = useState<ViewLayout>('continuous');
-  const [firstAlone, setFirstAlone] = useState(false);
+  // The default page layout (W4.5 S2) starts the view, and a changed default applies the same way
+  // the zoom default does; the reader's own choice is kept until the default changes.
+  const [startLayout] = useState<PageLayoutChoice>(() => readPreferences().pageLayout);
+  const appliedLayout = useRef<PageLayoutChoice>(startLayout);
+  const [viewLayout, setViewLayout] = useState<ViewLayout>(
+    () => layoutForChoice(startLayout).layout,
+  );
+  const [firstAlone, setFirstAlone] = useState(() => layoutForChoice(startLayout).firstAlone);
   // Night reading is a saved preference: read once here, written when the toggle changes.
   const [night, setNight] = useState(() => readPreferences().nightReading);
   // The zoom as the latest wheel event left it, so a burst of events builds on each other.
@@ -242,6 +257,20 @@ export function DocumentView({
         appliedChoice.current = choice;
         setFit(fitForChoice(choice));
         if (choice === 'actual') setManualZoom(DEFAULT_ZOOM);
+      }),
+    [],
+  );
+
+  // The saved default page layout, applied the same way: only a changed choice moves the view.
+  useEffect(
+    () =>
+      onPreferencesChanged(() => {
+        const choice = readPreferences().pageLayout;
+        if (choice === appliedLayout.current) return;
+        appliedLayout.current = choice;
+        const next = layoutForChoice(choice);
+        setViewLayout(next.layout);
+        setFirstAlone(next.firstAlone);
       }),
     [],
   );

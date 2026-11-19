@@ -1,5 +1,4 @@
 import { useEffect, useId, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Button } from 'react-aria-components';
 import {
   commandForEvent,
   displayKeys,
@@ -16,6 +15,7 @@ import {
 import { type CommandHandlers, isVisible, runCommand } from '../commands/run';
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
+import { ShortcutList } from './ShortcutList';
 import './palette.css';
 
 // The registry command that opens the keyboard shortcuts list inside the palette.
@@ -204,43 +204,6 @@ function CommandList({ registry, state, onRun }: CommandListProps) {
             );
           })}
         </ul>
-      )}
-    </div>
-  );
-}
-
-interface ShortcutListProps {
-  registry: Registry;
-  state: CommandState;
-  onBack: () => void;
-}
-
-// The keyboard shortcuts help: every visible command with a binding, from the effective keys (the
-// web override where there is one).
-function ShortcutList({ registry, state, onBack }: ShortcutListProps) {
-  const bound = registry.commands
-    .filter((def) => isVisible(def, state))
-    .map((def) => ({ def, keys: effectiveKeys(def.id) }))
-    .filter((entry) => entry.keys.length > 0);
-  return (
-    <div className="palette">
-      <Button className="palette-back" onPress={onBack}>
-        {t('palette.back')}
-      </Button>
-      <h2 className="palette-heading">{t('palette.shortcutsList')}</h2>
-      {bound.length === 0 ? (
-        <p className="palette-empty">{t('palette.noShortcuts')}</p>
-      ) : (
-        <dl className="palette-shortcuts">
-          {bound.map(({ def, keys }) => (
-            <div key={def.id} className="palette-shortcut-row">
-              <dt>{t(def.labelId)}</dt>
-              <dd>
-                <kbd>{displayKeys(keys, IS_MAC)}</kbd>
-              </dd>
-            </div>
-          ))}
-        </dl>
       )}
     </div>
   );

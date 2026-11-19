@@ -246,6 +246,14 @@ export const EN = {
   'prefs.zoom.fitWidth': 'Fit Width',
   'prefs.zoom.fitPage': 'Fit Page',
   'prefs.zoom.actual': '100%',
+  'prefs.layout.label': 'Default page layout',
+  'prefs.layout.hint': 'Used when a document is opened.',
+  'prefs.layout.continuous': 'Single column',
+  'prefs.layout.twoPage': 'Two pages',
+  'prefs.layout.twoPageCover': 'Two pages, first page alone',
+  'prefs.section.shortcuts': 'Shortcuts',
+  'prefs.shortcuts.hint': 'Lists every keyboard shortcut in Elanero.',
+  'prefs.shortcuts.open': 'Keyboard Shortcuts…',
 
   // Engine load stages (W3.1) and the load failure dialog.
   'loading.stage.pyodide': 'Loading the Python runtime',

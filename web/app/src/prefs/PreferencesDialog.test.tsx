@@ -179,4 +179,70 @@ describe('PreferencesDialog', () => {
     pressEscape();
     expect(authorInput(openFromCommand()).value).toBe('');
   });
+
+  it('offers only the page layouts that exist, and saves the one chosen in Viewing', () => {
+    const scope = openFromCommand();
+    expect([...layoutSelect(scope).options].map((o) => o.value)).toEqual([
+      'continuous',
+      'twoPage',
+      'twoPageCover',
+    ]);
+    typeInto(layoutSelect(scope), 'twoPageCover');
+    act(() => {
+      scope
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(readPreferences().pageLayout).toBe('twoPageCover');
+  });
 });
+
+describe('Keyboard Shortcuts from Preferences and the app menu (W4.5 S2)', () => {
+  it('opens above Preferences, keeps the unsaved draft, and Escape closes only the top one', () => {
+    const scope = openFromCommand();
+    typeInto(authorInput(scope), 'Draft');
+    act(() => {
+      buttonIn(scope, t('prefs.shortcuts.open')).click();
+    });
+    const shortcuts = topDialog();
+    expect(shortcuts?.textContent).toContain(t('palette.shortcutsList'));
+    expect(shortcuts?.querySelector('kbd')).not.toBeNull();
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+
+    act(() => {
+      shortcuts?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(authorInput(dialog() as HTMLElement).value).toBe('Draft');
+  });
+
+  it('the app menu command opens the shortcuts list (it no longer reads not available yet)', () => {
+    const menu = host.querySelector<HTMLButtonElement>(
+      `button[aria-label="${t('appMenu.label')}"]`,
+    );
+    expect(menu).not.toBeNull();
+    act(() => {
+      menu?.click();
+    });
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent?.trim() === t('command.keyboard-shortcuts.label'),
+    );
+    expect(item).toBeDefined();
+    act(() => {
+      item?.click();
+    });
+    expect(topDialog()?.textContent).toContain(t('palette.shortcutsList'));
+  });
+});
+
+function layoutSelect(scope: HTMLElement): HTMLSelectElement {
+  const select = scope.querySelector<HTMLSelectElement>('select[id$="-layout"]');
+  if (select === null) throw new Error('no layout select');
+  return select;
+}
+
+// The dialog on top: react-aria stacks a later overlay after the earlier ones.
+function topDialog(): HTMLElement | null {
+  const all = document.querySelectorAll<HTMLElement>('[role="dialog"]');
+  return all[all.length - 1] ?? null;
+}

@@ -391,6 +391,58 @@ describe('DocumentView layouts and night reading', () => {
     window.localStorage.clear();
   });
 
+  it('starts in two pages with page 1 alone for the saved cover layout (W4.5 S2)', async () => {
+    savePreferences({ defaultZoom: 'actual', pageLayout: 'twoPageCover' });
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    expect(button('Two pages')?.getAttribute('aria-pressed')).toBe('true');
+    expect(button('Page 1 alone')?.getAttribute('aria-pressed')).toBe('true');
+    expect(button('Single column')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('starts in two pages without page 1 alone for the saved two-page layout', async () => {
+    savePreferences({ defaultZoom: 'actual', pageLayout: 'twoPage' });
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    expect(button('Two pages')?.getAttribute('aria-pressed')).toBe('true');
+    expect(button('Page 1 alone')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('applies a changed default layout once, and saving other fields keeps the reader choice', async () => {
+    const { rpc } = fakeRpc(2);
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await flush();
+    const pressed = (label: string) => button(label)?.getAttribute('aria-pressed');
+
+    act(() => {
+      writePreferences({ ...readPreferences(), pageLayout: 'twoPage' });
+    });
+    expect(pressed('Two pages')).toBe('true');
+
+    // The reader picks the single column; saving another field must not undo that.
+    act(() => {
+      button('Single column')?.click();
+    });
+    act(() => {
+      writePreferences({ ...readPreferences(), reduceMotion: true });
+    });
+    expect(pressed('Single column')).toBe('true');
+
+    // Saving the same default again is not a change, so the reader's choice stays.
+    act(() => {
+      writePreferences({ ...readPreferences(), pageLayout: 'twoPage' });
+    });
+    expect(pressed('Single column')).toBe('true');
+  });
+
   it('zooms with Ctrl+wheel through the desktop steps and stops the browser zoom', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {

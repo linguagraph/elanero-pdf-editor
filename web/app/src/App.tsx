@@ -22,6 +22,7 @@ import { PreferencesDialog } from './prefs/PreferencesDialog';
 import { CombineDialog } from './combine/CombineDialog';
 import { PropertiesDialog } from './properties/PropertiesDialog';
 import { CommandPalette } from './palette/CommandPalette';
+import { ShortcutsDialog } from './palette/ShortcutsDialog';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
@@ -111,6 +112,9 @@ export function App({
     [jobs],
   );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  // Keyboard Shortcuts (W4.5 S2): from the app menu, the ribbon or Preferences. It opens above
+  // Preferences, which keeps its unsaved draft.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [compressOpen, setCompressOpen] = useState(false);
@@ -139,6 +143,7 @@ export function App({
   }, [engine]);
   const handlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
+    'keyboard-shortcuts': () => setShortcutsOpen(true),
     print: () => setPrintOpen(true),
     open: () => docs.openPicker(),
     'open-recent': () => docs.showStartPage(),
@@ -349,6 +354,13 @@ export function App({
         // clearing reloads the page, which would lose its unsaved edits. A file still queued or
         // opening (docs.pending) counts too: it can finish while the confirmation is showing.
         hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+      <ShortcutsDialog
+        isOpen={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        registry={REGISTRY}
+        state={state}
       />
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
         <SplitDialog

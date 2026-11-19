@@ -12,6 +12,11 @@ export type LanguageChoice = (typeof LANGUAGE_CHOICES)[number];
 export const ZOOM_CHOICES = ['fitWidth', 'fitPage', 'actual'] as const;
 export type ZoomChoice = (typeof ZOOM_CHOICES)[number];
 
+// The default page layout (W4.5 S2). The single-page layout is W5.1a and is not offered until it
+// exists, so it is not a choice here.
+export const PAGE_LAYOUT_CHOICES = ['continuous', 'twoPage', 'twoPageCover'] as const;
+export type PageLayoutChoice = (typeof PAGE_LAYOUT_CHOICES)[number];
+
 export const AUTHOR_NAME_MAX_LENGTH = 64;
 
 export interface Preferences {
@@ -22,6 +27,7 @@ export interface Preferences {
   readonly reduceMotion: boolean;
   // Night reading inverts the pages in the document view (a view setting, W1.6; not a theme).
   readonly nightReading: boolean;
+  readonly pageLayout: PageLayoutChoice;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -31,6 +37,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   defaultZoom: 'fitWidth',
   reduceMotion: false,
   nightReading: false,
+  pageLayout: 'continuous',
 };
 
 // The non-theme preferences are one JSON object. The theme keeps its own key (theme.ts), because
@@ -123,6 +130,7 @@ export function readPreferences(): Preferences {
       typeof record.nightReading === 'boolean'
         ? record.nightReading
         : DEFAULT_PREFERENCES.nightReading,
+    pageLayout: pickChoice(record.pageLayout, PAGE_LAYOUT_CHOICES, DEFAULT_PREFERENCES.pageLayout),
   };
 }
 
@@ -135,6 +143,7 @@ export function writePreferences(prefs: Preferences): boolean {
     defaultZoom: pickChoice(prefs.defaultZoom, ZOOM_CHOICES, DEFAULT_PREFERENCES.defaultZoom),
     reduceMotion: prefs.reduceMotion,
     nightReading: prefs.nightReading,
+    pageLayout: pickChoice(prefs.pageLayout, PAGE_LAYOUT_CHOICES, DEFAULT_PREFERENCES.pageLayout),
   };
   setTheme(prefs.theme);
   const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));
