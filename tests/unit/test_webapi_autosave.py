@@ -161,17 +161,30 @@ def test_a_busy_document_refuses_with_busy(web: None, fixture_pdf: Any) -> None:
     assert err["details"] == {"task": "Optimize"}
 
 
+def pin_copy(handle: str, copy: bytes, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the document's autosave copy ``copy`` for the rest of the test.
+
+    The writer's trailer ID can change a save's length from one save to the next (Pyodide's
+    output differs from CPython's by a few bytes), so a limit taken from one autosave is not
+    guaranteed to match the next. Pinning the copy the document returns keeps the limit check's
+    input equal to the measured size, whatever the writer's byte count is.
+    """
+    document = REGISTRY.get(handle).document
+    monkeypatch.setattr(document, "to_bytes", lambda *args, **kwargs: copy)
+
+
 def test_an_autosave_over_the_limit_is_refused(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     handle = open_data(fixture_pdf("images").read_bytes())
     _, saved = autosave(handle)
     size = len(saved)
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)
+    pin_copy(handle, saved, monkeypatch)
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", size - 1)  # one byte under the measured copy
     reply, out = call_raw("save.autosave_bytes", {"handle": handle})
     err = error(reply)
     assert err["code"] == FILE_TOO_LARGE
-    assert err["details"]["max_bytes"] == size - 1
+    assert err["details"] == {"max_bytes": size - 1, "size": size}
     assert out == []
 
 
@@ -180,9 +193,11 @@ def test_an_autosave_at_the_limit_succeeds(
 ) -> None:
     handle = open_data(fixture_pdf("images").read_bytes())
     _, saved = autosave(handle)
-    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", len(saved))
+    pin_copy(handle, saved, monkeypatch)
+    monkeypatch.setattr(limits, "MAX_SAVE_BYTES", len(saved))  # exactly the measured copy
     result, again = autosave(handle)
-    assert result["size"] == len(again)
+    assert again == saved
+    assert result["size"] == len(saved)
 
 
 def test_a_document_above_the_autosave_cap_is_skipped(
