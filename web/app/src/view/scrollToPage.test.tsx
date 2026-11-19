@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { DocumentView, type DocumentViewHandle } from './DocumentView';
+import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { scrollTopForPage, computeColumn } from './layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,6 +37,8 @@ async function flush(): Promise<void> {
 }
 
 beforeEach(() => {
+  // The geometry below is at 100 %; the saved default is Fit width otherwise.
+  window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ defaultZoom: 'actual' }));
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);

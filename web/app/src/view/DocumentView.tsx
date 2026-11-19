@@ -15,11 +15,20 @@ import {
 } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
-import { readPreferences, writePreferences } from '../prefs/store';
+import {
+  onPreferencesChanged,
+  readPreferences,
+  writePreferences,
+  type ZoomChoice,
+} from '../prefs/store';
 import {
   computeColumn,
   computeSpreads,
   currentPageIndex,
+  fitPageZoom,
+  fitWidthZoom,
+  largestPage,
+  type FitMode,
   type PageSizePt,
   scrollTopForPage,
   scrollTopForSpread,
@@ -83,9 +92,20 @@ function noJobWorker(): ActionJobWorker {
   throw new Error('the job worker is not available');
 }
 
-// The viewport height, or the window's when the element has no layout yet (jsdom, first paint).
-function viewportHeightOf(element: HTMLElement | null): number {
-  return element?.clientHeight || window.innerHeight;
+// The viewport size, or the window's when the element has no layout yet (jsdom, first paint).
+function viewportOf(element: HTMLElement | null): { top: number; height: number; width: number } {
+  return {
+    top: element?.scrollTop ?? 0,
+    height: element?.clientHeight || window.innerHeight,
+    width: element?.clientWidth || window.innerWidth,
+  };
+}
+
+// The fit mode a saved default zoom asks for; Actual size is no fit (the zoom is 100 %).
+function fitForChoice(choice: ZoomChoice): FitMode | null {
+  if (choice === 'fitWidth') return 'width';
+  if (choice === 'fitPage') return 'page';
+  return null;
 }
 
 export function DocumentView({
@@ -99,17 +119,22 @@ export function DocumentView({
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  // The zoom the reader picked by steps, the wheel or the presets; used when no fit mode is on.
+  const [manualZoom, setManualZoom] = useState(DEFAULT_ZOOM);
+  // The fit mode, if any. The saved default zoom starts it when the document opens (W5.1e).
+  const [fit, setFit] = useState<FitMode | null>(() => fitForChoice(readPreferences().defaultZoom));
+  // The default the view last applied, so a save that leaves it unchanged does not reset the zoom.
+  const appliedChoice = useRef<ZoomChoice>(readPreferences().defaultZoom);
   const [viewLayout, setViewLayout] = useState<ViewLayout>('continuous');
   const [firstAlone, setFirstAlone] = useState(false);
   // Night reading is a saved preference: read once here, written when the toggle changes.
   const [night, setNight] = useState(() => readPreferences().nightReading);
   // The zoom as the latest wheel event left it, so a burst of events builds on each other.
-  const zoomRef = useRef(zoom);
+  const zoomRef = useRef(manualZoom);
   const wheelPending = useRef(0);
   // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
   const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
-  const [scroll, setScroll] = useState({ top: 0, height: 0 });
+  const [scroll, setScroll] = useState({ top: 0, height: 0, width: 0 });
   // Bumped whenever the scheduler finished a render; the queue is re-planned then.
   const [tick, setTick] = useState(0);
   const [ownScheduler] = useState(() => new RenderScheduler(rpc, handle));
@@ -144,6 +169,29 @@ export function DocumentView({
 
   useEffect(() => scheduler.subscribe(() => setTick((value) => value + 1)), [scheduler]);
 
+  // The zoom in effect: the fitted one while a fit mode is on (it follows the viewport size, so a
+  // resize refits), else the manual zoom. The fit is the widest and tallest page, so every page fits.
+  const columns = viewLayout === 'twoPage' ? 2 : 1;
+  const fitted =
+    fit === null
+      ? null
+      : fit === 'width'
+        ? fitWidthZoom(largestPage(sizes ?? []).width, scroll.width, columns)
+        : fitPageZoom(
+            largestPage(sizes ?? []).width,
+            largestPage(sizes ?? []).height,
+            scroll.width,
+            scroll.height,
+            columns,
+          );
+  const zoom = fitted ?? manualZoom;
+
+  // Leaves any fit mode for a manual zoom: the steps, the wheel and the presets all do this.
+  const zoomTo = (value: number) => {
+    setFit(null);
+    setManualZoom(value);
+  };
+
   const layout = useMemo(
     () =>
       viewLayout === 'twoPage'
@@ -152,17 +200,34 @@ export function DocumentView({
     [sizes, zoom, viewLayout, firstAlone],
   );
 
-  // Reads the scroll position and the viewport height into state: on scroll, on resize and once
-  // the pages are known.
-  const measure = () => {
-    const element = scrollRef.current;
-    setScroll({ top: element?.scrollTop ?? 0, height: viewportHeightOf(element) });
-  };
+  // Reads the scroll position and the viewport size into state: on scroll, on resize (the window's,
+  // and the element's own, which moves when the layout around it does) and once the pages are known.
+  const measure = () => setScroll(viewportOf(scrollRef.current));
   useEffect(() => {
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure());
+    if (observer !== null && scrollRef.current !== null) observer.observe(scrollRef.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
   }, [sizes]);
+
+  // The saved default zoom, applied when the user saves a different one while the document is open.
+  // Saving other preferences leaves the zoom alone.
+  useEffect(
+    () =>
+      onPreferencesChanged(() => {
+        const choice = readPreferences().defaultZoom;
+        if (choice === appliedChoice.current) return;
+        appliedChoice.current = choice;
+        setFit(fitForChoice(choice));
+        if (choice === 'actual') setManualZoom(DEFAULT_ZOOM);
+      }),
+    [],
+  );
 
   useImperativeHandle(
     ref,
@@ -175,7 +240,7 @@ export function DocumentView({
             : scrollTopForPage(layout.boxes, index, zoom);
         if (element === null || top === null) return;
         element.scrollTop = top;
-        setScroll({ top, height: viewportHeightOf(element) });
+        setScroll(viewportOf(element));
       },
     }),
     [layout, zoom, viewLayout, firstAlone],
@@ -210,7 +275,8 @@ export function DocumentView({
         toZoom: to,
       });
       zoomRef.current = to;
-      setZoom(to);
+      setFit(null);
+      setManualZoom(to);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
@@ -224,7 +290,7 @@ export function DocumentView({
     pendingAnchor.current = null;
     element.scrollLeft = anchor.left;
     element.scrollTop = anchor.top;
-    setScroll({ top: element.scrollTop, height: viewportHeightOf(element) });
+    setScroll(viewportOf(element));
   }, [zoom]);
 
   const devicePixelRatio = window.devicePixelRatio || 1;
@@ -284,7 +350,7 @@ export function DocumentView({
       <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.zoomLabel')}>
         <button
           type="button"
-          onClick={() => setZoom(stepZoom(zoom, -1))}
+          onClick={() => zoomTo(stepZoom(zoom, -1))}
           disabled={zoom <= MIN_ZOOM}
         >
           {t('view.zoomOut')}
@@ -292,12 +358,17 @@ export function DocumentView({
         <span className="doc-view-zoom" aria-live="polite">
           {t('view.zoomPercent', { percent })}
         </span>
-        <button
-          type="button"
-          onClick={() => setZoom(stepZoom(zoom, 1))}
-          disabled={zoom >= MAX_ZOOM}
-        >
+        <button type="button" onClick={() => zoomTo(stepZoom(zoom, 1))} disabled={zoom >= MAX_ZOOM}>
           {t('view.zoomIn')}
+        </button>
+        <button type="button" aria-pressed={fit === 'width'} onClick={() => setFit('width')}>
+          {t('view.fitWidth')}
+        </button>
+        <button type="button" aria-pressed={fit === 'page'} onClick={() => setFit('page')}>
+          {t('view.fitPage')}
+        </button>
+        <button type="button" onClick={() => zoomTo(DEFAULT_ZOOM)}>
+          {t('view.actualSize')}
         </button>
         <div role="group" aria-label={t('view.layoutLabel')}>
           <button

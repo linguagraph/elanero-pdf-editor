@@ -37,6 +37,16 @@ export const DEFAULT_PREFERENCES: Preferences = {
 // the head script reads it before the app starts.
 export const PREFS_STORAGE_KEY = 'elanero.prefs';
 
+// Dispatched on the window after the preferences are written, so an open view can apply a changed
+// default (the same tab only: other tabs read the stored value when they next look).
+export const PREFERENCES_CHANGED_EVENT = 'elanero:preferences-changed';
+
+// Calls the listener after each write; returns the function that stops listening.
+export function onPreferencesChanged(listener: () => void): () => void {
+  window.addEventListener(PREFERENCES_CHANGED_EVENT, listener);
+  return () => window.removeEventListener(PREFERENCES_CHANGED_EVENT, listener);
+}
+
 // Words that mark a storage key as holding a secret (W1.1 section 6). A key is split into words at
 // punctuation and at camel-case boundaries, so `translation.apiKey` has the word `key`. Matching
 // whole words keeps harmless names such as `keyboardShortcuts` or `pinned` allowed.
@@ -127,5 +137,7 @@ export function writePreferences(prefs: Preferences): boolean {
     nightReading: prefs.nightReading,
   };
   setTheme(prefs.theme);
-  return writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));
+  const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));
+  window.dispatchEvent(new Event(PREFERENCES_CHANGED_EVENT));
+  return saved;
 }

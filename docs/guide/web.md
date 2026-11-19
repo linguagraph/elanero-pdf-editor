@@ -50,8 +50,8 @@ is reloaded until you press it.
   - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%), used when a document is opened.
 
   **Apply** saves your changes; **Cancel**, Esc or a click outside the dialog puts back the saved
-  theme. The author name and default zoom are saved now, but they take effect once documents and
-  comments are available in the web version (coming soon).
+  theme. The default zoom applies to the open document at once, and to each document you open. The
+  author name is saved now and used once comments are available in the web version (coming soon).
 
 ## Ribbon and keyboard shortcuts
 
@@ -137,7 +137,7 @@ full policy, with what the desktop app stores, is in the
 | Feature | Desktop | Web version |
 |---|---|---|
 | Light, dark and system theme | Yes | Yes |
-| Preferences: language, author name, reduce motion, default zoom | Yes | Saved; effect comes with the viewer (coming soon) |
+| Preferences: language, author name, reduce motion, default zoom | Yes | Saved; default zoom applies now, author name comes with comments (coming soon) |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | The app's files yes; documents need the engine's offline files (coming soon) |
 | Open, view, search and save PDFs | Yes | Coming soon |
