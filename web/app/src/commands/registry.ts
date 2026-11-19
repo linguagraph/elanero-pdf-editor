@@ -99,6 +99,11 @@ export function isSharedId(id: string): boolean {
   return Object.prototype.hasOwnProperty.call(SHARED_SHORTCUTS, id);
 }
 
+// The shared table's key strings for a command, in the desktop's order (none when it has none).
+export function sharedKeys(id: string): readonly string[] {
+  return isSharedId(id) ? (SHARED_SHORTCUTS[id]?.keys ?? []) : [];
+}
+
 // Builds a registry, and throws on a declaration error: a duplicate id, a command in an unknown
 // group, or a menu entry that names no command. Failing at start-up beats a silent mis-wire.
 export function createRegistry(

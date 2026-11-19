@@ -76,6 +76,16 @@ export const EN = {
   'disabled.nothingToRedo': 'There is nothing to redo.',
   'disabled.noRecentFiles': 'No recent files yet.',
 
+  // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
+  'palette.title': 'Command palette',
+  'palette.search': 'Search commands',
+  'palette.placeholder': 'Type a command',
+  'palette.commands': 'Commands',
+  'palette.empty': 'No command matches. Try another word.',
+  'palette.back': 'Back to commands',
+  'palette.shortcutsList': 'Keyboard shortcuts',
+  'palette.noShortcuts': 'No keyboard shortcuts yet.',
+
   // Command labels, keyed by command id (W1.6 section 11). Shortcuts are not text here: they come
   // from the shared table.
   'command.open.label': 'Open…',

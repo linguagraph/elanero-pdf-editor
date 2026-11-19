@@ -15,6 +15,7 @@ import { AppFrame } from './layout/AppFrame';
 import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
+import { CommandPalette } from './palette/CommandPalette';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
@@ -80,6 +81,7 @@ export function App({ engine }: AppProps) {
       }
     >
       <PreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
+      <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
       <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
       <div className="app-main">
