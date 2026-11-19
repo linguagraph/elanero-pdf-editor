@@ -58,7 +58,9 @@ is reloaded until you press it.
 - **Ribbon.** The ribbon's seven tabs (Home, Edit, Organize, Protect, Comment, View and Tools) are
   built, but they are not yet shown on the page. For now the top bar has the **Preferences** button
   and the theme switch only.
-- **Keyboard shortcuts.** No shortcuts are active in the web version yet. The web version will use
+- **Keyboard shortcuts.** Only three are active in the web version so far: **Alt+Left** and
+  **Alt+Right** go back and forward through the pages you have visited, and **Alt+G** moves the
+  cursor to the page box in the status bar. The web version will use
   the desktop's keys wherever the browser allows, and will list them in
   [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming soon).
 
@@ -68,6 +70,18 @@ is reloaded until you press it.
   every page. Click a preview to go to that page. The panel opens and closes for each open
   document separately, and it is not remembered after a reload. Bookmarks, attachments and layers
   are not available yet.
+
+## Going to a page
+
+- **Page box.** The status bar under the document shows the page you are reading. Type a page
+  number and press Enter to go to that page. If the number is not in the document, a message says
+  which numbers are valid, and the view does not move.
+- **Back and Forward.** The **Back** and **Forward** buttons in the status bar return to pages you
+  jumped from, or went to from a thumbnail, and go forward again. A small move of one page is not
+  recorded, and a new jump after going back clears the forward pages. The history is kept for each
+  open document until you reload the page.
+- **Page labels and links.** A document's own page labels (such as i, ii, 1) are not shown yet, and
+  links in the document do not work yet (coming soon).
 
 ## What is not available yet
 

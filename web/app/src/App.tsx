@@ -23,6 +23,8 @@ import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
+import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
+import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
@@ -86,6 +88,18 @@ export function App({ engine }: AppProps) {
     page: 1,
     zoom: DEFAULT_ZOOM,
   });
+  // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
+  // and Forward move through it (W5.3).
+  const history = useNavHistory(activeId);
+  const goTo = (index: number) => {
+    if (activeId !== null) recordTabJump(activeId, viewState.page - 1, index);
+    viewRef.current?.scrollToPage(index);
+  };
+  const stepBack = (direction: -1 | 1) => {
+    if (activeId === null) return;
+    const page = stepTabHistory(activeId, direction);
+    if (page !== null) viewRef.current?.scrollToPage(page);
+  };
   return (
     <AppFrame
       statusBar={
@@ -94,6 +108,11 @@ export function App({ engine }: AppProps) {
             page={viewState.page}
             total={activeTab?.pages ?? 0}
             zoom={viewState.zoom}
+            canBack={canGoBack(history)}
+            canForward={canGoForward(history)}
+            onGoTo={goTo}
+            onBack={() => stepBack(-1)}
+            onForward={() => stepBack(1)}
           />
         ) : undefined
       }
@@ -104,7 +123,7 @@ export function App({ engine }: AppProps) {
             rpc={session.rpc}
             handle={session.handle}
             scheduler={scheduler}
-            onSelect={(index) => viewRef.current?.scrollToPage(index)}
+            onSelect={goTo}
             onClose={() => {
               if (activeId !== null) setThumbnailsOpen(activeId, false);
             }}
