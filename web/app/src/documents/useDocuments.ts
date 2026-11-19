@@ -10,8 +10,12 @@ import {
   setTabSession,
 } from '../engine/engineConnection';
 import { reportRpcError, toasts } from '../feedback/toasts';
+import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import { addRecentFile, readRecentFiles, type RecentFile } from '../recent/recentFiles';
+import { type AutosaveWarning, createAutosaver } from '../storage/autosaver';
+import { createAutosaveStore } from '../storage/autosaveStore';
+import { browserTabId } from '../storage/tabId';
 import {
   activateTab,
   addTab,
@@ -24,6 +28,13 @@ import {
 import { asRpcError, openFile, sizeRefusal } from './openFile';
 import { passwordPrompt } from './passwordRequest';
 import { guardUnload } from './unloadGuard';
+
+// The message for each autosave warning. The autosaver raises each one once per page load.
+const AUTOSAVE_MESSAGES: Record<AutosaveWarning, MessageId> = {
+  unavailable: 'autosave.unavailable',
+  noSpace: 'autosave.noSpace',
+  tooLarge: 'autosave.tooLarge',
+};
 
 // A file counts as a PDF by its type, or by its name when the browser gives no type.
 export function isPdfFile(file: File): boolean {
@@ -98,9 +109,32 @@ export function useDocuments(engine: EngineConnection): Documents {
   const nextQueueIdRef = useRef(1);
   const prefetchBudgetRef = useRef({ current: 0 });
   const dirty = hasDirtyTab(tabs);
+  // The autosave copies of this page load (W3.9 S2). One scheduler per page; it is held in state
+  // so the effects below see the same instance.
+  const [autosaver] = useState(() =>
+    createAutosaver({
+      tabId: browserTabId(),
+      store: createAutosaveStore(),
+      client: () => engine.client(),
+      warn: (warning) => toasts.push('info', t(AUTOSAVE_MESSAGES[warning])),
+    }),
+  );
 
   // Warn before the page closes while a document has unsaved changes.
   useEffect(() => (dirty ? guardUnload(window) : undefined), [dirty]);
+
+  // Keeps the autosave copies in step with the open tabs: a dirty tab is copied, and a closed or
+  // clean tab loses its copy.
+  useEffect(() => {
+    autosaver.sync(tabs.tabs);
+  }, [autosaver, tabs]);
+
+  // Leaving the page deletes this page's copies, best effort (W1.1 section 6).
+  useEffect(() => {
+    const onPageHide = (): void => autosaver.dispose();
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [autosaver]);
 
   const showPending = useCallback(() => {
     setPending(
