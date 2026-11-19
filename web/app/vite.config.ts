@@ -4,6 +4,7 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { baseFor } from './src/deploy/base.ts';
 import { CSP_POLICY } from './src/csp.ts';
 import {
   appCacheName,
@@ -99,7 +100,9 @@ function serviceWorkerBuild(commit: string): Plugin {
   };
 }
 
-export default defineConfig({
+// A function of the command, so the production base (W9.2) applies to `vite build` only.
+export default defineConfig(({ command }) => ({
+  base: baseFor(command),
   plugins: [react(), devRelaxedCsp(), serviceWorkerBuild(gitCommit())],
   define: {
     __APP_COMMIT__: JSON.stringify(gitCommit()),
@@ -111,4 +114,4 @@ export default defineConfig({
   // The engine worker is an ES module: the page starts it by importing its URL from a blob: worker
   // (engine/start.ts), and an IIFE bundle would not run that way under the page CSP.
   worker: { format: 'es' },
-});
+}));

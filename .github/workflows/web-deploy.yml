@@ -1,0 +1,121 @@
+name: Web deploy (W9.2)
+
+# Publishes the web app to GitHub Pages under /elanero-pdf-editor/app/ (W9.2), next to the landing
+# page and the user guide that docs.yml publishes. Pages keeps one site per deployment, so this
+# workflow builds the whole site (the guide and landing page, the same way docs.yml does) and the
+# app into it, and deploys all of it in the same "pages" group. A docs-only deploy that does not
+# include the app would remove it, so docs.yml must include the app once it is deployable.
+#
+# The app is deployed only when the engine assets (Pyodide, the PyMuPDF wheel and the web zip,
+# staged by scripts/stage_engine_assets.mjs) are present in web/app/public/engine-assets. Staging
+# them in CI is the open follow-up in docs/web/plan.md (W9.2): until it lands, this workflow builds,
+# checks the base path and the size budget, and deploys nothing, so no build without the engine
+# goes live.
+#
+# Pages must be set to "GitHub Actions" as its source (Settings > Pages), as for docs.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-site:
+    name: web-site
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      deploy: ${{ steps.engine.outputs.present }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned Node version
+        id: versions
+        run: echo "node=$(jq -r .node web/spike/versions.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+
+      - name: Set up Python (the guide's build)
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install the docs tools pinned in pyproject.toml
+        run: |
+          python -c "import sys, subprocess, tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['docs']; subprocess.check_call([sys.executable, '-m', 'pip', 'install', *deps])"
+
+      - name: Build the website (the user guide, strictly, as docs.yml does)
+        run: python scripts/build_site.py --site-dir site
+
+      - name: Install the npm packages (exact, from the lockfile)
+        working-directory: web/app
+        run: npm ci
+
+      - name: Build the app (production base path /elanero-pdf-editor/app/)
+        working-directory: web/app
+        run: npm run build
+
+      - name: The app is served under its base path
+        run: |
+          grep -q 'src="/elanero-pdf-editor/app/assets/' web/app/dist/index.html
+          test -f web/app/dist/sw.js
+          test -f web/app/dist/manifest.webmanifest
+
+      - name: Check the first-load gzip budget (40 MB)
+        working-directory: web/app
+        run: node --experimental-strip-types scripts/check-size.ts dist
+
+      - name: Check that the engine assets are staged
+        id: engine
+        run: |
+          if test -f web/app/dist/engine-assets/pyodide.mjs && test -f web/app/dist/engine-assets/pyodide-lock.json; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The engine assets are not staged in CI yet (docs/web/plan.md, W9.2), so the app is built and checked but not deployed."
+          fi
+
+      - name: Add the app to the site
+        if: steps.engine.outputs.present == 'true'
+        run: |
+          mkdir -p site/app
+          cp -r web/app/dist/. site/app/
+
+      - name: Configure GitHub Pages
+        if: steps.engine.outputs.present == 'true' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        if: steps.engine.outputs.present == 'true' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  web-deploy:
+    needs: web-site
+    if: needs.web-site.outputs.deploy == 'true' && github.ref == 'refs/heads/main'
+    # Shares the "pages" group with docs.yml, so two deploys never overlap.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
