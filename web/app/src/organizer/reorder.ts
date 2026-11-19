@@ -39,10 +39,13 @@ export function dropSlot(cells: readonly CellBox[], x: number, y: number): DropS
 
   // The first row whose bottom is below the pointer; a pointer above the grid gets the first row,
   // one below it the last.
-  const row = rows.find((members) => {
-    const bottom = Math.max(...members.map((index) => cells[index]?.bottom ?? 0));
-    return y < bottom;
-  }) ?? rows[rows.length - 1] ?? [];
+  const row =
+    rows.find((members) => {
+      const bottom = Math.max(...members.map((index) => cells[index]?.bottom ?? 0));
+      return y < bottom;
+    }) ??
+    rows[rows.length - 1] ??
+    [];
 
   const ordered = [...row].sort((a, b) => (cells[a]?.left ?? 0) - (cells[b]?.left ?? 0));
   for (const index of ordered) {
