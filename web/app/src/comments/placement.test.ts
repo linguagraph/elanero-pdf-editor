@@ -73,7 +73,7 @@ describe('placing a comment', () => {
     noteRevisions.mockClear();
     store.getState().visible[0]?.action?.run();
     await settle();
-    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1' });
+    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: null });
     expect(noteRevisions).toHaveBeenCalledWith({ '0': 4 });
   });
 

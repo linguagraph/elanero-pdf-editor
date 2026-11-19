@@ -87,6 +87,7 @@ def state_of(session: DocumentSession) -> dto.DocStateDto:
         undo_label=stack.undo_label,
         redo_label=stack.redo_label,
         require_full_save=session.require_full_save,
+        history=stack.version,
     )
 
 

@@ -52,7 +52,10 @@ export async function placeComment(
 export async function undoComment(deps: PlacementDeps): Promise<void> {
   const store = deps.store ?? toasts;
   try {
-    const reply = await deps.rpc.call('actions.undo', { handle: deps.handle });
+    const reply = await deps.rpc.call('actions.undo', {
+      handle: deps.handle,
+      expect_history: null,
+    });
     if (reply.done) deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
   } catch (error) {
     reportFailure(store, error);
