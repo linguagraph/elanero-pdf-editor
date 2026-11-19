@@ -58,6 +58,7 @@ import { SearchRailButton } from './search/SearchRailButton';
 import { setSearchOpen, useSearchOpen } from './search/openState';
 import type { SearchMarks } from './search/search';
 import { APP_VERSION } from './version';
+import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
 
 // The command state every command reads before the document fields are filled in (see `state`).
@@ -78,9 +79,21 @@ export interface AppProps {
   readonly startPrintWorker?: () => WorkerClient;
   // The job worker pool (W3.1 slice 2). Tests leave it out and get a pool of their own.
   readonly jobs?: JobWorkerPool;
+  // The OS launches of PDFs (W4.6 S1). Tests leave it out: nothing is delivered then.
+  readonly launches?: LaunchInbox;
 }
 
-export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
+const NO_LAUNCHES = installLaunchInbox(undefined, {
+  failed: () => undefined,
+  tooMany: () => undefined,
+});
+
+export function App({
+  engine,
+  startPrintWorker,
+  jobs: jobsProp,
+  launches = NO_LAUNCHES,
+}: AppProps) {
   const ownPool = useMemo(
     () => createJobWorkerPool({ start: () => startJobWorker(jobWorkerBootOptions()) }),
     [],
@@ -109,6 +122,8 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
+  // Files the OS hands to the app open through the same path as the Open button (W4.6 S1).
+  useEffect(() => launches.attach(docs.openFiles), [launches, docs.openFiles]);
   useEffect(() => {
     // Two frames: the start-up screen is painted before the engine begins to load.
     let frame = requestAnimationFrame(() => {
