@@ -136,6 +136,7 @@ export interface PageRpc {
       | 'jobs.apply'
       | 'jobs.abort'
       | 'comments.flattenable'
+      | 'comments.xfdf_preview'
       | 'marks.list',
   >(
     method: M,

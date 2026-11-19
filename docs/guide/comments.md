@@ -51,6 +51,9 @@ The **Manage** group:
 - **Export Comments** saves the comments as XFDF (for another PDF editor), as a CSV summary, or as a
   PDF summary. The file is downloaded and the document is not changed. In the web version, the PDF
   summary is not available in every browser; the app tells you when it is not.
+- **Import Comments** adds the comments from an XFDF file (for example, one exported from another PDF
+  editor) to the document as one step, so **Undo** removes them all. In the web version, the file
+  can be up to 8 MB; the dialog shows how many comments it holds before you import them.
 
 Select a comment to move or resize it, and copy and paste it (**Ctrl+C** and **Ctrl+V**). The
 **Properties** panel (**Ctrl+E**) changes the color, fill, opacity, border, text and author of the

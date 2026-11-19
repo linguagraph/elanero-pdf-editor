@@ -25,6 +25,7 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   'open-recent',
   // The Comments panel's exports are not in the shared table yet; W7.1b adds the panel entry points.
   'export-comments',
+  'import-comments',
 ]);
 
 export const GROUPS: readonly GroupDef[] = [
@@ -177,6 +178,7 @@ export const COMMANDS: readonly CommandDef[] = [
   cmd('delete-comment', 'command.delete-comment.label', 'comment.manage'),
   cmd('flatten-all-comments', 'command.flatten-all-comments.label', 'comment.manage'),
   cmd('export-comments', 'command.export-comments.label', 'comment.manage'),
+  cmd('import-comments', 'command.import-comments.label', 'comment.manage'),
 
   // View
   cmd('zoom-out', 'command.zoom-out.label', 'view.zoom'),

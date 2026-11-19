@@ -32,6 +32,7 @@ import { startJobWorker } from './engine/start';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
+import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
@@ -87,6 +88,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
+  const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // One stable job worker factory for the document's jobs, so a redaction keeps its marks.
   const startJob = useCallback(() => startJobWorker(jobWorkerBootOptions()), []);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -117,6 +119,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'compare-files': () => setCompareOpen(true),
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
+    'import-comments': () => setCommentsImportOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -341,6 +344,15 @@ export function App({ engine, startPrintWorker }: AppProps) {
           handle={session.handle}
           name={activeTab.name}
           startWorker={startJob}
+        />
+      ) : null}
+      {documentShown && session !== null ? (
+        <CommentsImportDialog
+          isOpen={commentsImportOpen}
+          onClose={() => setCommentsImportOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}
       <PrintDialog
