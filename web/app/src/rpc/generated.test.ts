@@ -104,6 +104,7 @@ const DOC_STATE = {
   undo_label: '',
   redo_label: '',
   require_full_save: false,
+  history: 0,
 };
 
 describe('reply validators', () => {
@@ -245,6 +246,7 @@ describe('the change event decoders', () => {
     undo_label: 'Rotate Right',
     redo_label: '',
     require_full_save: false,
+    history: 0,
   };
   // One sample payload per kind (the event without its `kind` key), as the decoders read it.
   const SAMPLES: { [K in RpcEventKind]: unknown } = {
