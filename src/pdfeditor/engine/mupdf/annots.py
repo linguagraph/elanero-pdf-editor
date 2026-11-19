@@ -485,6 +485,27 @@ def update(page: MuPage, model: AnnotationModel) -> AnnotationModel:
     return page._annot_model(find(page, xref))
 
 
+def _write_redaction_style(doc: pymupdf.Document, xref: int, model: AnnotationModel) -> None:
+    """Write a mark's box colour (/IC), overlay text (/OverlayText) and text colour (the colour
+    in /DA). The defaults match ``add_redact_annot``: black box, white text, Helvetica 11."""
+    fill = model.fill.rgb() if model.fill else (0, 0, 0)
+    doc.xref_set_key(xref, "IC", _nums(fill))
+    if model.overlay_text:
+        doc.xref_set_key(xref, "OverlayText", pymupdf.get_pdf_str(model.overlay_text))
+    else:
+        doc.xref_set_key(xref, "OverlayText", "null")
+    text = model.text_color.rgb() if model.text_color else (1, 1, 1)
+    # Keep the font and size the mark already has; only the colour operator changes.
+    existing = doc.xref_get_key(xref, "DA")[1].replace("(", " ").replace(")", " ").split()
+    font = "/Helv 11 Tf"
+    for i, token in enumerate(existing):
+        if token == "Tf" and i >= 2:
+            font = " ".join(existing[i - 2 : i + 1])
+            break
+    colour = " ".join(pdf_num(v) for v in text)
+    doc.xref_set_key(xref, "DA", pymupdf.get_pdf_str(f"{colour} rg {font}"))
+
+
 def _apply_properties(
     page: MuPage, annot: pymupdf.Annot, model: AnnotationModel, created: bool = True
 ) -> None:
@@ -504,11 +525,11 @@ def _apply_properties(
         # otherwise survive a cleared comment).
         doc.xref_set_key(annot.xref, "Contents", pymupdf.get_pdf_str(""))
     if t is AnnotationType.REDACT:
-        # PyMuPDF can only cross out a one-box appearance; a multi-line text mark (one quad
-        # per line) would make update() fail, so those get plain boxes.
-        annot.update(cross_out=len(model.quads) <= 1)
-        return
-    if t is not AnnotationType.FREE_TEXT:
+        # Written before update(): the appearance is built from these keys, and update() alone
+        # would not persist a changed fill, overlay text or text colour (add() writes them too).
+        # The border and line colour do not apply to a mark.
+        _write_redaction_style(doc, annot.xref, model)
+    elif t is not AnnotationType.FREE_TEXT:
         fill = model.fill.rgb() if model.fill is not None and t in _FILL_TYPES else None
         stroke = model.color.rgb() if model.color is not None else None
         if stroke is not None or fill is not None:
@@ -522,6 +543,7 @@ def _apply_properties(
     elif (
         t not in (AnnotationType.TEXT, AnnotationType.FILE_ATTACHMENT, AnnotationType.STAMP)
         and not t.is_markup
+        and t is not AnnotationType.REDACT
     ):
         annot.set_border(width=model.border_width, dashes=list(model.dashes) or None)
     if t in (AnnotationType.LINE, AnnotationType.POLYLINE):
@@ -552,6 +574,10 @@ def _apply_properties(
             text_color=model.text_color.rgb() if model.text_color else (0, 0, 0),
             fill_color=model.fill.rgb() if model.fill else None,
         )
+    elif t is AnnotationType.REDACT:
+        # PyMuPDF can only cross out a one-box appearance; a multi-line text mark (one quad
+        # per line) would make update() fail, so those get plain boxes.
+        annot.update(cross_out=len(model.quads) <= 1)
     else:
         annot.update()
         if t is AnnotationType.STAMP:

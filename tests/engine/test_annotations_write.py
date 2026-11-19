@@ -635,3 +635,51 @@ def test_two_line_redaction_mark_round_trips_quads_and_colour(
     # The saved /QuadPoints hold the two lines in PDF space (origin bottom-left).
     corners = [list(c) for c in _corners(lines)]
     record("quad_points_pikepdf", path, subtype="/Redact", corners=corners)
+
+
+# -- restyling a redaction mark (W7.4b) ---------------------------------------------------------
+# An update must write a mark's box colour, overlay text and text colour, not only its geometry:
+# the restyle action sends exactly those three fields through update_annotation.
+
+
+def test_redaction_mark_update_persists_fill_overlay_and_text_colour(
+    writable: Engine, fixture_pdf, tmp_path: Path
+) -> None:
+    doc, path = _open(writable, fixture_pdf, tmp_path)
+    lines = (Quad.from_rect(Rect(100, 100, 220, 114)), Quad.from_rect(Rect(100, 130, 180, 144)))
+    mark = AnnotationModel(
+        AnnotationType.REDACT,
+        0,
+        Rect(100, 100, 220, 144),
+        quads=lines,
+        contents="secret",
+        overlay_text="OLD",
+        text_color=RED,
+    )
+    stored = doc.page(0).add_annotation(mark)
+    restyled = dataclasses.replace(stored, fill=BLUE, overlay_text="EXEMPT", text_color=BLUE)
+    updated = doc.page(0).update_annotation(restyled)
+    assert (updated.fill, updated.overlay_text, updated.text_color) == (BLUE, "EXEMPT", BLUE)
+    assert updated.rect == stored.rect and updated.name == stored.name
+    assert updated.contents == "secret"
+    assert _corners(updated.quads) == pytest.approx(_corners(lines))  # no cross-out change
+
+    # Clearing the overlay text removes it; the box colour and text colour stay as set.
+    cleared = doc.page(0).update_annotation(dataclasses.replace(updated, overlay_text=""))
+    assert cleared.overlay_text == "" and cleared.fill == BLUE and cleared.text_color == BLUE
+
+    again = _save_and_reopen(writable, doc, path, "/Redact", contents="secret")
+    reopened = next(a for a in again.page(0).annotations() if a.name == stored.name)
+    assert reopened.fill == BLUE and reopened.text_color == BLUE
+    assert reopened.overlay_text == ""
+    assert _corners(reopened.quads) == pytest.approx(_corners(lines))
+    again.close()
+    record(
+        "redact_annot_pikepdf",
+        path,
+        page=0,
+        mark=stored.name,
+        fill=[0, 0, 1],
+        overlay="",
+        text=[0, 0, 1],
+    )
