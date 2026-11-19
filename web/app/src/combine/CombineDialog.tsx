@@ -40,8 +40,8 @@ interface Result {
 
 // Hands the bytes to the browser as a file. The object URL is released after the click has
 // started the download.
-export function downloadBytes(name: string, bytes: ArrayBuffer): void {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+export function downloadBytes(name: string, bytes: ArrayBuffer, type = 'application/pdf'): void {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
