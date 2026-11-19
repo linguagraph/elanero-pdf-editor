@@ -1,0 +1,98 @@
+/* The search panel and its highlights (W5.4). Colours come from the theme tokens (W4.4a); the
+   highlight boxes are sized from the layout in CSS pixels, set inline. */
+
+.search-rail-button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.search-form,
+.search-options,
+.search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2);
+}
+
+.search-form input[type='search'] {
+  flex: 1 1 10rem;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.search-form button,
+.search-actions button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.search-options label {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: 44px;
+}
+
+.search-status {
+  margin: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-small);
+}
+
+.search-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.search-results button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  text-align: start;
+}
+
+.search-results button[aria-current='true'] {
+  background: var(--color-surface-alt);
+  font-weight: 600;
+}
+
+.search-hit-page {
+  display: block;
+  font-size: var(--font-size-small);
+}
+
+.search-mark {
+  position: absolute;
+  pointer-events: none;
+  background: rgb(255 214 0 / 45%);
+  mix-blend-mode: multiply;
+}
+
+.search-mark--current {
+  background: rgb(255 140 0 / 55%);
+}

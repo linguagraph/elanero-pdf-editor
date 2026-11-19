@@ -584,7 +584,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
 - [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails panel built and tested with a fake engine (Vitest); pending: bookmarks, attachments, layers)_
 - [ ] **W5.3** Links, navigation history, page jump, page labels
-- [ ] **W5.4** Text selection and copy; search panel
+- [ ] **W5.4** Text selection and copy; search panel _(partial: the text layer and the search panel are built and unit-tested; copy is the browser's native selection over the layer and has no automated test yet; the desktop selection model of W1.4 §10 is not ported)_
 
 **W6 Required features, #139**
 
