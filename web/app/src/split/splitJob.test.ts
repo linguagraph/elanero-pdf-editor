@@ -105,13 +105,15 @@ describe('runSplit', () => {
       parts: [[0, 1, 2], [4]],
     });
 
-    expect(engine.call.mock.calls.map((call) => call[0])).toEqual(['jobs.prepare', 'jobs.apply']);
+    expect(
+      engine.call.mock.calls.map((call) => call[0]).filter((name) => name !== 'system.memory'),
+    ).toEqual(['jobs.prepare', 'jobs.apply']);
     expect(engine.call.mock.calls[0]?.[1]).toEqual({
       handle: 'doc-1',
       job: 'split',
       args: expect.objectContaining({ mode: 'ranges', ranges: [[0, 1, 2], [4]] }),
     });
-    expect(engine.call.mock.calls[1]?.[1]).toEqual({
+    expect(engine.call.mock.calls.find((call) => call[0] === 'jobs.apply')?.[1]).toEqual({
       handle: 'doc-1',
       token: 'j1',
       document: null,
