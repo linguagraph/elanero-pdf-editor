@@ -28,7 +28,9 @@ export interface StageMessage {
 export interface ReplyMessage {
   id: number;
   reply: string;
+  // One buffer (the engine) or a list in $bin order (a job worker).
   buffer?: ArrayBuffer;
+  buffers?: ArrayBuffer[];
 }
 
 export interface ErrorMessage {
@@ -36,4 +38,11 @@ export interface ErrorMessage {
   error: { message: string; stage?: FailedStage };
 }
 
-export type WorkerOutbound = StageMessage | ReplyMessage | ErrorMessage;
+// worker -> main: a notice of a call still running (a job's progress). The id is the call's.
+export interface NoticeMessage {
+  kind: 'notice';
+  id: number;
+  notice: Record<string, unknown>;
+}
+
+export type WorkerOutbound = StageMessage | ReplyMessage | ErrorMessage | NoticeMessage;

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
-import { RpcError } from '../rpc/client';
+import { ReplyShapeError } from '../rpc/shape';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import {
   readRunReply,
@@ -15,7 +15,7 @@ import {
 
 const PDF_BYTES = new Uint8Array([37, 80, 68, 70]).buffer;
 
-function runReply(files: unknown[]): CallResult {
+function runReply(files: unknown[], buffers: ArrayBuffer[] = [PDF_BYTES]): CallResult {
   const reply = {
     v: PROTOCOL_VERSION,
     id: 1,
@@ -31,7 +31,7 @@ function runReply(files: unknown[]): CallResult {
     },
     events: [],
   };
-  return { reply: JSON.stringify(reply), buffer: PDF_BYTES };
+  return { reply: JSON.stringify(reply), buffers };
 }
 
 const ONE_FILE = runReply([
@@ -211,12 +211,24 @@ describe('readRunReply', () => {
     ]);
   });
 
-  it('refuses more than one file, which the one-buffer reply cannot carry', () => {
-    const two = runReply([
-      { name: 'a.pdf', mime: 'application/pdf', data: { $bin: 0 } },
-      { name: 'b.pdf', mime: 'application/pdf', data: { $bin: 1 } },
+  it('reads several files, each from its own buffer in $bin order', () => {
+    const second = new Uint8Array([9, 9]).buffer;
+    const two = runReply(
+      [
+        { name: 'a.pdf', mime: 'application/pdf', data: { $bin: 0 } },
+        { name: 'b.pdf', mime: 'application/pdf', data: { $bin: 1 } },
+      ],
+      [PDF_BYTES, second],
+    );
+    expect(readRunReply(two)).toEqual([
+      { name: 'a.pdf', mime: 'application/pdf', data: PDF_BYTES },
+      { name: 'b.pdf', mime: 'application/pdf', data: second },
     ]);
-    expect(() => readRunReply(two)).toThrow(RpcError);
+  });
+
+  it('refuses a file whose buffer is missing from the reply', () => {
+    const missing = runReply([{ name: 'a.pdf', mime: 'application/pdf', data: { $bin: 1 } }]);
+    expect(() => readRunReply(missing)).toThrow(ReplyShapeError);
   });
 
   it('refuses a result that is not files', () => {

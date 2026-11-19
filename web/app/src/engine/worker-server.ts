@@ -1,5 +1,5 @@
 import { EngineLoadError } from './errors';
-import type { LoadEngine } from './loader';
+import type { LoadEngine, WorkerRole } from './loader';
 import type { DispatchMessage, ErrorMessage, ReplyMessage, Stage } from './protocol';
 
 // The slice of a dedicated worker's global scope that the server uses.
@@ -11,6 +11,8 @@ export interface WorkerScope {
 export interface ServeOptions {
   load: LoadEngine;
   beforeEngine?: () => void;
+  // The Python entry point this worker answers with (the job worker's is 'job').
+  role?: WorkerRole;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,9 +37,16 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
     try {
       if (engine === undefined) throw new Error('the engine has not been started');
       const handle = await engine;
-      const result = handle.dispatch(message.request, message.buffers ?? []);
+      // A notice of this call (a job's progress) goes out before the reply, with the call's id.
+      const onNotice = (notice: Record<string, unknown>): void => {
+        scope.postMessage({ kind: 'notice', id: message.id, notice });
+      };
+      const result = handle.dispatch(message.request, message.buffers ?? [], onNotice);
       const reply: ReplyMessage = { id: message.id, reply: result.reply };
-      if (result.buffer === undefined) {
+      if (result.buffers !== undefined) {
+        reply.buffers = result.buffers;
+        scope.postMessage(reply, result.buffers);
+      } else if (result.buffer === undefined) {
         scope.postMessage(reply);
       } else {
         reply.buffer = result.buffer;
@@ -59,6 +68,7 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
           baseUrl: data.baseUrl,
           onStage: reportStage,
           beforeEngine: options.beforeEngine,
+          role: options.role,
         });
         // A failed load is reported by each call, so this handler must not leave it unhandled.
         engine.catch(() => undefined);

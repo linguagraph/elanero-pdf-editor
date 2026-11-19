@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EngineLoadError } from './errors';
-import { loadEngine, PILLOW_PACKAGE, type PyodideLike, type PyodideModule } from './loader';
+import {
+  loadEngine,
+  type Notice,
+  PILLOW_PACKAGE,
+  type PyodideLike,
+  type PyodideModule,
+} from './loader';
 import { PYMUPDF_WHEEL_FILE, WEBAPI_PROTOCOL } from './pins';
 import type { Stage } from './protocol';
 
@@ -214,5 +220,116 @@ describe('loadEngine', () => {
     expect(call).toHaveBeenCalledTimes(2); // hello during load, then this call
     const lastProxy = call.mock.results[1]?.value as { destroy: ReturnType<typeof vi.fn> };
     expect(lastProxy.destroy).toHaveBeenCalled();
+  });
+});
+
+// A Pyodide stand-in for the job worker. Its job call sends the given notice texts while a job
+// runs, then answers with the given buffers (a list reply, as the job adapter returns it).
+interface JobFake {
+  notices?: string[];
+  buffers?: Uint8Array[];
+}
+
+function fakeJobPyodide({ notices = [], buffers = [new Uint8Array([7, 8])] }: JobFake = {}) {
+  const log: string[] = [];
+  const call = vi.fn(
+    (request: string, _joined: unknown, _sizes: unknown, onNotice?: (text: string) => void) => {
+      const isHello = (JSON.parse(request) as { method: string }).method === 'hello';
+      if (!isHello) for (const text of notices) onNotice?.(text);
+      const reply = isHello
+        ? { v: 1, id: 1, ok: true, result: { protocol: WEBAPI_PROTOCOL }, events: [] }
+        : { v: 1, id: 2, ok: true, result: { kind: 'files', files: [] }, events: [] };
+      return {
+        toJs: () => [JSON.stringify(reply), isHello ? undefined : buffers],
+        destroy: vi.fn(),
+      };
+    },
+  );
+  const pyodide = {
+    loadPackage: vi.fn(async () => undefined),
+    runPythonAsync: vi.fn(async (code: string) => {
+      if (code.includes('_pdfeditor_job_call')) log.push('job adapter');
+      else if (code.includes('_pdfeditor_call')) log.push('engine adapter');
+      return undefined;
+    }),
+    toPy: vi.fn(() => ({ toJs: () => undefined, destroy: vi.fn() })),
+    globals: {
+      get: vi.fn((name: string) => (name === '_pdfeditor_job_call' ? call : undefined)),
+    },
+    FS: { writeFile: vi.fn() },
+  };
+  return { pyodide, call, log };
+}
+
+async function loadJob(fake: ReturnType<typeof fakeJobPyodide>) {
+  return loadEngine({
+    baseUrl: BASE,
+    role: 'job',
+    importPyodide: async () => fakeModule(fake.pyodide as unknown as PyodideLike),
+    fetchBytes: async () => new ArrayBuffer(4),
+  });
+}
+
+describe('loadEngine roles', () => {
+  it('loads the job adapter for the job worker, and not the engine adapter', async () => {
+    const fake = fakeJobPyodide();
+    await loadJob(fake);
+    expect(fake.log).toEqual(['job adapter']);
+  });
+
+  it('gives each notice of a job call to the caller as an object', async () => {
+    const notice = { notice: 'progress', id: 2, data: { done: 1, total: 2, status: '' } };
+    const fake = fakeJobPyodide({ notices: [JSON.stringify(notice)] });
+    const handle = await loadJob(fake);
+    const onNotice = vi.fn();
+    handle.dispatch('{"method":"job.run"}', [new ArrayBuffer(2)], onNotice);
+    expect(onNotice).toHaveBeenCalledTimes(1);
+    expect(onNotice).toHaveBeenCalledWith(notice);
+    // The job call takes the notice callback as its fourth argument.
+    expect(fake.call.mock.calls.at(-1)).toHaveLength(4);
+  });
+
+  it('drops a notice that is not a JSON object', async () => {
+    const fake = fakeJobPyodide({
+      notices: ['not json', '[1]', 'null', '3', '"text"', ''],
+    });
+    const handle = await loadJob(fake);
+    const onNotice = vi.fn<(notice: Notice) => void>();
+    const result = handle.dispatch('{"method":"job.run"}', [], onNotice);
+    expect(onNotice).not.toHaveBeenCalled();
+    expect(result.reply).toContain('"kind":"files"');
+  });
+
+  it('returns a list reply as buffers, with the first also as buffer', async () => {
+    const fake = fakeJobPyodide({
+      buffers: [new Uint8Array([1, 2]), new Uint8Array([3])],
+    });
+    const handle = await loadJob(fake);
+    const result = handle.dispatch('{"method":"job.run"}', []);
+    expect(result.buffers?.map((buffer) => Array.from(new Uint8Array(buffer)))).toEqual([
+      [1, 2],
+      [3],
+    ]);
+    expect(Array.from(new Uint8Array(result.buffer as ArrayBuffer))).toEqual([1, 2]);
+  });
+
+  it('returns only the reply for an empty list reply', async () => {
+    const fake = fakeJobPyodide({ buffers: [] });
+    const handle = await loadJob(fake);
+    const result = handle.dispatch('{"method":"job.run"}', []);
+    expect(result).not.toHaveProperty('buffers');
+    expect(result).not.toHaveProperty('buffer');
+    expect(result.reply).toContain('"kind":"files"');
+  });
+
+  it('keeps the engine path: three adapter arguments and one buffer, with no list', async () => {
+    const { pyodide, call } = fakePyodide();
+    const handle = await loadEngine(
+      options({ importPyodide: async () => fakeModule(pyodide as unknown as PyodideLike) }),
+    );
+    const result = handle.dispatch('{"method":"x"}', [new Uint8Array([1]).buffer]);
+    expect(call.mock.calls.at(-1)).toHaveLength(3);
+    expect(result.buffer).toBeInstanceOf(ArrayBuffer);
+    expect(result).not.toHaveProperty('buffers');
   });
 });

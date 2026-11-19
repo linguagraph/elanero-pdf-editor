@@ -22,7 +22,7 @@ from typing import Any
 from pdfeditor.core.inline_jobs import InlineRunner
 from pdfeditor.core.jobs import CancelToken, JobContext
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.webapi import Method, dto, jobs, limits
+from pdfeditor.webapi import Method, _hello, dto, jobs, limits
 from pdfeditor.webapi import dispatch as dispatch_envelope
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable
 from pdfeditor.webapi.errors import (
@@ -52,7 +52,11 @@ def dispatch(
     def handler(params: dto.JobRunParams, buffers: BufferTable) -> dto.JobRunResult:
         return run_job(params, buffers, request_id, notify, cancel)
 
-    methods = {"job.run": Method(dto.JobRunParams, handler, takes_buffers=True)}
+    # The job worker's own table: the hello the loader checks at start-up, and job.run.
+    methods = {
+        "hello": Method(dto.Empty, _hello),
+        "job.run": Method(dto.JobRunParams, handler, takes_buffers=True),
+    }
     return dispatch_envelope(request_json, buffers, methods)
 
 

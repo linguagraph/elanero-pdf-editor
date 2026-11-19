@@ -126,6 +126,52 @@ describe('startEngine', () => {
     await expect(pending).resolves.toEqual({ reply: 'ok', buffer: output });
   });
 
+  it('routes each notice to the call it belongs to', async () => {
+    const client = startEngine({ workerUrl: WORKER_URL, assetBaseUrl: ASSETS });
+    const worker = latestWorker();
+    const onFirst = vi.fn();
+    const onSecond = vi.fn();
+    client.call('{"a":1}', [], onFirst);
+    client.call('{"a":2}', [], onSecond);
+    const secondId = (worker.posted[2]?.message as { id: number }).id;
+    const notice = { notice: 'progress', id: 1, data: { done: 1, total: 2, status: '' } };
+
+    worker.emit('message', { data: { kind: 'notice', id: secondId, notice } });
+
+    expect(onSecond).toHaveBeenCalledWith(notice);
+    expect(onFirst).not.toHaveBeenCalled();
+  });
+
+  it('drops a notice that arrives after its call has finished', async () => {
+    const client = startEngine({ workerUrl: WORKER_URL, assetBaseUrl: ASSETS });
+    const worker = latestWorker();
+    const onNotice = vi.fn();
+    const pending = client.call('{"a":1}', [], onNotice);
+    const id = (worker.posted[1]?.message as { id: number }).id;
+    worker.emit('message', { data: { id, reply: 'done' } });
+    await expect(pending).resolves.toEqual({ reply: 'done' });
+
+    worker.emit('message', { data: { kind: 'notice', id, notice: { notice: 'progress' } } });
+
+    expect(onNotice).not.toHaveBeenCalled();
+  });
+
+  it('resolves a list reply with its buffers, and buffer is the first', async () => {
+    const client = startEngine({ workerUrl: WORKER_URL, assetBaseUrl: ASSETS });
+    const worker = latestWorker();
+    const first = new Uint8Array([1]).buffer;
+    const second = new Uint8Array([2, 3]).buffer;
+    const pending = client.call('{}');
+    const id = (worker.posted[1]?.message as { id: number }).id;
+    worker.emit('message', { data: { id, reply: 'ok', buffers: [first, second] } });
+
+    await expect(pending).resolves.toEqual({
+      reply: 'ok',
+      buffers: [first, second],
+      buffer: first,
+    });
+  });
+
   it('rejects with CallError on an error reply', async () => {
     const client = startEngine({ workerUrl: WORKER_URL, assetBaseUrl: ASSETS });
     const worker = latestWorker();
