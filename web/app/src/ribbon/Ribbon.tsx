@@ -27,6 +27,7 @@ import {
 } from '../commands/registry';
 import { t } from '../i18n/t';
 import { useViewportWidth } from '../layout/useViewportWidth';
+import { Icon } from '../theme/Icon';
 import { BREAKPOINTS_PX } from '../theme/tokens';
 import './ribbon.css';
 
@@ -211,6 +212,7 @@ function CommandButton({ def, registry, state, handlers, onRun, onBlocked }: Com
   const reasonId = useId();
   const shortcutId = useId();
   const shortcut = registry.shortcut(def.id);
+  const icon = registry.icon(def.id);
   const reasonText = reason === null ? undefined : t(DISABLED_REASON_LABELS[reason]);
   // The reason (when disabled) and the shortcut are described by hidden text, because react-aria's
   // Button does not pass a title or aria-keyshortcuts through.
@@ -232,7 +234,8 @@ function CommandButton({ def, registry, state, handlers, onRun, onBlocked }: Com
           if (runCommand(registry, def.id, state, handlers)) onRun?.();
         }}
       >
-        {t(def.labelId)}
+        {icon === undefined ? null : <Icon name={icon} size={20} />}
+        <span className="ribbon-command-label">{t(def.labelId)}</span>
       </Button>
       {reasonText === undefined ? null : (
         <span id={reasonId} hidden>

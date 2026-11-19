@@ -6,6 +6,7 @@
 // calls the engine: a command runs a handler the caller passes in (see run.ts).
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import type { MessageId } from '../i18n/en';
+import { ICONS, type IconName } from '../theme/icons.generated';
 
 export const TAB_ORDER = [
   'home',
@@ -78,6 +79,9 @@ export interface CommandDef {
   readonly group: string;
   readonly enabled: Enabled;
   readonly capability?: Capability;
+  // Set only for an id the shared table has no icon for (web-only ids, and desktop commands with no
+  // icon); otherwise the desktop icon name from the shared table applies.
+  readonly icon?: IconName;
 }
 
 export interface Registry {
@@ -88,14 +92,23 @@ export interface Registry {
   get(id: string): CommandDef | undefined;
   // The default shortcut from the shared table, or undefined when the command has none.
   shortcut(id: string): string | undefined;
+  // The command's icon: the override, else the shared table's desktop icon when the web has it.
+  icon(id: string): IconName | undefined;
 }
 
 interface ShortcutEntry {
   readonly keys: readonly string[];
+  // The desktop icon name, or null when the desktop command has none.
+  readonly icon: string | null;
 }
 
 // The shared table: desktop command id -> label and default key sequences.
 const SHARED_SHORTCUTS: Readonly<Record<string, ShortcutEntry>> = shortcutTable.commands;
+
+// Whether a name is one of the bundled icons (the web build ships the whole desktop set).
+export function isIconName(name: string): name is IconName {
+  return Object.hasOwn(ICONS, name);
+}
 
 // Whether the shared table lists this id (the desktop has the command).
 export function isSharedId(id: string): boolean {
@@ -127,6 +140,11 @@ export function createRegistry(
   for (const def of commands) {
     if (!groupIds.has(def.group)) throw new Error(`command ${def.id}: unknown group ${def.group}`);
   }
+  for (const def of commands) {
+    if (def.icon !== undefined && !isIconName(def.icon)) {
+      throw new Error(`command ${def.id}: unknown icon ${String(def.icon)}`);
+    }
+  }
   for (const section of menu) {
     for (const id of section) {
       if (!byId.has(id)) throw new Error(`menu entry ${id}: no such command`);
@@ -138,5 +156,11 @@ export function createRegistry(
     menu,
     get: (id) => byId.get(id),
     shortcut: (id) => (isSharedId(id) ? SHARED_SHORTCUTS[id]?.keys[0] : undefined),
+    icon: (id) => {
+      const override = byId.get(id)?.icon;
+      if (override !== undefined) return override;
+      const shared = isSharedId(id) ? SHARED_SHORTCUTS[id]?.icon : null;
+      return shared !== null && shared !== undefined && isIconName(shared) ? shared : undefined;
+    },
   };
 }

@@ -72,6 +72,10 @@
 }
 
 .ribbon-command {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
   min-height: 28px;
   padding: var(--space-1) var(--space-2);
   background: none;
