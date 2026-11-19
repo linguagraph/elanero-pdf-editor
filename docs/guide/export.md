@@ -51,6 +51,19 @@ exported at all.
     A PDF is a fixed layout, so converting it to Word or Excel rebuilds the content. Check the
     result, especially complex layouts, columns, tables and text inside pictures.
 
+## Export on the web
+
+In the web version, **Export** (in the **Tools** group, or from the command palette) opens the export
+dialog. Choose:
+
+- **Format**: plain text, Markdown, HTML, Word (`.docx`), PNG, JPEG or TIFF.
+- **Pages**: all pages, the current page, or a page range such as `1-3, 5`. A range is checked
+  before anything is exported; an empty range or a page outside the document is refused.
+- **Resolution** (images only): 150 dpi, or 300 dpi for sharper images.
+
+The export runs in the background, with a progress bar and a **Cancel** button. When it finishes,
+download the file. Several page images come together in one ZIP file.
+
 ## Extract images and fonts
 
 - **Images** in the **Export** group of the **Tools** tab (**File ▸ Extract Images…**) saves every image in

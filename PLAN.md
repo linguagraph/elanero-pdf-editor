@@ -609,7 +609,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W7.4** A7 Redaction and sanitize
 - [ ] **W7.5** A8 Password protection and permissions
 - [ ] **W7.6** A9 Document properties and metadata editing
-- [ ] **W7.7** A10 Export pages as images and text
+- [x] **W7.7** A10 Export pages as images and text _(text, Markdown, HTML, Word, PNG, JPEG and TIFF; all pages, the current page or a range; the export job with progress and Cancel; several page images come back as one `export.zip`, since the engine reply carries one file. Tested with the fake engine and in the Python job tests; the end-to-end run in the real app is not verified here)_
 - [x] **W7.8** A11 Compare documents
 - [ ] **W7.9** A12–A13 Flatten annotations; attachments and layers
 
