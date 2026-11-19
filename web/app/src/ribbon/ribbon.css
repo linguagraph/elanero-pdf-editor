@@ -179,5 +179,16 @@
   display: flex;
   flex-wrap: wrap;
   max-width: min(640px, calc(100vw - var(--space-4)));
+  max-height: calc(100vh - var(--space-6));
+  overflow-y: auto;
   outline: none;
+}
+
+/* The reason a disabled command gives when pressed; it takes its own line in the popover. */
+.ribbon-notice {
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
 }

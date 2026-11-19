@@ -44,13 +44,16 @@ export interface CommandState {
   readonly capabilities: ReadonlySet<Capability>;
 }
 
-export type DisabledReason = 'needsDocument' | 'nothingToUndo' | 'nothingToRedo' | 'noRecentFiles';
+// notAvailableYet is not an enabled rule: the caller reports it when a command has no handler.
+export type DisabledReason =
+  'needsDocument' | 'nothingToUndo' | 'nothingToRedo' | 'noRecentFiles' | 'notAvailableYet';
 
 export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>> = {
   needsDocument: 'disabled.needsDocument',
   nothingToUndo: 'disabled.nothingToUndo',
   nothingToRedo: 'disabled.nothingToRedo',
   noRecentFiles: 'disabled.noRecentFiles',
+  notAvailableYet: 'disabled.notAvailableYet',
 };
 
 // Returns the reason a command is disabled, or null when it can run.

@@ -10,7 +10,13 @@ import {
   Tabs,
   Toolbar,
 } from 'react-aria-components';
-import { type CommandHandlers, ribbonLayout, runCommand } from '../commands/run';
+import {
+  type CommandHandlers,
+  commandDisabledReason,
+  type RibbonTab,
+  ribbonLayout,
+  runCommand,
+} from '../commands/run';
 import {
   type CommandDef,
   type CommandState,
@@ -91,28 +97,59 @@ function CollapsedRibbon({ registry, state, handlers }: RibbonProps) {
       <div className="ribbon-tabs" role="group" aria-label={t('ribbon.label')}>
         {tabs.map((entry) => (
           <DialogTrigger key={entry.tab}>
-            <Button className="ribbon-tab">{t(TAB_LABELS[entry.tab])}</Button>
+            <Button className="ribbon-tab" aria-haspopup="dialog">
+              {t(TAB_LABELS[entry.tab])}
+            </Button>
             <Popover className="ribbon-popover" placement="bottom start">
               <Dialog className="ribbon-popover-body" aria-label={t(TAB_LABELS[entry.tab])}>
-                {({ close }) =>
-                  entry.groups.map((group) => (
-                    <RibbonGroup
-                      key={group.group.id}
-                      label={t(group.group.labelId)}
-                      commands={group.commands}
-                      registry={registry}
-                      state={state}
-                      handlers={handlers}
-                      onRun={close}
-                    />
-                  ))
-                }
+                {({ close }) => (
+                  <CollapsedTabBody
+                    tab={entry}
+                    registry={registry}
+                    state={state}
+                    handlers={handlers}
+                    close={close}
+                  />
+                )}
               </Dialog>
             </Popover>
           </DialogTrigger>
         ))}
       </div>
     </div>
+  );
+}
+
+interface CollapsedTabBodyProps {
+  tab: RibbonTab;
+  registry: Registry;
+  state: CommandState;
+  handlers: CommandHandlers;
+  close: () => void;
+}
+
+// The groups of one tab in the collapsed popover. A press on a disabled command keeps the popover
+// open and states the reason in the status line below the groups.
+function CollapsedTabBody({ tab, registry, state, handlers, close }: CollapsedTabBodyProps) {
+  const [notice, setNotice] = useState('');
+  return (
+    <>
+      {tab.groups.map((group) => (
+        <RibbonGroup
+          key={group.group.id}
+          label={t(group.group.labelId)}
+          commands={group.commands}
+          registry={registry}
+          state={state}
+          handlers={handlers}
+          onRun={close}
+          onBlocked={setNotice}
+        />
+      ))}
+      <p role="status" className="ribbon-notice">
+        {notice}
+      </p>
+    </>
   );
 }
 
@@ -124,9 +161,19 @@ interface RibbonGroupProps {
   handlers: CommandHandlers;
   // Called after a command in the group runs (the collapsed form closes its popover with it).
   onRun?: () => void;
+  // Called with the reason when a disabled command is pressed.
+  onBlocked?: (reason: string) => void;
 }
 
-function RibbonGroup({ label, commands, registry, state, handlers, onRun }: RibbonGroupProps) {
+function RibbonGroup({
+  label,
+  commands,
+  registry,
+  state,
+  handlers,
+  onRun,
+  onBlocked,
+}: RibbonGroupProps) {
   const labelId = useId();
   return (
     <div role="group" aria-labelledby={labelId} className="ribbon-group">
@@ -139,6 +186,7 @@ function RibbonGroup({ label, commands, registry, state, handlers, onRun }: Ribb
             state={state}
             handlers={handlers}
             onRun={onRun}
+            onBlocked={onBlocked}
           />
         ))}
       </div>
@@ -155,10 +203,11 @@ interface CommandButtonProps {
   state: CommandState;
   handlers: CommandHandlers;
   onRun?: () => void;
+  onBlocked?: (reason: string) => void;
 }
 
-function CommandButton({ def, registry, state, handlers, onRun }: CommandButtonProps) {
-  const reason = def.enabled(state);
+function CommandButton({ def, registry, state, handlers, onRun, onBlocked }: CommandButtonProps) {
+  const reason = commandDisabledReason(def, state, handlers);
   const reasonId = useId();
   const shortcutId = useId();
   const shortcut = registry.shortcut(def.id);
@@ -176,6 +225,10 @@ function CommandButton({ def, registry, state, handlers, onRun }: CommandButtonP
         aria-disabled={reasonText === undefined ? undefined : 'true'}
         aria-describedby={describedBy === '' ? undefined : describedBy}
         onPress={() => {
+          if (reasonText !== undefined) {
+            onBlocked?.(reasonText);
+            return;
+          }
           if (runCommand(registry, def.id, state, handlers)) onRun?.();
         }}
       >

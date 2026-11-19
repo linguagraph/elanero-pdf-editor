@@ -75,6 +75,7 @@ export const EN = {
   'disabled.nothingToUndo': 'There is nothing to undo.',
   'disabled.nothingToRedo': 'There is nothing to redo.',
   'disabled.noRecentFiles': 'No recent files yet.',
+  'disabled.notAvailableYet': 'This command is not available yet.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
   'palette.title': 'Command palette',
