@@ -86,7 +86,16 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
     [],
   );
   const jobs = jobsProp ?? ownPool;
-  useEffect(() => () => jobs.dispose(), [jobs]);
+  // StrictMode runs this cleanup once at mount, so the warm-up flag resets with the pool: the next
+  // page draw warms the pool again (jobs.warm re-arms a disposed pool).
+  const warmed = useRef(false);
+  useEffect(
+    () => () => {
+      warmed.current = false;
+      jobs.dispose();
+    },
+    [jobs],
+  );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -138,8 +147,8 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
     () => (session === null ? null : new RenderScheduler(session.rpc, session.handle)),
     [session],
   );
-  // The job worker is warmed once, after the first page of the first document is drawn (W1.1).
-  const warmed = useRef(false);
+  // The job worker is warmed once per page load, after the first page of the first document is
+  // drawn (W1.1). Later documents do nothing; the dispose cleanup above clears the flag.
   useEffect(() => {
     let stale = false;
     void scheduler?.firstPage.then(() => {

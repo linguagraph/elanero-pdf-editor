@@ -210,7 +210,7 @@ describe('job worker pool: timers and limits', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
-  it('dispose terminates the idle worker, a later warm does nothing, and leases are untouched', async () => {
+  it('dispose leaves a worker on lease alone, and terminates it when released', async () => {
     const { pool, start, made } = setup();
     pool.warm();
     made[0]!.answer(0);
@@ -218,10 +218,48 @@ describe('job worker pool: timers and limits', () => {
     const lease = pool.acquire();
     pool.dispose();
     expect(made[0]!.worker.terminate).not.toHaveBeenCalled();
-    pool.warm();
-    expect(start).toHaveBeenCalledTimes(1);
     lease.terminate();
     expect(made[0]!.worker.terminate).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispose is idempotent', async () => {
+    const { pool, made } = setup();
+    pool.warm();
+    made[0]!.answer(0);
+    await settle();
+    pool.dispose();
+    pool.dispose();
+    expect(made[0]!.worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('a warm after dispose re-arms the pool and starts exactly one worker', async () => {
+    const { pool, start, made } = setup();
+    pool.warm();
+    made[0]!.answer(0);
+    await settle();
+    pool.dispose();
+    expect(made[0]!.worker.terminate).toHaveBeenCalledTimes(1);
+    pool.warm();
+    pool.warm();
+    expect(start).toHaveBeenCalledTimes(2);
+    made[1]!.answer(0);
+    await settle();
+    expect(made[1]!.worker.terminate).not.toHaveBeenCalled();
+    pool.acquire();
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it('a lease released after dispose terminates its worker and does not re-warm', async () => {
+    const { pool, start, made } = setup();
+    pool.warm();
+    made[0]!.answer(0);
+    await settle();
+    const lease = pool.acquire();
+    pool.dispose();
+    lease.terminate();
+    expect(made[0]!.worker.terminate).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
   });
 
   it('dispose terminates an idle worker', async () => {

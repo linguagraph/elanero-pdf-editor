@@ -29,11 +29,15 @@ const HELLO = JSON.stringify({ v: 1, id: 0, method: 'hello', params: {} });
 
 export interface JobWorkerPool {
   // A worker for one job. Same shape as startJobWorker's result, so the job flows don't change.
+  // acquire() after dispose() still starts a worker, and that worker's release() terminates it.
   acquire(): WorkerClient;
   // Starts one worker in the background if none is idle or starting. Idempotent. After the first
-  // call the pool is "armed": it re-warms after a discard.
+  // call the pool is "armed": it re-warms after a discard. Calling it after dispose() re-arms the
+  // pool, which StrictMode needs: its development-only cleanup disposes the pool before the first
+  // page is drawn.
   warm(): void;
-  // Terminates the idle worker and stops all timers. Workers out on lease are not touched.
+  // Terminates the idle worker and stops all timers. Idempotent. Workers out on lease are not
+  // touched; they are terminated when released while the pool is disposed.
   dispose(): void;
 }
 
@@ -103,8 +107,9 @@ export function createJobWorkerPool(options: JobPoolOptions): JobWorkerPool {
     }, idleMs);
   };
 
-  const warm = (): void => {
-    armed = true;
+  // Starts the background warm-up unless the pool is disposed, a worker is already there, or one is
+  // queued. A discard from a lease goes through here too, but it never re-arms a disposed pool.
+  const startWarm = (): void => {
     if (disposed || lowMemory() || slot !== undefined || warmQueued) return;
     warmQueued = true;
     schedule(() => {
@@ -142,7 +147,7 @@ export function createJobWorkerPool(options: JobPoolOptions): JobWorkerPool {
 
   const discard = (client: WorkerClient): void => {
     client.terminate();
-    if (armed) warm();
+    if (armed) startWarm();
   };
 
   const lease = (client: WorkerClient): WorkerClient => {
@@ -194,6 +199,8 @@ export function createJobWorkerPool(options: JobPoolOptions): JobWorkerPool {
 
   return {
     acquire() {
+      // Not blocked by disposed: a job that starts after dispose gets a worker, and its release()
+      // terminates that worker (see release above).
       if (slot !== undefined) {
         const taken = slot;
         slot = undefined;
@@ -203,10 +210,16 @@ export function createJobWorkerPool(options: JobPoolOptions): JobWorkerPool {
       return lease(options.start());
     },
 
-    warm,
+    warm() {
+      // Re-arms a pool that dispose() stopped (StrictMode's development-only cleanup).
+      armed = true;
+      disposed = false;
+      startWarm();
+    },
 
     dispose() {
       disposed = true;
+      warmQueued = false;
       clearIdleTimer();
       const idle = slot;
       slot = undefined;
