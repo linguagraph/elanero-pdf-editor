@@ -410,6 +410,35 @@ export const EN = {
   'error.INTERNAL':
     'Something went wrong inside Elanero. Try again; if it keeps happening, reload the page.',
   'error.TIMEOUT': 'Elanero is still working on this. You can wait, or restart the engine.',
+
+  // Split dialog (W6.2).
+  'split.title': 'Split document',
+  'split.mode.label': 'Split by',
+  'split.mode.pages': 'Every N pages',
+  'split.mode.ranges': 'Page ranges',
+  'split.mode.bookmarks': 'Top-level bookmarks',
+  'split.mode.size': 'Largest file size',
+  'split.pagesPerFile.label': 'Pages in each file',
+  'split.ranges.label': 'Page ranges',
+  'split.ranges.placeholder': 'For example 1-3, 5',
+  'split.ranges.hint': 'Separate ranges with commas. Each range becomes one file.',
+  'split.bookmarks.hint': 'One file for each top-level bookmark.',
+  'split.size.label': 'Largest file, in megabytes',
+  'split.size.hint':
+    'Pages are grouped so that no file is larger than this, unless one page alone is.',
+  'split.error.pagesPerFile': 'Enter a whole number of pages from 1 to {count}.',
+  'split.error.ranges.empty': 'Enter at least one page range.',
+  'split.error.ranges.invalid':
+    '"{item}" is not a page range. Use page numbers and dashes, for example 1-3, 5.',
+  'split.error.ranges.outOfRange': '"{item}" is outside the document, which has {count} pages.',
+  'split.error.size': 'Enter a size in megabytes that is greater than 0.',
+  'split.failed': 'The document could not be split. Try again.',
+  'split.submit': 'Split',
+  'split.close': 'Close',
+  'split.running': 'Splitting the document. The progress bar shows how far it has got.',
+  'split.results.heading': 'Files ({count})',
+  'split.download': 'Download {name}',
+  'split.zipPending': 'Download as ZIP is not available yet. Each file downloads on its own.',
 } as const;
 
 export type MessageId = keyof typeof EN;

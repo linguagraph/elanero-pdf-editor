@@ -589,7 +589,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W6 Required features, #139**
 
 - [ ] **W6.1** R2 Page organizer _(partial: organizer panel with thumbnails, multi-select, rotate, move up/down and delete, each undoable and tested with a fake engine (Vitest); pending: insert blank, duplicate, extract, insert from file, drag-and-drop reorder)_
-- [ ] **W6.2** R3 Split dialog
+- [ ] **W6.2** R3 Split dialog _(partial: split dialog on the Overlay host (Split command) with the four modes (every N pages, page ranges, top-level bookmarks, largest size), validation before any job starts, the prepare, run and apply flow with progress and Cancel, and one download per file, all tested with a fake engine (Vitest); pending: the browser's job worker does not serve `job.run` (the adapter uses the engine's method table), so a split cannot finish in the real app yet; the reply carries one binary value, so a split into several files cannot come back; ZIP; a percentage (the job reports none to the browser yet); the preview of the resulting files)_
 - [ ] **W6.3** R6 Combine dialog
 - [ ] **W6.4** R5 Compress dialog
 - [ ] **W6.5** R7 Print
