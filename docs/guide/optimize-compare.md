@@ -35,6 +35,12 @@ the open document is left unchanged.
 
 Removing document information or thumbnails removes that data from the copy only.
 
+In the web version, **Tools ▸ Reduce File Size** offers the four presets (Smallest, Balanced, High
+quality and Lossless) and no custom settings. **Compress** runs in the background with a progress
+bar and **Cancel**. The result shows the size before and after, and **Download reduced.pdf** saves
+the copy. If the preset does not make the file smaller, the dialog says so and offers no download:
+keep the original.
+
 ### See what takes up space
 
 **Tools ▸ Space Usage…** shows what the file is made of: the total size,
