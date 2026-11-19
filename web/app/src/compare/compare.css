@@ -1,0 +1,92 @@
+/* The compare dialog (W7.8, W1.6 section 9). Colours and spacing come from the theme tokens. */
+
+.compare {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.compare-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.compare-label {
+  font-weight: 600;
+}
+
+.compare-input {
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.compare-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.compare-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.compare-error {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+.compare-status {
+  margin: 0;
+}
+
+.compare-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.compare-report {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.compare-heading {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.compare-pages {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compare-changes {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
+.compare-page-link {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.compare-page-link[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.compare-kind {
+  font-weight: 600;
+}

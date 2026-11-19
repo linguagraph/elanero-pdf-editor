@@ -28,6 +28,7 @@ import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
+import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
@@ -71,6 +72,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [exportOpen, setExportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
   useEffect(() => {
     // Two frames: the start-up screen is painted before the engine begins to load.
@@ -93,6 +95,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
+    'compare-files': () => setCompareOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -230,6 +233,17 @@ export function App({ engine, startPrintWorker }: AppProps) {
           pageCount={activeTab.pages}
           currentPage={viewState.page}
           startWorker={() => startJobWorker(jobWorkerBootOptions())}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
+        <CompareDialog
+          isOpen={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          currentName={activeTab.name}
+          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+          onGoToPage={goTo}
         />
       ) : null}
       <PrintDialog
