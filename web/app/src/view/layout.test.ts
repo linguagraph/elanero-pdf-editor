@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeColumn,
+  currentPageIndex,
   distanceToCentre,
   isInViewport,
   PAGE_GAP_PT,
@@ -89,5 +90,39 @@ describe('viewport helpers', () => {
     // The page centre is at 200 and the viewport centre at 200 for a 400 px viewport from 0.
     expect(distanceToCentre(box, 0, 400)).toBe(0);
     expect(distanceToCentre(box, 0, 200)).toBe(100);
+  });
+});
+
+describe('currentPageIndex', () => {
+  // Three 100 px pages with no gaps: page i spans [100i, 100i + 100).
+  const boxes: PageBox[] = [0, 1, 2].map((index) => ({
+    index,
+    top: index * 100,
+    left: 0,
+    width: 100,
+    height: 100,
+  }));
+
+  it('is the first page at the top of the document', () => {
+    expect(currentPageIndex(boxes, 0, 100)).toBe(0);
+  });
+
+  it('is the page whose centre is nearest the middle of the viewport', () => {
+    // The viewport from 120 to 220 has its centre at 170, on page 1.
+    expect(currentPageIndex(boxes, 120, 100)).toBe(1);
+    // From 160 to 260 the centre is at 210, on page 2.
+    expect(currentPageIndex(boxes, 160, 100)).toBe(2);
+  });
+
+  it('is the last page when scrolled to the end', () => {
+    expect(currentPageIndex(boxes, 200, 100)).toBe(2);
+  });
+
+  it('stays inside the document when the scroll is past its end', () => {
+    expect(currentPageIndex(boxes, 5000, 100)).toBe(2);
+  });
+
+  it('is 0 for an empty document', () => {
+    expect(currentPageIndex([], 0, 100)).toBe(0);
   });
 });
