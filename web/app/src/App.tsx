@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
 import { type CommandHandlers, runCommand } from './commands/run';
@@ -26,6 +26,7 @@ import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
+import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
 import { CompareDialog } from './compare/CompareDialog';
@@ -72,6 +73,9 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [exportOpen, setExportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
+  const [sanitizeOpen, setSanitizeOpen] = useState(false);
+  // One stable job worker factory for the document's jobs, so a redaction keeps its marks.
+  const startJob = useCallback(() => startJobWorker(jobWorkerBootOptions()), []);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
   useEffect(() => {
@@ -95,6 +99,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
+    'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
@@ -246,6 +251,16 @@ export function App({ engine, startPrintWorker }: AppProps) {
           onGoToPage={goTo}
         />
       ) : null}
+      {documentShown && session !== null ? (
+        <SanitizeDialog
+          isOpen={sanitizeOpen}
+          onClose={() => setSanitizeOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={startJob}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
       <PrintDialog
         isOpen={printOpen}
         onClose={() => setPrintOpen(false)}
@@ -282,6 +297,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
             handle={session.handle}
             scheduler={scheduler}
             onViewChange={setViewState}
+            startWorker={startJob}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }
