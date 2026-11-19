@@ -392,6 +392,9 @@ export const EN = {
   'view.zoomOut': 'Zoom out',
   'view.zoomIn': 'Zoom in',
   'view.zoomPercent': '{percent}%',
+  'view.fitWidth': 'Fit width',
+  'view.fitPage': 'Fit page',
+  'view.actualSize': 'Actual size',
   'view.goToPage': 'Go to page',
   'view.jumpInvalid':
     'There is no page "{input}" in this document. Type a page label, or a page number from 1 to {total}.',
