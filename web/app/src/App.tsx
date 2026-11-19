@@ -29,6 +29,7 @@ import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { SplitDialog } from './split/SplitDialog';
+import { ExportDialog } from './export/ExportDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
@@ -70,6 +71,7 @@ export interface AppProps {
 export function App({ engine, startPrintWorker }: AppProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -97,6 +99,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     open: () => docs.openPicker(),
     'open-recent': () => docs.showStartPage(),
     'split-document': () => setSplitOpen(true),
+    'export-pdf': () => setExportOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
@@ -226,6 +229,17 @@ export function App({ engine, startPrintWorker }: AppProps) {
           engine={rpc}
           handle={session.handle}
           pageCount={activeTab.pages}
+          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
+        <ExportDialog
+          isOpen={exportOpen}
+          onClose={() => setExportOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
           startWorker={() => startJobWorker(jobWorkerBootOptions())}
         />
       ) : null}

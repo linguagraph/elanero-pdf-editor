@@ -15,9 +15,11 @@ same code. Nothing here imports PyMuPDF.
 
 from __future__ import annotations
 
+import io
 import math
 import secrets
 import tempfile
+import zipfile
 from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
@@ -210,6 +212,18 @@ def _collect(folder: Path) -> tuple[dto.FileDto, ...]:
     )
 
 
+def _as_archive(files: tuple[dto.FileDto, ...]) -> tuple[dto.FileDto, ...]:
+    """Several files come back as one ZIP, since a reply carries one buffer to the page (the engine
+    channel's limit). One file is returned as it is."""
+    if len(files) < 2:
+        return files
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for item in files:
+            archive.writestr(item.name, item.data)
+    return (dto.FileDto(name="export.zip", mime="application/zip", data=buffer.getvalue()),)
+
+
 def _check_pages(pages: Sequence[int], count: int, path: str) -> None:
     for index in pages:
         if not 0 <= index < count:
@@ -291,7 +305,7 @@ def _run_export(
                 format=IMAGE_FORMATS[args.format], dpi=args.dpi, annotations=args.annotations
             )
             export_pages(doc, pages, target, options, token=ctx.token, progress=ctx.progress)
-        files = _collect(Path(folder))
+        files = _as_archive(_collect(Path(folder)))
     return JobOutput(files=files)
 
 

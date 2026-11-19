@@ -143,6 +143,7 @@ full policy, with what the desktop app stores, is in the
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
 | Other comments, redaction, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
+| Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
 | Print | Yes | Coming soon |
 | Translation (opt-in) | Yes | Coming soon |
 | OCR and batch OCR | Yes | Desktop only (for now) |

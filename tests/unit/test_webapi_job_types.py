@@ -282,12 +282,12 @@ def test_export_images_name_each_page_and_multipage_tiff_is_one_file(
     args = {"format": "jpeg", "pages": [0, 1], "dpi": 150}
     _, copy = prepare(handle, "export", args)
     reply, out = run_on_copy("export", args, copy)
-    files = files_of(ok(reply), out)
-    assert [(name, mime) for name, mime, _ in files] == [
-        ("export-1.jpg", "image/jpeg"),
-        ("export-2.jpg", "image/jpeg"),
-    ]
-    assert Image.open(io.BytesIO(files[0][2])).format == "JPEG"
+    # Two page images come back as one ZIP, since a reply carries one buffer to the page.
+    ((name, mime, data),) = files_of(ok(reply), out)
+    assert (name, mime) == ("export.zip", "application/zip")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert archive.namelist() == ["export-1.jpg", "export-2.jpg"]
+        assert Image.open(io.BytesIO(archive.read("export-1.jpg"))).format == "JPEG"
 
     tiff_args = {"format": "tiff", "pages": [0, 1], "dpi": 150}
     _, copy = prepare(handle, "export", tiff_args)
