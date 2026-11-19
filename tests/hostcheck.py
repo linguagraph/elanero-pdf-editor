@@ -229,22 +229,26 @@ def _approx(actual: list[float], expected: list[float]) -> None:
 
 
 def _pdfium_rgb(data: bytes, index: int) -> Any:
-    import numpy as np
+    """The page as a Pillow RGB image (pure Python: the host replay has no numpy)."""
     import pypdfium2 as pdfium
 
     pdf = pdfium.PdfDocument(data)
     try:
         bitmap = pdf[index].render(scale=1, may_draw_forms=True)
-        return np.array(bitmap.to_pil().convert("RGB"))
+        return bitmap.to_pil().convert("RGB")
     finally:
         pdf.close()
 
 
 def _red_count(rgb: Any, clip: list[float]) -> int:
     x0, y0, x1, y1 = clip
-    part = rgb[int(y0) : int(y1), int(x0) : int(x1)].astype(int)
-    red = (part[:, :, 0] > 150) & (part[:, :, 1] < 110) & (part[:, :, 2] < 110)
-    return int(red.sum())
+    part = rgb.crop((int(x0), int(y0), int(x1), int(y1)))
+    raw = part.tobytes()  # RGB bytes, three per pixel
+    return sum(
+        1
+        for r, g, b in zip(raw[0::3], raw[1::3], raw[2::3], strict=True)
+        if r > 150 and g < 110 and b < 110
+    )
 
 
 def _doc_text(pd: Any) -> str:
@@ -380,8 +384,8 @@ def _red_pixels_pdfium(data: bytes, page: int, clip: list[float], minimum: int) 
 
 @host_check("stamp_orientation_pdfium")
 def _stamp_orientation_pdfium(data: bytes, page: int) -> None:
-    rgb = _pdfium_rgb(data, page).astype(int)
-    left, right = rgb[350, 220], rgb[350, 280]
+    rgb = _pdfium_rgb(data, page)
+    left, right = rgb.getpixel((220, 350)), rgb.getpixel((280, 350))  # (x, y)
     assert left[0] > 150 and left[2] < 100  # red on the left: not rotated or mirrored
     assert right[2] > 150 and right[0] < 100
 
