@@ -47,10 +47,27 @@ async function flush(): Promise<void> {
 const viewWidth = () => window.innerWidth;
 const viewHeight = () => window.innerHeight;
 
-const zoomText = () => host.querySelector('.doc-view-zoom')?.textContent;
+// The zoom box of the canvas pill shows the zoom as a percentage.
+const zoomText = () => host.querySelector<HTMLInputElement>('.canvas-pill-zoom-input')?.value;
 
+// A pill button, by its accessible name (the aria-label, else its text).
 const button = (label: string) =>
-  [...host.querySelectorAll('button')].find((b) => b.textContent === label);
+  [...host.querySelectorAll('button')].find(
+    (b) => (b.getAttribute('aria-label') ?? b.textContent) === label,
+  );
+
+// Picks the preset with the given label from the zoom box's list.
+function choosePreset(label: string): void {
+  act(() => {
+    button('Zoom presets')?.click();
+  });
+  const preset = [...host.querySelectorAll<HTMLButtonElement>('.canvas-pill-presets button')].find(
+    (b) => b.textContent === label,
+  );
+  act(() => {
+    preset?.click();
+  });
+}
 
 function savePreferences(record: Record<string, unknown>): void {
   window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(record));
@@ -179,7 +196,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     expect(button('Fit page')?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('switches between the fit modes and to actual size from the toolbar', async () => {
+  it('switches between the fit modes and to actual size from the pill', async () => {
     savePreferences({ defaultZoom: 'actual' });
     const { rpc } = fakeRpc();
     act(() => {
@@ -196,10 +213,9 @@ describe('DocumentView fit modes (W5.1e)', () => {
     expect(zoomText()).toBe(
       `${Math.round(fitPageZoom(LETTER.width, LETTER.height, viewWidth(), viewHeight()) * 100)}%`,
     );
-    act(() => {
-      button('Actual size')?.click();
-    });
+    choosePreset('100%');
     expect(zoomText()).toBe('100%');
+    expect(button('Fit width')?.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('refits the fit width mode when the window is resized', async () => {
@@ -216,21 +232,6 @@ describe('DocumentView fit modes (W5.1e)', () => {
     });
     window.innerWidth = before;
     expect(zoomText()).toBe(`${Math.round(fitWidthZoom(LETTER.width, before / 2) * 100)}%`);
-  });
-
-  it('presses Actual size only at 100 % with no fit mode', async () => {
-    savePreferences({ defaultZoom: 'fitWidth' });
-    const { rpc } = fakeRpc();
-    act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
-    });
-    await flush();
-    expect(button('Actual size')?.getAttribute('aria-pressed')).toBe('false');
-    act(() => {
-      button('Actual size')?.click();
-    });
-    expect(button('Actual size')?.getAttribute('aria-pressed')).toBe('true');
-    expect(button('Fit width')?.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('ignores a width change under 1 px, so the fitted zoom does not flip', async () => {

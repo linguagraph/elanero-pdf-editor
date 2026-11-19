@@ -59,6 +59,9 @@ async function flush(): Promise<void> {
 }
 
 // The geometry tests here are at 100 %; the saved default is Fit width otherwise.
+// The zoom box of the canvas pill shows the zoom as a percentage.
+const zoomValue = () => host.querySelector<HTMLInputElement>('.canvas-pill-zoom-input')?.value;
+
 function savePreferences(record: Record<string, unknown>): void {
   window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(record));
 }
@@ -194,12 +197,14 @@ describe('DocumentView with a fake engine', () => {
       root.render(<DocumentView rpc={rpc} handle="doc-1" />);
     });
     await flush();
-    expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('100%');
-    const zoomIn = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Zoom in');
+    expect(zoomValue()).toBe('100%');
+    const zoomIn = [...host.querySelectorAll('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Zoom in',
+    );
     act(() => {
       zoomIn?.click();
     });
-    expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('125%');
+    expect(zoomValue()).toBe('125%');
   });
 
   it('shows the loading text while the page sizes are read', () => {
@@ -408,7 +413,7 @@ describe('DocumentView layouts and night reading', () => {
       scroll?.dispatchEvent(wheel);
     });
     expect(wheel.defaultPrevented).toBe(true);
-    expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('125%');
+    expect(zoomValue()).toBe('125%');
   });
 
   it('leaves a plain wheel to the browser', async () => {
@@ -423,7 +428,7 @@ describe('DocumentView layouts and night reading', () => {
       scroll?.dispatchEvent(wheel);
     });
     expect(wheel.defaultPrevented).toBe(false);
-    expect(host.querySelector('.doc-view-zoom')?.textContent).toBe('100%');
+    expect(zoomValue()).toBe('100%');
   });
 });
 

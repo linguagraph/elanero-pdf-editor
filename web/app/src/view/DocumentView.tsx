@@ -6,6 +6,7 @@
 // no annotations here.
 import {
   type Ref,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -51,7 +52,9 @@ import { TextLayerCache } from '../text/textLayerCache';
 import { CachedCanvas } from './pixels';
 import { RenderScheduler } from './renderScheduler';
 import { planPageRenders, tileRect, tilesInViewport } from './tiles';
-import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, scaleMilli, stepZoom } from './zoom';
+import { CanvasPill } from './CanvasPill';
+import { DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
+import type { ZoomRequest } from './zoomBox';
 import { anchoredScroll, isZoomWheel, takeWheelSteps, wheelDeltaPixels } from './wheel';
 import './documentView.css';
 
@@ -246,22 +249,22 @@ export function DocumentView({
     [],
   );
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      scrollToPage(index: number) {
-        const element = scrollRef.current;
-        const top =
-          viewLayout === 'twoPage'
-            ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
-            : scrollTopForPage(layout.boxes, index, zoom);
-        if (element === null || top === null) return;
-        element.scrollTop = top;
-        setScroll(viewportOf(element));
-      },
-    }),
+  // Scrolls so the page's top edge is at the top of the viewport; shared by the handle and the pill.
+  const scrollToPage = useCallback(
+    (index: number) => {
+      const element = scrollRef.current;
+      const top =
+        viewLayout === 'twoPage'
+          ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
+          : scrollTopForPage(layout.boxes, index, zoom);
+      if (element === null || top === null) return;
+      element.scrollTop = top;
+      setScroll(viewportOf(element));
+    },
     [layout, zoom, viewLayout, firstAlone],
   );
+
+  useImperativeHandle(ref, () => ({ scrollToPage }), [scrollToPage]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -347,7 +350,16 @@ export function DocumentView({
     );
   }
   const total = layout.boxes.length;
-  const percent = Math.round(zoom * 100);
+
+  // The canvas pill's calls: a fit mode or a manual zoom, a step of the zoom, and a page jump or step.
+  const zoomRequest = (request: ZoomRequest) => {
+    if ('fit' in request) setFit(request.fit);
+    else zoomTo(clampZoom(request.zoom));
+  };
+  const stepPage = (direction: -1 | 1) => {
+    const index = Math.min(total - 1, Math.max(0, currentPage - 1 + direction));
+    scrollToPage(index);
+  };
 
   const commentDeps = { rpc, handle, scheduler };
   const place = (page: number, rect: PageRect, text: string) => {
@@ -364,33 +376,7 @@ export function DocumentView({
       className={night ? 'doc-view doc-view--night' : 'doc-view'}
       aria-label={t('view.label')}
     >
-      <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.zoomLabel')}>
-        <button
-          type="button"
-          onClick={() => zoomTo(stepZoom(zoom, -1))}
-          disabled={zoom <= MIN_ZOOM}
-        >
-          {t('view.zoomOut')}
-        </button>
-        <span className="doc-view-zoom" aria-live="polite">
-          {t('view.zoomPercent', { percent })}
-        </span>
-        <button type="button" onClick={() => zoomTo(stepZoom(zoom, 1))} disabled={zoom >= MAX_ZOOM}>
-          {t('view.zoomIn')}
-        </button>
-        <button type="button" aria-pressed={fit === 'width'} onClick={() => setFit('width')}>
-          {t('view.fitWidth')}
-        </button>
-        <button type="button" aria-pressed={fit === 'page'} onClick={() => setFit('page')}>
-          {t('view.fitPage')}
-        </button>
-        <button
-          type="button"
-          aria-pressed={fit === null && manualZoom === DEFAULT_ZOOM}
-          onClick={() => zoomTo(DEFAULT_ZOOM)}
-        >
-          {t('view.actualSize')}
-        </button>
+      <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.label')}>
         <div role="group" aria-label={t('view.layoutLabel')}>
           <button
             type="button"
@@ -529,6 +515,19 @@ export function DocumentView({
             })}
           </div>
         </div>
+      )}
+      {sizes === null ? null : (
+        <CanvasPill
+          page={currentPage}
+          total={total}
+          labels={labels}
+          zoom={zoom}
+          fit={fit}
+          onGoTo={scrollToPage}
+          onStep={stepPage}
+          onZoom={zoomRequest}
+          onZoomStep={(direction) => zoomTo(stepZoom(zoom, direction))}
+        />
       )}
     </section>
   );
