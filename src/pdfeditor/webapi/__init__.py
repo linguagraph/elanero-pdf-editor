@@ -62,7 +62,7 @@ METHODS: dict[str, Method] = {
     "render.page": Method(dto.RenderPageParams, render.render_page),
     "render.tile": Method(dto.RenderTileParams, render.render_tile),
     "actions.run": Method(dto.RunParams, actions.run_action, takes_buffers=True),
-    "actions.undo": Method(dto.HandleParams, actions.undo),
+    "actions.undo": Method(dto.UndoParams, actions.undo),
     "actions.redo": Method(dto.HandleParams, actions.redo),
     "actions.available": Method(dto.HandleParams, actions.available),
     "comments.flattenable": Method(dto.HandleParams, actions.flattenable),
