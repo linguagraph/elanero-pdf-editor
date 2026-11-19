@@ -290,6 +290,11 @@ export const EN = {
   'view.zoomOut': 'Zoom out',
   'view.zoomIn': 'Zoom in',
   'view.zoomPercent': '{percent}%',
+  'view.goToPage': 'Go to page',
+  'view.jumpInvalid':
+    'There is no page "{input}" in this document. Type a page label, or a page number from 1 to {total}.',
+  'view.back': 'Back',
+  'view.forward': 'Forward',
   'view.pageNumber': 'Page {page} of {total}',
   'view.renderFailed': 'This page could not be drawn.',
   'view.layoutLabel': 'Page layout',
