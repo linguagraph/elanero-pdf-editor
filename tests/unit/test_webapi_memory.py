@@ -94,6 +94,8 @@ def test_snapshot_bytes_grow_with_an_undo_snapshot(web: None, fixture_pdf: Any) 
     assert snapshot == session.undo_stack.disk_bytes
 
 
+# Pyodide has no threads (W0.4 C6), so this test is desktop-only and the Pyodide run deselects it.
+@pytest.mark.desktop_only
 def test_system_memory_does_not_wait_for_a_running_task(web: None, fixture_pdf: Any) -> None:
     # A long task holds the session lock for its whole run; system.memory must still answer.
     handle = open_fixture(fixture_pdf("images").read_bytes())
