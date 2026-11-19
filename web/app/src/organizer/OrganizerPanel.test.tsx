@@ -8,7 +8,7 @@ import { createToastStore, type ToastStore } from '../feedback/toasts';
 import type { JobWorker } from '../files/fileJob';
 import { RpcError } from '../rpc/client';
 import { PROTOCOL_VERSION } from '../rpc/generated';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { OrganizerPanel } from './OrganizerPanel';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -289,7 +289,7 @@ describe('page organizer actions', () => {
       params: { handle: 'h', name: 'pages.rotate', args: { pages: [0, 2], delta: 90 } },
     });
     const toast = store.getState().visible[0];
-    expect(toast?.text).toBe(t('organizer.rotated', { count: 2 }));
+    expect(toast?.text).toBe(tp('organizer.rotated', 2));
     expect(toast?.action?.label).toBe(t('toast.undo'));
 
     act(() => toast?.action?.run());
@@ -371,7 +371,7 @@ describe('page organizer insert and duplicate', () => {
     });
     expect(options()).toHaveLength(5);
     expect(selectedPages()).toEqual([4]);
-    expect(store.getState().visible[0]?.text).toBe(t('organizer.inserted', { count: 1 }));
+    expect(store.getState().visible[0]?.text).toBe(tp('organizer.inserted', 1));
   });
 
   it('insert blank after the last selected page selects the new page', async () => {
@@ -404,7 +404,7 @@ describe('page organizer insert and duplicate', () => {
     });
     expect(options()).toHaveLength(6);
     expect(selectedPages()).toEqual([2, 3]);
-    expect(store.getState().visible[0]?.text).toBe(t('organizer.duplicated', { count: 2 }));
+    expect(store.getState().visible[0]?.text).toBe(tp('organizer.duplicated', 2));
   });
 
   it('duplicate needs a selection', async () => {
@@ -453,7 +453,7 @@ describe('page organizer insert from file', () => {
     });
     expect(options()).toHaveLength(4 + INSERTED);
     expect(selectedPages()).toEqual([2, 3]);
-    expect(store.getState().visible[0]?.text).toBe(t('organizer.inserted', { count: INSERTED }));
+    expect(store.getState().visible[0]?.text).toBe(tp('organizer.inserted', INSERTED));
   });
 
   it('asks for the password of a locked file once and inserts it with the answer', async () => {
@@ -525,7 +525,7 @@ describe('page organizer extract', () => {
     expect(download).toHaveBeenCalledWith('doc (extract).pdf', expect.any(ArrayBuffer));
     expect(calls.filter((call) => call.method === 'actions.run')).toHaveLength(0);
     const shown = store.getState().visible[0];
-    expect(shown?.text).toBe(t('organizer.extracted', { count: 2, name: 'doc (extract).pdf' }));
+    expect(shown?.text).toBe(tp('organizer.extracted', 2, { name: 'doc (extract).pdf' }));
     expect(shown?.action).toBeUndefined();
     expect(options()).toHaveLength(4);
   });

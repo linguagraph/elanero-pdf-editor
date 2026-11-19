@@ -54,6 +54,17 @@ describe('message catalogue (W4.7)', () => {
     }
   });
 
+  it('keeps count-dependent text in plural entries, never "(s)" or "{count} nouns"', () => {
+    // The label-and-value form ("Comments: {count}") reads correctly in every language and stays
+    // allowed. Plural entries are exempt: their `other` form legitimately says "{count} pages".
+    for (const id of ids) {
+      const entry = EN[id];
+      if (typeof entry !== 'string') continue;
+      expect(entry, id).not.toMatch(/\(s\)/);
+      expect(entry, id).not.toMatch(/\{(count|total)\} \p{L}+s\b/u);
+    }
+  });
+
   it('gives every English plural exactly the one and other forms', () => {
     for (const id of ids) {
       const entry = EN[id];
@@ -96,6 +107,12 @@ describe('tp() plural forms', () => {
     expect(tp('sample.pages', 1)).toBe('1 page');
     expect(tp('sample.pages', 0)).toBe('0 pages');
     expect(tp('sample.pages', 2)).toBe('2 pages');
+  });
+
+  it('uses the singular form of the migrated W4.7 keys at a count of 1', () => {
+    expect(tp('organizer.deleted', 1)).toBe('Deleted 1 page');
+    expect(tp('search.countTotal', 1)).toBe('1 match');
+    expect(tp('marks.done.removed', 1)).toBe('Removed 1 mark.');
   });
 
   it('formats the count with grouping for the locale', () => {
@@ -144,6 +161,26 @@ describe('tp() plural forms', () => {
       'sample.pages': { one: '{count} page of {name}', other: '{count} pages of {name}' },
     });
     expect(translate('sample.pages', 3, { name: 'Doc' })).toBe('3 pages of Doc');
+  });
+});
+
+describe('English literal text of the renamed plural keys', () => {
+  afterEach(() => setLocale('en', {}));
+
+  it('organizer.selected names the selected count and the total', () => {
+    expect(tp('organizer.selected', 5, { selected: 2, total: 5 })).toBe('2 of 5 pages selected');
+    expect(tp('organizer.selected', 5, { selected: 5, total: 5 })).toBe('5 of 5 pages selected');
+    expect(tp('organizer.selected', 1, { selected: 1, total: 1 })).toBe('1 of 1 page selected');
+  });
+
+  it('compare.report.summary reads the compared and changed counts at 1 and at 3', () => {
+    expect(tp('compare.report.summary', 1, { changed: 1 })).toBe('1 page compared, 1 changed.');
+    expect(tp('compare.report.summary', 3, { changed: 2 })).toBe('3 pages compared, 2 changed.');
+  });
+
+  it('uses the singular text of organizer.rotated and organizer.moved at a count of 1', () => {
+    expect(tp('organizer.rotated', 1)).toBe('Rotated 1 page');
+    expect(tp('organizer.moved', 1)).toBe('Moved 1 page');
   });
 });
 

@@ -52,13 +52,7 @@ import { SearchPanel } from './search/SearchPanel';
 import type { SearchMarks } from './search/search';
 import { RailButton } from './layout/RailButton';
 import { RAIL_ICONS } from './layout/railIcons';
-import {
-  closePanel,
-  PANEL_SIDE,
-  type PanelKey,
-  togglePanel,
-  useOpenPanel,
-} from './layout/sidePanels';
+import { closePanel, openPanel, useOpenPanel } from './layout/sidePanels';
 import { APP_VERSION } from './version';
 import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
@@ -111,6 +105,8 @@ export function App({
     },
     [jobs],
   );
+  // Bumped by Ctrl+F so the search panel moves focus to its query box (see SearchPanel).
+  const [searchFocus, setSearchFocus] = useState(0);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   // Keyboard Shortcuts (W4.5 S2): from the app menu, the ribbon or Preferences. It opens above
   // Preferences, which keeps its unsaved draft.
@@ -157,6 +153,11 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
+    // Ctrl+F: the search panel, on the left, with focus in its query box (also when it is open).
+    find: () => {
+      openPanel('search');
+      setSearchFocus((count) => count + 1);
+    },
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -185,18 +186,9 @@ export function App({
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
-  // One panel shows at a time (W4.2a S1): the left side's panel, or else the right side's. The left
-  // panels get their own slot in S2.
+  // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
-  const shownPanel = leftPanelOpen ?? rightPanelOpen;
-  // Until S2 docks the left panels, a panel on either side closes the other side's, so only one
-  // panel shows at a time, as before the side-panel store.
-  // TODO(W4.2a S2): remove the one-panel bridge once panels sit on their own side.
-  const selectPanel = (key: PanelKey) => {
-    closePanel(PANEL_SIDE[key] === 'left' ? 'right' : 'left');
-    togglePanel(key);
-  };
   // The search hits the document view draws, with the tab they belong to (W5.4).
   const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
     null,
@@ -247,71 +239,82 @@ export function App({
           />
         ) : undefined
       }
-      rightRail={
+      railsHidden={showStart}
+      leftRail={
         <>
           <RailButton
             panel="pages"
             label={t('thumbnails.title')}
             icon={RAIL_ICONS.pages}
             disabled={!documentShown}
-            controlsId={documentShown ? 'app-panel-right' : undefined}
-            onToggle={selectPanel}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
           />
           <RailButton
             panel="bookmarks"
             label={t('bookmarks.title')}
             icon={RAIL_ICONS.bookmarks}
             disabled={!documentShown}
-            controlsId={documentShown ? 'app-panel-right' : undefined}
-            onToggle={selectPanel}
-          />
-          <RailButton
-            panel="organizer"
-            label={t('organizer.title')}
-            icon={RAIL_ICONS.organizer}
-            disabled={!documentShown}
-            controlsId={documentShown ? 'app-panel-right' : undefined}
-            onToggle={selectPanel}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
           />
           <RailButton
             panel="search"
             label={t('search.title')}
             icon={RAIL_ICONS.search}
             disabled={!documentShown}
-            controlsId={documentShown ? 'app-panel-right' : undefined}
-            onToggle={selectPanel}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
+            count={
+              searchMarks !== null && searchMarks.tabId === activeId
+                ? searchMarks.marks.hits.length
+                : 0
+            }
           />
         </>
       }
-      rightPanel={
-        documentShown && shownPanel === 'search' && activeId !== null && session !== null ? (
+      leftPanel={
+        documentShown && leftPanelOpen === 'search' && activeId !== null && session !== null ? (
           <SearchPanel
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
             onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
             onGoTo={goTo}
-            onClose={() => closePanel(PANEL_SIDE.search)}
+            onClose={() => closePanel('left')}
+            focusRequest={searchFocus}
           />
-        ) : documentShown && shownPanel === 'bookmarks' && activeId !== null && session !== null ? (
+        ) : documentShown &&
+          leftPanelOpen === 'bookmarks' &&
+          activeId !== null &&
+          session !== null ? (
           <BookmarksPanel
             key={`bookmarks-${structureRevision}`}
             rpc={session.rpc}
             handle={session.handle}
             tabId={activeId}
             onSelect={goTo}
-            onClose={() => closePanel(PANEL_SIDE.bookmarks)}
+            onClose={() => closePanel('left')}
           />
-        ) : documentShown && shownPanel === 'pages' && session !== null && scheduler !== null ? (
+        ) : documentShown && leftPanelOpen === 'pages' && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
             key={`thumbs-${structureRevision}`}
             rpc={session.rpc}
             handle={session.handle}
             scheduler={scheduler}
             onSelect={goTo}
-            onClose={() => closePanel(PANEL_SIDE.pages)}
+            onClose={() => closePanel('left')}
           />
-        ) : documentShown && shownPanel === 'organizer' && session !== null ? (
+        ) : undefined
+      }
+      rightRail={
+        <RailButton
+          panel="organizer"
+          label={t('organizer.title')}
+          icon={RAIL_ICONS.organizer}
+          disabled={!documentShown}
+          controlsId={documentShown ? 'app-panel-right' : undefined}
+        />
+      }
+      rightPanel={
+        documentShown && rightPanelOpen === 'organizer' && session !== null ? (
           <OrganizerPanel
             rpc={session.rpc}
             handle={session.handle}
@@ -324,7 +327,7 @@ export function App({
               // The dialogs and the status bar read the tab's page count, so it follows the change.
               if (activeId !== null) docs.setPages(activeId, pageCount);
             }}
-            onClose={() => closePanel(PANEL_SIDE.organizer)}
+            onClose={() => closePanel('right')}
           />
         ) : undefined
       }

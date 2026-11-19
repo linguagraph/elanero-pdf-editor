@@ -222,7 +222,7 @@ describe('SearchPanel', () => {
     expect(statusText()).toBe('Searching… page 1 of 4');
     act(() => buttonNamed('Stop').click());
     await flush();
-    expect(statusText()).toBe('Search stopped. 1 matches found so far.');
+    expect(statusText()).toBe('Search stopped. 1 match found so far.');
     expect(resultTexts()).toEqual(['Page 1[cat] one']);
     expect(chunked).toHaveBeenCalledTimes(1);
     expect(spies.onMarks).toHaveBeenLastCalledWith({ hits: expect.any(Array), current: 0 });

@@ -1,9 +1,10 @@
 import type { KeyboardEvent, ReactNode } from 'react';
+import { t, tp } from '../i18n/t';
 import { PANEL_SIDE, type PanelKey, togglePanel, useOpenPanel } from './sidePanels';
 
 export interface RailButtonProps {
   readonly panel: PanelKey;
-  // The translated panel name: the tooltip and the accessible name.
+  // The translated panel name: the tooltip, and the name before the count is added.
   readonly label: string;
   // An icon with aria-hidden set on its svg.
   readonly icon: ReactNode;
@@ -12,10 +13,9 @@ export interface RailButtonProps {
   // mounted: aria-controls names it only while the button is expanded, so it never points at a
   // missing element.
   readonly controlsId?: string;
-  // Replaces the default toggle. The app uses it to keep one panel open across both sides until
-  // the left panels get their own slot (W4.2a S2).
-  // TODO(W4.2a S2): remove the one-panel bridge once panels sit on their own side.
-  readonly onToggle?: (panel: PanelKey) => void;
+  // Shown as a badge when above zero (the search hits, for one). Above 99 the badge reads "99+".
+  // The accessible name then gets the count too: "Search, 1 item".
+  readonly count?: number;
 }
 
 // A rail button: it opens or closes its panel on the side the panel docks on. Up and Down move
@@ -26,27 +26,33 @@ export function RailButton({
   icon,
   disabled = false,
   controlsId,
-  onToggle,
+  count = 0,
 }: RailButtonProps) {
   const side = PANEL_SIDE[panel];
-  const expanded = useOpenPanel(side) === panel;
+  const openOnSide = useOpenPanel(side);
+  // A disabled button has no panel on screen (the side may still remember it open), so it is not
+  // expanded either.
+  const expanded = !disabled && openOnSide === panel;
+  const name = count > 0 ? tp('rail.count', count, { panel: label }) : label;
   return (
     <button
       type="button"
       className="rail-button"
       data-panel={panel}
-      title={label}
+      title={name}
       aria-expanded={expanded}
       aria-controls={expanded && controlsId !== undefined ? controlsId : undefined}
       disabled={disabled}
-      onClick={() => {
-        if (onToggle !== undefined) onToggle(panel);
-        else togglePanel(panel);
-      }}
+      onClick={() => togglePanel(panel)}
       onKeyDown={moveAlongRail}
     >
       {icon}
-      <span className="visually-hidden">{label}</span>
+      {count > 0 ? (
+        <span className="rail-badge" aria-hidden="true">
+          {count > 99 ? t('rail.badgeOverflow') : String(count)}
+        </span>
+      ) : null}
+      <span className="visually-hidden">{name}</span>
     </button>
   );
 }
@@ -55,7 +61,7 @@ function moveAlongRail(event: KeyboardEvent<HTMLButtonElement>): void {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
   const buttons = [
     ...(event.currentTarget
-      .closest('.app-rail')
+      .closest('[role="toolbar"]')
       ?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []),
   ];
   const index = buttons.indexOf(event.currentTarget);

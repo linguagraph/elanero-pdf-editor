@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { type PrintRpc } from './printJob';
 import { PrintDialog } from './PrintDialog';
 
@@ -153,6 +153,6 @@ describe('PrintDialog', () => {
 
   it('warns above 200 pages', () => {
     render(250, rpcStub().rpc);
-    expect(document.body.textContent).toContain(t('print.large', { count: 250 }));
+    expect(document.body.textContent).toContain(tp('print.large', 250));
   });
 });

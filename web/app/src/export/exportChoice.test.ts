@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { checkExport, exportArgs, type ExportValues } from './exportChoice';
 
 const base: ExportValues = { format: 'txt', pageMode: 'all', range: '', dpi: 150 };
@@ -36,7 +36,7 @@ describe('checkExport', () => {
     const checked = checkExport(values({ pageMode: 'range', range: '3-12' }), 10, 1);
     expect(checked).toEqual({
       ok: false,
-      message: t('split.error.ranges.outOfRange', { item: '3-12', count: 10 }),
+      message: tp('split.error.ranges.outOfRange', 10, { item: '3-12' }),
     });
   });
 

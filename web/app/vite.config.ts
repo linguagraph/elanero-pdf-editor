@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
@@ -10,8 +11,12 @@ import {
   appCacheName,
   buildIdSource,
   buildManifest,
+  ENGINE_DIR,
+  engineAssetProblems,
   renderServiceWorker,
+  STAGE_MANIFEST_FILE,
   type PrecacheFile,
+  type StageManifest,
 } from './src/pwa/build.ts';
 import { APP_VERSION } from './src/version.ts';
 
@@ -61,6 +66,31 @@ function devRelaxedCsp(): Plugin {
 // whose SHA-256 differs, so its cache holds exactly what this build produced.
 const SW_FILE = 'sw.js';
 
+// The engine is staged by scripts/stage_engine_assets.mjs. When it is there, the precache must list
+// every staged file with the manifest's SHA-256, or the offline engine would be missing files. When
+// it is not, the build still goes on (the app shell works offline); ELANERO_REQUIRE_ENGINE=1 makes
+// the absence a failure, for a deploy that must ship the engine.
+function checkEngineAssets(
+  context: { warn(message: string): void },
+  outDir: string,
+  files: readonly PrecacheFile[],
+): void {
+  const path = join(outDir, ENGINE_DIR, STAGE_MANIFEST_FILE);
+  if (!existsSync(path)) {
+    if (process.env.ELANERO_REQUIRE_ENGINE === '1') {
+      throw new Error(`engine assets are not staged (${path}); ELANERO_REQUIRE_ENGINE=1`);
+    }
+    context.warn('engine assets not staged: offline covers the app shell only');
+    return;
+  }
+  const stage = JSON.parse(readFileSync(path, 'utf8')) as StageManifest;
+  const problems = engineAssetProblems(files, stage);
+  if (problems.length > 0) {
+    const list = problems.map((problem) => `  ${problem}`).join('\n');
+    throw new Error(`staged engine assets do not match the precache:\n${list}`);
+  }
+}
+
 function serviceWorkerBuild(commit: string): Plugin {
   let outDir = '';
   return {
@@ -91,6 +121,7 @@ function serviceWorkerBuild(commit: string): Plugin {
         files.push({ path: relative, sha256: digest });
       }
       files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      checkEngineAssets(this, outDir, files);
       const buildId = createHash('sha256').update(buildIdSource(files)).digest('hex').slice(0, 12);
       const cacheName = appCacheName(APP_VERSION, buildId);
       const swPath = join(outDir, SW_FILE);

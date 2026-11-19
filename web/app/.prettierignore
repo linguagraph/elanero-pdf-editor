@@ -4,3 +4,4 @@ package-lock.json
 playwright-report/
 test-results/
 src/rpc/generated.ts
+src/theme/icons.generated.ts

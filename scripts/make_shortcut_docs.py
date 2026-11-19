@@ -4,7 +4,8 @@ Two outputs, both generated from the same run, so they can't disagree:
 
 - ``docs/guide/keyboard-shortcuts.md``: the guide page, with every command and its shortcut.
 - ``web/src/generated/shortcuts.json``: the web front end's copy (W2.1 slice (f),
-  docs/web/design/W1.3.md §5): command id -> label and default key sequences, in the same text.
+  docs/web/design/W1.3.md §5): command id -> label, default key sequences and the icon name
+  (W4.3a S1; null when the command has no bundled icon).
 
 A unit test fails when a committed output no longer matches the app.
 
@@ -77,7 +78,10 @@ def render_outputs() -> tuple[str, str]:
             label = _menu_label(action.text())
             sequences = list(manager.defaults.get(key, ()))
             rows.append((label.lower(), label, ", ".join(sequences) or "None"))
-            commands[key] = {"label": label, "keys": sequences}
+            # The bundled icon's name (data/icons), so the web ribbon shows the same icon as the
+            # desktop. Null when the action has none; the web catalog overrides it for its own ids.
+            icon_name = action.icon().name()
+            commands[key] = {"label": label, "keys": sequences, "icon": icon_name or None}
         rows.sort()
         body = "".join(f"| {_cell(label)} | {_cell(keys)} |\n" for _, label, keys in rows)
     finally:

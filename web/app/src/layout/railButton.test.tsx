@@ -1,11 +1,18 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { t } from '../i18n/t';
 import { Panel } from './Panel';
 import { RailButton } from './RailButton';
 import { RAIL_ICONS } from './railIcons';
-import { closePanel, PANEL_SIDE, type PanelKey, openPanelOf, useOpenPanel } from './sidePanels';
+import {
+  closePanel,
+  openPanel,
+  openPanelOf,
+  PANEL_SIDE,
+  type PanelKey,
+  useOpenPanel,
+} from './sidePanels';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -114,32 +121,55 @@ describe.each(PANELS)('$panel aria-controls', ({ panel, label }) => {
   });
 });
 
-describe('RailButton toggle', () => {
-  it('calls onToggle instead of toggling the store when one is given', () => {
-    const onToggle = vi.fn();
+describe('RailButton count', () => {
+  const name = () => host.querySelector('.visually-hidden')?.textContent;
+  const badge = () => host.querySelector('.rail-badge');
+
+  it('shows no badge and the plain label at zero', () => {
+    render(<RailButton panel="search" label={t('search.title')} icon={RAIL_ICONS.search} />);
+    expect(badge()).toBeNull();
+    expect(name()).toBe(t('search.title'));
+    expect(host.querySelector('button')?.title).toBe(t('search.title'));
+  });
+
+  it('adds the count to the name and shows it as a badge', () => {
     render(
-      <RailButton
-        panel="search"
-        label={t('search.title')}
-        icon={RAIL_ICONS.search}
-        onToggle={onToggle}
-      />,
+      <RailButton panel="search" label={t('search.title')} icon={RAIL_ICONS.search} count={1} />,
     );
-    press(host.querySelector('button'));
-    expect(onToggle).toHaveBeenCalledWith('search');
-    expect(openPanelOf('left')).toBeNull();
+    expect(name()).toBe('Search, 1 item');
+    expect(badge()?.textContent).toBe('1');
+    expect(badge()?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('reads 99+ in the badge above 99, and keeps the exact count in the name', () => {
+    render(
+      <RailButton panel="search" label={t('search.title')} icon={RAIL_ICONS.search} count={120} />,
+    );
+    expect(badge()?.textContent).toBe('99+');
+    expect(name()).toBe('Search, 120 items');
+  });
+});
+
+describe('RailButton while disabled', () => {
+  it('is not expanded, even when its side still remembers the panel', () => {
+    openPanel('search');
+    render(
+      <RailButton panel="search" label={t('search.title')} icon={RAIL_ICONS.search} disabled />,
+    );
+    expect(host.querySelector('button')?.getAttribute('aria-expanded')).toBe('false');
+    closePanel('left');
   });
 });
 
 describe('rail keyboard', () => {
   it('moves focus up and down between enabled buttons of the same rail, and wraps', () => {
     render(
-      <nav className="app-rail">
+      <div className="app-rail" role="toolbar" aria-orientation="vertical">
         <RailButton panel="pages" label={t('thumbnails.title')} icon={RAIL_ICONS.pages} />
         <RailButton panel="bookmarks" label={t('bookmarks.title')} icon={RAIL_ICONS.bookmarks} />
         <RailButton panel="search" label={t('search.title')} icon={RAIL_ICONS.search} disabled />
         <RailButton panel="organizer" label={t('organizer.title')} icon={RAIL_ICONS.organizer} />
-      </nav>,
+      </div>,
     );
     const pages = host.querySelector<HTMLButtonElement>('[data-panel="pages"]');
     const bookmarks = host.querySelector<HTMLButtonElement>('[data-panel="bookmarks"]');

@@ -132,6 +132,27 @@ describe('AppFrame', () => {
     expect(frame?.dataset.rightPanel).toBe('none');
     expect(host.querySelector('.app-panel')).toBeNull();
   });
+
+  it('shows the rails as toolbars unless the start page hides them', () => {
+    setWidth(1366);
+    render(
+      <AppFrame header={<span>top</span>} leftRail={<span>left</span>} railsHidden>
+        <span>page</span>
+      </AppFrame>,
+    );
+    const frame = host.querySelector<HTMLElement>('.app-frame');
+    expect(frame?.dataset.rails).toBe('hidden');
+    const rails = host.querySelectorAll('.app-rail');
+    expect(rails).toHaveLength(2);
+    for (const rail of rails) expect(rail.getAttribute('role')).toBe('toolbar');
+
+    render(
+      <AppFrame header={<span>top</span>} leftRail={<span>left</span>}>
+        <span>page</span>
+      </AppFrame>,
+    );
+    expect(host.querySelector<HTMLElement>('.app-frame')?.dataset.rails).toBe('shown');
+  });
 });
 
 describe('Overlay', () => {

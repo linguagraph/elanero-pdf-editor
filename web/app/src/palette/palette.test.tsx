@@ -5,9 +5,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { REGISTRY } from '../commands/catalog';
-import type { CommandState } from '../commands/registry';
-import type { CommandHandlers } from '../commands/run';
+import { type CommandState, TAB_LABELS } from '../commands/registry';
+import { type CommandHandlers, runCommand } from '../commands/run';
+import { t } from '../i18n/t';
 import { CommandPalette } from './CommandPalette';
+import { RECENT_COMMANDS_KEY } from './recentCommands';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,6 +40,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  window.localStorage.clear();
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
@@ -227,6 +230,101 @@ describe('command palette', () => {
     expect(kbd).not.toContain('Ctrl+W');
   });
 
+  it('ranks by the words of the label, so initials and letters in order find a command', () => {
+    render(OPEN_STATE, spies());
+    openPalette();
+    type('rfs');
+    expect(rows().map((row) => row.dataset.command)).toContain('reduce-file-size');
+  });
+
+  it('shows the ribbon tab of each command in its row', () => {
+    render(OPEN_STATE, spies());
+    openPalette();
+    type('redo');
+    const group = REGISTRY.groups.find((g) => g.id === REGISTRY.get('redo')?.group);
+    const tab = group?.tab;
+    if (tab === null || tab === undefined) throw new Error('redo has no ribbon tab');
+    expect(rows()[0]?.querySelector('.palette-tab')?.textContent).toBe(t(TAB_LABELS[tab]));
+  });
+
+  it('records a palette run, then lists that command first with the Recent tag', () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    openPalette();
+    type('redo');
+    key(input(), { key: 'Enter' });
+    expect(handlers.redo).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(RECENT_COMMANDS_KEY)).toBe('["redo"]');
+
+    openPalette();
+    expect(rows()[0]?.dataset.command).toBe('redo');
+    expect(rows()[0]?.dataset.recent).toBe('true');
+    expect(rows()[0]?.textContent).toContain(t('palette.recent'));
+    expect(rows()[1]?.dataset.recent).toBeUndefined();
+  });
+
+  it('does not record a run that is refused because the command is disabled', () => {
+    render(NO_DOCUMENT_STATE, spies());
+    openPalette();
+    type('close');
+    key(input(), { key: 'Enter' });
+    expect(window.localStorage.getItem(RECENT_COMMANDS_KEY)).toBeNull();
+  });
+
+  it('does not record a ribbon run, which goes through runCommand without the palette', () => {
+    // The ribbon's buttons call runCommand directly (Ribbon.tsx), not the palette's run path.
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    act(() => {
+      runCommand(REGISTRY, 'undo', OPEN_STATE, handlers);
+    });
+    expect(handlers.undo).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(RECENT_COMMANDS_KEY)).toBeNull();
+  });
+
+  it('labels a command with no ribbon tab as in the app menu', () => {
+    render(OPEN_STATE, spies());
+    openPalette();
+    type('preferences');
+    expect(rows()[0]?.dataset.command).toBe('preferences');
+    expect(rows()[0]?.querySelector('.palette-tab')?.textContent).toBe(t('palette.menuLocation'));
+    expect(rows()[0]?.querySelector('.palette-tab')?.textContent).toBe('App menu');
+  });
+
+  it('opens and lists the commands normally when the stored recent list is corrupt', () => {
+    window.localStorage.setItem(RECENT_COMMANDS_KEY, '{not json');
+    render(OPEN_STATE, spies());
+    expect(() => openPalette()).not.toThrow();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(rows().length).toBeGreaterThan(20);
+    expect(rows().some((row) => row.dataset.recent === 'true')).toBe(false);
+  });
+
+  it('does not record the keyboard shortcuts entry, which only switches the palette view', () => {
+    render(OPEN_STATE, spies());
+    openPalette();
+    type('keyboard');
+    key(input(), { key: 'Enter' });
+    expect(document.querySelector('kbd')).not.toBeNull();
+    expect(window.localStorage.getItem(RECENT_COMMANDS_KEY)).toBeNull();
+  });
+
+  it('says a command with no handler is not available yet, and does not run it', () => {
+    const handlers = spies();
+    delete handlers.close;
+    render(OPEN_STATE, handlers);
+    openPalette();
+    type('close');
+    const row = rows()[0];
+    expect(row?.dataset.command).toBe('close');
+    expect(row?.getAttribute('aria-disabled')).toBe('true');
+    expect(row?.textContent).toContain(t('disabled.notAvailableYet'));
+
+    key(input(), { key: 'Enter' });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(window.localStorage.getItem(RECENT_COMMANDS_KEY)).toBeNull();
+  });
+
   it('is a scan-clean module: every user string goes through t()', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const files = readdirSync(here).filter(
@@ -251,6 +349,14 @@ describe('keyboard shortcuts', () => {
     key(document.body, { key: 'z', ctrlKey: true });
     expect(handlers.undo).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('does not record a command run from its shortcut', () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    key(document.body, { key: 'z', ctrlKey: true });
+    expect(handlers.undo).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(RECENT_COMMANDS_KEY)).toBeNull();
   });
 
   it('does not run a disabled command from its shortcut', () => {

@@ -11,7 +11,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import type { JobProgressStore } from '../feedback/jobRun';
 import { downloadBytes } from '../files/downloads';
@@ -205,8 +205,7 @@ function CompareForm({
             {t('compare.report.heading')}
           </h3>
           <p className="compare-hint">
-            {t('compare.report.summary', {
-              compared: comparedPageCount(finished.report),
+            {tp('compare.report.summary', comparedPageCount(finished.report), {
               changed: pages.length,
             })}
           </p>

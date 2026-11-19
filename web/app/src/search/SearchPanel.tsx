@@ -4,7 +4,7 @@
 // and choosing one asks the view to scroll to its page through onGoTo.
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import type { SearchHitDto, SearchOptionsDto } from '../rpc/generated';
 import { collectSearch, nextHit, previousHit, type SearchMarks } from './search';
@@ -18,6 +18,8 @@ export interface SearchPanelProps {
   // Called with the zero-based page of a hit the user chose or the first hit found.
   readonly onGoTo: (page: number) => void;
   readonly onClose: () => void;
+  // Bumped by the caller to move focus to the query box, also when the panel is already open (Ctrl+F).
+  readonly focusRequest?: number;
 }
 
 type Status = 'idle' | 'searching' | 'done' | 'stopped' | 'failed';
@@ -39,21 +41,36 @@ function statusText(view: RunView): string {
     case 'searching':
       return t('search.progress', { done: view.pagesDone, total: view.total });
     case 'stopped':
-      return t('search.stopped', { count: view.hits.length });
+      return tp('search.stopped', view.hits.length);
     case 'failed':
       return t('search.failed');
     case 'done':
       if (view.hits.length === 0) return t('search.noMatches');
       return view.current >= 0
-        ? t('search.count', { current: view.current + 1, count: view.hits.length })
-        : t('search.countTotal', { count: view.hits.length });
+        ? tp('search.count', view.hits.length, { current: view.current + 1 })
+        : tp('search.countTotal', view.hits.length);
     case 'idle':
-      return view.hits.length > 0 ? t('search.countTotal', { count: view.hits.length }) : '';
+      return view.hits.length > 0 ? tp('search.countTotal', view.hits.length) : '';
   }
 }
 
-export function SearchPanel({ rpc, handle, onMarks, onGoTo, onClose }: SearchPanelProps) {
+export function SearchPanel({
+  rpc,
+  handle,
+  onMarks,
+  onGoTo,
+  onClose,
+  focusRequest = 0,
+}: SearchPanelProps) {
   const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  // The last request handled. A panel that mounts with a request (Ctrl+F opened it) focuses too.
+  const handledRequest = useRef(0);
+  useEffect(() => {
+    if (focusRequest === handledRequest.current) return;
+    handledRequest.current = focusRequest;
+    inputRef.current?.focus();
+  }, [focusRequest]);
   const [options, setOptions] = useState<SearchOptionsDto>(NO_OPTIONS);
   const [view, setView] = useState<RunView>(IDLE);
   // The run in progress. Starting a new run, or stopping, replaces or clears it, so a slice from
@@ -153,6 +170,7 @@ export function SearchPanel({ rpc, handle, onMarks, onGoTo, onClose }: SearchPan
     <Panel title={t('search.title')} onClose={onClose}>
       <form className="search-form" role="search" onSubmit={submit}>
         <input
+          ref={inputRef}
           type="search"
           aria-label={t('search.query')}
           value={query}

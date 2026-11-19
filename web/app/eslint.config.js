@@ -10,6 +10,8 @@ export default tseslint.config(
       'playwright-report/',
       'test-results/',
       'src/rpc/generated.ts',
+      // Generated from the bundled SVGs by scripts/generate-icons.ts.
+      'src/theme/icons.generated.ts',
       // Staged Pyodide files (scripts/stage_engine_assets.mjs): third-party, not our code.
       'public/engine-assets/',
     ],

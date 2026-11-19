@@ -1,0 +1,149 @@
+// Turns the bundled Lucide SVGs (src/pdfeditor/data/icons, W1.6 section 7) into the data the web
+// icon module holds. It accepts only the shapes those icons use and throws on anything else, so an
+// icon with a <script>, an on* attribute or an unexpected element fails the build instead of being
+// dropped. The output is tag names and attribute strings, never markup: Icon.tsx builds the
+// elements with createElement (W1.1 section 10). No Node APIs here, so the browser bundle can use it.
+
+export const ICON_ELEMENTS = [
+  'path',
+  'circle',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'ellipse',
+] as const;
+
+export const ICON_ATTRIBUTES = [
+  'd',
+  'cx',
+  'cy',
+  'r',
+  'rx',
+  'ry',
+  'x',
+  'y',
+  'x1',
+  'x2',
+  'y1',
+  'y2',
+  'width',
+  'height',
+  'points',
+] as const;
+
+// Three desktop icons fill a dot with currentColor; any other fill is rejected.
+const FILL_VALUE = 'currentColor';
+
+// The root <svg> attributes the source may carry. Icon.tsx sets the presentation attributes, so
+// only viewBox matters to the data; the rest are listed so an unknown one (an on* handler) fails.
+const ROOT_ATTRIBUTES: ReadonlySet<string> = new Set([
+  'class',
+  'xmlns',
+  'width',
+  'height',
+  'viewBox',
+  'fill',
+  'stroke',
+  'stroke-width',
+  'stroke-linecap',
+  'stroke-linejoin',
+]);
+
+const VIEW_BOX = '0 0 24 24';
+
+export type IconElement = readonly [tag: string, attrs: Readonly<Record<string, string>>];
+
+export interface IconData {
+  readonly name: string;
+  readonly elements: readonly IconElement[];
+}
+
+const COMMENT = /<!--[\s\S]*?-->/g;
+const ROOT = /^\s*<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/;
+const ATTRIBUTE = /\s*([A-Za-z_:][-\w:.]*)\s*=\s*"([^"]*)"/y;
+const ELEMENT = /\s*<([A-Za-z][\w-]*)((?:\s*[A-Za-z_:][-\w:.]*\s*=\s*"[^"]*")*)\s*\/>/y;
+const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+// Parses `name="value"` pairs, rejecting anything between them.
+function parseAttributes(where: string, text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let pos = 0;
+  while (text.slice(pos).trim() !== '') {
+    ATTRIBUTE.lastIndex = pos;
+    const match = ATTRIBUTE.exec(text);
+    if (match === null) throw new Error(`${where}: unsupported attribute syntax`);
+    const key = match[1] ?? '';
+    if (Object.hasOwn(out, key)) throw new Error(`${where}: duplicate attribute ${key}`);
+    out[key] = match[2] ?? '';
+    pos = ATTRIBUTE.lastIndex;
+  }
+  return out;
+}
+
+// Builds the data for one icon from its SVG source. Throws with the icon's name on any markup
+// outside the allow-lists.
+export function parseIconSvg(name: string, source: string): IconData {
+  if (!NAME.test(name)) throw new Error(`${name}: icon names are lowercase words joined by "-"`);
+  const body = source.replace(COMMENT, '');
+  const root = ROOT.exec(body);
+  if (root === null) throw new Error(`${name}: not a single <svg> element`);
+  const rootAttrs = parseAttributes(`${name} <svg>`, root[1] ?? '');
+  for (const key of Object.keys(rootAttrs)) {
+    if (!ROOT_ATTRIBUTES.has(key))
+      throw new Error(`${name} <svg>: attribute ${key} is not allowed`);
+  }
+  if (rootAttrs.viewBox !== VIEW_BOX)
+    throw new Error(`${name}: only the 24-unit grid is supported`);
+
+  const inner = root[2] ?? '';
+  const elements: IconElement[] = [];
+  let pos = 0;
+  while (inner.slice(pos).trim() !== '') {
+    ELEMENT.lastIndex = pos;
+    const match = ELEMENT.exec(inner);
+    if (match === null) {
+      throw new Error(`${name}: unsupported markup near "${inner.slice(pos, pos + 40).trim()}"`);
+    }
+    pos = ELEMENT.lastIndex;
+    const tag = match[1] ?? '';
+    if (!(ICON_ELEMENTS as readonly string[]).includes(tag)) {
+      throw new Error(`${name}: element <${tag}> is not allowed`);
+    }
+    const attrs = parseAttributes(`${name} <${tag}>`, match[2] ?? '');
+    for (const [key, value] of Object.entries(attrs)) {
+      const allowed =
+        (ICON_ATTRIBUTES as readonly string[]).includes(key) ||
+        (key === 'fill' && value === FILL_VALUE);
+      if (!allowed) throw new Error(`${name} <${tag}>: attribute ${key} is not allowed`);
+    }
+    elements.push([tag, attrs]);
+  }
+  if (elements.length === 0) throw new Error(`${name}: no drawing elements`);
+  return { name, elements };
+}
+
+// The generated module (web/app/src/theme/icons.generated.ts): one icon per line, keys sorted as
+// given. Attribute values go through JSON.stringify, so they stay string literals.
+export function renderIconsModule(icons: readonly IconData[]): string {
+  const lines = icons.map((icon) => {
+    const elements = icon.elements.map(([tag, attrs]) => {
+      const props = Object.entries(attrs)
+        .map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
+        .join(', ');
+      return `[${JSON.stringify(tag)}, { ${props} }]`;
+    });
+    return `  ${JSON.stringify(icon.name)}: [${elements.join(', ')}],`;
+  });
+  return [
+    '// Generated by web/app/scripts/generate-icons.ts from src/pdfeditor/data/icons. Do not edit.',
+    '// Run `npm run icons` after changing an icon and commit the result.',
+    '',
+    'export const ICONS = {',
+    ...lines,
+    '} as const;',
+    '',
+    'export type IconName = keyof typeof ICONS;',
+    '',
+  ].join('\n');
+}
