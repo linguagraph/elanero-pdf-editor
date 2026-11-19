@@ -75,9 +75,10 @@ is reloaded until you press it.
 
 ## Ribbon and keyboard shortcuts
 
-- **Ribbon.** The ribbon's seven tabs (Home, Edit, Organize, Protect, Comment, View and Tools) are
-  built, but they are not yet shown on the page. For now the top bar has the **Preferences** button
-  and the theme switch only.
+- **Ribbon.** The ribbon sits under the top bar with the same seven tabs as the desktop (Home, Edit,
+  Organize, Protect, Comment, View and Tools). Each command shows its icon above its label, the same
+  icon as on the desktop. A command that is not available in the web version yet, or that needs an
+  open document, stays visible but greyed out; point at it to see why.
 - **Keyboard shortcuts.** Only three are active in the web version so far: **Alt+Left** and
   **Alt+Right** go back and forward through the pages you have visited, and **Alt+G** moves the
   cursor to the page box in the status bar. The web version will use
@@ -194,9 +195,11 @@ full policy, with what the desktop app stores, is in the
 
 <!--
 Evidence for the claims on this page (repository paths, checked on main):
-- Web app shell, what is mounted: web/app/src/App.tsx (ThemeSwitch, PreferencesDialog, UpdatePrompt,
-  EngineLoadingScreen, ToastRegion; no Ribbon or AppMenu, so the ribbon is not shown yet).
-- Ribbon and app menu built but not mounted: web/app/src/ribbon/Ribbon.tsx, web/app/src/ribbon/AppMenu.tsx,
+- Web app shell, what is mounted: web/app/src/App.tsx (Ribbon, AppMenu, ThemeSwitch, PreferencesDialog,
+  UpdatePrompt, EngineLoadingScreen, ToastRegion).
+- Ribbon icons: web/app/src/ribbon/Ribbon.tsx, web/app/src/theme/Icon.tsx, web/app/src/theme/icons.generated.ts
+  (from src/pdfeditor/data/icons), web/src/generated/shortcuts.json (desktop icon names).
+- Ribbon and app menu: web/app/src/ribbon/Ribbon.tsx, web/app/src/ribbon/AppMenu.tsx,
   web/app/src/commands/run.ts, web/app/src/commands/catalog.ts (seven tabs; app.help group).
 - Install App has no handler: web/app/src/commands/catalog.ts ('install-app'); no handler in App.tsx.
 - Install (manifest, standalone display): web/app/index.html, web/app/src/pwa/build.ts (buildManifest),

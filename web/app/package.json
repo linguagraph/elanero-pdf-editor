@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "tokens": "node --experimental-strip-types scripts/generate-tokens.ts",
-    "tokens:check": "node --experimental-strip-types scripts/generate-tokens.ts --check"
+    "tokens:check": "node --experimental-strip-types scripts/generate-tokens.ts --check",
+    "icons": "node --experimental-strip-types scripts/generate-icons.ts",
+    "icons:check": "node --experimental-strip-types scripts/generate-icons.ts --check"
   },
   "dependencies": {
     "react": "19.3.1",

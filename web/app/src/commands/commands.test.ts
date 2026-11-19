@@ -61,6 +61,24 @@ describe('registry declarations', () => {
     expect(() => createRegistry([], GROUPS, [['missing']])).toThrow(/no such command/);
   });
 
+  it('rejects a command icon that is not in the bundled set', () => {
+    const def = {
+      id: 'save',
+      labelId: 'command.save.label',
+      group: 'home.file',
+      enabled: () => null,
+      icon: 'no-such-icon',
+    } as unknown as CommandDef;
+    expect(() => createRegistry([def], GROUPS, [])).toThrow(/unknown icon no-such-icon/);
+  });
+
+  it('gives each command its override icon, else the desktop icon from the shared table', () => {
+    expect(REGISTRY.icon('whats-different')).toBe('info');
+    expect(REGISTRY.icon('save')).toBe('save');
+    expect(REGISTRY.icon('undo')).toBe('undo-2');
+    expect(REGISTRY.icon('no-such-command')).toBeUndefined();
+  });
+
   it('gives every search keyword an English string', () => {
     const withKeywords = COMMANDS.filter((def) => def.keywordsId !== undefined);
     expect(withKeywords.length).toBeGreaterThanOrEqual(10);

@@ -3,6 +3,7 @@
 // desktop does not have; the test checks that every other id is in the shared table. Keep this
 // file to declarations: enabled rules and labels only, no PDF logic and no RPC.
 import type { MessageId } from '../i18n/en';
+import type { IconName } from '../theme/icons.generated';
 import {
   ALWAYS,
   CAN_REDO,
@@ -88,7 +89,24 @@ function cmd(
 // Commands that work with no document open.
 const OPEN_ANYTIME = ALWAYS;
 
-export const COMMANDS: readonly CommandDef[] = [
+// Icons for the commands the shared table gives no icon: the web-only ids and the desktop commands
+// with none. Each name is checked against the bundled set when the registry is built.
+const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
+  'about-elanero': 'info',
+  help: 'circle-help',
+  'keyboard-shortcuts': 'list-checks',
+  preferences: 'settings-2',
+  'save-as': 'save',
+  'extract-image': 'image-down',
+  'mark-text': 'text-search',
+  'whats-different': 'info',
+  'install-app': 'upload',
+  'open-recent': 'folder-open',
+  'export-comments': 'file-output',
+  'import-comments': 'file-input',
+};
+
+const DECLARED_COMMANDS: readonly CommandDef[] = [
   // Home
   cmd('open', 'command.open.label', 'home.file', OPEN_ANYTIME),
   cmd('save', 'command.save.label', 'home.file'),
@@ -274,6 +292,11 @@ export const COMMANDS: readonly CommandDef[] = [
   cmd('install-app', 'command.install-app.label', 'app.help', OPEN_ANYTIME, 'pwa_install'),
   cmd('about-elanero', 'command.about-elanero.label', 'app.help', OPEN_ANYTIME),
 ];
+
+export const COMMANDS: readonly CommandDef[] = DECLARED_COMMANDS.map((def) => {
+  const icon = ICON_OVERRIDES[def.id];
+  return icon === undefined ? def : { ...def, icon };
+});
 
 // The app menu's sections, in W1.6 section 6 order (a separator between sections).
 export const MENU: readonly (readonly string[])[] = [
