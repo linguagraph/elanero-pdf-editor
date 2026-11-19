@@ -172,6 +172,7 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
   const shownPanel = leftPanelOpen ?? rightPanelOpen;
   // Until S2 docks the left panels, a panel on either side closes the other side's, so only one
   // panel shows at a time, as before the side-panel store.
+  // TODO(W4.2a S2): remove the one-panel bridge once panels sit on their own side.
   const selectPanel = (key: PanelKey) => {
     closePanel(PANEL_SIDE[key] === 'left' ? 'right' : 'left');
     togglePanel(key);
@@ -233,6 +234,7 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
             label={t('thumbnails.title')}
             icon={RAIL_ICONS.pages}
             disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
             onToggle={selectPanel}
           />
           <RailButton
@@ -240,6 +242,7 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
             label={t('bookmarks.title')}
             icon={RAIL_ICONS.bookmarks}
             disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
             onToggle={selectPanel}
           />
           <RailButton
@@ -247,6 +250,7 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
             label={t('organizer.title')}
             icon={RAIL_ICONS.organizer}
             disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
             onToggle={selectPanel}
           />
           <RailButton
@@ -254,6 +258,7 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
             label={t('search.title')}
             icon={RAIL_ICONS.search}
             disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-right' : undefined}
             onToggle={selectPanel}
           />
         </>

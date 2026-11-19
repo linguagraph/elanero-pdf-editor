@@ -5,7 +5,7 @@ import { t } from '../i18n/t';
 import { Panel } from './Panel';
 import { RailButton } from './RailButton';
 import { RAIL_ICONS } from './railIcons';
-import { closePanel, PANEL_SIDE, type PanelKey, openPanelOf } from './sidePanels';
+import { closePanel, PANEL_SIDE, type PanelKey, openPanelOf, useOpenPanel } from './sidePanels';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -58,7 +58,7 @@ describe.each(PANELS)('$panel rail button', ({ panel, label }) => {
     render(<RailButton panel={panel} label={label} icon={RAIL_ICONS[panel]} />);
     const button = host.querySelector<HTMLButtonElement>('button');
     expect(button?.getAttribute('aria-expanded')).toBe('false');
-    expect(button?.getAttribute('aria-controls')).toBe(`app-panel-${PANEL_SIDE[panel]}`);
+    expect(button?.hasAttribute('aria-controls')).toBe(false);
     expect(button?.title).toBe(label);
     expect(button?.textContent).toBe(label);
     expect(button?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
@@ -75,6 +75,42 @@ describe.each(PANELS)('$panel rail button', ({ panel, label }) => {
   it('is disabled when disabled is set', () => {
     render(<RailButton panel={panel} label={label} icon={RAIL_ICONS[panel]} disabled />);
     expect(host.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+  });
+});
+
+// A stand-in for the panel slot: it is mounted only while its panel is open, as in the app.
+const PANEL_ID = 'app-panel-test';
+
+function PanelRig({ panel, label }: { panel: PanelKey; label: string }) {
+  const open = useOpenPanel(PANEL_SIDE[panel]) === panel;
+  return (
+    <>
+      <RailButton panel={panel} label={label} icon={RAIL_ICONS[panel]} controlsId={PANEL_ID} />
+      {open ? <aside id={PANEL_ID}>{panel}</aside> : null}
+    </>
+  );
+}
+
+describe.each(PANELS)('$panel aria-controls', ({ panel, label }) => {
+  it('names the rendered panel only while the button is expanded', () => {
+    render(<PanelRig panel={panel} label={label} />);
+    const button = host.querySelector<HTMLButtonElement>('button');
+    expect(button?.hasAttribute('aria-controls')).toBe(false);
+
+    press(button);
+    const controls = button?.getAttribute('aria-controls') ?? '';
+    expect(controls).toBe(PANEL_ID);
+    expect(document.getElementById(controls)).not.toBeNull();
+
+    press(button);
+    expect(button?.hasAttribute('aria-controls')).toBe(false);
+  });
+
+  it('names nothing when no controlsId is given, even while expanded', () => {
+    render(<RailButton panel={panel} label={label} icon={RAIL_ICONS[panel]} />);
+    press(host.querySelector('button'));
+    expect(host.querySelector('button')?.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('button')?.hasAttribute('aria-controls')).toBe(false);
   });
 });
 
