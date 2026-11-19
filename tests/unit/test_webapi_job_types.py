@@ -97,8 +97,24 @@ def page_total(handle: str) -> int:
     return int(ok(call("session.info", {"handle": handle}))["page_count"])
 
 
-# The trailer's /ID array, whatever its spacing (writers differ between platforms).
-_ID_PATTERN = re.compile(rb"/ID\s*\[[^\]]*\]")
+# The trailer's /ID array, whatever its spacing (writers differ between platforms). Each element
+# is a hex string or a literal string, and a literal string may hold any byte, ``]`` included
+# (the ID is random, so a save can produce one); the escape-aware form keeps the match whole.
+_ID_PATTERN = re.compile(rb"/ID\s*\[(?:\s*(?:<[0-9A-Fa-f\s]*>|\((?:\\[\s\S]|[^\\()])*\)))*\s*\]")
+
+
+def strip_id(data: bytes) -> bytes:
+    """``data`` without its single trailer /ID array."""
+    data, count = _ID_PATTERN.subn(b"", data)
+    assert count == 1, "the saved file has no single /ID array to remove"
+    return data
+
+
+def test_strip_id_removes_a_literal_id_whose_bytes_include_a_bracket() -> None:
+    trailer = b"<</Size 2/Root 1 0 R/ID [(9Cd&:\\(*P]x)(abc)]>>"
+    assert strip_id(b"%PDF" + trailer) == b"%PDF<</Size 2/Root 1 0 R>>"
+    hex_id = b"<</Root 1 0 R/ID [<00ab> <CD01>]>>"
+    assert strip_id(hex_id) == b"<</Root 1 0 R>>"
 
 
 def saved_bytes(handle: str) -> bytes:
@@ -107,10 +123,7 @@ def saved_bytes(handle: str) -> bytes:
     document, so the whole array is removed from both sides before a comparison.
     """
     reply, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
-    data = binary(ok(reply)["data"], out)
-    data, count = _ID_PATTERN.subn(b"", data)
-    assert count == 1, "the saved file has no single /ID array to remove"
-    return data
+    return strip_id(binary(ok(reply)["data"], out))
 
 
 def page_text(handle: str, page: int) -> str:
