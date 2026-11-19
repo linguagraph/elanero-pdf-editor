@@ -31,6 +31,10 @@ import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
 import { OrganizerPanel } from './organizer/OrganizerPanel';
 import { OrganizerRailButton } from './organizer/OrganizerRailButton';
 import { setOrganizerOpen, useOrganizerOpen } from './organizer/openState';
+import { SearchPanel } from './search/SearchPanel';
+import { SearchRailButton } from './search/SearchRailButton';
+import { setSearchOpen, useSearchOpen } from './search/openState';
+import type { SearchMarks } from './search/search';
 import { APP_VERSION } from './version';
 import './app.css';
 
@@ -86,10 +90,15 @@ export function App({ engine }: AppProps) {
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
-  // One right panel shows at a time: opening the thumbnails closes the page organizer.
+  const searchOpen = useSearchOpen(activeId);
+  // One right panel shows at a time: opening the thumbnails or the search closes the page organizer.
   useEffect(() => {
-    if (activeId !== null && thumbnailsOpen) setOrganizerOpen(activeId, false);
-  }, [activeId, thumbnailsOpen]);
+    if (activeId !== null && (thumbnailsOpen || searchOpen)) setOrganizerOpen(activeId, false);
+  }, [activeId, thumbnailsOpen, searchOpen]);
+  // The search hits the document view draws, with the tab they belong to (W5.4).
+  const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
+    null,
+  );
   const documentShown = !showStart && activeId !== null && session !== null && scheduler !== null;
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
   // The page and zoom the document view reports, for the status bar under the document.
@@ -112,10 +121,20 @@ export function App({ engine }: AppProps) {
         <>
           <ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />
           <OrganizerRailButton tabId={activeId} disabled={!documentShown} />
+          <SearchRailButton tabId={activeId} disabled={!documentShown} />
         </>
       }
       rightPanel={
-        documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
+        documentShown && searchOpen && activeId !== null && session !== null ? (
+          <SearchPanel
+            key={activeId}
+            rpc={session.rpc}
+            handle={session.handle}
+            onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
+            onGoTo={(page) => viewRef.current?.scrollToPage(page)}
+            onClose={() => setSearchOpen(activeId, false)}
+          />
+        ) : documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
             key={`thumbs-${structureRevision}`}
             rpc={session.rpc}
@@ -130,7 +149,11 @@ export function App({ engine }: AppProps) {
           <OrganizerPanel
             rpc={session.rpc}
             handle={session.handle}
-            onChanged={() => setStructureRevision((value) => value + 1)}
+            onChanged={() => {
+              // The search marks name pages by index, which a change may have moved.
+              setSearchMarks(null);
+              setStructureRevision((value) => value + 1);
+            }}
             onClose={() => {
               if (activeId !== null) setOrganizerOpen(activeId, false);
             }}
@@ -178,6 +201,9 @@ export function App({ engine }: AppProps) {
             handle={session.handle}
             scheduler={scheduler}
             onViewChange={setViewState}
+            searchMarks={
+              searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
+            }
           />
         ) : null}
         {documentShown ? null : (

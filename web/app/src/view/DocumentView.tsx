@@ -1,8 +1,8 @@
 // The document view (W5.1a, W1.4 sections 1, 2, 5, 6 and 8): the pages of one open document,
 // stacked vertically at the zoom level, each with a placeholder at its size. Only the pages near the
 // viewport are mounted; the visible ones are rendered through render.page, queued and cached by the
-// render scheduler, which the thumbnails panel of the same tab shares. No annotations, text layer or
-// tiles here (W5.1b and later).
+// render scheduler, which the thumbnails panel of the same tab shares. Each page also gets its text
+// layer (W5.4) and the search highlights. No annotations or tiles here (W5.1b and later).
 import {
   type Ref,
   useEffect,
@@ -26,6 +26,10 @@ import {
   scrollTopForSpread,
   visibleRange,
 } from './layout';
+import { PageMarks } from '../search/PageMarks';
+import { marksOnPage, type SearchMarks } from '../search/search';
+import { PageTextLayer } from '../text/PageTextLayer';
+import { TextLayerCache } from '../text/textLayerCache';
 import { pageCacheKey } from './pageCache';
 import { CachedCanvas } from './pixels';
 import { type PlannedRender, RenderScheduler } from './renderScheduler';
@@ -60,6 +64,8 @@ export interface DocumentViewProps {
   // Called when the page or the zoom changes, and once when the view mounts. Give it a stable
   // function (a state setter, for one) so the view does not report again on each render.
   readonly onViewChange?: (state: DocumentViewState) => void;
+  // The search hits to draw on the pages, and the selected one (W5.4).
+  readonly searchMarks?: SearchMarks;
 }
 
 // The viewport height, or the window's when the element has no layout yet (jsdom, first paint).
@@ -73,6 +79,7 @@ export function DocumentView({
   scheduler: shared,
   ref,
   onViewChange,
+  searchMarks,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -92,6 +99,8 @@ export function DocumentView({
   const [ownScheduler] = useState(() => new RenderScheduler(rpc, handle));
   const scheduler = shared ?? ownScheduler;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The text layers of this document, one per page and revision (W5.4).
+  const textLayers = useMemo(() => new TextLayerCache(rpc, handle), [rpc, handle]);
 
   useEffect(() => {
     let active = true;
@@ -321,6 +330,13 @@ export function DocumentView({
                     cacheKey={cacheKey}
                     version={tick}
                     className="doc-page-canvas"
+                  />
+                  <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
+                  <PageTextLayer
+                    cache={textLayers}
+                    page={box.index}
+                    revision={scheduler.revisionOf(box.index)}
+                    zoom={zoom}
                   />
                   {scheduler.isFailed(cacheKey) ? (
                     <span className="doc-page-error">{t('view.renderFailed')}</span>

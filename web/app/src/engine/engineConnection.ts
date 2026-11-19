@@ -4,14 +4,14 @@
 // is ready, and again after a failure.
 import { useSyncExternalStore } from 'react';
 import { engineLoad, type EngineLoadStore } from '../feedback/engineLoad';
-import { createRpcClient, type RpcClient } from '../rpc/client';
+import { type CallOptions, createRpcClient, type RpcClient } from '../rpc/client';
 import { EngineLoadError } from './errors';
 import type { FailedStage, Stage } from './protocol';
 import { startEngine, type StartOptions, type WorkerClient } from './start';
 import type { Methods } from '../rpc/generated';
 
 // The calls the app makes on the engine. The real RPC client satisfies it; tests pass a fake.
-export type EngineClient = Pick<RpcClient, 'call'>;
+export type EngineClient = Pick<RpcClient, 'call' | 'chunked'>;
 
 // The first call waits for the whole load, so it gets no short deadline: a first visit can take
 // minutes on a slow network (docs/web/plan.md, decision 10). This only stops a worker that never
@@ -122,10 +122,16 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
 // The calls the document view, the thumbnails panel and the page organizer make. RpcClient satisfies
 // this; tests pass a fake.
 export interface PageRpc {
-  call<M extends 'session.pages' | 'render.page' | 'actions.run' | 'actions.undo'>(
+  call<M extends 'session.pages' | 'render.page' | 'text.layer' | 'actions.run' | 'actions.undo'>(
     method: M,
     params: Methods[M]['params'],
   ): Promise<Methods[M]['result']>;
+  // Each slice of a chunked call (text.search, W5.4), as RpcClient.chunked gives them.
+  chunked<M extends 'text.search'>(
+    method: M,
+    params: Omit<Methods[M]['params'], 'cursor'>,
+    options?: CallOptions,
+  ): AsyncGenerator<Methods[M]['result'], void, undefined>;
 }
 
 export interface EngineSession {
