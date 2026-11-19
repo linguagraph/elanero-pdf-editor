@@ -2,6 +2,7 @@
    and its canvas are sized from the layout in CSS pixels (set on the elements, not in this file). */
 
 .doc-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
