@@ -219,16 +219,6 @@ export class RpcClient {
     } catch (error) {
       return Promise.reject(toRpcError(method, error));
     }
-    // The worker channel carries one binary value per message (the loader's adapter).
-    if (buffers.length > 1) {
-      return Promise.reject(
-        new RpcError(
-          'INVALID_ARGS',
-          `${method} sent ${buffers.length} binary values; the limit is 1`,
-        ),
-      );
-    }
-
     const id = this.nextId++;
     const bytesSent = buffers.reduce((total, buffer) => total + buffer.byteLength, 0);
     const timeoutMs = options.timeoutMs ?? deadlineMs(method, bytesSent);
@@ -250,7 +240,7 @@ export class RpcClient {
       );
       signal?.addEventListener('abort', onAbort, { once: true });
 
-      this.worker.call(request, buffers[0]).then(
+      this.worker.call(request, buffers).then(
         (result) =>
           settle(() => {
             try {

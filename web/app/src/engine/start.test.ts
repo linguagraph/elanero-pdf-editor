@@ -116,9 +116,10 @@ describe('startEngine', () => {
     const input = new Uint8Array([1]).buffer;
     const output = new Uint8Array([2, 3]).buffer;
 
-    const pending = client.call('{}', input);
+    const pending = client.call('{}', [input]);
     const sent = worker.posted[1];
     expect(sent?.transfer).toEqual([input]);
+    expect((sent?.message as { buffers?: unknown }).buffers).toEqual([input]);
     const id = (sent?.message as { id: number }).id;
     worker.emit('message', { data: { id, reply: 'ok', buffer: output } });
 

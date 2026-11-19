@@ -590,7 +590,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 - [ ] **W6.1** R2 Page organizer _(partial: organizer panel with thumbnails, multi-select, rotate, move up/down and delete, each undoable and tested with a fake engine (Vitest); pending: insert blank, duplicate, extract, insert from file, drag-and-drop reorder)_
 - [ ] **W6.2** R3 Split dialog
-- [ ] **W6.3** R6 Combine dialog
+- [ ] **W6.3** R6 Combine dialog _(partial: source list (add PDFs and images, drag and drop), reordering, remove, output name, and the combine flow through the merge job with progress, Cancel and download, tested with a fake job worker (Vitest); pending: page ranges per source; merged bookmarks are always on, with no toggle; progress is indeterminate because the job worker's progress notices are not sent to the page yet; Cancel terminates the job worker, since merge has no prepare and so no jobs.abort)_
 - [ ] **W6.4** R5 Compress dialog
 - [ ] **W6.5** R7 Print
 - [ ] **W6.6** R4 Translate
