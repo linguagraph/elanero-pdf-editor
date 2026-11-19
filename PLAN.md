@@ -553,16 +553,15 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W3 Engine worker and RPC, #136**
 
-- [ ] **W3.1** Worker bootstrap: load pinned Pyodide and wheels
-  _(partial: loader, workers and start helpers with unit tests done; real in-browser load verified by the Playwright e2e (`web/app/e2e`): stages in order, hello, job-worker globals removed, blocked wheel fails at `packages`. The app now starts the engine after first paint, drives the loading screen from its stages (Retry on failure) and opens files through `session.open` with the password prompt and `session.close` on tab close; the Playwright ready check needs staged assets. Pending: document load during packages, Pyodide snapshot, job worker start after page 1)_
+- [x] **W3.1** Worker bootstrap: load pinned Pyodide and wheels _(the Pyodide snapshot was evaluated and not adopted: docs/web/spikes/W3.1-snapshot.md)_
 - [x] **W3.2** `webapi.session`: open from bytes, close, info
 - [x] **W3.3** `webapi.render`: render tiles to RGBA
 - [x] **W3.4** `webapi.text`: text layer and search
-- [ ] **W3.5** `webapi.actions`: named actions, undo, redo _(partial: actions.run/undo/redo/available with changed/state in the result and structure_version done; the reply envelope's events (changed, state on content changes; closed on session.close) and session.open state done; the saved event and save.mark_saved done (tested); the busy-flag state event of jobs.prepare/abort done (tested); pending: state sent only with content changes, not on every field change; blocked is the BUSY error, not an event)_
+- [x] **W3.5** `webapi.actions`: named actions, undo, redo
 - [x] **W3.6** `webapi.save`: save_bytes, full or incremental
 - [x] **W3.7** `webapi.jobs` and job worker protocol _(complete; print's partial notices (W1.2 section 17.4) are tracked under W6.5)_
 - [x] **W3.8** TypeScript RPC client with generated types
-- [ ] **W3.9** Resource limits and guarded errors _(partial: limit audit done. Each limit is checked at an inclusive boundary with its W1.2 code and details; those whose size is known up front (file size, query, scale, pixels, job bytes) are checked before the work, and the page count and save size on its result. The open reply carries the size warning. A refused open, job or apply leaves no document open and no task running. In the RPC client, out-of-memory text from the worker maps to `OUT_OF_MEMORY`, and `web/app/src/engine/restart.ts` starts a new worker and lists the documents to reopen, with the lost-work text. Pending: reopen from the OPFS autosave (depends on the storage task); the 16 MP per-tile render limit (tiles come with W5.1b); the warning when the engine heap passes 1.5 GiB.)_
+- [ ] **W3.9** Resource limits and guarded errors _(partial: limit audit done. Each limit is checked at an inclusive boundary with its W1.2 code and details; those whose size is known up front (file size, query, scale, pixels, job bytes) are checked before the work, and the page count and save size on its result. The open reply carries the size warning. A refused open, job or apply leaves no document open and no task running. In the RPC client, out-of-memory text from the worker maps to `OUT_OF_MEMORY`, and `web/app/src/engine/restart.ts` starts a new worker and lists the documents to reopen, with the lost-work text. Done since: the OPFS autosave and the reopen of documents after a restart (slices 2 and 3), and the warning when the engine heap passes 1.5 GiB (slice 4). Pending: the viewer's render-scale cap of 256,000 (slice 5); the 16 MP per-tile limit is already in `render.tile` (W5.1b).)_
 
 **W4 Front-end shell, #137**
 
