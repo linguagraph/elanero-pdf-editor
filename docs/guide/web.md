@@ -59,6 +59,10 @@ is reloaded until you press it.
     comments you add.
   - **Appearance**: the theme, and **Reduce motion**, which turns off animations.
   - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%), used when a document is opened.
+  - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and
+    uploaded fonts from this browser, then reloads the page. It is turned off while a document is
+    open; close the documents first. Your files are not touched, and the recovery copies of other
+    open Elanero tabs are kept.
 
   **Apply** saves your changes; **Cancel**, Esc or a click outside the dialog puts back the saved
   theme. The default zoom applies to the open document at once, and to each document you open. The
@@ -151,7 +155,9 @@ says so. Saving is coming soon, so this is not yet working.
   clearing the site's data removes it. Save or download a file before you close the tab to keep it.
 - **Your theme** is kept in the browser's local storage under the name `elanero.theme`.
 - **Your preferences** (language, author name, reduce motion and default zoom) are kept in the same
-  browser's local storage under the name `elanero.prefs`.
+  browser's local storage under the name `elanero.prefs`. **Clear all local data** in the Preferences
+  dialog removes every key that starts with `elanero.`, and the uploaded fonts, but keeps other
+  sites' data on the same address and the recovery copies of other open tabs.
 - **The app's files** are kept by the browser so the editor works offline.
 
 The web version sends nothing to any server while you edit, and has no accounts, analytics or
@@ -166,6 +172,7 @@ full policy, with what the desktop app stores, is in the
 |---|---|---|
 | Light, dark and system theme | Yes | Yes |
 | Preferences: language, author name, reduce motion, default zoom | Yes | Saved; default zoom applies now, author name comes with comments (coming soon) |
+| Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | The app's files yes; documents need the engine's offline files (coming soon) |
 | Open, view, search and save PDFs | Yes | Coming soon |

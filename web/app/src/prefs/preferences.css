@@ -61,3 +61,26 @@
   background: var(--color-accent);
   color: var(--color-on-accent);
 }
+
+.prefs-confirm {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-small);
+}
+
+.prefs-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.prefs-danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.prefs-error {
+  color: var(--color-danger);
+}
