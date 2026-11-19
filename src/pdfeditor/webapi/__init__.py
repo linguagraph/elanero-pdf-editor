@@ -59,6 +59,7 @@ METHODS: dict[str, Method] = {
     "actions.redo": Method(dto.HandleParams, actions.redo),
     "actions.available": Method(dto.HandleParams, actions.available),
     "comments.flattenable": Method(dto.HandleParams, actions.flattenable),
+    "comments.xfdf_preview": Method(dto.XfdfPreviewParams, actions.xfdf_preview),
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
     "save.mark_saved": Method(dto.HandleParams, save.mark_saved),

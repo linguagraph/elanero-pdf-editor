@@ -45,9 +45,12 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix
-from pdfeditor.services.xfdf import import_command
+from pdfeditor.services.xfdf import XfdfTooLarge, import_command
 
 WRITE = ("annotations_write",)
+
+# The desktop panel shows the same text for a file it refuses before reading it.
+XFDF_TOO_LARGE_MESSAGE = "This XFDF file is too large to import."
 
 # -- helpers moved from the desktop (Qt-free) ----------------------------------------------
 
@@ -391,6 +394,8 @@ def import_xfdf(session: DocumentSession, args: ImportXfdf) -> ActionResult[int]
     with session.lock:
         try:
             command = import_command(args.text, session.document)
+        except XfdfTooLarge as exc:  # before the parse: nothing has changed yet
+            raise Refused(XFDF_TOO_LARGE_MESSAGE) from exc
         except (ET.ParseError, ValueError) as exc:  # nothing has changed yet
             raise Refused("This file is not valid XFDF.") from exc  # the cause keeps the detail
     if not command.commands:

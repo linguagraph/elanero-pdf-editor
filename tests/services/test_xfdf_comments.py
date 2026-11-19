@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
@@ -26,7 +27,15 @@ from pdfeditor.services.comments import (
     summary_html,
     summary_pdf,
 )
-from pdfeditor.services.xfdf import export_xfdf, import_command, parse_xfdf
+from pdfeditor.services.xfdf import (
+    MAX_XFDF_BYTES,
+    XfdfTooLarge,
+    check_size,
+    export_xfdf,
+    import_command,
+    parse_xfdf,
+    preview_xfdf,
+)
 from tests.hostcheck import record
 
 
@@ -259,3 +268,64 @@ def test_xfdf_with_doctype_or_entity_is_refused(session: DocumentSession) -> Non
 def test_non_xfdf_root_is_refused(session: DocumentSession) -> None:
     with session.lock, pytest.raises(ValueError, match="not XFDF"):
         parse_xfdf("<html><body/></html>", session.document)
+
+
+def test_text_over_the_limit_is_refused_before_any_parsing(
+    session: DocumentSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def parsed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("an over-size XFDF reached the XML parser")
+
+    monkeypatch.setattr(ET, "fromstring", parsed)
+    with session.lock, pytest.raises(XfdfTooLarge):
+        parse_xfdf("x" * (MAX_XFDF_BYTES + 1), session.document)
+    assert issubclass(XfdfTooLarge, ValueError)
+
+
+def test_size_is_measured_in_utf8_bytes_not_characters() -> None:
+    # 'é' is one character but two UTF-8 bytes: under the limit by len(), over it when encoded.
+    text = "é" * (MAX_XFDF_BYTES // 2 + 1)
+    assert len(text) <= MAX_XFDF_BYTES < len(text.encode("utf-8"))
+    with pytest.raises(XfdfTooLarge):
+        check_size(text)
+
+
+def test_exactly_at_the_limit_passes_the_size_check() -> None:
+    check_size("x" * MAX_XFDF_BYTES)
+    check_size("é" * (MAX_XFDF_BYTES // 2))  # exactly MAX_XFDF_BYTES bytes
+
+
+PREVIEW_XFDF = """<?xml version="1.0" encoding="UTF-8"?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve">
+<annots>
+<text name="note-1" page="0" rect="72,600,92,620"><contents>first</contents></text>
+<square name="box-1" page="1" rect="100,100,200,200"><contents>second</contents></square>
+<text name="reply-1" page="1" rect="72,600,92,620" inreplyto="note-1">
+<contents>reply</contents>
+</text>
+<text name="off-page" page="99" rect="0,0,10,10"><contents>not counted</contents></text>
+<bogus name="unknown" page="0" rect="0,0,10,10"/>
+</annots>
+</xfdf>
+"""
+
+
+def test_preview_counts_what_the_import_adds(session: DocumentSession) -> None:
+    with session.lock:
+        preview = preview_xfdf(PREVIEW_XFDF, session.document)
+        imported = import_command(PREVIEW_XFDF, session.document)
+    # Off-page comments and unknown tags are skipped by both, so the counts agree.
+    assert preview.comments == 3
+    assert preview.replies == 1
+    assert preview.pages == (0, 1)
+    assert preview.comments == len(imported.commands)
+
+
+def test_preview_refuses_what_import_refuses(session: DocumentSession) -> None:
+    body = '<annots><text page="0" rect="0,0,10,10" contents="x"/></annots>'
+    with session.lock:
+        with pytest.raises(XfdfTooLarge):
+            preview_xfdf("x" * (MAX_XFDF_BYTES + 1), session.document)
+        with pytest.raises(ValueError, match="not XFDF"):
+            preview_xfdf(f'<?xml version="1.0"?><!DOCTYPE xfdf []>{body}', session.document)
+    assert not session.undo_stack.can_undo

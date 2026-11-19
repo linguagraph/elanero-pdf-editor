@@ -40,7 +40,7 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
-from pdfeditor.services.xfdf import export_xfdf
+from pdfeditor.services.xfdf import MAX_XFDF_BYTES, XfdfTooLarge, export_xfdf
 from tests.actions.conftest import Opener, pretend_signed
 from tests.hostcheck import record
 
@@ -813,6 +813,17 @@ def test_import_refuses_what_is_not_xfdf(open_copy: Opener, text: str) -> None:
         comments.import_xfdf(s, ImportXfdf(text))
     assert info.value.code == "REFUSED"
     assert info.value.__cause__ is not None  # the parser's reason is kept on the cause
+    assert state(s) == before
+    assert not s.undo_stack.can_undo
+
+
+def test_import_of_an_over_size_file_is_refused_and_changes_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = state(s)
+    with pytest.raises(Refused, match="too large to import") as info:
+        comments.import_xfdf(s, ImportXfdf("x" * (MAX_XFDF_BYTES + 1)))
+    assert info.value.code == "REFUSED"
+    assert isinstance(info.value.__cause__, XfdfTooLarge)  # the size check, before any parse
     assert state(s) == before
     assert not s.undo_stack.can_undo
 
