@@ -1,6 +1,11 @@
 import { Fragment } from 'react';
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from 'react-aria-components';
-import { type CommandHandlers, menuSections, runCommand } from '../commands/run';
+import {
+  type CommandHandlers,
+  commandDisabledReason,
+  menuSections,
+  runCommand,
+} from '../commands/run';
 import { type CommandState, type Registry } from '../commands/registry';
 import { t } from '../i18n/t';
 import './ribbon.css';
@@ -37,7 +42,7 @@ export function AppMenu({ registry, state, handlers }: AppMenuProps) {
                   key={def.id}
                   id={def.id}
                   className="app-menu-item"
-                  isDisabled={def.enabled(state) !== null}
+                  isDisabled={commandDisabledReason(def, state, handlers) !== null}
                   textValue={t(def.labelId)}
                 >
                   {t(def.labelId)}

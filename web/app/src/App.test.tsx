@@ -25,4 +25,28 @@ describe('App', () => {
       host.remove();
     }
   });
+
+  it('mounts the ribbon under the logo bar, with the app menu button beside the logo', () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      act(() => {
+        root.render(<App engine={fakeEngine()} />);
+      });
+      const header = host.querySelector('.app-frame-header');
+      expect(header?.querySelector('.app-header .app-menu-button')).not.toBeNull();
+      const tabs = header?.querySelectorAll('.ribbon [role="tab"]') ?? [];
+      expect(tabs).toHaveLength(7);
+      // No document is open, so a document command is disabled with its reason.
+      const save = header?.querySelector<HTMLElement>('[data-command="save"]');
+      expect(save?.getAttribute('aria-disabled')).toBe('true');
+    } finally {
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    }
+  });
 });

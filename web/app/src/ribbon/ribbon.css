@@ -150,3 +150,45 @@
   margin: var(--space-1) 0;
   background: var(--color-border);
 }
+
+/* The collapsed form (narrow windows): the tab row scrolls inside itself, never the page, and the
+   touch targets are at least 44 px (W1.6, touch). */
+.ribbon-collapsed .ribbon-tabs {
+  overflow-x: auto;
+  border-bottom: none;
+}
+
+.ribbon-collapsed .ribbon-tab {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+.ribbon-collapsed .ribbon-command {
+  min-height: 44px;
+}
+
+.ribbon-popover {
+  max-width: calc(100vw - var(--space-4));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+.ribbon-popover-body {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: min(640px, calc(100vw - var(--space-4)));
+  max-height: calc(100vh - var(--space-6));
+  overflow-y: auto;
+  outline: none;
+}
+
+/* The reason a disabled command gives when pressed; it takes its own line in the popover. */
+.ribbon-notice {
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

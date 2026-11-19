@@ -4,6 +4,7 @@ import {
   TAB_ORDER,
   type CommandDef,
   type CommandState,
+  type DisabledReason,
   type GroupDef,
   type Registry,
   type TabId,
@@ -15,6 +16,18 @@ export type CommandHandlers = Readonly<Record<string, (() => void) | undefined>>
 // Hidden means the capability is off (W1.6 section 2): the command is absent, not greyed.
 export function isVisible(def: CommandDef, state: CommandState): boolean {
   return def.capability === undefined || state.capabilities.has(def.capability);
+}
+
+// Why a command cannot run now, or null when it can. A command with no handler yet reads as
+// disabled, so the ribbon and the menu never show a command that does nothing as enabled.
+export function commandDisabledReason(
+  def: CommandDef,
+  state: CommandState,
+  handlers: CommandHandlers,
+): DisabledReason | null {
+  const reason = def.enabled(state);
+  if (reason !== null) return reason;
+  return handlers[def.id] === undefined ? 'notAvailableYet' : null;
 }
 
 // Runs the command when it is visible, enabled and has a handler. Returns whether it ran, so a

@@ -195,7 +195,7 @@ function openCalls(): Recorded[] {
 describe('start page', () => {
   it('shows the start page when no document tab is open', () => {
     expect(host.querySelector('.start-page')).not.toBeNull();
-    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('.doc-tabs [role="tablist"]')).toBeNull();
   });
 
   it('opens the file input from the Open button, which accepts PDFs only', () => {
@@ -358,7 +358,7 @@ describe('document tabs', () => {
     act(() => {
       buttonNamed(t('tabs.close', { name: 'a.pdf' })).click();
     });
-    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('.doc-tabs [role="tablist"]')).toBeNull();
     expect(host.querySelector('.start-page')).not.toBeNull();
   });
 
@@ -449,7 +449,7 @@ describe('document tabs', () => {
   it('moves between tabs with the arrow keys', async () => {
     dropFiles([pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')]);
     await until(() => tabNames().length === 3);
-    const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const tabs = [...host.querySelectorAll<HTMLElement>('.doc-tabs [role="tab"]')];
     expect(tabs[2]?.getAttribute('aria-selected')).toBe('true');
     act(() => {
       tabs[2]?.focus();
@@ -458,7 +458,9 @@ describe('document tabs', () => {
       tabs[2]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     });
     expect(
-      host.querySelectorAll<HTMLElement>('[role="tab"]')[1]?.getAttribute('aria-selected'),
+      host
+        .querySelectorAll<HTMLElement>('.doc-tabs [role="tab"]')[1]
+        ?.getAttribute('aria-selected'),
     ).toBe('true');
   });
 });

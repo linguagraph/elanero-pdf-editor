@@ -17,6 +17,14 @@ body {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* The app menu button and the logo sit together at the start of the header bar. */
+.app-header-start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .brand {
   color: var(--color-brand);
   font-size: var(--font-size-title);

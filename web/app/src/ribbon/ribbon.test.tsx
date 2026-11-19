@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,13 +129,147 @@ describe('Ribbon', () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
-  it('gives the shortcut from the shared table in the description', () => {
+  it('marks a command with no handler yet as disabled, with the not-available reason', () => {
     render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    const el = button('save');
+    expect(el.getAttribute('aria-disabled')).toBe('true');
+    expect(describedText(el)).toContain(t('disabled.notAvailableYet'));
+  });
+
+  it('gives the shortcut from the shared table in the description', () => {
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ save: vi.fn() }} />);
     expect(describedText(button('save'))).toBe('Ctrl+S');
   });
 });
 
+describe('Ribbon in a narrow window', () => {
+  const realWidth = window.innerWidth;
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function narrow(width: number): void {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  it('shows one row of tabs, with no tab panels, below the tablet breakpoint', () => {
+    narrow(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon-collapsed')).not.toBeNull();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelectorAll('.ribbon-tabs > button')).toHaveLength(
+      ribbonLayout(REGISTRY, withDoc).length,
+    );
+  });
+
+  it('opens a tab group in a popover, and closes it once a command runs', () => {
+    narrow(390);
+    const save = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ save }} />);
+    const homeTab = host.querySelector<HTMLButtonElement>('.ribbon-tabs > button');
+    expect(homeTab?.textContent).toBe(t(TAB_LABELS.home));
+    act(() => {
+      homeTab?.click();
+    });
+    const popover = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(popover?.textContent).toContain(t('command.save.label'));
+    act(() => {
+      document.querySelector<HTMLElement>('[data-command="save"]')?.click();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('does not run a disabled command from the popover', () => {
+    narrow(390);
+    const save = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={noDoc} handlers={{ save }} />);
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-tabs > button')?.click();
+    });
+    const el = document.querySelector<HTMLElement>('[data-command="save"]');
+    expect(el?.getAttribute('aria-disabled')).toBe('true');
+    act(() => {
+      el?.click();
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('keeps the popover open and says why when a command with no handler is pressed', () => {
+    narrow(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ save: vi.fn() }} />);
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-tabs > button')?.click();
+    });
+    act(() => {
+      document.querySelector<HTMLElement>('[data-command="print"]')?.click();
+    });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('.ribbon-notice')?.textContent).toBe(
+      t('disabled.notAvailableYet'),
+    );
+  });
+
+  it('marks the tab buttons as opening a dialog', () => {
+    narrow(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    const tabButtons = host.querySelectorAll<HTMLElement>('.ribbon-tabs > button');
+    expect(tabButtons.length).toBeGreaterThan(0);
+    for (const tabButton of tabButtons) {
+      expect(tabButton.getAttribute('aria-haspopup')).toBe('dialog');
+    }
+  });
+
+  it('closes the popover on Escape and returns focus to its tab button', async () => {
+    narrow(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ save: vi.fn() }} />);
+    const homeTab = host.querySelector<HTMLButtonElement>('.ribbon-tabs > button');
+    // A pointer press focuses the button before the popover opens; react-aria restores focus there.
+    act(() => {
+      homeTab?.focus();
+      homeTab?.click();
+    });
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    // react-aria restores focus after the popover unmounts, on a later tick.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(homeTab);
+  });
+});
+
+// Every string the ribbon shows or reads goes through t() (W4.7). Class names and ids are not text.
+describe('ribbon strings go through t()', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const JSX_TEXT = />([^<>{}\n]*\p{L}[^<>{}\n]*)</gu;
+  const READABLE_ATTRIBUTE =
+    /\b(aria-label|aria-description|title|alt|placeholder)=("[^"]*"|'[^']*')/g;
+
+  it.each(['Ribbon.tsx', 'AppMenu.tsx'])('%s has no literal user text', (file) => {
+    const text = readFileSync(resolve(here, file), 'utf8');
+    expect([...text.matchAll(JSX_TEXT)].map((m) => m[1])).toEqual([]);
+    expect([...text.matchAll(READABLE_ATTRIBUTE)].map((m) => m[0])).toEqual([]);
+  });
+});
+
 describe('AppMenu', () => {
+  it('marks a command with no handler yet as disabled', () => {
+    render(<AppMenu registry={REGISTRY} state={withDoc} handlers={{ preferences: vi.fn() }} />);
+    act(() => {
+      host.querySelector<HTMLElement>('button[aria-label="Main menu"]')?.click();
+    });
+    const item = (id: string): HTMLElement | null =>
+      document.querySelector<HTMLElement>(`[role="menuitem"][data-key="${id}"]`);
+    expect(item('print')?.getAttribute('aria-disabled')).toBe('true');
+    expect(item('preferences')?.getAttribute('aria-disabled')).toBeNull();
+  });
+
   it('opens from its button and closes with Escape', () => {
     render(<AppMenu registry={REGISTRY} state={withDoc} handlers={{}} />);
     const trigger = host.querySelector<HTMLElement>('button[aria-label="Main menu"]');

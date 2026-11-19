@@ -70,3 +70,26 @@ test('desktop width: every right rail button fits its rail and shows its icon', 
     await expect(button).toHaveAttribute('title', /.+/);
   }
 });
+
+// W4.3c: the ribbon sits under the logo bar, full width. Above the tablet breakpoint it shows the
+// tab list; below it, the collapsed form (one row of tabs, groups in popovers).
+test('desktop width (1366 px): the ribbon is mounted with its tabs', async ({ page }) => {
+  await openAtWidth(page, 1366, 768);
+  const ribbon = page.locator('.app-frame-header .ribbon');
+  await expect(ribbon).toBeVisible();
+  await expect(ribbon.getByRole('tablist').getByRole('tab')).toHaveCount(7);
+  await expect(ribbon.getByRole('tab', { name: 'Home' })).toBeVisible();
+  expect(await horizontalOverflow(page)).toBe(0);
+});
+
+test('phone width (390 px): the ribbon shows the collapsed form, no horizontal page scroll', async ({
+  page,
+}) => {
+  await openAtWidth(page, 390, 844);
+  await expect(page.locator('.app-frame-header .ribbon-collapsed')).toBeVisible();
+  await expect(page.locator('.app-frame-header [role="tablist"]')).toHaveCount(0);
+  await expect(
+    page.locator('.app-frame-header .ribbon-collapsed > .ribbon-tabs > button'),
+  ).toHaveCount(7);
+  expect(await horizontalOverflow(page)).toBe(0);
+});
