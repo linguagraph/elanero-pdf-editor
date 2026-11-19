@@ -100,6 +100,11 @@ function radio(value: string): HTMLInputElement {
   return found;
 }
 
+// The texts of the toasts on screen, in order.
+function texts(store: ToastStore): string[] {
+  return store.getState().visible.map((toast) => toast.text);
+}
+
 function setup(worker: JobWorker, overrides: Partial<CommentsExportDialogProps> = {}) {
   const { call } = fakeEngine();
   const store: ToastStore = createToastStore();
@@ -158,7 +163,7 @@ describe('CommentsExportDialog', () => {
       expect.any(ArrayBuffer),
       'text/csv',
     );
-    expect(store.getState().visible.map((toast) => toast.text)).toContain(t('commentsExport.done'));
+    expect(texts(store)).toEqual([t('commentsExport.done')]);
   });
 
   it('says the PDF summary is unavailable when the engine cannot lay it out', async () => {
@@ -172,22 +177,18 @@ describe('CommentsExportDialog', () => {
     });
     await settle();
     expect(download).not.toHaveBeenCalled();
-    expect(store.getState().visible.map((toast) => toast.text)).toContain(
-      t('commentsExport.pdfUnavailable'),
-    );
+    expect(texts(store)).toEqual([t('commentsExport.pdfUnavailable')]);
   });
 
   it('reports other failures through the shared error reporter', async () => {
-    const { store } = setup(failingWorker('ENGINE_ERROR', 'boom'));
+    const { store, download } = setup(failingWorker('ENGINE_ERROR', 'boom'));
     await settle();
     await act(async () => {
       buttonNamed(t('commentsExport.export')).click();
     });
     await settle();
-    expect(store.getState().visible.map((toast) => toast.text)).not.toContain(
-      t('commentsExport.done'),
-    );
-    expect(store.getState().visible.length).toBeGreaterThan(0);
+    expect(download).not.toHaveBeenCalled();
+    expect(texts(store)).toEqual([t('error.ENGINE_ERROR')]);
   });
 
   it('Cancel closes without running a job', async () => {

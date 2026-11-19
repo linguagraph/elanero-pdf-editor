@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createJobProgressStore } from '../feedback/jobRun';
+import { createToastStore } from '../feedback/toasts';
 import type { FileJobEngine, JobWorker } from '../files/fileJob';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import {
@@ -76,5 +78,50 @@ describe('comment export job', () => {
     expect(files).toHaveLength(1);
     expect(files[0]?.name).toBe('Report-comments.csv');
     expect(files[0]?.mime).toBe('text/csv');
+  });
+
+  it('leaves the result toast to the dialog: the job bar shows none on success', async () => {
+    const toastStore = createToastStore();
+    const progress = createJobProgressStore({ toasts: toastStore });
+    const { call } = fakeEngine();
+    await runCommentsExport(
+      {
+        engine: { call } as unknown as FileJobEngine,
+        startWorker: () => filesWorker('Report-comments.csv', 'text/csv'),
+        progress,
+      },
+      'h1',
+      'csv',
+      'Report.pdf',
+    );
+    expect(toastStore.getState().visible).toEqual([]);
+    expect(progress.getState().job).toBeUndefined();
+  });
+
+  it('leaves the error toast to the dialog: the job bar shows none on failure', async () => {
+    const toastStore = createToastStore();
+    const progress = createJobProgressStore({ toasts: toastStore });
+    const { call } = fakeEngine();
+    const reply = {
+      v: PROTOCOL_VERSION,
+      id: 1,
+      ok: false,
+      error: { code: 'NOT_SUPPORTED', message: 'no layout engine' },
+      events: [],
+    };
+    const worker: JobWorker = {
+      call: vi.fn(async () => ({ reply: JSON.stringify(reply) })),
+      terminate: vi.fn(),
+    };
+    await expect(
+      runCommentsExport(
+        { engine: { call } as unknown as FileJobEngine, startWorker: () => worker, progress },
+        'h1',
+        'pdf',
+        'Report.pdf',
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_SUPPORTED' });
+    expect(toastStore.getState().visible).toEqual([]);
+    expect(progress.getState().job).toBeUndefined();
   });
 });

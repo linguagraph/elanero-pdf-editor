@@ -39,5 +39,11 @@ export function runCommentsExport(
   format: CommentsExportFormat,
   name: string,
 ): Promise<ResultFile[]> {
-  return runFileJob(deps, handle, COMMENTS_EXPORT_JOB, commentsExportArgs(format, name));
+  // The dialog reports the outcome (one success or error toast), so the job bar stays quiet.
+  return runFileJob(
+    { ...deps, ownToasts: true },
+    handle,
+    COMMENTS_EXPORT_JOB,
+    commentsExportArgs(format, name),
+  );
 }

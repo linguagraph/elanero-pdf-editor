@@ -41,6 +41,9 @@ export interface FileJobDeps {
   readonly engine: FileJobEngine;
   readonly startWorker: () => JobWorker;
   readonly progress?: JobProgressStore;
+  // The caller reports the outcome itself (its toasts are more specific than the job bar's). The
+  // bar then hides with no success or error toast, so the user sees one message per result.
+  readonly ownToasts?: boolean;
 }
 
 // Thrown when the user cancelled. A dialog treats it as a normal end, not an error.
@@ -139,6 +142,7 @@ export async function runFileJobOutput(
   args: Record<string, unknown>,
 ): Promise<FileJobOutput> {
   const progress = deps.progress ?? jobProgress;
+  const quiet = deps.ownToasts === true;
   const { engine } = deps;
   const prepared = await engine.call('jobs.prepare', { handle, job, args });
   const { token } = prepared;
@@ -190,13 +194,13 @@ export async function runFileJobOutput(
       label: '',
       require_full_save: false,
     });
-    progress.finish(token, { ok: true });
+    progress.finish(token, { ok: true, quiet });
     return output;
   } catch (error) {
     if (error instanceof FileJobCancelled) throw error;
     // Frees the prepared job. Best effort: the engine drops unused jobs on the next prepare.
     await engine.call('jobs.abort', { handle, token }).catch(() => undefined);
-    progress.finish(token, { ok: false, error });
+    progress.finish(token, { ok: false, error, quiet });
     throw error;
   } finally {
     worker.terminate();
