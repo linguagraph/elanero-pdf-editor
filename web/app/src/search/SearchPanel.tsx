@@ -203,7 +203,7 @@ export function SearchPanel({ rpc, handle, onMarks, onGoTo, onClose }: SearchPan
         {statusText(view)}
       </p>
       {count > 0 ? (
-        <ol className="search-results" aria-label={t('search.results')}>
+        <ol className="search-results panel-fill" tabIndex={0} aria-label={t('search.results')}>
           {view.hits.map((hit, index) => (
             <li key={index}>
               <button

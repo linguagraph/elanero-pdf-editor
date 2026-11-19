@@ -214,7 +214,7 @@ export function OrganizerPanel({
           {t('organizer.loading')}
         </p>
       ) : (
-        <div className="organizer">
+        <div className="organizer panel-fill">
           <p className="organizer-status" aria-live="polite">
             {t('organizer.selected', { count: picked.length, total })}
           </p>
@@ -249,6 +249,7 @@ export function OrganizerPanel({
             aria-label={t('organizer.pages')}
             aria-multiselectable="true"
             className="organizer-grid"
+            tabIndex={0}
           >
             {sizes.map((size, index) => {
               const selected = picked.includes(index);

@@ -29,7 +29,6 @@
 
 .thumbs-scroll {
   position: relative;
-  height: min(70vh, 40rem);
   overflow-y: auto;
   background: var(--color-surface-alt);
 }

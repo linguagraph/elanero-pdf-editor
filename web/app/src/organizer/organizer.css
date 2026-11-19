@@ -23,6 +23,8 @@
 .organizer {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   gap: var(--space-2);
 }
 
@@ -46,11 +48,26 @@
   color: var(--color-text-disabled);
 }
 
+.organizer > * {
+  flex: 0 0 auto;
+}
+
+.organizer > .organizer-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.organizer-grid:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  /* Inside the box: .organizer clips overflow, so an outside ring would be cut off. */
+  outline-offset: -2px;
+}
+
 .organizer-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: var(--space-2);
-  max-height: min(70vh, 40rem);
   overflow-y: auto;
   padding: var(--space-1);
   background: var(--color-surface-alt);
