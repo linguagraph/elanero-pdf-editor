@@ -14,6 +14,7 @@ import {
   closeTab as closeTabState,
   EMPTY_TABS,
   hasDirtyTab,
+  setPageCount,
   type TabState,
 } from '../tabs/tabState';
 import { asRpcError, openFile } from './openFile';
@@ -38,6 +39,8 @@ export interface Documents {
   showStartPage(): void;
   selectTab(id: number): void;
   closeTab(id: number): void;
+  // Keeps a tab's page count in step with the engine after an organizer change.
+  setPages(id: number, pages: number): void;
 }
 
 export function useDocuments(engine: EngineConnection): Documents {
@@ -136,6 +139,13 @@ export function useDocuments(engine: EngineConnection): Documents {
     [tabs, engine, commitTabs],
   );
 
+  const setPages = useCallback(
+    (id: number, pages: number) => {
+      commitTabs((state) => setPageCount(state, id, pages));
+    },
+    [commitTabs],
+  );
+
   return {
     tabs,
     recent,
@@ -147,5 +157,6 @@ export function useDocuments(engine: EngineConnection): Documents {
     showStartPage,
     selectTab,
     closeTab,
+    setPages,
   };
 }

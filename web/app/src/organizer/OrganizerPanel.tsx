@@ -16,6 +16,8 @@ import { thumbnailScaleMilli, type ThumbnailSize } from '../view/thumbnails';
 import {
   canDelete,
   clampSelection,
+  duplicatedPages,
+  insertAt,
   movedPages,
   moveTarget,
   NO_SELECTION,
@@ -31,14 +33,15 @@ export interface OrganizerPanelProps {
   readonly rpc: PageRpc;
   readonly handle: string;
   readonly onClose: () => void;
-  // Called after a change that moves, removes or turns pages, so the document view and the
-  // thumbnails panel drop what they drew before.
-  readonly onChanged?: () => void;
+  // Called after a change that moves, adds, removes or turns pages, with the new page count, so
+  // the document view, the thumbnails panel and the tab's page count drop what they had before.
+  readonly onChanged?: (pageCount: number) => void;
   // Where the Undo toasts and the errors go. The app's toast store unless a test passes its own.
   readonly toastStore?: ToastStore;
 }
 
-type PageChange = 'pages.rotate' | 'pages.move' | 'pages.delete';
+type PageChange =
+  'pages.rotate' | 'pages.move' | 'pages.delete' | 'pages.insert_blank' | 'pages.duplicate';
 
 export function OrganizerPanel({
   rpc,
@@ -106,7 +109,7 @@ export function OrganizerPanel({
   const reload = async (nextSelection?: PageSelection) => {
     const reply = await rpc.call('session.pages', { handle });
     adopt(reply.pages, nextSelection);
-    onChanged?.();
+    onChanged?.(reply.pages.length);
   };
 
   const undoChange = async () => {
@@ -179,6 +182,25 @@ export function OrganizerPanel({
     );
   };
 
+  // The blank page takes the size of the page before it, and becomes the selection.
+  const insertBlank = () => {
+    const at = insertAt(picked, total);
+    void change('pages.insert_blank', { at }, t('organizer.inserted', { count: 1 }), () => ({
+      picked: [at],
+      anchor: at,
+    }));
+  };
+
+  // The copies go right after the last chosen page, and they become the selection.
+  const duplicateSelected = () => {
+    const copies = duplicatedPages(picked);
+    const count = picked.length;
+    void change('pages.duplicate', { pages: picked }, t('organizer.duplicated', { count }), () => ({
+      picked: copies,
+      anchor: copies[0] ?? null,
+    }));
+  };
+
   const deleteSelected = () => {
     if (!canDelete(picked, total)) return;
     const count = picked.length;
@@ -224,6 +246,12 @@ export function OrganizerPanel({
             </button>
             <button type="button" disabled={!hasSelection || busy} onClick={() => rotate(90)}>
               {t('command.rotate-pages-right.label')}
+            </button>
+            <button type="button" disabled={busy} onClick={insertBlank}>
+              {t('organizer.insertBlank')}
+            </button>
+            <button type="button" disabled={!hasSelection || busy} onClick={duplicateSelected}>
+              {t('command.duplicate-pages.label')}
             </button>
             <button type="button" disabled={!canUp} onClick={() => moveSelected('up')}>
               {t('organizer.moveUp')}

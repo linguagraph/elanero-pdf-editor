@@ -6,6 +6,7 @@ import {
   EMPTY_TABS,
   hasDirtyTab,
   setDirty,
+  setPageCount,
   type TabState,
 } from './tabState';
 
@@ -68,5 +69,11 @@ describe('tab state', () => {
     expect(state.tabs.find((tab) => tab.id === 2)?.dirty).toBe(true);
     expect(hasDirtyTab(state)).toBe(true);
     expect(hasDirtyTab(setDirty(state, 2, false))).toBe(false);
+  });
+
+  it('sets the page count of one tab and leaves the others alone', () => {
+    const state = setPageCount(withThree(), 2, 7);
+    expect(state.tabs.map((tab) => tab.pages)).toEqual([1, 7, 1]);
+    expect(state.activeId).toBe(3);
   });
 });

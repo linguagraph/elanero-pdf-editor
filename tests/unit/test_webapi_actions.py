@@ -323,6 +323,33 @@ def test_available_lists_the_page_actions_on_the_web(web: None, fixture_pdf: Any
     assert list(names) == sorted(names)
 
 
+def test_insert_blank_and_duplicate_change_the_page_count_and_undo_restores(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf)
+    count = page_count(handle)
+    blank = ok(
+        call("actions.run", {"handle": handle, "name": "pages.insert_blank", "args": {"at": 1}})
+    )
+    assert blank["executed"] is True and blank["label"] == "Insert Blank Page"
+    assert blank["changed"] is not None
+    assert blank["state"]["page_count"] == count + 1
+    assert page_count(handle) == count + 1
+    copies = ok(
+        call(
+            "actions.run",
+            {"handle": handle, "name": "pages.duplicate", "args": {"pages": [0, 2]}},
+        )
+    )
+    assert copies["executed"] is True and copies["changed"] is not None
+    assert copies["state"]["page_count"] == count + 3
+    assert page_count(handle) == count + 3
+    assert ok(undo(handle))["done"] is True
+    assert page_count(handle) == count + 1
+    assert ok(undo(handle))["done"] is True
+    assert page_count(handle) == count
+
+
 def _never(session: Any, args: Any) -> ActionResult[None]:
     raise AssertionError("an action the web does not have must not run")
 

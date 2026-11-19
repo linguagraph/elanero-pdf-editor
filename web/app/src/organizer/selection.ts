@@ -58,6 +58,20 @@ export function moveTarget(
   return last >= count - 1 ? null : Math.min(last + 2, count);
 }
 
+// The index a blank page is inserted at: right after the last selected page, or at the end of the
+// document with no selection. The engine's pages.insert_blank takes the page before it as the size.
+export function insertAt(picked: readonly number[], total: number): number {
+  if (picked.length === 0) return total;
+  return (picked[picked.length - 1] ?? 0) + 1;
+}
+
+// The pages that duplicating the selection creates: the copies go right after the last chosen
+// page, in the order of the selection (pages.duplicate does the same).
+export function duplicatedPages(picked: readonly number[]): number[] {
+  const last = picked[picked.length - 1] ?? 0;
+  return Array.from({ length: picked.length }, (_, offset) => last + 1 + offset);
+}
+
 // Deleting is allowed for some pages, never for all of them: a document keeps one page.
 export function canDelete(picked: readonly number[], count: number): boolean {
   return picked.length > 0 && picked.length < count;
