@@ -10,6 +10,7 @@ neither at module level, and Pyodide can run it too.
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import re
@@ -109,6 +110,20 @@ def saved_bytes(handle: str) -> bytes:
     return data
 
 
+def page_text(handle: str, page: int) -> str:
+    return str(ok(call("text.layer", {"handle": handle, "page": page}))["text"])
+
+
+def reopened_state(data: bytes) -> tuple[int, list[str]]:
+    """The page count and each page's text, read by the engine after reopening saved bytes."""
+    handle = open_data(data, "reopened.pdf")
+    try:
+        pages = page_total(handle)
+        return pages, [page_text(handle, number) for number in range(pages)]
+    finally:
+        call("session.close", {"handle": handle})
+
+
 def prepare(
     handle: str, job: str, args: dict[str, Any], extra: list[bytes] | None = None
 ) -> tuple[dict[str, Any], bytes]:
@@ -203,7 +218,10 @@ def test_a_read_only_type_runs_on_a_copy_and_leaves_the_document_unchanged(
 ) -> None:
     handle = open_data(text_fixture(fixture_pdf), "text.pdf")
     session = REGISTRY.get(handle)
+    # Raw save bytes differ between two saves of the same document (the /ID, and under Pyodide
+    # other bytes too), so the document is compared by what it contains after a reopen.
     before = saved_bytes(handle)
+    before_state = reopened_state(before)
     version = session.structure_version
 
     prepared, copy = prepare(handle, job, args)
@@ -221,7 +239,14 @@ def test_a_read_only_type_runs_on_a_copy_and_leaves_the_document_unchanged(
 
     applied = ok(apply_read_only(handle, prepared["token"]))
     assert applied["applied"] is False
-    assert saved_bytes(handle) == before  # the save output equals the input
+    after = saved_bytes(handle)  # a save after the read-only job still succeeds
+    assert reopened_state(after) == before_state  # page count and each page's text
+    assert before_state[0] == page_total(handle)
+    record(
+        "same_object_count_pikepdf",
+        after,
+        reference=base64.b64encode(before).decode("ascii"),
+    )  # the same number of objects in the saved file
     assert session.structure_version == version
     assert session.is_dirty is False
 
