@@ -233,12 +233,14 @@ class UndoStack:
         self._history_shortened = False
         self._notify()
 
-    def _trim(self) -> None:
-        def disk() -> int:
-            return sum(c.disk_bytes for c in self._undo)
+    @property
+    def disk_bytes(self) -> int:
+        """The disk the undo snapshots take: the sum the budget is checked against."""
+        return sum(c.disk_bytes for c in self._undo)
 
+    def _trim(self) -> None:
         while len(self._undo) > 1 and (
-            len(self._undo) > self.limit or disk() > self.max_disk_bytes
+            len(self._undo) > self.limit or self.disk_bytes > self.max_disk_bytes
         ):
             self._undo.pop(0).discard()
             self._dropped += 1
