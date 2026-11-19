@@ -24,6 +24,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
   gap: var(--space-2);
 }
 
@@ -45,6 +46,21 @@
 
 .organizer-actions button:disabled {
   color: var(--color-text-disabled);
+}
+
+.organizer > * {
+  flex: 0 0 auto;
+}
+
+.organizer > .organizer-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.organizer-grid:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .organizer-grid {

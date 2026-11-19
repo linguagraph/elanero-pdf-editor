@@ -249,6 +249,7 @@ export function OrganizerPanel({
             aria-label={t('organizer.pages')}
             aria-multiselectable="true"
             className="organizer-grid"
+            tabIndex={0}
           >
             {sizes.map((size, index) => {
               const selected = picked.includes(index);
