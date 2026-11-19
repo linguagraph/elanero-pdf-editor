@@ -417,6 +417,9 @@ class MuDocument:
         label = self.page(index).fz.get_label()
         return str(label) if label else str(index + 1)
 
+    def page_labels(self) -> list[str]:
+        return pages.page_labels(self)
+
     def embedded_files(self) -> list[EmbeddedFile]:
         out = []
         for name in self._fz.embfile_names():

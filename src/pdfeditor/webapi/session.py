@@ -5,8 +5,8 @@ The limits are read from :mod:`pdfeditor.webapi.limits` at call time, so tests c
 The open password is kept by the registry only while the document is open; it never goes into a
 reply, a log or an error message. The engine also keeps the password it authenticated with, for
 the life of the open document, because MuPDF needs it to re-read the file.
-Page revisions and page labels are not in ``session.pages`` yet; they come with the render and
-structure calls (W1.2 section 12), so the reply carries only sizes and rotation for now.
+Page revisions are not in ``session.pages`` yet; they come with the render and structure calls
+(W1.2 section 12). The reply carries the sizes and rotation, and the page labels (W5.3b).
 """
 
 from __future__ import annotations
@@ -94,7 +94,8 @@ def document_pages(params: dto.HandleParams) -> dto.PagesResult:
     with session.lock:
         document = session.document
         sizes = tuple(_page_size(document.page(i)) for i in range(document.page_count))
-    return dto.PagesResult(pages=sizes)
+        labels = tuple(document.page_labels())
+    return dto.PagesResult(pages=sizes, labels=labels)
 
 
 def document_capabilities(params: dto.HandleParams) -> dto.CapabilitiesResult:

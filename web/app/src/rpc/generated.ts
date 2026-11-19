@@ -272,6 +272,7 @@ export interface PageSize {
 
 export interface PagesResult {
   pages: PageSize[];
+  labels: string[];
 }
 
 export interface PlatformFlags {
@@ -920,9 +921,10 @@ export function decodePagesResult(
   path: string,
 ): PagesResult {
   const o = expectObject(value, path);
-  checkKeys(o, ['pages'], path);
+  checkKeys(o, ['pages', 'labels'], path);
   return {
     pages: expectArray(field(o, 'pages', path), `${path}.pages`).map((item1, index1) => decodePageSize(item1, ctx, `${`${path}.pages`}[${index1}]`)),
+    labels: expectArray(field(o, 'labels', path), `${path}.labels`).map((item1, index1) => expectString(item1, `${`${path}.labels`}[${index1}]`)),
   };
 }
 

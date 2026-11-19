@@ -246,11 +246,52 @@ def test_label_rules_roundtrip(ops: Engine, fixture_pdf, tmp_path: Path) -> None
         ]
     )
     assert [doc.page_label(i) for i in range(5)] == ["i", "ii", "A-1", "A-2", "A-3"]
+    assert doc.page_labels() == ["i", "ii", "A-1", "A-2", "A-3"]
     doc.save()
     doc.close()
     again = ops.open(path)
     assert again.page_label_rules()[1] == PageLabelRule(2, LabelStyle.DECIMAL, "A-", 1)
+    assert again.page_labels() == ["i", "ii", "A-1", "A-2", "A-3"]
     again.close()
+    # The saved file, read by the independent libraries: the rule is in /PageLabels as set, and
+    # page 0 still renders.
+    record("page_label_rule_pikepdf", path, start=2, style="D", prefix="A-", first=1)
+    record("page_render_width_pdfium", path, page=0, scale=0.5)
+
+
+def test_page_labels_none_style_is_empty_strings(ops: Engine, fixture_pdf, tmp_path: Path) -> None:
+    doc, _path = _open(ops, fixture_pdf, tmp_path, "text_multipage")
+    doc.set_page_label_rules([PageLabelRule(0, LabelStyle.NONE)])
+    # A rule that yields nothing is "" in the bulk read; page_label falls back to the number.
+    assert doc.page_labels() == ["", "", "", "", ""]
+    assert [doc.page_label(i) for i in range(5)] == ["1", "2", "3", "4", "5"]
+    doc.close()
+
+
+class _NoPrivateLabelRead:
+    """Hides MuPDF's private ``_get_page_labels``, so ``page_labels`` takes the fallback."""
+
+    def __init__(self, real: object) -> None:
+        self._real = real
+
+    def __getattr__(self, name: str) -> object:
+        if name == "_get_page_labels":
+            raise AttributeError(name)
+        return getattr(self._real, name)
+
+
+def test_page_labels_fallback_matches_primary(
+    ops: Engine, fixture_pdf, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fallback (for a PyMuPDF without the private read) must give the same labels as the
+    # primary path on a file covering roman, prefixed decimal, prefix-only and alphabetic past Z.
+    doc, _path = _open(ops, fixture_pdf, tmp_path, "page_labels")
+    expected = ["i", "ii", "A-1", "A-2", "A-3", "Cover", "Z", "AA"]
+    assert doc.page_labels() == expected
+    monkeypatch.setattr(type(doc), "fz", property(lambda self: _NoPrivateLabelRead(self._fz)))
+    assert not hasattr(doc.fz, "_get_page_labels")
+    assert doc.page_labels() == expected
+    doc.close()
 
 
 def test_text_width(ops: Engine) -> None:

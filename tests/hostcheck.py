@@ -832,6 +832,24 @@ def _rotation_pikepdf(data: bytes, page: int, degrees: int) -> None:
         assert int(pdf.pages[page].obj.get("/Rotate", 0)) == degrees
 
 
+@host_check("page_label_rule_pikepdf")
+def _page_label_rule_pikepdf(data: bytes, start: int, style: str, prefix: str, first: int) -> None:
+    """The /PageLabels number tree holds the rule starting at ``start``, as written."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        tree = pdf.Root.get("/PageLabels")
+        assert tree is not None, "no /PageLabels in the catalogue"
+        nums = list(tree.Nums)
+        rules = {int(nums[i]): nums[i + 1] for i in range(0, len(nums), 2)}
+        rule = rules[start]
+        assert str(rule.get("/P", "")) == prefix
+        style_name = rule.get("/S")
+        expected_style = f"/{style}" if style else ""
+        assert (str(style_name) if style_name is not None else "") == expected_style
+        assert int(rule.get("/St", 1)) == first
+
+
 @host_check("catalog_has_key_pikepdf")
 def _catalog_has_key_pikepdf(data: bytes, key: str) -> None:
     import pikepdf

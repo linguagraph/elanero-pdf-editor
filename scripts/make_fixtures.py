@@ -162,6 +162,24 @@ def outline_irregular() -> None:
     _save(doc, "outline_irregular.pdf")
 
 
+def page_labels() -> None:
+    # Eight pages with four rules: roman, decimal with a prefix, prefix only, and alphabetic
+    # past Z (MuPDF's own numbering after Z is what the web shows too).
+    doc = pymupdf.open()
+    for i in range(8):
+        page = doc.new_page(width=A4.width, height=A4.height)
+        page.insert_text((72, 72), f"Page {i + 1}", fontsize=16)
+    doc.set_page_labels(
+        [
+            {"startpage": 0, "prefix": "", "style": "r", "firstpagenum": 1},
+            {"startpage": 2, "prefix": "A-", "style": "D", "firstpagenum": 1},
+            {"startpage": 5, "prefix": "Cover", "style": "", "firstpagenum": 1},
+            {"startpage": 6, "prefix": "", "style": "A", "firstpagenum": 26},
+        ]
+    )
+    _save(doc, "page_labels.pdf")
+
+
 def encrypted() -> None:
     doc = pymupdf.open()
     page = doc.new_page(width=A4.width, height=A4.height)
@@ -1067,6 +1085,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "annotations_unnamed": annotations_unnamed,
     "outline": outline,
     "outline_irregular": outline_irregular,
+    "page_labels": page_labels,
     "encrypted": encrypted,
     "hybrid_xref": hybrid_xref,
     "rotated_pages": rotated_pages,

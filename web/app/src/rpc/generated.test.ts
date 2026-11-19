@@ -109,8 +109,11 @@ describe('reply validators', () => {
       }),
     ).toMatchObject({ handle: 'h1', pages: 2, warning: null });
     expect(
-      decodeResult('session.pages', { pages: [{ width: 612, height: 792, rotation: 0 }] }),
-    ).toEqual({ pages: [{ width: 612, height: 792, rotation: 0 }] });
+      decodeResult('session.pages', {
+        pages: [{ width: 612, height: 792, rotation: 0 }],
+        labels: ['i'],
+      }),
+    ).toEqual({ pages: [{ width: 612, height: 792, rotation: 0 }], labels: ['i'] });
     expect(
       decodeResult('actions.undo', { done: false, label: '', changed: null, state: DOC_STATE }),
     ).toMatchObject({ done: false, changed: null });
@@ -187,6 +190,15 @@ describe('reply validators', () => {
     expect(() =>
       decodeResult('session.pages', { pages: [{ width: 612, height: 'tall', rotation: 0 }] }),
     ).toThrow('result.pages[0].height');
+  });
+
+  it('rejects a page label that is not a string', () => {
+    expect(() =>
+      decodeResult('session.pages', {
+        pages: [{ width: 612, height: 792, rotation: 0 }],
+        labels: [1],
+      }),
+    ).toThrow('result.labels[0]');
   });
 
   it('rejects a value outside an enum', () => {

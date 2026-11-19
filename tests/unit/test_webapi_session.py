@@ -98,6 +98,14 @@ def test_pages_and_info_match_the_engine(web: None, fixture_pdf: Any) -> None:
     assert info["result"]["encrypted"] is False
 
 
+def test_pages_carry_the_page_labels(web: None, fixture_pdf: Any) -> None:
+    labelled = handle_of(open_bytes(fixture_pdf("outline").read_bytes()))
+    result = call("session.pages", {"handle": labelled})["result"]
+    assert result["labels"] == ["i", "ii", "iii", "iv", "v", "vi"]
+    plain = handle_of(open_bytes(fixture_pdf("text_multipage").read_bytes()))
+    assert call("session.pages", {"handle": plain})["result"]["labels"] == []
+
+
 def test_capabilities_report_the_web_flags(web: None, fixture_pdf: Any) -> None:
     handle = handle_of(open_bytes(fixture_pdf("text_multipage").read_bytes()))
     reply = call("session.capabilities", {"handle": handle})

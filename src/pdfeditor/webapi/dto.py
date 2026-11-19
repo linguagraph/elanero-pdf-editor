@@ -92,6 +92,9 @@ class FlattenableResult:
 @dataclasses.dataclass(frozen=True, slots=True)
 class PagesResult:
     pages: tuple[PageSize, ...]
+    # The page labels, one per page; empty when the document has none, and "" for a page with
+    # no label (its rule yields nothing).
+    labels: tuple[str, ...]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
