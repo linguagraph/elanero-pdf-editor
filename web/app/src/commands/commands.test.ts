@@ -61,6 +61,15 @@ describe('registry declarations', () => {
     expect(() => createRegistry([], GROUPS, [['missing']])).toThrow(/no such command/);
   });
 
+  it('gives every search keyword an English string', () => {
+    const withKeywords = COMMANDS.filter((def) => def.keywordsId !== undefined);
+    expect(withKeywords.length).toBeGreaterThanOrEqual(10);
+    for (const def of withKeywords) {
+      const keywordsId = def.keywordsId as MessageId;
+      expect(EN[keywordsId].trim(), def.id).not.toBe('');
+    }
+  });
+
   it('has no duplicate ids in the built-in catalogue', () => {
     const ids = COMMANDS.map((def) => def.id);
     expect(new Set(ids).size).toBe(ids.length);
