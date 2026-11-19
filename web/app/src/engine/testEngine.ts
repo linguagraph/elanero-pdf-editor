@@ -14,13 +14,25 @@ export interface FakeEngine extends EngineConnection {
 
 export function fakeEngine(client?: EngineClient): FakeEngine {
   let current = client;
+  let waiters: ((ready: EngineClient) => void)[] = [];
   return {
     store: createEngineLoadStore(),
     client: () => current,
+    whenReady: () =>
+      current !== undefined
+        ? Promise.resolve(current)
+        : new Promise<EngineClient>((resolve) => {
+            waiters.push(resolve);
+          }),
     start: vi.fn<() => void>(),
     dispose: vi.fn<() => void>(),
     setClient(next) {
       current = next;
+      if (next === undefined) return;
+      // Setting a client is the engine becoming ready: the waiting opens go on.
+      const ready = waiters;
+      waiters = [];
+      for (const resolve of ready) resolve(next);
     },
   };
 }

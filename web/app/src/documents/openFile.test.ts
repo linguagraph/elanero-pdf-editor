@@ -112,6 +112,20 @@ describe('openFile', () => {
     });
   });
 
+  it('sends the bytes read ahead on the first attempt only, and reads the file again for a password', async () => {
+    const file = pdf('locked.pdf');
+    const read = vi.spyOn(file, 'arrayBuffer');
+    const bytes = new TextEncoder().encode('%PDF-1.4 ahead').buffer as ArrayBuffer;
+    const { client, call } = scriptedClient([fail('PASSWORD_REQUIRED'), answer(OPENED)]);
+    const outcome = await openFile(client, file, async () => 'pw', bytes);
+
+    expect(outcome.status).toBe('opened');
+    expect(read).toHaveBeenCalledTimes(1);
+    const sent = call.mock.calls.map((args) => (args[1] as { data: ArrayBuffer }).data);
+    expect(sent[0]).toBe(bytes);
+    expect(sent[1]).not.toBe(bytes);
+  });
+
   it('keeps the password out of localStorage and sessionStorage', async () => {
     const { client } = scriptedClient([fail('PASSWORD_REQUIRED'), answer(OPENED)]);
     await openFile(client, pdf('locked.pdf'), async () => 'hunter2-secret');

@@ -181,13 +181,6 @@ function errorToasts(): string[] {
     .map((toast) => toast.text);
 }
 
-function infoToasts(): string[] {
-  return toasts
-    .getState()
-    .visible.filter((toast) => toast.kind === 'info')
-    .map((toast) => toast.text);
-}
-
 function openCalls(): Recorded[] {
   return calls.filter((call) => call.method === 'session.open');
 }
@@ -245,15 +238,84 @@ describe('start page', () => {
     expect(tabNames()).toEqual(['scan.PDF']);
   });
 
-  it('does not call the engine before it is ready, and says so', () => {
-    const notReady = fakeEngine();
+  // Renders the app with an engine that is still loading, and a client that answers once it is
+  // ready (setClient on the returned engine).
+  function renderLoading(): { engine: FakeEngine; queued: ReturnType<typeof engineClient> } {
+    const queued = engineClient();
+    const loading = fakeEngine();
     act(() => {
-      root.render(<App engine={notReady} />);
+      root.render(<App engine={loading} />);
     });
-    dropFiles([pdf('report.pdf')]);
+    return { engine: loading, queued };
+  }
+
+  it('queues files picked during the load, shows them, and opens them once the engine is ready', async () => {
+    const { engine: loading, queued } = renderLoading();
+    const first = pdf('report.pdf');
+    const readFirst = vi.spyOn(first, 'arrayBuffer');
+    dropFiles([first, pdf('second.pdf')]);
+    expect(readFirst).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.start-pending')?.textContent).toContain(t('start.pending.heading'));
+    expect(host.querySelectorAll('.start-pending-list li')).toHaveLength(2);
+    expect(queued.calls.filter((call) => call.method === 'session.open')).toEqual([]);
     expect(tabNames()).toEqual([]);
-    expect(infoToasts()).toEqual([t('open.engineNotReady')]);
-    expect(calls).toEqual([]);
+
+    act(() => {
+      loading.setClient(queued.client);
+    });
+    await until(() => tabNames().length === 2);
+    expect(tabNames()).toEqual(['report.pdf', 'second.pdf']);
+    const opened = queued.calls.filter((call) => call.method === 'session.open');
+    expect(opened.map((call) => call.params['name'])).toEqual(['report.pdf', 'second.pdf']);
+    expect(host.querySelector('.start-pending')).toBeNull();
+  });
+
+  it("drops a waiting file when its Don't open button is pressed", async () => {
+    const { engine: loading, queued } = renderLoading();
+    dropFiles([pdf('report.pdf'), pdf('second.pdf')]);
+    act(() => {
+      buttonNamed(t('start.pending.cancelLabel', { name: 'report.pdf' })).click();
+    });
+    expect(host.querySelectorAll('.start-pending-list li')).toHaveLength(1);
+    act(() => {
+      loading.setClient(queued.client);
+    });
+    await until(() => tabNames().length === 1);
+    expect(tabNames()).toEqual(['second.pdf']);
+  });
+
+  it('asks for the password of a queued file after the engine is ready', async () => {
+    const { engine: loading, queued } = renderLoading();
+    dropFiles([pdf('locked.pdf')]);
+    act(() => {
+      loading.setClient(queued.client);
+    });
+    await until(() => passwordInput() !== null);
+    typePassword('secret');
+    submitPassword();
+    await until(() => tabNames().length === 1);
+    expect(tabNames()).toEqual(['locked.pdf']);
+    const opened = queued.calls.filter((call) => call.method === 'session.open');
+    expect(opened.map((call) => call.params['password'])).toEqual([null, 'secret']);
+  });
+
+  it('refuses a non-PDF and a too-large file at once, without queueing them', () => {
+    renderLoading();
+    const big = pdf('big.pdf');
+    Object.defineProperty(big, 'size', { value: 1024 ** 3 + 1 });
+    dropFiles([new File(['hello'], 'notes.txt', { type: 'text/plain' }), big]);
+    expect(errorToasts()).toHaveLength(2);
+    expect(host.querySelectorAll('.start-pending-list li')).toHaveLength(0);
+  });
+
+  it('does not read a file over the read-ahead limit before the engine is ready', () => {
+    renderLoading();
+    const large = pdf('large.pdf');
+    Object.defineProperty(large, 'size', { value: 256 * 1024 * 1024 + 1 });
+    const read = vi.spyOn(large, 'arrayBuffer');
+    dropFiles([large]);
+    expect(read).not.toHaveBeenCalled();
+    expect(host.querySelectorAll('.start-pending-list li')).toHaveLength(1);
   });
 
   it('shows the engine error as a toast and opens no tab', async () => {
