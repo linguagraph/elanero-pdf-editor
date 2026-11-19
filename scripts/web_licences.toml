@@ -196,28 +196,28 @@ copyright = "Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)"
 copyright = "Copyright (c) Microsoft Corporation."
 
 [npm."react-aria"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."react-aria-components"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."react-stately"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."@react-types/shared"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."@internationalized/date"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."@internationalized/number"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."@internationalized/string"]
-copyright = "Copyright Adobe. All rights reserved."
+copyright = "Copyright 2019 Adobe"
 
 [npm."@swc/helpers"]
-copyright = "Copyright (c) 강동윤 (package author, per package.json; to confirm)"
+copyright = "Copyright 2024 SWC contributors."
 
 [npm."client-only"]
 copyright = "To confirm: no copyright line in the installed package (its licence file is absent)."
