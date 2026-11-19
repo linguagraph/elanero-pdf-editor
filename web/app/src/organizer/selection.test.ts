@@ -2,12 +2,28 @@ import { describe, expect, it } from 'vitest';
 import {
   canDelete,
   clampSelection,
+  duplicatedPages,
+  insertAt,
   movedPages,
   moveTarget,
   NO_SELECTION,
   type PageSelection,
   selectPage,
 } from './selection';
+
+describe('insertAt and duplicatedPages', () => {
+  it('inserts after the last selected page, or at the end with no selection', () => {
+    expect(insertAt([], 5)).toBe(5);
+    expect(insertAt([1, 3], 5)).toBe(4);
+    expect(insertAt([0], 5)).toBe(1);
+  });
+
+  it('the copies go right after the last chosen page, in order', () => {
+    expect(duplicatedPages([0, 1])).toEqual([2, 3]);
+    expect(duplicatedPages([0, 2])).toEqual([3, 4]);
+    expect(duplicatedPages([4])).toEqual([5]);
+  });
+});
 
 const PLAIN = { ctrl: false, shift: false };
 const CTRL = { ctrl: true, shift: false };

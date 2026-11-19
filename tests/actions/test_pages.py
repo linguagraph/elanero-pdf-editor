@@ -439,6 +439,42 @@ def test_round_trip_insert_file(open_copy: Opener, tmp_path: Path, fixture_pdf) 
     assert_reads_everywhere(out, count + 6)
 
 
+def test_round_trip_insert_blank(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("text_multipage")
+    count = s.page_count
+    page_actions.insert_blank(s, InsertBlankPage(at=1))
+    out = s.save(tmp_path / "blank.pdf")
+    reopened = DocumentSession.open(out)
+    try:
+        after = texts(reopened)
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    assert len(after) == count + 1
+    assert after[1].strip() == ""
+    assert "needle-1" in after[0] and "needle-2" in after[2]
+    record("text_contains_pdfium", out, page=2, text="needle-2")
+    assert_reads_everywhere(out, count + 1)
+
+
+def test_round_trip_duplicate(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    page_actions.duplicate(s, DuplicatePages((0, 2)))
+    out = s.save(tmp_path / "duplicated.pdf")
+    reopened = DocumentSession.open(out)
+    try:
+        after = texts(reopened)
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    # The copies of pages 1 and 3 go right after page 3, the last chosen one.
+    assert after == [before[0], before[1], before[2], before[0], before[2], *before[3:]]
+    record("text_contains_pdfium", out, page=3, text="needle-1")
+    record("text_contains_pdfium", out, page=4, text="needle-3")
+    assert_reads_everywhere(out, len(before) + 2)
+
+
 def test_round_trip_crop_margins(open_copy: Opener, tmp_path: Path) -> None:
     s = open_copy("text_multipage")
     before = rects(s)[0]

@@ -21,6 +21,8 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
 function fakeRpc(pageCount: number, moveValue: number[] = [1]) {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
   let count = pageCount;
+  // The page count before each action, so an undo can restore it.
+  const counts: number[] = [];
   const rpc = {
     call: vi.fn((method: string, params: Record<string, unknown>) => {
       calls.push({ method, params });
@@ -33,8 +35,13 @@ function fakeRpc(pageCount: number, moveValue: number[] = [1]) {
         return Promise.resolve({ pages });
       }
       if (method === 'actions.run') {
+        counts.push(count);
         if (params.name === 'pages.delete') {
           count -= (params.args as { pages: number[] }).pages.length;
+        }
+        if (params.name === 'pages.insert_blank') count += 1;
+        if (params.name === 'pages.duplicate') {
+          count += (params.args as { pages: number[] }).pages.length;
         }
         const value = params.name === 'pages.move' ? moveValue : null;
         return Promise.resolve({
@@ -46,6 +53,7 @@ function fakeRpc(pageCount: number, moveValue: number[] = [1]) {
         });
       }
       if (method === 'actions.undo') {
+        count = counts.pop() ?? count;
         return Promise.resolve({ done: true, label: 'x', changed: null, state: {} });
       }
       const request = params as { revision: number };
@@ -79,9 +87,17 @@ async function flush(): Promise<void> {
   });
 }
 
-function mount(rpc: PageRpc, store: ToastStore): void {
+function mount(rpc: PageRpc, store: ToastStore, onChanged?: (pageCount: number) => void): void {
   act(() => {
-    root.render(<OrganizerPanel rpc={rpc} handle="h" onClose={() => {}} toastStore={store} />);
+    root.render(
+      <OrganizerPanel
+        rpc={rpc}
+        handle="h"
+        onClose={() => {}}
+        toastStore={store}
+        onChanged={onChanged}
+      />,
+    );
   });
 }
 
@@ -239,5 +255,84 @@ describe('page organizer actions', () => {
     expect(buttonNamed(t('command.delete-pages.label')).disabled).toBe(true);
     expect(host.textContent).toContain(t('organizer.keepOne'));
     expect(calls.some((call) => call.method === 'actions.run')).toBe(false);
+  });
+});
+
+describe('page organizer insert and duplicate', () => {
+  it('insert blank with no selection adds the page at the end and selects it', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    const store = createToastStore();
+    mount(rpc, store);
+    await flush();
+    click(buttonNamed(t('organizer.insertBlank')));
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.insert_blank', args: { at: 4 } },
+    });
+    expect(options()).toHaveLength(5);
+    expect(selectedPages()).toEqual([4]);
+    expect(store.getState().visible[0]?.text).toBe(t('organizer.inserted', { count: 1 }));
+  });
+
+  it('insert blank after the last selected page selects the new page', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[1]!);
+    click(options()[3]!, { ctrlKey: true });
+    click(buttonNamed(t('organizer.insertBlank')));
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.insert_blank', args: { at: 4 } },
+    });
+    expect(selectedPages()).toEqual([4]);
+  });
+
+  it('duplicate sends the selection and selects the copies', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    const store = createToastStore();
+    mount(rpc, store);
+    await flush();
+    click(options()[0]!);
+    click(options()[1]!, { shiftKey: true });
+    click(buttonNamed(t('command.duplicate-pages.label')));
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.duplicate', args: { pages: [0, 1] } },
+    });
+    expect(options()).toHaveLength(6);
+    expect(selectedPages()).toEqual([2, 3]);
+    expect(store.getState().visible[0]?.text).toBe(t('organizer.duplicated', { count: 2 }));
+  });
+
+  it('duplicate needs a selection', async () => {
+    const { rpc } = fakeRpc(4);
+    mount(rpc, createToastStore());
+    await flush();
+    expect(buttonNamed(t('command.duplicate-pages.label')).disabled).toBe(true);
+  });
+
+  it('reports the new page count to onChanged, and Undo reloads the pages', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    const store = createToastStore();
+    const onChanged = vi.fn();
+    mount(rpc, store, onChanged);
+    await flush();
+    click(options()[0]!);
+    click(buttonNamed(t('command.duplicate-pages.label')));
+    await flush();
+    expect(onChanged).toHaveBeenLastCalledWith(5);
+
+    const listed = calls.filter((call) => call.method === 'session.pages').length;
+    const toast = store.getState().visible[0];
+    expect(toast?.action?.label).toBe(t('toast.undo'));
+    act(() => toast?.action?.run());
+    await flush();
+    expect(calls.some((call) => call.method === 'actions.undo')).toBe(true);
+    expect(calls.filter((call) => call.method === 'session.pages').length).toBeGreaterThan(listed);
+    expect(onChanged).toHaveBeenLastCalledWith(4);
   });
 });

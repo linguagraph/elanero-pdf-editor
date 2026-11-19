@@ -79,9 +79,11 @@ is reloaded until you press it.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
   thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
   Shift-click to select a range. Then rotate the selected pages left or right, move them up or
-  down, or delete them (after a confirmation; a document always keeps one page). Each change can
-  be undone from the notice that follows it. Inserting, duplicating and extracting pages, and
-  dragging pages, are not available yet.
+  down, delete them (after a confirmation; a document always keeps one page), or duplicate them.
+  Insert blank page adds an empty page after the last selected page (or at the end when nothing is
+  selected), the same size as the page before it. Duplicate puts a copy of each selected page right
+  after the last one. Each change can be undone from the notice that follows it. Inserting pages
+  from a file, extracting pages, and dragging pages, are not available yet.
 
 ## Going to a page
 

@@ -60,6 +60,14 @@ export function setDirty(state: TabState, id: number, dirty: boolean): TabState 
   };
 }
 
+// Stores the page count the engine reported after a change that added or removed pages.
+export function setPageCount(state: TabState, id: number, pages: number): TabState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, pages } : tab)),
+  };
+}
+
 export function hasDirtyTab(state: TabState): boolean {
   return state.tabs.some((tab) => tab.dirty);
 }

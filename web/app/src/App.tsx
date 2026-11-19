@@ -232,10 +232,12 @@ export function App({ engine, startPrintWorker }: AppProps) {
           <OrganizerPanel
             rpc={session.rpc}
             handle={session.handle}
-            onChanged={() => {
+            onChanged={(pageCount) => {
               // The search marks name pages by index, which a change may have moved.
               setSearchMarks(null);
               setStructureRevision((value) => value + 1);
+              // The dialogs and the status bar read the tab's page count, so it follows the change.
+              if (activeId !== null) docs.setPages(activeId, pageCount);
             }}
             onClose={() => {
               if (activeId !== null) setOrganizerOpen(activeId, false);
