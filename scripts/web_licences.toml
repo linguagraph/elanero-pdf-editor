@@ -1,0 +1,223 @@
+# Hand-kept inputs of scripts/make_web_licences.py (W9.5b). Read them with the lock and the
+# version pins to write web/app/public/THIRD_PARTY_LICENSES.txt.
+#
+# - pyodide / pymupdf: must equal web/spike/versions.json. A version bump fails the check until the
+#   Pyodide or PyMuPDF components below are reviewed and this key is updated.
+# - [[component]]: each non-npm part of the web engine that ships to the browser.
+# - [npm."<name>"]: the copyright line of each runtime npm package in web/app/package-lock.json.
+#   The lock has no copyright holders, so they are kept here after reading each package's licence
+#   file. The generator never reads node_modules.
+#
+# A note starting "To confirm" marks a fact that is not verified from this repository (the Pyodide
+# or Emscripten sources, or the wasm build's contents). Do not drop the note until it is checked.
+
+pyodide = "314.0.8"
+pymupdf = "1.28.2"
+
+[[component]]
+name = "Pyodide"
+version = "314.0.8"
+license = "MPL-2.0"
+url = "https://pyodide.org"
+copyright = ["Copyright (c) Pyodide contributors"]
+note = "To confirm: the copyright line against the Pyodide 314.0.8 sources."
+
+[[component]]
+name = "CPython (Python 3.14 and its standard library)"
+version = "3.14.2"
+license = "PSF-2.0"
+url = "https://www.python.org"
+copyright = ["Copyright (c) Python Software Foundation"]
+note = "To confirm: the 3.14.2 copyright years. The version is from the Pyodide 314.0.8 lock."
+
+[[component]]
+name = "Emscripten runtime (in Pyodide)"
+version = "5.0.3"
+license = "MIT"
+url = "https://emscripten.org"
+copyright = ["Copyright (c) Emscripten authors"]
+note = "To confirm: the version (taken from the lock's platform tag emscripten_5_0_3), the copyright line, and that parts under the UIUC/NCSA licence are not in the build (the NCSA text is not included)."
+
+[[component]]
+name = "Pillow"
+version = "12.2.0"
+license = "MIT-CMU"
+url = "https://python-pillow.github.io"
+copyright = [
+  "Copyright (c) 1997-2011 by Secret Labs AB",
+  "Copyright (c) 1995-2011 by Fredrik Lundh and contributors",
+  "Copyright (c) 2010 by Jeffrey 'Alex' Clark and contributors",
+]
+note = "To confirm: the copyright lines for 12.2.0 (taken from the Pillow 13.0.0 licence file)."
+
+[[component]]
+name = "libjpeg-turbo (in Pillow, Pyodide build)"
+version = "To confirm"
+license = "IJG"
+url = "https://libjpeg-turbo.org"
+copyright = ["Copyright (C) 1991-2020 Independent JPEG Group", "Copyright (C) 2009-2025 D. R. Commander"]
+note = "To confirm against the Pyodide 314.0.8 pillow recipe, which is not in this repository. libjpeg-turbo is also offered under the modified BSD (BSD-3-Clause) licence; the IJG text included here is libjpeg-turbo's copy of it."
+
+[[component]]
+name = "zlib (in Pillow, Pyodide build)"
+version = "To confirm"
+license = "Zlib"
+url = "https://zlib.net"
+copyright = ["Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler"]
+note = "To confirm against the Pyodide 314.0.8 pillow recipe, which is not in this repository."
+
+[[component]]
+name = "libwebp (in Pillow, Pyodide build)"
+version = "To confirm"
+license = "BSD-3-Clause"
+url = "https://developers.google.com/speed/webp"
+copyright = ["Copyright (c) 2010, Google Inc. All rights reserved."]
+note = "To confirm against the Pyodide 314.0.8 pillow recipe, which is not in this repository. The copyright line is from the libwebp 1.6.0 notice in the Pillow 13.0.0 licence file."
+
+[[component]]
+name = "PyMuPDF"
+version = "1.28.2"
+license = "AGPL-3.0-only"
+url = "https://pymupdf.readthedocs.io"
+copyright = ["Copyright (c) Artifex Software, Inc."]
+note = "PyMuPDF is dual licensed (AGPL-3.0 or an Artifex commercial licence). This build uses the AGPL licence. The wasm wheel is built from the source tarball (see versions.json wheelRoute); the bundled libraries listed below are to confirm for that build."
+
+[[component]]
+name = "MuPDF (in PyMuPDF)"
+version = "1.28.2"
+license = "AGPL-3.0-or-later"
+url = "https://mupdf.com"
+copyright = ["Copyright (C) 2004-2025 Artifex Software, Inc."]
+
+[[component]]
+name = "FreeType (in MuPDF)"
+version = "To confirm"
+license = "FTL"
+url = "https://freetype.org"
+copyright = ["Copyright 1996-2002, 2006 by David Turner, Robert Wilhelm, and Werner Lemberg"]
+note = "To confirm: the version and that this library is in the wasm build. The FreeType Project licence text is included."
+
+[[component]]
+name = "HarfBuzz (in MuPDF)"
+version = "To confirm"
+license = "MIT"
+url = "https://harfbuzz.github.io"
+copyright = ["Copyright (c) 2010-2022 Google, Inc.", "Copyright (c) 2015-2020 Ebrahim Byagowi"]
+note = "To confirm: the version and that this library is in the wasm build. The copyright lines are from the HarfBuzz 14.5.0 notice in the Pillow 13.0.0 licence file."
+
+[[component]]
+name = "Little CMS 2 (in MuPDF)"
+version = "To confirm"
+license = "MIT"
+url = "https://www.littlecms.com"
+copyright = ["Copyright (c) 2023 Marti Maria Saguer"]
+note = "To confirm: the version and that this library is in the wasm build. The copyright line is from the lcms2 2.19.1 notice in the Pillow 13.0.0 licence file."
+
+[[component]]
+name = "OpenJPEG (in MuPDF)"
+version = "To confirm"
+license = "BSD-2-Clause"
+url = "https://www.openjpeg.org"
+copyright = ["Copyright (c) 2002-2014, Universite catholique de Louvain (UCL), Belgium", "Copyright (c) 2002-2014, Professor Benoit Macq"]
+note = "To confirm: the version and that this library is in the wasm build. The copyright lines are from the openjpeg 2.5.4 notice in the Pillow 13.0.0 licence file."
+
+[[component]]
+name = "jbig2dec (in MuPDF)"
+version = "To confirm"
+license = "AGPL-3.0-or-later"
+url = "https://jbig2dec.com"
+copyright = ["Copyright (C) 2002-2025 Artifex Software, Inc."]
+note = "To confirm: the version, the copyright years, and that this library is in the wasm build."
+
+[[component]]
+name = "gumbo-parser (in MuPDF)"
+version = "To confirm"
+license = "Apache-2.0"
+url = "https://github.com/google/gumbo-parser"
+copyright = ["Copyright 2010 Google, Inc."]
+note = "To confirm: the version, the copyright line, and that this library is in the wasm build."
+
+[[component]]
+name = "libjpeg (in MuPDF)"
+version = "To confirm"
+license = "IJG"
+url = "https://libjpeg-turbo.org"
+copyright = ["Copyright (C) 1991-2020 Independent JPEG Group"]
+note = "To confirm: the version and that this library is in the wasm build."
+
+[[component]]
+name = "zlib (in MuPDF)"
+version = "To confirm"
+license = "Zlib"
+url = "https://zlib.net"
+copyright = ["Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler"]
+note = "To confirm: the version and that this library is in the wasm build."
+
+[[component]]
+name = "Tesseract OCR and Leptonica (in MuPDF, if the wasm build has OCR)"
+version = "To confirm"
+license = "Apache-2.0"
+url = "https://github.com/tesseract-ocr/tesseract"
+copyright = ["Copyright (c) Tesseract contributors", "Copyright (c) Leptonica contributors"]
+note = "To confirm: whether the wasm build includes Tesseract and Leptonica at all. If it does not, delete this entry. Leptonica is offered under BSD-2-Clause, and only the Apache-2.0 text is included here."
+
+[[component]]
+name = "Vite (preload helper injected into the build)"
+version = "8.3.5"
+license = "MIT"
+url = "https://vite.dev"
+copyright = ["Copyright (c) 2019-present, VoidZero Inc. and Vite contributors"]
+
+[[component]]
+name = "Elanero (this web build)"
+version = "this build"
+license = "AGPL-3.0-or-later"
+copyright = ["Copyright (c) the Elanero contributors (see the repository's commit history)"]
+
+[npm."react"]
+copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
+
+[npm."react-dom"]
+copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
+
+[npm."scheduler"]
+copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
+
+[npm."use-sync-external-store"]
+copyright = "Copyright (c) Meta Platforms, Inc. and affiliates."
+
+[npm."aria-hidden"]
+copyright = "Copyright (c) 2017 Anton Korzunov"
+
+[npm."clsx"]
+copyright = "Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)"
+
+[npm."tslib"]
+copyright = "Copyright (c) Microsoft Corporation."
+
+[npm."react-aria"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."react-aria-components"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."react-stately"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."@react-types/shared"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."@internationalized/date"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."@internationalized/number"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."@internationalized/string"]
+copyright = "Copyright 2019 Adobe"
+
+[npm."@swc/helpers"]
+copyright = "Copyright 2024 SWC contributors."
+
+[npm."client-only"]
+copyright = "To confirm: no copyright line in the installed package (its licence file is absent)."

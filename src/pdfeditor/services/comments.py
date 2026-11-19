@@ -8,8 +8,9 @@ import io
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from pdfeditor.engine.base import Document
+from pdfeditor.engine.base import Document, Engine, UnsupportedFeature
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType, ReviewState
+from pdfeditor.model.geometry import Rect
 
 TYPE_LABELS = {
     AnnotationType.TEXT: "Note",
@@ -110,14 +111,25 @@ def summary_csv(threads: list[Thread], page_labels: list[str] | None = None) -> 
     return buf.getvalue()
 
 
-def summary_html(threads: list[Thread], title: str, page_labels: list[str] | None = None) -> str:
-    """A printable summary (turned into PDF by the UI through Qt's HTML printing)."""
+SUMMARY_CSS = (
+    "body{font-family:sans-serif;font-size:10pt} h1{font-size:15pt} h2{font-size:12pt;"
+    "border-bottom:1px solid #999;margin-top:14pt} .c{margin:6pt 0} .meta{color:#555}"
+    " .reply{margin-left:18pt;border-left:2px solid #ccc;padding-left:6pt}"
+)
+
+# A4 in points, and the margin every side of a summary page gets.
+SUMMARY_PAGE = Rect(0, 0, 595, 842)
+SUMMARY_MARGIN = 54.0
+
+
+def page_labels(doc: Document) -> list[str]:
+    """The label each page shows in the summary: its PDF page label, or its number."""
+    return [doc.page_label(i) or str(i + 1) for i in range(doc.page_count)]
+
+
+def summary_body_html(threads: list[Thread], title: str, labels: list[str] | None = None) -> str:
+    """The summary's body (no document wrapper or style): shared by the HTML and PDF forms."""
     parts = [
-        "<html><head><meta charset='utf-8'><style>",
-        "body{font-family:sans-serif;font-size:10pt} h1{font-size:15pt} h2{font-size:12pt;"
-        "border-bottom:1px solid #999;margin-top:14pt} .c{margin:6pt 0} .meta{color:#555}"
-        " .reply{margin-left:18pt;border-left:2px solid #ccc;padding-left:6pt}",
-        "</style></head><body>",
         f"<h1>Comments summary: {html.escape(title)}</h1>",
         f"<p class='meta'>{sum(1 + len(t.replies) for t in threads)} comments</p>",
     ]
@@ -125,12 +137,38 @@ def summary_html(threads: list[Thread], title: str, page_labels: list[str] | Non
     for t in threads:
         if t.comment.page_index != page:
             page = t.comment.page_index
-            label = page_labels[page] if page_labels else str(page + 1)
+            label = labels[page] if labels else str(page + 1)
             parts.append(f"<h2>Page {html.escape(label)}</h2>")
         parts.append(_entry_html(t.comment, "c"))
         parts.extend(_entry_html(r, "c reply") for r in t.replies)
-    parts.append("</body></html>")
     return "".join(parts)
+
+
+def summary_html(threads: list[Thread], title: str, page_labels: list[str] | None = None) -> str:
+    """A printable summary (turned into PDF by the UI through Qt's HTML printing)."""
+    return "".join(
+        [
+            "<html><head><meta charset='utf-8'><style>",
+            SUMMARY_CSS,
+            "</style></head><body>",
+            summary_body_html(threads, title, page_labels),
+            "</body></html>",
+        ]
+    )
+
+
+def summary_pdf(
+    engine: Engine, threads: list[Thread], title: str, labels: list[str] | None = None
+) -> bytes:
+    """The summary as a finished PDF, laid out by the engine (no Qt, so the web can use it).
+
+    The caller holds the engine lock. Raises ``UnsupportedFeature`` when the engine cannot lay
+    out HTML.
+    """
+    if not engine.capabilities.html_layout:
+        raise UnsupportedFeature("this engine cannot lay out HTML")
+    body = summary_body_html(threads, title, labels)
+    return engine.html_to_pdf(body, SUMMARY_CSS, SUMMARY_PAGE, SUMMARY_MARGIN)
 
 
 def _entry_html(a: AnnotationModel, css: str) -> str:

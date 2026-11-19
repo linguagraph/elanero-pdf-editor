@@ -229,22 +229,26 @@ def _approx(actual: list[float], expected: list[float]) -> None:
 
 
 def _pdfium_rgb(data: bytes, index: int) -> Any:
-    import numpy as np
+    """The page as a Pillow RGB image (pure Python: the host replay has no numpy)."""
     import pypdfium2 as pdfium
 
     pdf = pdfium.PdfDocument(data)
     try:
         bitmap = pdf[index].render(scale=1, may_draw_forms=True)
-        return np.array(bitmap.to_pil().convert("RGB"))
+        return bitmap.to_pil().convert("RGB")
     finally:
         pdf.close()
 
 
 def _red_count(rgb: Any, clip: list[float]) -> int:
     x0, y0, x1, y1 = clip
-    part = rgb[int(y0) : int(y1), int(x0) : int(x1)].astype(int)
-    red = (part[:, :, 0] > 150) & (part[:, :, 1] < 110) & (part[:, :, 2] < 110)
-    return int(red.sum())
+    part = rgb.crop((int(x0), int(y0), int(x1), int(y1)))
+    raw = part.tobytes()  # RGB bytes, three per pixel
+    return sum(
+        1
+        for r, g, b in zip(raw[0::3], raw[1::3], raw[2::3], strict=True)
+        if r > 150 and g < 110 and b < 110
+    )
 
 
 def _doc_text(pd: Any) -> str:
@@ -380,8 +384,8 @@ def _red_pixels_pdfium(data: bytes, page: int, clip: list[float], minimum: int) 
 
 @host_check("stamp_orientation_pdfium")
 def _stamp_orientation_pdfium(data: bytes, page: int) -> None:
-    rgb = _pdfium_rgb(data, page).astype(int)
-    left, right = rgb[350, 220], rgb[350, 280]
+    rgb = _pdfium_rgb(data, page)
+    left, right = rgb.getpixel((220, 350)), rgb.getpixel((280, 350))  # (x, y)
     assert left[0] > 150 and left[2] < 100  # red on the left: not rotated or mirrored
     assert right[2] > 150 and right[0] < 100
 
@@ -832,6 +836,24 @@ def _rotation_pikepdf(data: bytes, page: int, degrees: int) -> None:
         assert int(pdf.pages[page].obj.get("/Rotate", 0)) == degrees
 
 
+@host_check("page_label_rule_pikepdf")
+def _page_label_rule_pikepdf(data: bytes, start: int, style: str, prefix: str, first: int) -> None:
+    """The /PageLabels number tree holds the rule starting at ``start``, as written."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        tree = pdf.Root.get("/PageLabels")
+        assert tree is not None, "no /PageLabels in the catalogue"
+        nums = list(tree.Nums)
+        rules = {int(nums[i]): nums[i + 1] for i in range(0, len(nums), 2)}
+        rule = rules[start]
+        assert str(rule.get("/P", "")) == prefix
+        style_name = rule.get("/S")
+        expected_style = f"/{style}" if style else ""
+        assert (str(style_name) if style_name is not None else "") == expected_style
+        assert int(rule.get("/St", 1)) == first
+
+
 @host_check("catalog_has_key_pikepdf")
 def _catalog_has_key_pikepdf(data: bytes, key: str) -> None:
     import pikepdf
@@ -1140,3 +1162,16 @@ def _perf_page_one_pikepdf(data: bytes) -> None:
             if operator == pikepdf.Operator("Tf"):
                 used.add(str(operands[0]))
         assert len(used) >= 2, f"expected text in two fonts, saw {sorted(used)}"
+
+
+@host_check("comments_pikepdf")
+def _comments_pikepdf(data: bytes, comments: int, replies: int) -> None:
+    """The saved comments are annotations with /Contents, and each reply has /IRT to its parent."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for page in pdf.pages for a in page.get("/Annots", [])]
+        with_text = [a for a in annots if "/Contents" in a]
+        linked = [a for a in with_text if "/IRT" in a]
+        assert len(with_text) == comments, len(with_text)
+        assert len(linked) == replies, len(linked)

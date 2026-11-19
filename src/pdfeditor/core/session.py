@@ -22,6 +22,7 @@ from pdfeditor.core.commands.snapshot import SnapshotStore
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.base import Document, Engine, PasswordCallback, SaveError, SaveOptions
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
+from pdfeditor.model.metadata import EncryptionMethod
 
 log = logging.getLogger(__name__)
 _ids = itertools.count(1)
@@ -315,9 +316,26 @@ class DocumentSession:
                 options = SaveOptions(incremental=False, garbage=self._garbage_level())
                 doc.prepare_full_save(options)  # the same preparation as save()
                 data = doc.to_bytes(options)
-            self._verify_bytes(data, doc.page_count, password)
+            for check in self._verify_passwords(password):
+                self._verify_bytes(data, doc.page_count, check)
         log.info("saved %d bytes%s", len(data), " (incremental)" if incremental else "")
         return SaveBytes(data=data, incremental=incremental)
+
+    def _verify_passwords(self, password: str | None) -> list[str | None]:
+        """The passwords the saved bytes must each open with. A pending change decides them, not
+        the caller's open password: removing security gives plain bytes, and a new encryption
+        opens only with the new passwords (the same rule as the desktop's ``_save_full``). When
+        both a user and an owner password are set, each is checked, so a user password the
+        engine encodes differently on write can't be saved unopenable."""
+        pending = self.document.pending_security()
+        if pending is None:
+            return [password]
+        if pending.method is EncryptionMethod.NONE:
+            return [None]
+        passwords: list[str | None] = [
+            secret for secret in (pending.user_password, pending.owner_password) if secret
+        ]
+        return passwords or [pending.owner_password]
 
     def _verify_bytes(self, data: bytes, pages: int, password: str | None) -> None:
         """Open the bytes again and compare the page count. An encrypted document is opened with

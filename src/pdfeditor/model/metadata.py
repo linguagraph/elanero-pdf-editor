@@ -127,6 +127,7 @@ class SecuritySettings:
     """Password protection to apply on the next save. ``method`` NONE removes security."""
 
     method: EncryptionMethod = EncryptionMethod.AES_256
-    user_password: str = ""  # needed to open the document ("" = opens without a password)
-    owner_password: str = ""  # needed to change security or lift the permissions
+    # repr=False: a log line or traceback must never print a password
+    user_password: str = field(default="", repr=False)  # "" = opens without a password
+    owner_password: str = field(default="", repr=False)  # needed to change security or lift it
     permissions: Permissions = field(default_factory=Permissions)

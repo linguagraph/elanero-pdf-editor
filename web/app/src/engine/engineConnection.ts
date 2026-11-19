@@ -135,7 +135,8 @@ export interface PageRpc {
       | 'jobs.prepare'
       | 'jobs.apply'
       | 'jobs.abort'
-      | 'comments.flattenable',
+      | 'comments.flattenable'
+      | 'marks.list',
   >(
     method: M,
     params: Methods[M]['params'],

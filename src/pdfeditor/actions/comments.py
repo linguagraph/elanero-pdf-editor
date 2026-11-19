@@ -13,6 +13,7 @@ See docs/web/design/W1.3.md.
 from __future__ import annotations
 
 import copy
+import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -388,7 +389,10 @@ def delete(session: DocumentSession, args: DeleteAnnotations) -> ActionResult[No
 def import_xfdf(session: DocumentSession, args: ImportXfdf) -> ActionResult[int]:
     ensure_idle(session)
     with session.lock:
-        command = import_command(args.text, session.document)  # parse errors propagate
+        try:
+            command = import_command(args.text, session.document)
+        except (ET.ParseError, ValueError) as exc:  # nothing has changed yet
+            raise Refused("This file is not valid XFDF.") from exc  # the cause keeps the detail
     if not command.commands:
         return ActionResult(command.label, 0, False)
     session.execute(command)

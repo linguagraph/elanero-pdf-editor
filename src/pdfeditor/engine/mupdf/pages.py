@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import os
 import tempfile
 from collections.abc import Sequence
@@ -26,6 +27,8 @@ from pdfeditor.model.pages import ImageStamp, LabelStyle, MarkKind, PageLabelRul
 if TYPE_CHECKING:
     from pdfeditor.engine.mupdf.document import MuDocument
     from pdfeditor.engine.mupdf.page import MuPage
+
+logger = logging.getLogger(__name__)
 
 
 # -- labels -----------------------------------------------------------------------------------
@@ -61,6 +64,53 @@ def set_label_rules(doc: MuDocument, rules: Sequence[PageLabelRule]) -> None:
             if 0 <= r.start < count
         ]
     )
+
+
+def page_labels(doc: MuDocument) -> list[str]:
+    """Every page's label, read from the catalogue once.
+
+    Built with MuPDF's own ``get_label_pno`` (what ``Page.get_label`` uses), so the web and the
+    desktop agree exactly, including MuPDF's alphabetic numbering past Z.
+    """
+    count = doc.page_count
+    try:
+        if not hasattr(doc.fz, "_get_page_labels"):  # a PyMuPDF without the private read
+            return _page_labels_from_rules(doc, count)
+        raw = doc.fz._get_page_labels()
+        if not raw:
+            return []
+        labels = sorted(raw)
+        out: list[str] = []
+        for index in range(count):
+            try:
+                out.append(str(pymupdf.utils.get_label_pno(index, labels)))
+            except (IndexError, KeyError, ValueError):
+                out.append("")  # before the first rule's start page
+        return out
+    except Exception:
+        # Labels are cosmetic: a malformed /PageLabels must not fail the whole page list.
+        logger.warning("could not read page labels; showing page numbers", exc_info=True)
+        return []
+
+
+def _page_labels_from_rules(doc: MuDocument, count: int) -> list[str]:
+    """The same labels from the public rule dictionaries, for a PyMuPDF without the private read."""
+    rules = sorted(doc.fz.get_page_labels(), key=lambda r: int(r.get("startpage", 0)))
+    if not rules:
+        return []
+    out: list[str] = []
+    for index in range(count):
+        applicable = [r for r in rules if int(r.get("startpage", 0)) <= index]
+        if not applicable:
+            out.append("")
+            continue
+        rule = applicable[-1]
+        style = str(rule.get("style", "") or "")
+        start = int(rule.get("startpage", 0))
+        first = int(rule.get("firstpagenum", 1) or 1)
+        number = index - start + first - (1 if style in ("a", "A") else 0)
+        out.append(pymupdf.utils.construct_label(style, str(rule.get("prefix", "") or ""), number))
+    return out
 
 
 # -- structure --------------------------------------------------------------------------------

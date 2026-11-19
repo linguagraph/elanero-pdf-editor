@@ -417,6 +417,9 @@ class MuDocument:
         label = self.page(index).fz.get_label()
         return str(label) if label else str(index + 1)
 
+    def page_labels(self) -> list[str]:
+        return pages.page_labels(self)
+
     def embedded_files(self) -> list[EmbeddedFile]:
         out = []
         for name in self._fz.embfile_names():
@@ -523,7 +526,7 @@ class MuDocument:
             kwargs["encryption"] = pymupdf.PDF_ENCRYPT_NONE
             return kwargs
         s = self._security
-        if s is not None:
+        if s is not None and options.apply_security:
             kwargs["encryption"] = _ENCRYPT_METHODS[s.method]
             if s.method is not EncryptionMethod.NONE:
                 kwargs["user_pw"] = s.user_password

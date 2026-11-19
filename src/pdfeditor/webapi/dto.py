@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum, IntFlag
 from typing import Any, NoReturn, Union, get_args, get_origin
 
+from pdfeditor.model.pages import MarkKind
 from pdfeditor.services.assembly import SplitMode
 from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
 
@@ -92,6 +93,9 @@ class FlattenableResult:
 @dataclasses.dataclass(frozen=True, slots=True)
 class PagesResult:
     pages: tuple[PageSize, ...]
+    # The page labels, one per page; empty when the document has none, and "" for a page with
+    # no label (its rule yields nothing).
+    labels: tuple[str, ...]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -364,6 +368,18 @@ class AvailableResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class MarkSummaryDto:
+    kind: MarkKind  # a kind of page mark (services.stamping.find_marks)
+    pages: int  # how many pages carry it
+    foreign: bool  # only other tools' marks of this kind were found (Acrobat's)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MarksResult:
+    items: tuple[MarkSummaryDto, ...]  # one per kind present, in MarkKind order
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class JobPrepareParams:
     handle: str
     job: str  # a job type name (W1.2 section 13), such as "action" or "reduce_size"
@@ -523,6 +539,12 @@ class CompareValue:
     identical: bool
     pairs: tuple[tuple[int | None, int | None], ...]  # aligned pages (older, newer)
     changes: tuple[CompareChangeDto, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommentsExportArgs:
+    format: str  # "xfdf" (the comments), "csv" or "pdf" (the summary, as the Comments panel writes)
+    name: str  # the document's display name: the XFDF's file link and the file names' stem
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

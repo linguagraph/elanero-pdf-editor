@@ -213,6 +213,24 @@ def test_outline_and_labels(engine: Engine, fixture_pdf) -> None:
     doc.close()
 
 
+def test_page_labels_bulk_read(engine: Engine, fixture_pdf) -> None:
+    doc = engine.open(fixture_pdf("outline"))
+    assert doc.page_labels() == ["i", "ii", "iii", "iv", "v", "vi"]
+    doc.close()
+
+    plain = engine.open(fixture_pdf("text_multipage"))
+    assert plain.page_labels() == []
+    plain.close()
+
+    rules = engine.open(fixture_pdf("page_labels"))
+    bulk = rules.page_labels()
+    assert bulk == ["i", "ii", "A-1", "A-2", "A-3", "Cover", "Z", "AA"]
+    # The bulk read agrees with the per-page read, where "" means "no label" (the number).
+    per_page = [rules.page_label(i) for i in range(rules.page_count)]
+    assert [label or str(i + 1) for i, label in enumerate(bulk)] == per_page
+    rules.close()
+
+
 def test_links(engine: Engine, fixture_pdf) -> None:
     doc = engine.open(fixture_pdf("outline"))
     links = sorted(doc.page(0).links(), key=lambda ln: ln.rect.y0)

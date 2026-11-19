@@ -225,3 +225,60 @@ def test_security_remove_that_loses_a_race_with_a_task_raises_busy(
         run(s, "security.remove", RemoveSecurity())
     s.end_task("OCR")
     assert _pending(s) == settings  # the pending encryption was not touched
+
+
+# -- W7.5 S1: signed documents, repr, snapshots --------------------------------------------
+
+SIGNED_MESSAGE = (
+    r"This document is signed\. Changing its security would invalidate the signatures\."
+)
+
+
+def test_set_security_on_a_signed_document_is_refused(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = open_copy("report")
+    pretend_signed(s, monkeypatch)
+    settings = SecuritySettings(EncryptionMethod.AES_256, "open me", "boss", RESTRICTED)
+    with pytest.raises(Refused, match=SIGNED_MESSAGE):
+        run(s, "security.set", SetSecurity(settings))
+    assert _pending(s) is None
+
+
+def test_remove_security_on_a_signed_document_is_refused(
+    open_encrypted: OpenEncrypted, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = open_encrypted("owner")
+    pretend_signed(s, monkeypatch)
+    with pytest.raises(Refused, match=SIGNED_MESSAGE):
+        run(s, "security.remove", RemoveSecurity())
+    assert _pending(s) is None
+
+
+def test_security_settings_repr_hides_both_passwords() -> None:
+    settings = SecuritySettings(EncryptionMethod.AES_256, "open-secret", "owner-secret")
+    text = repr(settings)
+    assert "open-secret" not in text
+    assert "owner-secret" not in text
+
+
+def test_pending_security_survives_a_snapshot_action_undo_and_redo(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    """A snapshot action after security.set must not encrypt its undo bytes with the pending
+    password: undo would then load bytes that the open document can't authenticate."""
+    s = open_copy("sensitive")
+    settings = SecuritySettings(EncryptionMethod.AES_256, "open me", "boss", RESTRICTED)
+    run(s, "security.set", SetSecurity(settings))
+    run(s, "document.sanitize", SanitizeDocument())
+
+    s.undo()
+    assert _title(s) == "Confidential report"
+    assert _pending(s) == settings
+    s.redo()
+    assert _pending(s) == settings
+
+    pages = s.page_count
+    out = s.save(tmp_path / "locked.pdf")
+    record("encrypted_pages_pikepdf", out, pages=pages, password="open me")
+    record("page_count_pdfium", out, pages=pages, password="open me")

@@ -78,6 +78,7 @@ class Capabilities:
     structure: bool = False  # read/edit tags and accessibility settings
     auto_tag: bool = False  # tag untagged documents from layout analysis (experimental)
     optimize: bool = False
+    html_layout: bool = False  # html_to_pdf: lay out HTML/CSS into a finished PDF
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +127,9 @@ class SaveOptions:
     object_streams: bool = False
     clean_content: bool = False
     decrypt: bool = False  # write without encryption (export pipelines; never for snapshots)
+    # False keeps the file's current encryption rather than the pending security change. Undo
+    # snapshots and recovery files need it: they reopen with the password the document holds now.
+    apply_security: bool = True
     # Subset fonts this app embedded while editing (never on an incremental save, which must
     # keep a signature's byte range intact). Doesn't affect fonts already in the document.
     subset_fonts: bool = True
@@ -444,6 +448,12 @@ class Document(Protocol):
 
     def page_label(self, index: int) -> str: ...
 
+    def page_labels(self) -> list[str]:
+        """Every page's label in one read: ``[]`` when the document has no page labels, else
+        exactly ``page_count`` strings, with ``""`` for a page whose rule yields nothing (style
+        NONE and an empty prefix). Bulk, so a large document is not loaded page by page."""
+        ...
+
     def embedded_files(self) -> list[EmbeddedFile]: ...
 
     def extract_embedded_file(self, name: str) -> bytes: ...
@@ -571,6 +581,15 @@ class Engine(Protocol):
         """An embeddable program for a standard (base-14) font or a metric-compatible stand-in
         (Arial -> Helvetica, Times New Roman -> Times, Courier New -> Courier); None if there
         is none. Used to embed fonts a PDF only names (PDF/A)."""
+        ...
+
+    def html_to_pdf(self, html: str, css: str, page: Rect, margin: float) -> bytes:
+        """Lay out ``html`` (styled by ``css``) on pages of size ``page``, inset by ``margin``
+        points, and return the finished PDF. Text flows onto as many pages as it needs.
+
+        Only needed when ``capabilities.html_layout`` is set. No engine object escapes: the
+        result is plain bytes, and the caller holds the engine lock while this runs.
+        """
         ...
 
     def text_width(self, text: str, font: str, size: float) -> float:

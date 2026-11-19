@@ -151,6 +151,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
     page: 1,
     zoom: DEFAULT_ZOOM,
     layout: 'continuous',
+    labels: [],
   });
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).
@@ -180,6 +181,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
             total={activeTab?.pages ?? 0}
             zoom={viewState.zoom}
             layout={viewState.layout}
+            labels={viewState.labels}
             canBack={canGoBack(history)}
             canForward={canGoForward(history)}
             onGoTo={goTo}
