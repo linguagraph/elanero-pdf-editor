@@ -44,12 +44,14 @@ from pdfeditor.services.assembly import (
     subset_size,
     write_split,
 )
+from pdfeditor.services.comments import comment_threads, page_labels, summary_csv, summary_pdf
 from pdfeditor.services.compare import CompareOptions
 from pdfeditor.services.compare import compare as compare_documents
 from pdfeditor.services.export import TextFormat, export_document
 from pdfeditor.services.export.images import ImageFormat, PageImageOptions, export_pages
 from pdfeditor.services.optimize import PRESETS, ReduceOptions, preset, reduce_size
 from pdfeditor.services.optimize import audit as space_audit
+from pdfeditor.services.xfdf import export_xfdf
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.actions import _Events
 from pdfeditor.webapi.dto import BufferTable, from_json
@@ -183,6 +185,8 @@ _MIME = {
     ".jpg": "image/jpeg",
     ".tif": "image/tiff",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xfdf": "application/vnd.adobe.xfdf",
+    ".csv": "text/csv",
 }
 TEXT_FORMATS = {
     "txt": TextFormat.TEXT,
@@ -431,6 +435,43 @@ def _run_compare(
     return JobOutput(kind="report", value=value)
 
 
+COMMENTS_EXPORT_FORMATS = ("xfdf", "csv", "pdf")
+
+
+def _convert_comments_export(data: object, buffers: BufferTable) -> dto.CommentsExportArgs:
+    args: dto.CommentsExportArgs = from_json(dto.CommentsExportArgs, data, buffers, "args")
+    if args.format not in COMMENTS_EXPORT_FORMATS:
+        raise RpcFailure(INVALID_ARGS, "args.format: no such format", {"path": "args.format"})
+    return args
+
+
+def _run_comments_export(
+    session: DocumentSession | None, args: dto.CommentsExportArgs, ctx: JobContext
+) -> JobOutput:
+    # The desktop Comments panel's three exports, written from the job's copy: nothing here
+    # changes the document, so there is no undo step.
+    owner = _session(session)
+    stem = safe_name(Path(args.name).stem)
+    ctx.token.check()
+    with owner.lock:
+        doc = owner.document
+        if args.format == "xfdf":
+            file_name = f"{stem}.xfdf"
+            data = export_xfdf(doc, args.name).encode("utf-8")
+        else:
+            threads = comment_threads(doc)
+            labels = page_labels(doc)
+            if args.format == "csv":
+                file_name = f"{stem}-comments.csv"
+                # The BOM is what the desktop writes, so Excel opens the file as UTF-8.
+                data = summary_csv(threads, labels).encode("utf-8-sig")
+            else:
+                file_name = f"{stem}-comments.pdf"
+                data = summary_pdf(owner.engine, threads, args.name, labels)
+        ctx.token.check()
+    return JobOutput(files=(dto.FileDto(name=file_name, mime=_mime_of(file_name), data=data),))
+
+
 def _convert_print(data: object, buffers: BufferTable) -> dto.PrintArgs:
     args: dto.PrintArgs = from_json(dto.PrintArgs, data, buffers, "args")
     if args.dpi not in IMAGE_DPI:
@@ -473,6 +514,9 @@ JOB_TYPES: dict[str, JobType] = {
     "merge": JobType("merge", False, _convert_merge, _run_merge, takes_document=False),
     "compare": JobType("compare", False, _convert_compare, _run_compare),
     "print_pages": JobType("print_pages", False, _convert_print, _run_print),
+    "comments_export": JobType(
+        "comments_export", False, _convert_comments_export, _run_comments_export
+    ),
 }
 
 

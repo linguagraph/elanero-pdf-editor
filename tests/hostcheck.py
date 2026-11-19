@@ -1140,3 +1140,16 @@ def _perf_page_one_pikepdf(data: bytes) -> None:
             if operator == pikepdf.Operator("Tf"):
                 used.add(str(operands[0]))
         assert len(used) >= 2, f"expected text in two fonts, saw {sorted(used)}"
+
+
+@host_check("comments_pikepdf")
+def _comments_pikepdf(data: bytes, comments: int, replies: int) -> None:
+    """The saved comments are annotations with /Contents, and each reply has /IRT to its parent."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for page in pdf.pages for a in page.get("/Annots", [])]
+        with_text = [a for a in annots if "/Contents" in a]
+        linked = [a for a in with_text if "/IRT" in a]
+        assert len(with_text) == comments, len(with_text)
+        assert len(linked) == replies, len(linked)

@@ -594,3 +594,132 @@ def test_an_unknown_job_type_is_invalid_args_at_prepare_and_run(
     err = error(run_on_copy("no_such_job", {}, text_fixture(fixture_pdf))[0])
     assert err["code"] == INVALID_ARGS
     assert err["details"]["path"] == "params.job"
+
+
+# -- comments_export: the Comments panel's three exports, read-only -------------------------------
+
+ANNOTATED = "annotations"  # one page with a sticky note ("A sticky note") and other annotations
+CSV_HEADER = "Page,Type,Author,Date,Status,Comment,Reply to"
+
+
+def comments_handle(fixture_pdf: Any, name: str = ANNOTATED) -> str:
+    return open_data(fixture_pdf(name).read_bytes(), "notes.pdf")
+
+
+def export_comments(handle: str, fmt: str, name: str = "notes.pdf") -> tuple[dict[str, Any], bytes]:
+    """Prepares and runs comments_export on a copy; returns the job's result and its file."""
+    args = {"format": fmt, "name": name}
+    _, copy = prepare(handle, "comments_export", args)
+    reply, out = run_on_copy("comments_export", args, copy)
+    ((_, _, data),) = files_of(ok(reply), out)
+    return ok(reply), data
+
+
+@pytest.mark.parametrize(
+    ("fmt", "file_name", "mime"),
+    [
+        ("xfdf", "notes.xfdf", "application/vnd.adobe.xfdf"),
+        ("csv", "notes-comments.csv", "text/csv"),
+        ("pdf", "notes-comments.pdf", "application/pdf"),
+    ],
+)
+def test_comments_export_gives_one_named_file_per_format(
+    web: None, fixture_pdf: Any, fmt: str, file_name: str, mime: str
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    result, data = export_comments(handle, fmt)
+    ((name, got_mime, _),) = files_of(result, [data])
+    assert (name, got_mime) == (file_name, mime)
+    assert len(data) > 0
+    assert result["kind"] == "files"
+
+
+def test_the_csv_export_has_a_bom_and_the_panels_header(web: None, fixture_pdf: Any) -> None:
+    handle = comments_handle(fixture_pdf)
+    _, data = export_comments(handle, "csv")
+    assert data.startswith(bytes([0xEF, 0xBB, 0xBF]))  # the BOM the desktop writes
+    lines = data.decode("utf-8-sig").splitlines()
+    assert lines[0] == CSV_HEADER
+    assert any("A sticky note" in line for line in lines[1:])
+
+
+def test_the_xfdf_export_names_the_document_and_holds_the_comment(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    _, data = export_comments(handle, "xfdf", name="Quarterly Review.pdf")
+    text = data.decode("utf-8")
+    assert text.startswith("<?xml")
+    assert "A sticky note" in text
+    assert '<f href="Quarterly Review.pdf"' in text
+    assert 'xmlns="http://ns.adobe.com/xfdf/"' in text
+
+
+def test_the_summary_pdf_holds_the_comment_text(web: None, fixture_pdf: Any) -> None:
+    handle = comments_handle(fixture_pdf)
+    _, data = export_comments(handle, "pdf")
+    assert data.startswith(b"%PDF")
+    record("text_contains_pdfium", data, page=0, text="A sticky note")
+    record("page_count_pikepdf", data, pages=1)
+
+
+def test_an_empty_document_still_exports_its_summary(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    _, data = export_comments(handle, "csv", name="text.pdf")
+    lines = data.decode("utf-8-sig").splitlines()
+    assert lines == [CSV_HEADER]
+
+
+def test_a_comments_export_leaves_the_document_and_its_undo_stack_alone(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    session = REGISTRY.get(handle)
+    before = (page_total(handle), session.undo_stack.is_clean, session.structure_version)
+    args = {"format": "xfdf", "name": "notes.pdf"}
+    prepared, copy = prepare(handle, "comments_export", args)
+    assert prepared["mutating"] is False
+    reply, _ = run_on_copy("comments_export", args, copy)
+    assert ok(reply)["kind"] == "files"
+    applied = ok(apply_read_only(handle, prepared["token"]))
+    assert applied["applied"] is False
+    assert (page_total(handle), session.undo_stack.is_clean, session.structure_version) == before
+
+
+def test_a_comments_export_of_an_encrypted_document_uses_the_decrypted_copy(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    prepared, copy = prepare(handle, "comments_export", {"format": "csv", "name": "encrypted.pdf"})
+    assert "password" not in prepared
+    reply, out = run_on_copy("comments_export", {"format": "csv", "name": "encrypted.pdf"}, copy)
+    ((name, _, data),) = files_of(ok(reply), out)
+    assert name == "encrypted-comments.csv"
+    assert data.decode("utf-8-sig").splitlines()[0] == CSV_HEADER
+
+
+def test_a_comments_export_cancelled_before_it_starts_is_cancelled(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    args = {"format": "pdf", "name": "notes.pdf"}
+    _, copy = prepare(handle, "comments_export", args)
+    token = CancelToken()
+    token.cancel()
+    reply, _ = run_on_copy("comments_export", args, copy, cancel=token)
+    assert error(reply)["code"] == CANCELLED
+
+
+def test_a_comments_export_with_an_unknown_format_is_invalid_args(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    err = error(
+        call(
+            "jobs.prepare",
+            {"handle": handle, "job": "comments_export", "args": {"format": "docx", "name": "a"}},
+        )
+    )
+    assert err["code"] == INVALID_ARGS
+    assert err["details"]["path"] == "args.format"
+    assert len(jobs.PREPARED) == 0

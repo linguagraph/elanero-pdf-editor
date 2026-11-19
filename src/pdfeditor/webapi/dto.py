@@ -526,6 +526,12 @@ class CompareValue:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class CommentsExportArgs:
+    format: str  # "xfdf" (the comments), "csv" or "pdf" (the summary, as the Comments panel writes)
+    name: str  # the document's display name: the XFDF's file link and the file names' stem
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class PrintArgs:
     pages: tuple[int, ...] | None = None  # 0-based; None: every page
     dpi: int = 150  # 150 (default) or 300 (W1.4 section 11)
