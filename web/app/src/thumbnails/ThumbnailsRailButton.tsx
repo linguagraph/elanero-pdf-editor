@@ -1,6 +1,7 @@
 // The rail button that opens and closes the thumbnails panel (W5.2, W1.6 section 1). Its pressed
 // state is the panel's open state for the active tab.
 import { t } from '../i18n/t';
+import { setSearchOpen } from '../search/openState';
 import { setThumbnailsOpen, useThumbnailsOpen } from './openState';
 import './thumbnails.css';
 
@@ -19,7 +20,10 @@ export function ThumbnailsRailButton({ tabId, disabled }: ThumbnailsRailButtonPr
       aria-pressed={open}
       disabled={disabled || tabId === null}
       onClick={() => {
-        if (tabId !== null) setThumbnailsOpen(tabId, !open);
+        if (tabId === null) return;
+        // The search and thumbnails panels share the right panel: opening one closes the other.
+        if (!open) setSearchOpen(tabId, false);
+        setThumbnailsOpen(tabId, !open);
       }}
     >
       {t('thumbnails.title')}

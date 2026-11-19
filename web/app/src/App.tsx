@@ -30,6 +30,10 @@ import { RenderScheduler } from './view/renderScheduler';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { ThumbnailsRailButton } from './thumbnails/ThumbnailsRailButton';
 import { setThumbnailsOpen, useThumbnailsOpen } from './thumbnails/openState';
+import { SearchPanel } from './search/SearchPanel';
+import { SearchRailButton } from './search/SearchRailButton';
+import { setSearchOpen, useSearchOpen } from './search/openState';
+import type { SearchMarks } from './search/search';
 import { APP_VERSION } from './version';
 import './app.css';
 
@@ -81,6 +85,11 @@ export function App({ engine }: AppProps) {
   );
   const viewRef = useRef<DocumentViewHandle>(null);
   const thumbnailsOpen = useThumbnailsOpen(activeId);
+  const searchOpen = useSearchOpen(activeId);
+  // The search hits the document view draws, with the tab they belong to (W5.4).
+  const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
+    null,
+  );
   const documentShown = !showStart && activeId !== null && session !== null && scheduler !== null;
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
   // The page and zoom the document view reports, for the status bar under the document.
@@ -116,9 +125,23 @@ export function App({ engine }: AppProps) {
           />
         ) : undefined
       }
-      rightRail={<ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />}
+      rightRail={
+        <>
+          <ThumbnailsRailButton tabId={activeId} disabled={!documentShown} />
+          <SearchRailButton tabId={activeId} disabled={!documentShown} />
+        </>
+      }
       rightPanel={
-        documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
+        documentShown && searchOpen && activeId !== null && session !== null ? (
+          <SearchPanel
+            key={activeId}
+            rpc={session.rpc}
+            handle={session.handle}
+            onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
+            onGoTo={goTo}
+            onClose={() => setSearchOpen(activeId, false)}
+          />
+        ) : documentShown && thumbnailsOpen && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
             rpc={session.rpc}
             handle={session.handle}
@@ -171,6 +194,9 @@ export function App({ engine }: AppProps) {
             handle={session.handle}
             scheduler={scheduler}
             onViewChange={setViewState}
+            searchMarks={
+              searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
+            }
           />
         ) : null}
         {documentShown ? null : (

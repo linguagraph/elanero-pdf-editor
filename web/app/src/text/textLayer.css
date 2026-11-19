@@ -1,0 +1,21 @@
+/* The text layer over a page (W5.4): transparent text in positioned spans, above the page image.
+   The boxes are set inline from the layout; only the text colour and selection are styled here. */
+
+.page-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.page-text-line {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  line-height: 1;
+  user-select: text;
+  cursor: text;
+}
+
+.page-text-line::selection {
+  background: rgb(0 96 192 / 35%);
+}
