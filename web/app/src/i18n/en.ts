@@ -201,6 +201,17 @@ export const EN = {
   'prefs.section.general': 'General',
   'prefs.section.appearance': 'Appearance',
   'prefs.section.viewing': 'Viewing',
+  'prefs.section.privacy': 'Privacy',
+  'prefs.clearAll.open': 'Clear all local data…',
+  'prefs.clearAll.hint':
+    'Removes your preferences, recent file names and uploaded fonts from this browser. Your files are not touched.',
+  'prefs.clearAll.blocked': 'Close all documents first.',
+  'prefs.clearAll.confirm':
+    'This cannot be undone. Your saved preferences and recent file names are removed, then the page reloads.',
+  'prefs.clearAll.clear': 'Clear',
+  'prefs.clearAll.keep': 'Keep',
+  'prefs.clearAll.incomplete':
+    "Some data could not be removed. Try again, or clear the site's data in the browser's settings.",
   'prefs.language.label': 'Language',
   'prefs.language.english': 'English',
   'prefs.language.hint': 'Only English is available for now.',

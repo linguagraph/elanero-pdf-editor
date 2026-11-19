@@ -1,8 +1,9 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Checkbox, Radio, RadioGroup, TextField, Label, Input } from 'react-aria-components';
 import { t } from '../i18n/t';
 import type { MessageId } from '../i18n/en';
 import { Overlay } from '../layout/Overlay';
+import { clearLocalData, type ClearAction } from '../storage/clearLocalData';
 import {
   applyTheme,
   isThemeChoice,
@@ -24,6 +25,12 @@ import './preferences.css';
 export interface PreferencesDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  // True while a document is open in this tab. Clear all is then disabled (W4.5 D2): the reload
+  // would lose the open documents' state.
+  hasDocuments: boolean;
+  // Injected for tests; the app uses the defaults.
+  clearData?: ClearAction;
+  reloadPage?: () => void;
 }
 
 const THEME_LABELS: Readonly<Record<ThemeChoice, MessageId>> = {
@@ -45,14 +52,26 @@ const LANGUAGE_LABELS: Readonly<Record<LanguageChoice, MessageId>> = {
 // Preferences (W1.6 section 9, W4.5). Changes are drafts until Apply. The theme is the exception:
 // it previews at once through the theme module, and Cancel, Escape or a tap outside puts back the
 // saved one. The sections follow the desktop PreferencesDialog where they apply on the web.
-export function PreferencesDialog({ isOpen, onClose }: PreferencesDialogProps) {
+export function PreferencesDialog({
+  isOpen,
+  onClose,
+  hasDocuments,
+  clearData = () => clearLocalData(),
+  reloadPage = () => window.location.reload(),
+}: PreferencesDialogProps) {
   const cancel = () => {
     applyTheme(readStoredTheme());
     onClose();
   };
   return (
     <Overlay isOpen={isOpen} onClose={cancel} title={t('prefs.title')} showCloseButton={false}>
-      <PreferencesForm onApply={onClose} onCancel={cancel} />
+      <PreferencesForm
+        onApply={onClose}
+        onCancel={cancel}
+        hasDocuments={hasDocuments}
+        clearData={clearData}
+        reloadPage={reloadPage}
+      />
     </Overlay>
   );
 }
@@ -60,13 +79,31 @@ export function PreferencesDialog({ isOpen, onClose }: PreferencesDialogProps) {
 interface PreferencesFormProps {
   onApply: () => void;
   onCancel: () => void;
+  hasDocuments: boolean;
+  clearData: ClearAction;
+  reloadPage: () => void;
 }
 
 // Mounted only while the dialog is open (the overlay renders nothing when closed), so every open
 // starts from the saved preferences.
-function PreferencesForm({ onApply, onCancel }: PreferencesFormProps) {
+function PreferencesForm({
+  onApply,
+  onCancel,
+  hasDocuments,
+  clearData,
+  reloadPage,
+}: PreferencesFormProps) {
   const [draft, setDraft] = useState<Preferences>(readPreferences);
+  const [confirming, setConfirming] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearFailed, setClearFailed] = useState(false);
+  const keepRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
+
+  // The confirmation takes focus, on Keep, so Enter does not clear by accident.
+  useEffect(() => {
+    if (confirming) keepRef.current?.focus();
+  }, [confirming]);
 
   const update = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     setDraft((previous) => ({ ...previous, [key]: value }));
@@ -75,6 +112,22 @@ function PreferencesForm({ onApply, onCancel }: PreferencesFormProps) {
   const chooseTheme = (theme: ThemeChoice) => {
     applyTheme(theme);
     update('theme', theme);
+  };
+
+  // The reload is the reset: the theme, accent, recent list and every in-memory copy start from the
+  // defaults. It runs only when everything was removed; a partial clear stays on the page, with the
+  // message, because the state a reload would show is then unknown.
+  const clearAll = async () => {
+    setClearing(true);
+    setClearFailed(false);
+    const outcome = await clearData().catch(() => ({ keysRemoved: 0, complete: false }));
+    if (outcome.complete) {
+      reloadPage();
+      return;
+    }
+    setClearing(false);
+    setConfirming(false);
+    setClearFailed(true);
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -164,6 +217,52 @@ function PreferencesForm({ onApply, onCancel }: PreferencesFormProps) {
           </select>
           <span className="prefs-hint">{t('prefs.zoom.hint')}</span>
         </label>
+      </section>
+
+      <section className="prefs-section" aria-labelledby={`${ids}-privacy`}>
+        <h3 id={`${ids}-privacy`} className="prefs-heading">
+          {t('prefs.section.privacy')}
+        </h3>
+        <span className="prefs-hint">{t('prefs.clearAll.hint')}</span>
+        {confirming ? (
+          <div className="prefs-confirm" role="group" aria-label={t('prefs.clearAll.confirm')}>
+            <span>{t('prefs.clearAll.confirm')}</span>
+            <div className="prefs-confirm-actions">
+              <button
+                type="button"
+                className="overlay-close prefs-danger"
+                disabled={clearing}
+                onClick={() => void clearAll()}
+              >
+                {t('prefs.clearAll.clear')}
+              </button>
+              <button
+                ref={keepRef}
+                type="button"
+                className="overlay-close"
+                disabled={clearing}
+                onClick={() => setConfirming(false)}
+              >
+                {t('prefs.clearAll.keep')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="overlay-close prefs-danger"
+            disabled={hasDocuments || clearing}
+            onClick={() => setConfirming(true)}
+          >
+            {t('prefs.clearAll.open')}
+          </button>
+        )}
+        {hasDocuments ? <span className="prefs-hint">{t('prefs.clearAll.blocked')}</span> : null}
+        {clearFailed ? (
+          <span className="prefs-error" role="alert">
+            {t('prefs.clearAll.incomplete')}
+          </span>
+        ) : null}
       </section>
 
       <div className="overlay-actions">

@@ -303,7 +303,11 @@ export function App({ engine, startPrintWorker, jobs: jobsProp }: AppProps) {
         </>
       }
     >
-      <PreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
+      <PreferencesDialog
+        isOpen={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        hasDocuments={documentShown}
+      />
       {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
         <SplitDialog
           isOpen={splitOpen}
