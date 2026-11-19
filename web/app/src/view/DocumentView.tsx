@@ -33,6 +33,10 @@ import { CommentToolbar } from '../comments/CommentToolbar';
 import type { PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
+import type { ActionJobWorker } from '../actionJob/actionJob';
+import { RedactLayer } from '../redaction/RedactLayer';
+import { RedactionBar } from '../redaction/RedactionBar';
+import { useRedaction } from '../redaction/useRedaction';
 import { TextLayerCache } from '../text/textLayerCache';
 import { CachedCanvas } from './pixels';
 import { RenderScheduler } from './renderScheduler';
@@ -70,6 +74,13 @@ export interface DocumentViewProps {
   readonly onViewChange?: (state: DocumentViewState) => void;
   // The search hits to draw on the pages, and the selected one (W5.4).
   readonly searchMarks?: SearchMarks;
+  // Starts the job worker for the redaction apply (W7.4). Tests leave it out; applying then fails.
+  readonly startWorker?: () => ActionJobWorker;
+}
+
+// The job worker is missing: the apply reports its failure, as any other failed job does.
+function noJobWorker(): ActionJobWorker {
+  throw new Error('the job worker is not available');
 }
 
 // The viewport height, or the window's when the element has no layout yet (jsdom, first paint).
@@ -84,6 +95,7 @@ export function DocumentView({
   ref,
   onViewChange,
   searchMarks,
+  startWorker,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -105,6 +117,13 @@ export function DocumentView({
   const scrollRef = useRef<HTMLDivElement>(null);
   // The comment tool on, if any (W7.1a): a click or drag on a page then places a comment.
   const [commentTool, setCommentTool] = useState<CommentToolId | null>(null);
+  // The redaction tools (W7.4). The mark tool and a comment tool are not on together.
+  const redactionTools = useRedaction({
+    rpc,
+    handle,
+    scheduler,
+    startWorker: startWorker ?? noJobWorker,
+  });
   // The text layers of this document, one per page and revision (W5.4).
   const textLayers = useMemo(() => new TextLayerCache(rpc, handle), [rpc, handle]);
 
@@ -307,7 +326,23 @@ export function DocumentView({
         <button type="button" aria-pressed={night} onClick={() => chooseNight(!night)}>
           {t('view.night')}
         </button>
-        <CommentToolbar tool={commentTool} onChoose={setCommentTool} />
+        <CommentToolbar
+          tool={commentTool}
+          onChoose={(tool) => {
+            redactionTools.controller.setActive(false);
+            setCommentTool(tool);
+          }}
+        />
+        <RedactionBar
+          state={redactionTools.state}
+          onToggle={() => {
+            const on = !redactionTools.state.active;
+            redactionTools.controller.setActive(on);
+            if (on) setCommentTool(null);
+          }}
+          onClear={() => void redactionTools.controller.clear()}
+          onApply={() => void redactionTools.controller.apply()}
+        />
       </div>
       {sizes === null ? (
         <p role="status" className="doc-view-status">
@@ -378,6 +413,14 @@ export function DocumentView({
                       widthPt={sizes[box.index]?.width ?? 0}
                       heightPt={sizes[box.index]?.height ?? 0}
                       onPlace={(rect, text) => place(box.index, rect, text)}
+                    />
+                  ) : null}
+                  {redactionTools.state.active && sizes !== null ? (
+                    <RedactLayer
+                      zoom={zoom}
+                      widthPt={sizes[box.index]?.width ?? 0}
+                      heightPt={sizes[box.index]?.height ?? 0}
+                      onPlace={(rect) => void redactionTools.controller.add(box.index, rect)}
                     />
                   ) : null}
                   <PageTextLayer
