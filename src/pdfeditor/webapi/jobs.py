@@ -451,7 +451,9 @@ def _run_comments_export(
     # The desktop Comments panel's three exports, written from the job's copy: nothing here
     # changes the document, so there is no undo step.
     owner = _session(session)
-    stem = safe_name(Path(args.name).stem)
+    # safe_name never returns "" (it falls back to "part"), so an empty stem is caught first.
+    raw_stem = Path(args.name).stem.strip()
+    stem = safe_name(raw_stem) if raw_stem else "document"
     ctx.token.check()
     with owner.lock:
         doc = owner.document

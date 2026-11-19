@@ -16,17 +16,20 @@ import json
 import re
 import zipfile
 from collections.abc import Iterator
+from dataclasses import replace
 from typing import Any
 
 import pytest
 from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.engine import mupdf as mupdf_engine
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
     CANCELLED,
     INVALID_ARGS,
+    NOT_SUPPORTED,
     RENDER_TOO_LARGE,
 )
 from pdfeditor.webapi.platform import configure_web
@@ -670,12 +673,30 @@ def test_an_empty_document_still_exports_its_summary(web: None, fixture_pdf: Any
     assert lines == [CSV_HEADER]
 
 
+def annotations_of(handle: str) -> list[tuple[int, Any]]:
+    """Every page's annotations, in page order, read through the open document."""
+    session = REGISTRY.get(handle)
+    with session.lock:
+        return [
+            (index, annotation)
+            for index in range(session.document.page_count)
+            for annotation in session.document.page(index).annotations()
+        ]
+
+
 def test_a_comments_export_leaves_the_document_and_its_undo_stack_alone(
     web: None, fixture_pdf: Any
 ) -> None:
     handle = comments_handle(fixture_pdf)
     session = REGISTRY.get(handle)
-    before = (page_total(handle), session.undo_stack.is_clean, session.structure_version)
+    before = (
+        page_total(handle),
+        session.undo_stack.is_clean,
+        session.structure_version,
+        saved_bytes(handle),
+        annotations_of(handle),
+    )
+    assert before[4], "the fixture should carry annotations for this check to mean anything"
     args = {"format": "xfdf", "name": "notes.pdf"}
     prepared, copy = prepare(handle, "comments_export", args)
     assert prepared["mutating"] is False
@@ -683,7 +704,38 @@ def test_a_comments_export_leaves_the_document_and_its_undo_stack_alone(
     assert ok(reply)["kind"] == "files"
     applied = ok(apply_read_only(handle, prepared["token"]))
     assert applied["applied"] is False
-    assert (page_total(handle), session.undo_stack.is_clean, session.structure_version) == before
+    after = (
+        page_total(handle),
+        session.undo_stack.is_clean,
+        session.structure_version,
+        saved_bytes(handle),
+        annotations_of(handle),
+    )
+    assert after == before
+
+
+def test_an_empty_name_exports_under_the_document_fallback(web: None, fixture_pdf: Any) -> None:
+    handle = comments_handle(fixture_pdf)
+    result, data = export_comments(handle, "csv", name="")
+    ((name, _, _),) = files_of(result, [data])
+    assert name == "document-comments.csv"
+
+
+def test_the_pdf_export_is_refused_when_the_engine_cannot_lay_out_html(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = comments_handle(fixture_pdf)
+    args = {"format": "pdf", "name": "notes.pdf"}
+    _, copy = prepare(handle, "comments_export", args)
+    # The engine reads its capability set from this module at each access, so the job's
+    # worker (same process here) sees the switched-off flag.
+    monkeypatch.setattr(
+        mupdf_engine,
+        "_CAPABILITIES",
+        replace(mupdf_engine._CAPABILITIES, html_layout=False),
+    )
+    reply, _ = run_on_copy("comments_export", args, copy)
+    assert error(reply)["code"] == NOT_SUPPORTED
 
 
 def test_a_comments_export_of_an_encrypted_document_uses_the_decrypted_copy(
