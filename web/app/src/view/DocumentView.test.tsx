@@ -201,3 +201,74 @@ describe('DocumentView with a fake engine', () => {
     expect(host.querySelector('[role="status"]')?.textContent).toBe('Loading pages…');
   });
 });
+
+// A one-page document whose render.page answers come from the test, attempt by attempt.
+function scriptedRpc(answer: (attempt: number) => Promise<unknown>) {
+  let attempts = 0;
+  const call = vi.fn((method: string) => {
+    if (method === 'session.pages') {
+      return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }] });
+    }
+    const attempt = attempts;
+    attempts += 1;
+    return answer(attempt);
+  });
+  return { rpc: { call } as unknown as PageRpc, call };
+}
+
+const drawnReply = {
+  width: 2,
+  height: 2,
+  revision: 0,
+  format: 'rgba',
+  pixels: new ArrayBuffer(16),
+};
+
+// Lets the queue run its retries: each pass is one tick of the view.
+async function settle(): Promise<void> {
+  for (let pass = 0; pass < 10; pass += 1) await flush();
+}
+
+function renderCalls(call: ReturnType<typeof scriptedRpc>['call']): number {
+  return call.mock.calls.filter(([method]) => method === 'render.page').length;
+}
+
+describe('DocumentView render retries', () => {
+  it('asks again after two failures, and draws the third answer', async () => {
+    const { rpc, call } = scriptedRpc((attempt) =>
+      attempt < 2 ? Promise.reject(new Error('boom')) : Promise.resolve(drawnReply),
+    );
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await settle();
+    expect(renderCalls(call)).toBe(3);
+    expect(host.querySelector('canvas')?.dataset.drawn).toBe('true');
+    expect(host.querySelector('.doc-page-error')).toBeNull();
+  });
+
+  it('stops after three failures and shows the page as failed', async () => {
+    const { rpc, call } = scriptedRpc(() => Promise.reject(new Error('boom')));
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await settle();
+    expect(renderCalls(call)).toBe(3);
+    expect(host.querySelector('.doc-page-error')?.textContent).toBe(
+      'This page could not be drawn.',
+    );
+    // No further requests, however long the view waits.
+    await settle();
+    expect(renderCalls(call)).toBe(3);
+  });
+
+  it('asks once and no more when the engine never answers', async () => {
+    const { rpc, call } = scriptedRpc(() => new Promise(() => undefined));
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+    });
+    await settle();
+    expect(renderCalls(call)).toBe(1);
+    expect(host.querySelector('.doc-page-error')).toBeNull();
+  });
+});

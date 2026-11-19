@@ -17,6 +17,10 @@ import { type QueueEntry, RenderQueue, requestKey } from './renderQueue';
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, scaleMilli, stepZoom } from './zoom';
 import './documentView.css';
 
+// How many times a page's render is asked for before it is shown as failed. A render that keeps
+// failing would otherwise be requested again on every tick, without end.
+export const MAX_RENDER_ATTEMPTS = 3;
+
 export interface DocumentViewProps {
   readonly rpc: PageRpc;
   readonly handle: string;
@@ -74,6 +78,9 @@ export function DocumentView({ rpc, handle }: DocumentViewProps) {
   // Bumped whenever the cache or a page revision changes; the render queue is re-planned then.
   const [tick, setTick] = useState(0);
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  // Failed attempts per page key (page, revision and scale). A key that reaches the cap is shown as
+  // failed and not requested again; a changed revision or scale is a new key, so it is asked for.
+  const attempts = useRef(new Map<string, number>());
   const [cache] = useState(() => new PageCache());
   const [queue] = useState(() => new RenderQueue());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -131,7 +138,7 @@ export function DocumentView({ rpc, handle }: DocumentViewProps) {
       if (box === undefined) continue;
       const revision = revisions.get(index) ?? 0;
       const key = pageCacheKey({ handle, page: index, revision, scaleMilli: scale, rotation: 0 });
-      if (cache.has(key)) continue;
+      if (cache.has(key) || failed.has(key)) continue;
       entries.push({
         request: { page: index, revision, scaleMilli: scale, rotation: 0 },
         visible: isInViewport(box, scroll.top, scroll.height),
@@ -178,7 +185,12 @@ export function DocumentView({ rpc, handle }: DocumentViewProps) {
           () => {
             queue.finish(requestId);
             if (!mounted.current) return;
-            setFailed((previous) => new Set(previous).add(cacheKey));
+            const count = (attempts.current.get(cacheKey) ?? 0) + 1;
+            attempts.current.set(cacheKey, count);
+            // Below the cap the plan asks again; at the cap the page stays failed.
+            if (count >= MAX_RENDER_ATTEMPTS) {
+              setFailed((previous) => new Set(previous).add(cacheKey));
+            }
             setTick((value) => value + 1);
           },
         );
@@ -197,6 +209,7 @@ export function DocumentView({ rpc, handle }: DocumentViewProps) {
     handle,
     tick,
     revisions,
+    failed,
   ]);
 
   if (loadFailed) {
