@@ -10,6 +10,7 @@ export type ColourToken =
   | 'window'
   | 'surface'
   | 'surfaceAlt'
+  | 'canvas'
   | 'border'
   | 'borderStrong'
   | 'text'
@@ -33,6 +34,7 @@ export const COLOURS: Record<'light' | 'dark', Record<ColourToken, string>> = {
     window: '#f3f3f3',
     surface: '#ffffff',
     surfaceAlt: '#f9f9f9',
+    canvas: '#d4d5d7',
     border: '#e0e0e0',
     borderStrong: '#c2c2c2',
     text: '#1b1b1b',
@@ -51,6 +53,7 @@ export const COLOURS: Record<'light' | 'dark', Record<ColourToken, string>> = {
     window: '#202020',
     surface: '#2b2b2b',
     surfaceAlt: '#323232',
+    canvas: '#141414',
     border: '#3b3b3b',
     borderStrong: '#5a5a5a',
     text: '#f3f3f3',
@@ -92,9 +95,9 @@ export const BREAKPOINTS_PX = {
   tablet: 768,
 } as const;
 
-// Side rail and panel widths. W1.6 gives no pixel values; these are the web's own choice. The rail
-// is 48 px so its 44 px touch targets fit with a margin.
+// Side rail and panel widths. The panel is the desktop's default side panel width (240 px,
+// ui/side_panels.py). The rail is 48 px so its 44 px touch targets fit with a margin.
 export const LAYOUT_PX = {
   railWidth: 48,
-  panelWidth: 280,
+  panelWidth: 240,
 } as const;

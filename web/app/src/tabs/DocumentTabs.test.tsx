@@ -118,3 +118,13 @@ describe('document tabs', () => {
     expect(onSelect).toHaveBeenCalledWith(1);
   });
 });
+
+describe('document tab names', () => {
+  it('truncates a long name and shows the full name as a tooltip', () => {
+    const long = 'a-very-long-document-name-that-does-not-fit.pdf';
+    render(addTab(EMPTY_TABS, pdf(long)));
+    const name = host.querySelector<HTMLElement>('.doc-tab-name');
+    expect(name?.getAttribute('title')).toBe(long);
+    expect(name?.textContent).toBe(long);
+  });
+});

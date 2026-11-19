@@ -4,6 +4,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/t';
 import { pageLabelFor, parsePageInput } from './navigation';
+import type { ViewLayout } from './DocumentView';
 import './documentView.css';
 
 export interface DocumentStatusBarProps {
@@ -11,6 +12,8 @@ export interface DocumentStatusBarProps {
   readonly page: number;
   readonly total: number;
   readonly zoom: number;
+  // The page layout the reader chose; shown at the right end, after the zoom.
+  readonly layout?: ViewLayout;
   // The document's page labels, when it has them (one per page, empty for none).
   readonly labels?: readonly string[];
   readonly canBack: boolean;
@@ -25,6 +28,7 @@ export function DocumentStatusBar({
   page,
   total,
   zoom,
+  layout = 'continuous',
   labels,
   canBack,
   canForward,
@@ -71,43 +75,52 @@ export function DocumentStatusBar({
     onGoTo(index);
   };
 
+  // Page of total on the left, then Back and Forward; zoom and the view mode on the right (desktop
+  // order, W1.6 section 1).
   return (
     <div className="doc-status">
-      <button type="button" onClick={onBack} disabled={!canBack}>
-        {t('view.back')}
-      </button>
-      <button type="button" onClick={onForward} disabled={!canForward}>
-        {t('view.forward')}
-      </button>
-      <form className="doc-status-jump" onSubmit={submit}>
-        <input
-          ref={inputRef}
-          type="text"
-          inputMode="text"
-          aria-label={t('view.goToPage')}
-          aria-invalid={invalid !== null}
-          value={draft ?? currentLabel}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            setInvalid(null);
-          }}
-          onBlur={() => {
-            setDraft(null);
-            setInvalid(null);
-          }}
-        />
-        <span className="doc-status-page" aria-live="polite">
-          {t('view.pageNumber', { page: currentLabel, total })}
+      <div className="doc-status-start">
+        <form className="doc-status-jump" onSubmit={submit}>
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="text"
+            aria-label={t('view.goToPage')}
+            aria-invalid={invalid !== null}
+            value={draft ?? currentLabel}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setInvalid(null);
+            }}
+            onBlur={() => {
+              setDraft(null);
+              setInvalid(null);
+            }}
+          />
+          <span className="doc-status-page" aria-live="polite">
+            {t('view.pageNumber', { page: currentLabel, total })}
+          </span>
+        </form>
+        <button type="button" onClick={onBack} disabled={!canBack}>
+          {t('view.back')}
+        </button>
+        <button type="button" onClick={onForward} disabled={!canForward}>
+          {t('view.forward')}
+        </button>
+        {invalid === null ? null : (
+          <span role="alert" className="doc-status-error">
+            {invalid}
+          </span>
+        )}
+      </div>
+      <div className="doc-status-end">
+        <span className="doc-status-zoom">
+          {t('view.zoomPercent', { percent: Math.round(zoom * 100) })}
         </span>
-      </form>
-      {invalid === null ? null : (
-        <span role="alert" className="doc-status-error">
-          {invalid}
+        <span className="doc-status-mode">
+          {t(layout === 'twoPage' ? 'view.layoutTwoPage' : 'view.layoutSingle')}
         </span>
-      )}
-      <span className="doc-status-zoom">
-        {t('view.zoomPercent', { percent: Math.round(zoom * 100) })}
-      </span>
+      </div>
     </div>
   );
 }

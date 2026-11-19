@@ -28,7 +28,9 @@ export default defineConfig({
           timeout: 60_000,
         },
         {
-          command: `npx vite build && npx vite preview --port ${APP_PORT} --strictPort`,
+          // The build takes the root base: `vite preview` serves the folder at the root, and the production
+          // base (W9.2) would put every asset under a sub-path it does not serve.
+          command: `npx vite build --base=/ && npx vite preview --port ${APP_PORT} --strictPort`,
           url: `http://localhost:${APP_PORT}/`,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

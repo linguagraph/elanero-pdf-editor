@@ -4,6 +4,7 @@
   --color-window: #f3f3f3;
   --color-surface: #ffffff;
   --color-surface-alt: #f9f9f9;
+  --color-canvas: #d4d5d7;
   --color-border: #e0e0e0;
   --color-border-strong: #c2c2c2;
   --color-text: #1b1b1b;
@@ -33,7 +34,7 @@
   --breakpoint-medium: 1024px;
   --breakpoint-tablet: 768px;
   --layout-rail-width: 48px;
-  --layout-panel-width: 280px;
+  --layout-panel-width: 240px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +43,7 @@
     --color-window: #202020;
     --color-surface: #2b2b2b;
     --color-surface-alt: #323232;
+    --color-canvas: #141414;
     --color-border: #3b3b3b;
     --color-border-strong: #5a5a5a;
     --color-text: #f3f3f3;
@@ -63,6 +65,7 @@
   --color-window: #202020;
   --color-surface: #2b2b2b;
   --color-surface-alt: #323232;
+  --color-canvas: #141414;
   --color-border: #3b3b3b;
   --color-border-strong: #5a5a5a;
   --color-text: #f3f3f3;
@@ -83,6 +86,7 @@
     --color-window: Canvas;
     --color-surface: ButtonFace;
     --color-surface-alt: ButtonFace;
+    --color-canvas: Canvas;
     --color-border: CanvasText;
     --color-border-strong: CanvasText;
     --color-text: CanvasText;

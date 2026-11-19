@@ -17,6 +17,7 @@ export function BookmarksRailButton({ tabId, disabled }: BookmarksRailButtonProp
   return (
     <button
       type="button"
+      title={t('bookmarks.title')}
       className="bookmarks-rail-button"
       aria-pressed={open}
       disabled={disabled || tabId === null}

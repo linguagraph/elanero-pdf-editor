@@ -26,7 +26,9 @@ export function DocumentTabs({ state, onSelect, onClose }: DocumentTabsProps) {
       <TabList aria-label={t('tabs.label')} className="doc-tabs-list">
         {state.tabs.map((tab) => (
           <Tab key={tab.id} id={String(tab.id)} className="doc-tab">
-            <span className="doc-tab-name">{tab.name}</span>
+            <span className="doc-tab-name" title={tab.name}>
+              {tab.name}
+            </span>
             {tab.dirty ? (
               <span className="doc-tab-dirty">
                 <span aria-hidden="true">•</span>

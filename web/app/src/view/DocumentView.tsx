@@ -48,7 +48,7 @@ import './documentView.css';
 export { MAX_RENDER_ATTEMPTS } from './renderScheduler';
 
 // The page layouts the toolbar offers: the continuous single column, or two-page spreads.
-type ViewLayout = 'continuous' | 'twoPage';
+export type ViewLayout = 'continuous' | 'twoPage';
 
 // What the parent can ask the view to do. Scrolling is the only action for now.
 export interface DocumentViewHandle {
@@ -61,6 +61,8 @@ export interface DocumentViewHandle {
 export interface DocumentViewState {
   readonly page: number;
   readonly zoom: number;
+  // The page layout the reader chose (single column or two-page spreads).
+  readonly layout: ViewLayout;
 }
 
 export interface DocumentViewProps {
@@ -232,8 +234,8 @@ export function DocumentView({
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
   const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
   useEffect(() => {
-    onViewChange?.({ page: currentPage, zoom });
-  }, [currentPage, zoom, onViewChange]);
+    onViewChange?.({ page: currentPage, zoom, layout: viewLayout });
+  }, [currentPage, zoom, viewLayout, onViewChange]);
 
   // Plans the page renders from what is on screen now: the visible pages first, then the pages
   // just outside the viewport (prefetch, which the scheduler sends after the visible ones). A page

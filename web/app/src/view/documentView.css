@@ -50,16 +50,21 @@
   font-size: var(--font-size-small);
 }
 
+/* The canvas behind the pages (W1.6 section 4, U4): the token colour, neutral grey in light and
+   near-black in dark. */
 .doc-view-scroll {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  background: var(--color-surface-alt);
+  background: var(--color-canvas);
 }
 
+/* The page column is centred when the canvas is wider than it. Its gaps come from the layout
+   (PAGE_GAP_PT, the same 12 pt as the desktop), so pages keep even space above, between and below. */
 .doc-view-content {
   position: relative;
+  margin: 0 auto;
 }
 
 .doc-view-status {
@@ -67,12 +72,13 @@
   color: var(--color-text-muted);
 }
 
+/* A page sheet with a soft drop shadow, as the desktop draws it (page_item.shadow_strips). */
 .doc-page {
   position: absolute;
   background: #fff;
   box-shadow:
-    0 1px 1px rgb(0 0 0 / 12%),
-    0 2px 3px rgb(0 0 0 / 8%);
+    0 1px 2px rgb(0 0 0 / 14%),
+    0 3px 8px rgb(0 0 0 / 10%);
 }
 
 .doc-page-placeholder,
@@ -112,10 +118,11 @@
 /* The status bar under the document (W1.6 section 1): the page indicator and the zoom. */
 .doc-status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: 0 var(--space-3);
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   min-height: 32px;
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
@@ -126,6 +133,24 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* The two groups of the status bar: the page on the left, the zoom and the view mode on the right. */
+.doc-status-start,
+.doc-status-end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.doc-status-end {
+  flex: 0 0 auto;
+}
+
+.doc-status-mode {
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .doc-status-jump input {

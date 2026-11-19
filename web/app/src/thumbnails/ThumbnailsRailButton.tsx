@@ -17,6 +17,7 @@ export function ThumbnailsRailButton({ tabId, disabled }: ThumbnailsRailButtonPr
   return (
     <button
       type="button"
+      title={t('thumbnails.title')}
       className="thumbs-rail-button"
       aria-pressed={open}
       disabled={disabled || tabId === null}

@@ -19,6 +19,7 @@ export function OrganizerRailButton({ tabId, disabled }: OrganizerRailButtonProp
   return (
     <button
       type="button"
+      title={t('organizer.title')}
       className="organizer-rail-button"
       aria-pressed={open}
       disabled={disabled || tabId === null}

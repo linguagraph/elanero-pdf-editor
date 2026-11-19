@@ -28,8 +28,10 @@
   white-space: nowrap;
 }
 
+/* The active tab is the surface colour, with an accent line along its top edge (desktop tab bar). */
 .doc-tab[aria-selected='true'] {
-  background: var(--color-window);
+  background: var(--color-surface);
+  border-top: 2px solid var(--color-accent);
   font-weight: 600;
 }
 
@@ -39,6 +41,7 @@
 }
 
 .doc-tab-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

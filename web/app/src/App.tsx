@@ -149,6 +149,7 @@ export function App({ engine, startPrintWorker }: AppProps) {
   const [viewState, setViewState] = useState<DocumentViewState>({
     page: 1,
     zoom: DEFAULT_ZOOM,
+    layout: 'continuous',
   });
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).

@@ -17,6 +17,7 @@ export function SearchRailButton({ tabId, disabled }: SearchRailButtonProps) {
   return (
     <button
       type="button"
+      title={t('search.title')}
       className="search-rail-button"
       aria-pressed={open}
       disabled={disabled || tabId === null}

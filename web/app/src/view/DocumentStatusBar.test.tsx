@@ -146,3 +146,22 @@ describe('back and forward', () => {
     expect(document.activeElement).toBe(field());
   });
 });
+
+describe('desktop order', () => {
+  it('puts the page on the left and the zoom and view mode on the right', () => {
+    render(props({ page: 3, total: 10, zoom: 1.5, layout: 'twoPage' }));
+    const start = host.querySelector('.doc-status-start');
+    const end = host.querySelector('.doc-status-end');
+    expect(start?.textContent).toContain(t('view.pageNumber', { page: 3, total: 10 }));
+    expect(start?.textContent).not.toContain('150%');
+    expect(end?.textContent).toBe(
+      `${t('view.zoomPercent', { percent: 150 })}${t('view.layoutTwoPage')}`,
+    );
+    expect(host.querySelector('.doc-status-mode')?.textContent).toBe(t('view.layoutTwoPage'));
+  });
+
+  it('shows the single column layout by default', () => {
+    render(props());
+    expect(host.querySelector('.doc-status-mode')?.textContent).toBe(t('view.layoutSingle'));
+  });
+});
