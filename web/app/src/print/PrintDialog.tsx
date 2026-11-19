@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import type { WorkerClient } from '../engine/start';
 import { Overlay } from '../layout/Overlay';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { resolvePrintPages, type PrintScope } from './printRange';
 import { runPrintJob, type PrintRpc } from './printJob';
 import './print.css';
@@ -140,7 +140,7 @@ export function PrintDialog({
           {t('print.comments.label')}
         </label>
         {selected > LARGE_PRINT_PAGES ? (
-          <p className="print-hint">{t('print.large', { count: selected })}</p>
+          <p className="print-hint">{tp('print.large', selected)}</p>
         ) : null}
         {session === null ? <p className="print-hint">{t('print.noDocument')}</p> : null}
         <div className="overlay-actions">

@@ -11,7 +11,7 @@ import { downloadBytes } from '../files/downloads';
 import { passwordPrompt, type PasswordPrompt } from '../documents/passwordRequest';
 import { reportRpcError, toasts, type ToastStore, undoAction } from '../feedback/toasts';
 import { RpcError } from '../rpc/client';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import { Panel } from '../layout/Panel';
 import { ACCEPT } from '../combine/sources';
@@ -183,7 +183,7 @@ export function OrganizerPanel({
     void change(
       'pages.rotate',
       { pages: picked, delta },
-      t('organizer.rotated', { count }),
+      tp('organizer.rotated', count),
       () => undefined,
     );
   };
@@ -192,22 +192,17 @@ export function OrganizerPanel({
     const before = moveTarget(direction, picked, total);
     if (before === null) return;
     const count = picked.length;
-    void change(
-      'pages.move',
-      { pages: picked, before },
-      t('organizer.moved', { count }),
-      (value) => {
-        const moved = movedPages(value);
-        if (moved === null || moved.length === 0) return undefined;
-        return { picked: moved, anchor: moved[0] ?? null };
-      },
-    );
+    void change('pages.move', { pages: picked, before }, tp('organizer.moved', count), (value) => {
+      const moved = movedPages(value);
+      if (moved === null || moved.length === 0) return undefined;
+      return { picked: moved, anchor: moved[0] ?? null };
+    });
   };
 
   // The blank page takes the size of the page before it, and becomes the selection.
   const insertBlank = () => {
     const at = insertAt(picked, total);
-    void change('pages.insert_blank', { at }, t('organizer.inserted', { count: 1 }), () => ({
+    void change('pages.insert_blank', { at }, tp('organizer.inserted', 1), () => ({
       picked: [at],
       anchor: at,
     }));
@@ -217,7 +212,7 @@ export function OrganizerPanel({
   const duplicateSelected = () => {
     const copies = duplicatedPages(picked);
     const count = picked.length;
-    void change('pages.duplicate', { pages: picked }, t('organizer.duplicated', { count }), () => ({
+    void change('pages.duplicate', { pages: picked }, tp('organizer.duplicated', count), () => ({
       picked: copies,
       anchor: copies[0] ?? null,
     }));
@@ -235,7 +230,7 @@ export function OrganizerPanel({
       await reload(insertedSelection(at, count));
       toastStore.push(
         'info',
-        t('organizer.inserted', { count }),
+        tp('organizer.inserted', count),
         undoAction(() => void undoChange()),
       );
     } catch (error) {
@@ -255,7 +250,7 @@ export function OrganizerPanel({
     try {
       const file = await runExtract({ engine: rpc, startWorker }, handle, picked);
       download(name, file.data);
-      toastStore.push('info', t('organizer.extracted', { count, name }));
+      toastStore.push('info', tp('organizer.extracted', count, { name }));
     } catch (error) {
       if (!(error instanceof FileJobCancelled)) reportFailure(error);
     } finally {
@@ -269,7 +264,7 @@ export function OrganizerPanel({
     void change(
       'pages.delete',
       { pages: picked },
-      t('organizer.deleted', { count }),
+      tp('organizer.deleted', count),
       () => NO_SELECTION,
     );
   };
@@ -300,7 +295,7 @@ export function OrganizerPanel({
       ) : (
         <div className="organizer panel-fill">
           <p className="organizer-status" aria-live="polite">
-            {t('organizer.selected', { count: picked.length, total })}
+            {tp('organizer.selected', total, { selected: picked.length, total })}
           </p>
           <div role="toolbar" aria-label={t('organizer.actions')} className="organizer-actions">
             <button type="button" disabled={!hasSelection || busy} onClick={() => rotate(270)}>
@@ -405,7 +400,7 @@ export function OrganizerPanel({
         title={t('organizer.deleteTitle')}
         showCloseButton={false}
       >
-        <p>{t('organizer.deleteBody', { count: picked.length })}</p>
+        <p>{tp('organizer.deleteBody', picked.length)}</p>
         <div className="organizer-confirm">
           <Button className="organizer-cancel" onPress={() => setConfirming(false)}>
             {t('organizer.cancel')}
