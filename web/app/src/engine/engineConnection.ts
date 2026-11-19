@@ -132,6 +132,7 @@ export interface PageRpc {
       | 'actions.run'
       | 'actions.undo'
       | 'jobs.prepare'
+      | 'jobs.apply'
       | 'jobs.abort',
   >(
     method: M,
