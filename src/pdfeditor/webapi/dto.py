@@ -496,8 +496,24 @@ class ActionJobArgs:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class ReduceOptionsDto:
+    """The desktop reduce dialog's fields, without the fast web view (the web has no linearize)."""
+
+    image_dpi: int | None  # None keeps the image resolution
+    jpeg_quality: int  # 10 to 100
+    grayscale: bool
+    subset_fonts: bool
+    remove_thumbnails: bool
+    remove_metadata: bool
+    object_streams: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class ReduceSizeArgs:
-    preset: str  # a key of the size presets: "screen", "ebook", "print" or "lossless"
+    # A key of the size presets ("screen", "ebook", "print" or "lossless"), or "custom" + options.
+    preset: str
+    options: ReduceOptionsDto | None = None  # required for "custom" and refused for a named preset
+    audit: bool = False  # also measure the space before and after (the result's audit values)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -505,6 +521,8 @@ class ReduceSizeValue:
     before: int
     after: int
     notes: tuple[str, ...]
+    audit_before: AuditValue | None = None  # set only when the job asked for the audit
+    audit_after: AuditValue | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -514,7 +532,8 @@ class AuditArgs:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class SpaceCategoryDto:
-    name: str  # a category of the space audit, such as "images" or "fonts"
+    key: str  # a stable id for the front end's t() (SPACE_CATEGORY_KEYS in webapi.jobs)
+    name: str  # the engine's English label, kept for the desktop parity and the logs
     size: int  # its stored (compressed) bytes
 
 

@@ -63,7 +63,14 @@ side is `pdfeditor.webapi`, packed by `scripts/web_package.py`. Run the npm comm
   `'self'` (`index.html` carries the same policy; `csp.test.ts` fails on drift).
 - Every user-facing string goes through `t()` (`web/app/src/i18n/t.ts`), with its key in `web/app/src/i18n/en.ts`.
 - Generated files are regenerated, never hand-edited: `web/app/src/rpc/generated.ts` by
-  `python scripts/make_web_types.py` (`--check` for drift), `web/app/src/theme/tokens.css` by `npm run tokens`.
+  `python scripts/make_web_types.py` (`--check` for drift), `web/app/src/theme/tokens.css` by `npm run tokens`,
+  `web/app/public/THIRD_PARTY_LICENSES.txt` by `uv run python scripts/make_web_licences.py` (`--check` for
+  drift; `--verify-installed` after `npm ci` in `web/app` checks each copyright line against node_modules).
+- A new runtime npm package or engine component (anything the browser ships) needs an entry in
+  `scripts/web_licences.toml`: the npm entry's `version` and `copyright` read from the package's own
+  licence file, and a component's licence and copyright from its source. A lock bump of a listed package
+  fails `--check` until its entry is re-read. Anything not verified from the repository is marked
+  "To confirm" in its note, never guessed.
 - The engine runs only in the workers under `web/app/src/engine/`, never on the main thread.
 - No SharedArrayBuffer (GitHub Pages sets no COOP/COEP), so a running engine job is cancelled by
   discarding its worker (docs/web/plan.md, decision 5), not by an interrupt buffer.

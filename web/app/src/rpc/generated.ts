@@ -44,6 +44,20 @@ export const IO_EXTRA = {
   msPerStep: 1000,
 } as const;
 
+/** services.optimize.PRESETS: the reduce presets the dialog seeds its fields from. */
+export const REDUCE_PRESETS = {
+  'screen': { image_dpi: 72, jpeg_quality: 50, grayscale: false, subset_fonts: true, remove_thumbnails: true, remove_metadata: false, object_streams: true },
+  'ebook': { image_dpi: 150, jpeg_quality: 70, grayscale: false, subset_fonts: true, remove_thumbnails: true, remove_metadata: false, object_streams: true },
+  'print': { image_dpi: 300, jpeg_quality: 85, grayscale: false, subset_fonts: true, remove_thumbnails: true, remove_metadata: false, object_streams: true },
+  'lossless': { image_dpi: null, jpeg_quality: 100, grayscale: false, subset_fonts: true, remove_thumbnails: true, remove_metadata: false, object_streams: true },
+} as const;
+/** webapi.jobs REDUCE_DPI_RANGE and REDUCE_QUALITY_RANGE: the spin box limits. */
+export const REDUCE_DPI_RANGE = [36, 1200] as const;
+export const REDUCE_QUALITY_RANGE = [10, 100] as const;
+/** webapi.jobs.SPACE_CATEGORY_KEYS: the stable keys of an audit category, for t(). */
+export const SPACE_CATEGORY_KEYS = ['images', 'fonts', 'page_content', 'comments_forms', 'tags', 'bookmarks_links', 'embedded_files', 'metadata_thumbnails', 'other', 'file_overhead'] as const;
+export type SpaceCategoryKey = (typeof SPACE_CATEGORY_KEYS)[number];
+
 export type EncryptionMethod = 'none' | 'rc4-40' | 'rc4-128' | 'aes-128' | 'aes-256' | 'unknown';
 
 /**
