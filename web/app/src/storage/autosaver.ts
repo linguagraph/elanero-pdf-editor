@@ -33,6 +33,8 @@ export interface Autosaver {
   // Brings the scheduler in step with the open documents. A dirty document is scheduled; a document
   // that is clean, or no longer open, has its copy deleted.
   sync(docs: readonly AutosaveDocument[]): void;
+  // True when the document (by tab id) has no copy because it is password-protected (D2).
+  isProtected(docId: number): boolean;
 }
 
 // Re-syncs when the page comes back from the back-forward cache (pageshow with persisted set). The
@@ -221,6 +223,10 @@ export function createAutosaver(options: AutosaverOptions): Autosaver {
   }
 
   return {
+    isProtected(docId) {
+      return entries.get(docId)?.disabled === 'protected';
+    },
+
     sync(docs) {
       const present = new Set<number>();
       for (const doc of docs) {

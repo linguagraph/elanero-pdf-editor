@@ -10,6 +10,7 @@ import {
   setTabSession,
 } from '../engine/engineConnection';
 import { memoryWarner } from '../feedback/memoryWarning';
+import { notResponding } from '../feedback/notResponding';
 import { reportRpcError, toasts } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
@@ -23,9 +24,11 @@ import {
   closeTab as closeTabState,
   EMPTY_TABS,
   hasDirtyTab,
+  replaceHandle,
   setPageCount,
   type TabState,
 } from '../tabs/tabState';
+import { restartSession } from './engineSession';
 import { asRpcError, openFile, sizeRefusal } from './openFile';
 import { passwordPrompt } from './passwordRequest';
 import { guardUnload } from './unloadGuard';
@@ -112,14 +115,34 @@ export function useDocuments(engine: EngineConnection): Documents {
   const dirty = hasDirtyTab(tabs);
   // The autosave copies of this page load (W3.9 S2). One scheduler per page; it is held in state
   // so the effects below see the same instance.
+  const [autosaveStore] = useState(() => createAutosaveStore());
   const [autosaver] = useState(() =>
     createAutosaver({
       tabId: browserTabId(),
-      store: createAutosaveStore(),
+      store: autosaveStore,
       client: () => engine.client(),
       warn: (warning) => toasts.push('warning', t(AUTOSAVE_MESSAGES[warning])),
     }),
   );
+
+  // The restart reopens each document from its autosave copy (W3.9 S3). The session is rebuilt
+  // with the tabs, so a restart always sees the documents that are open now.
+  useEffect(() => {
+    notResponding.setSession(
+      restartSession({
+        engine,
+        tabs: tabs.tabs,
+        tabId: browserTabId(),
+        store: autosaveStore,
+        isProtected: (id) => autosaver.isProtected(id),
+        reopened: (id, client, opened) => {
+          commitTabs((state) => replaceHandle(state, id, opened.handle, opened.pages));
+          setTabSession(id, { rpc: client, handle: opened.handle });
+        },
+      }),
+    );
+    return () => notResponding.setSession(undefined);
+  }, [engine, autosaver, autosaveStore, tabs, commitTabs]);
 
   // Warn before the page closes while a document has unsaved changes.
   useEffect(() => (dirty ? guardUnload(window) : undefined), [dirty]);

@@ -71,3 +71,18 @@ export function setPageCount(state: TabState, id: number, pages: number): TabSta
 export function hasDirtyTab(state: TabState): boolean {
   return state.tabs.some((tab) => tab.dirty);
 }
+
+// Points a tab at the handle of its document reopened after an engine restart (W3.9 S3). The copy
+// that reopened it holds the unsaved changes, so the tab is dirty again: it keeps being autosaved
+// and the page still warns before it closes.
+export function replaceHandle(
+  state: TabState,
+  id: number,
+  handle: string,
+  pages: number,
+): TabState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, handle, pages, dirty: true } : tab)),
+  };
+}

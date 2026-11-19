@@ -9,6 +9,7 @@ export interface FakeEngine extends EngineConnection {
   readonly store: EngineLoadStore;
   readonly start: Mock<() => void>;
   readonly dispose: Mock<() => void>;
+  readonly restart: Mock<() => boolean>;
   setClient(client: EngineClient | undefined): void;
 }
 
@@ -26,6 +27,7 @@ export function fakeEngine(client?: EngineClient): FakeEngine {
           }),
     start: vi.fn<() => void>(),
     dispose: vi.fn<() => void>(),
+    restart: vi.fn<() => boolean>(() => true),
     setClient(next) {
       current = next;
       if (next === undefined) return;
