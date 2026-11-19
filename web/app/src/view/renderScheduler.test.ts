@@ -32,6 +32,18 @@ const plan = (pages: number[], scaleMilli = 1000) =>
   pages.map((page) => ({ page, scaleMilli, visible: true, distance: page }));
 
 describe('RenderScheduler', () => {
+  it('records the revisions a change reports and tells the listeners once', () => {
+    const { rpc } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    const listener = vi.fn();
+    scheduler.subscribe(listener);
+    scheduler.noteRevisions({ '2': 4 });
+    expect(scheduler.revisionOf(2)).toBe(4);
+    expect(listener).toHaveBeenCalledTimes(1);
+    scheduler.noteRevisions({ '2': 4 });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it('sends a waiting page render before the queued thumbnails when a slot opens', async () => {
     const { rpc, renders } = fakeRpc();
     const scheduler = new RenderScheduler(rpc, 'h');

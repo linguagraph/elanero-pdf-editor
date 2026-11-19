@@ -602,7 +602,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W7 Added features, #140**
 
-- [ ] **W7.1a** A4 Comment tools and `annotations.create`
+- [ ] **W7.1a** A4 Comment tools and `annotations.create` _(partial: `annotations.create` with the sticky note, rectangle and highlight builders (`actions/comment_tools.py`) and the web toolbar with Undo are done and tested; pending: the text box, callout, pen, oval, line, arrow, polygon, polyline, stamp and attach tools; the desktop tools not yet moved onto the shared builders; comment selection, move and resize; the note popup for an existing note; keyboard use of the tools)_
 - [ ] **W7.1b** A4 Comments panel
 - [ ] **W7.2** A5 Comment summary export and XFDF import/export
 - [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds

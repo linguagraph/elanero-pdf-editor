@@ -336,6 +336,15 @@ export const EN = {
   'view.layoutTwoPage': 'Two pages',
   'view.coverAlone': 'Page 1 alone',
   'view.night': 'Night reading',
+  'comment.toolbarLabel': 'Comment tools',
+  'comment.tool.note': 'Sticky note',
+  'comment.tool.rectangle': 'Rectangle',
+  'comment.tool.highlight': 'Highlight',
+  'comment.added': 'Comment added.',
+  'comment.failed': 'The comment could not be added.',
+  'comment.noteText': 'Note text',
+  'comment.noteAdd': 'Add note',
+  'comment.cancel': 'Cancel',
 
   // Thumbnails side panel (W5.2). The rail button shows the panel's name.
   'thumbnails.title': 'Thumbnails',

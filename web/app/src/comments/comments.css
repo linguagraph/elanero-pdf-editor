@@ -1,0 +1,39 @@
+/* The comment tools' gesture layer and note form (W7.1a). Colours come from the theme tokens. */
+
+.comment-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.comment-preview {
+  position: absolute;
+  border: 1px dashed var(--color-focus-ring);
+  pointer-events: none;
+}
+
+.comment-note-form {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 200px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: default;
+}
+
+.comment-note-form textarea {
+  font: inherit;
+  resize: vertical;
+}
+
+.comment-note-actions {
+  display: flex;
+  gap: var(--space-2);
+}

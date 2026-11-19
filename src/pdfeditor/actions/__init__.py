@@ -68,6 +68,7 @@ def available(session: DocumentSession) -> list[str]:
 # Registration happens on import. The group modules import ``action`` from this package, so
 # they must come after it is defined.
 from pdfeditor.actions import (  # noqa: E402,F401
+    comment_tools,
     comments,
     content,
     document,
