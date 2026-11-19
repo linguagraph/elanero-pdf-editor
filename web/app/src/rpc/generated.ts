@@ -159,6 +159,7 @@ export interface DocStateDto {
   undo_label: string;
   redo_label: string;
   require_full_save: boolean;
+  history: number;
 }
 
 /** Params of a call that takes none. */
@@ -555,6 +556,11 @@ export interface TextPosition {
   index: number;
 }
 
+export interface UndoParams {
+  handle: string;
+  expect_history: number | null;
+}
+
 export interface UnlockParams {
   handle: string;
   /** an owner password; never echoed */
@@ -585,7 +591,7 @@ export interface Methods {
   'actions.available': { params: HandleParams; result: AvailableResult; deadline: 'instant' };
   'actions.redo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
   'actions.run': { params: RunParams; result: RunResult; deadline: 'action' };
-  'actions.undo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
+  'actions.undo': { params: UndoParams; result: HistoryResult; deadline: 'edit' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
@@ -841,7 +847,7 @@ export function decodeDocStateDto(
   path: string,
 ): DocStateDto {
   const o = expectObject(value, path);
-  checkKeys(o, ['page_count', 'structure_version', 'dirty', 'busy', 'can_undo', 'can_redo', 'undo_label', 'redo_label', 'require_full_save'], path);
+  checkKeys(o, ['page_count', 'structure_version', 'dirty', 'busy', 'can_undo', 'can_redo', 'undo_label', 'redo_label', 'require_full_save', 'history'], path);
   return {
     page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
     structure_version: expectInteger(field(o, 'structure_version', path), `${path}.structure_version`),
@@ -852,6 +858,7 @@ export function decodeDocStateDto(
     undo_label: expectString(field(o, 'undo_label', path), `${path}.undo_label`),
     redo_label: expectString(field(o, 'redo_label', path), `${path}.redo_label`),
     require_full_save: expectBoolean(field(o, 'require_full_save', path), `${path}.require_full_save`),
+    history: expectInteger(field(o, 'history', path), `${path}.history`),
   };
 }
 
@@ -1510,6 +1517,19 @@ export function decodeTextPosition(
   return {
     page: expectInteger(field(o, 'page', path), `${path}.page`),
     index: expectInteger(field(o, 'index', path), `${path}.index`),
+  };
+}
+
+export function decodeUndoParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): UndoParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'expect_history'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    expect_history: orNull(field(o, 'expect_history', path), `${path}.expect_history`, (v1, p1) => expectInteger(v1, p1)),
   };
 }
 

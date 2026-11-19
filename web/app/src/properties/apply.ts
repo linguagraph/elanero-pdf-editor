@@ -78,7 +78,7 @@ export async function applyProperties(
 export async function undoProperties(deps: PropertiesDeps): Promise<void> {
   const store = deps.store ?? toasts;
   try {
-    await deps.rpc.call('actions.undo', { handle: deps.handle });
+    await deps.rpc.call('actions.undo', { handle: deps.handle, expect_history: null });
   } catch (error) {
     reportFailure(store, error);
   }

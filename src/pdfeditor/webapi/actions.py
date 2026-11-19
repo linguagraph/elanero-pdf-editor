@@ -22,7 +22,14 @@ from pdfeditor.services.comments import flattenable as flattenable_comments
 from pdfeditor.services.xfdf import XfdfTooLarge, preview_xfdf
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.dto import BufferTable, from_json
-from pdfeditor.webapi.errors import BUSY, FILE_TOO_LARGE, INVALID_ARGS, REFUSED, RpcFailure
+from pdfeditor.webapi.errors import (
+    BUSY,
+    FILE_TOO_LARGE,
+    INVALID_ARGS,
+    REFUSED,
+    STALE_OBJECT,
+    RpcFailure,
+)
 from pdfeditor.webapi.events import changed_of, state_of
 from pdfeditor.webapi.registry import REGISTRY
 
@@ -106,8 +113,8 @@ def list_marks(params: dto.HandleParams) -> dto.MarksResult:
     return dto.MarksResult(items=items)
 
 
-def undo(params: dto.HandleParams) -> dto.HistoryResult:
-    return _history(params.handle, forward=False)
+def undo(params: dto.UndoParams) -> dto.HistoryResult:
+    return _history(params.handle, forward=False, expect=params.expect_history)
 
 
 def redo(params: dto.HandleParams) -> dto.HistoryResult:
@@ -121,13 +128,22 @@ def available(params: dto.HandleParams) -> dto.AvailableResult:
     return dto.AvailableResult(names=tuple(names))
 
 
-def _history(handle: str, *, forward: bool) -> dto.HistoryResult:
+def _history(handle: str, *, forward: bool, expect: int | None = None) -> dto.HistoryResult:
     session = REGISTRY.get(handle)
     events = _Events()
     unsubscribe = session.subscribe(events)
     try:
         with session.lock:
             stack = session.undo_stack
+            # An Undo offer names the history it was made at (W4.4b): if the history moved, or
+            # there is nothing left to undo, the offered step is no longer the newest one, so it
+            # is refused before anything changes. BUSY is checked after this, by session.undo.
+            if expect is not None and (stack.version != expect or not stack.can_undo):
+                raise RpcFailure(
+                    STALE_OBJECT,
+                    "the document changed since this undo was offered",
+                    {"history": stack.version},
+                )
             label = stack.redo_label if forward else stack.undo_label
             done = session.redo() if forward else session.undo()
             if events.blocked:
