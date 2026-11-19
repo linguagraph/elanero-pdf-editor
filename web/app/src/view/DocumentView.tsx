@@ -66,12 +66,13 @@ export interface DocumentViewHandle {
 }
 
 // What the view reports to its host for the status bar: the page at the middle of the viewport
-// (one-based) and the zoom.
+// (one-based), the zoom, and the document's page labels (one per page; empty when it has none).
 export interface DocumentViewState {
   readonly page: number;
   readonly zoom: number;
   // The page layout the reader chose (single column or two-page spreads).
   readonly layout: ViewLayout;
+  readonly labels: readonly string[];
 }
 
 export interface DocumentViewProps {
@@ -120,6 +121,8 @@ export function DocumentView({
   startWorker,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
+  // The page labels, from the same session.pages reply as the sizes (W5.3).
+  const [labels, setLabels] = useState<readonly string[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   // The zoom the reader picked by steps, the wheel or the presets; used when no fit mode is on.
   const [manualZoom, setManualZoom] = useState(DEFAULT_ZOOM);
@@ -159,7 +162,10 @@ export function DocumentView({
     rpc
       .call('session.pages', { handle })
       .then((reply) => {
-        if (active) setSizes(reply.pages);
+        if (active) {
+          setSizes(reply.pages);
+          setLabels(reply.labels);
+        }
       })
       .catch(() => {
         if (active) setLoadFailed(true);
@@ -309,8 +315,8 @@ export function DocumentView({
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
   const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
   useEffect(() => {
-    onViewChange?.({ page: currentPage, zoom, layout: viewLayout });
-  }, [currentPage, zoom, viewLayout, onViewChange]);
+    onViewChange?.({ page: currentPage, zoom, layout: viewLayout, labels });
+  }, [currentPage, zoom, viewLayout, labels, onViewChange]);
 
   // Plans the page renders from what is on screen now: the visible pages first, then the pages
   // just outside the viewport (prefetch, which the scheduler sends after the visible ones). A page

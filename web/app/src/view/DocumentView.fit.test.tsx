@@ -18,7 +18,7 @@ function fakeRpc() {
   const rpc = {
     call: vi.fn((method: string, params: unknown) => {
       if (method === 'session.pages') {
-        return Promise.resolve({ pages: [{ ...LETTER, rotation: 0 }] });
+        return Promise.resolve({ pages: [{ ...LETTER, rotation: 0 }], labels: [] });
       }
       if (method === 'text.layer') return new Promise(() => undefined);
       if (method === 'render.page') renders.push(params as { scale_milli: number });

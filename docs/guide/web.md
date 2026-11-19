@@ -79,11 +79,9 @@ is reloaded until you press it.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
   thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
   Shift-click to select a range. Then rotate the selected pages left or right, move them up or
-  down, delete them (after a confirmation; a document always keeps one page), or duplicate them.
-  Insert blank page adds an empty page after the last selected page (or at the end when nothing is
-  selected), the same size as the page before it. Duplicate puts a copy of each selected page right
-  after the last one. Each change can be undone from the notice that follows it. Inserting pages
-  from a file, extracting pages, and dragging pages, are not available yet.
+  down, or delete them (after a confirmation; a document always keeps one page). Each change can
+  be undone from the notice that follows it. Inserting, duplicating and extracting pages, and
+  dragging pages, are not available yet.
 
 ## Going to a page
 
@@ -94,8 +92,9 @@ is reloaded until you press it.
   jumped from, or went to from a thumbnail, and go forward again. A small move of one page is not
   recorded, and a new jump after going back clears the forward pages. The history is kept for each
   open document until you reload the page.
-- **Page labels and links.** A document's own page labels (such as i, ii, 1) are not shown yet, and
-  links in the document do not work yet (coming soon).
+- **Page labels and links.** The status bar shows the document's own page labels (such as i, ii, 1),
+  and you can type a label into the page field to go to that page. Links in the document do not
+  work yet (coming soon).
 
 ## What is not available yet
 

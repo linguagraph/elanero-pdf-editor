@@ -14,7 +14,7 @@ type Pending = {
 };
 
 // A fake engine: session.pages answers at once; each render.page waits until the test answers it.
-function fakeRpc(pageCount: number) {
+function fakeRpc(pageCount: number, labels: readonly string[] = []) {
   const renders: Pending[] = [];
   const rpc = {
     call: vi.fn((method: string, params: unknown) => {
@@ -24,7 +24,7 @@ function fakeRpc(pageCount: number) {
           height: 792,
           rotation: 0,
         }));
-        return Promise.resolve({ pages });
+        return Promise.resolve({ pages, labels: [...labels] });
       }
       // The text layers (W5.4) are asked for but never answered here: they are not renders.
       if (method === 'text.layer') return new Promise(() => undefined);
@@ -216,7 +216,7 @@ function scriptedRpc(answer: (attempt: number) => Promise<unknown>) {
   let attempts = 0;
   const call = vi.fn((method: string) => {
     if (method === 'session.pages') {
-      return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }] });
+      return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }], labels: [] });
     }
     // The text layer is not a render: it is never answered here and does not use up an attempt.
     if (method === 'text.layer') return new Promise(() => undefined);
@@ -243,6 +243,30 @@ async function settle(): Promise<void> {
 function renderCalls(call: ReturnType<typeof scriptedRpc>['call']): number {
   return call.mock.calls.filter(([method]) => method === 'render.page').length;
 }
+
+describe('DocumentView page labels', () => {
+  it('reports the labels from session.pages through onViewChange', async () => {
+    const { rpc } = fakeRpc(3, ['i', 'ii', '1']);
+    const onViewChange = vi.fn();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+    });
+    await flush();
+    expect(onViewChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 1, labels: ['i', 'ii', '1'] }),
+    );
+  });
+
+  it('reports no labels for a document that has none', async () => {
+    const { rpc } = fakeRpc(3);
+    const onViewChange = vi.fn();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+    });
+    await flush();
+    expect(onViewChange).toHaveBeenLastCalledWith(expect.objectContaining({ labels: [] }));
+  });
+});
 
 describe('DocumentView render retries', () => {
   it('asks again after two failures, and draws the third answer', async () => {
@@ -409,7 +433,10 @@ function fakeSizedRpc(sizes: { width: number; height: number }[]) {
   const rpc = {
     call: vi.fn((method: string, params: unknown) => {
       if (method === 'session.pages') {
-        return Promise.resolve({ pages: sizes.map((size) => ({ ...size, rotation: 0 })) });
+        return Promise.resolve({
+          pages: sizes.map((size) => ({ ...size, rotation: 0 })),
+          labels: [],
+        });
       }
       if (method === 'text.layer') return new Promise(() => undefined);
       calls.push({ method, params: params as Record<string, unknown> });
