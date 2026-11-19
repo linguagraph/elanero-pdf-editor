@@ -10,6 +10,7 @@ import pymupdf
 from pdfeditor.engine.base import Capabilities, PasswordCallback
 from pdfeditor.engine.mupdf.document import MuDocument, open_document
 from pdfeditor.engine.mupdf.page import MuPage
+from pdfeditor.model.geometry import Rect
 from pdfeditor.model.platform import current
 
 __all__ = ["MuDocument", "MuPDFEngine", "MuPage", "create_engine"]
@@ -33,6 +34,7 @@ _CAPABILITIES = Capabilities(
     redact=True,
     export=True,
     optimize=True,
+    html_layout=True,
     encrypt=True,
     structure=True,
     auto_tag=True,
@@ -62,6 +64,11 @@ class MuPDFEngine:
 
     def new_document(self) -> MuDocument:
         return MuDocument(pymupdf.open(), None, None)
+
+    def html_to_pdf(self, html: str, css: str, page: Rect, margin: float) -> bytes:
+        from pdfeditor.engine.mupdf.html import html_to_pdf
+
+        return html_to_pdf(html, css, page, margin)
 
     def text_width(self, text: str, font: str, size: float) -> float:
         from pdfeditor.engine.mupdf.pages import text_width

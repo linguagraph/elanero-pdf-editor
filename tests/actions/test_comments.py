@@ -10,7 +10,6 @@ from __future__ import annotations
 import dataclasses
 import shutil
 from pathlib import Path
-from xml.etree.ElementTree import ParseError
 
 import pytest
 
@@ -799,10 +798,23 @@ def test_import_with_no_comments_is_not_executed(open_copy: Opener) -> None:
     assert not s.undo_stack.can_undo
 
 
-def test_import_rejects_malformed_xml(open_copy: Opener) -> None:
+@pytest.mark.parametrize(
+    "text",
+    [
+        "<xfdf",  # malformed XML
+        '<?xml version="1.0"?><!DOCTYPE xfdf [<!ENTITY a "b">]><xfdf/>',  # a DOCTYPE
+        "<html/>",  # well-formed, but not XFDF
+    ],
+)
+def test_import_refuses_what_is_not_xfdf(open_copy: Opener, text: str) -> None:
     s = open_copy("annotations")
-    with pytest.raises(ParseError):  # the parser error propagates unchanged to the desktop
-        comments.import_xfdf(s, ImportXfdf("<xfdf"))
+    before = state(s)
+    with pytest.raises(Refused, match="not valid XFDF") as info:
+        comments.import_xfdf(s, ImportXfdf(text))
+    assert info.value.code == "REFUSED"
+    assert info.value.__cause__ is not None  # the parser's reason is kept on the cause
+    assert state(s) == before
+    assert not s.undo_stack.can_undo
 
 
 # -- busy -----------------------------------------------------------------------------------

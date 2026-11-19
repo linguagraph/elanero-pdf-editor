@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
+from pdfeditor.engine.base import Capabilities, Engine, UnsupportedFeature
+from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.annotations import (
     AnnotationModel,
     AnnotationType,
@@ -15,8 +19,15 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Quad, Rect
-from pdfeditor.services.comments import comment_threads, summary_csv, summary_html
+from pdfeditor.services.comments import (
+    comment_threads,
+    page_labels,
+    summary_csv,
+    summary_html,
+    summary_pdf,
+)
 from pdfeditor.services.xfdf import export_xfdf, import_command, parse_xfdf
+from tests.hostcheck import record
 
 
 @pytest.fixture
@@ -191,3 +202,60 @@ def test_xfdf_callout_roundtrip(session: DocumentSession, fixture_pdf, tmp_path:
     assert callout.vertices[0].y == pytest.approx(120, abs=1.5)
     assert callout.rect.x0 == pytest.approx(250, abs=1.5)
     fresh.close()
+
+
+def test_summary_pdf_opens_renders_and_keeps_labels(session: DocumentSession) -> None:
+    _populate(session)
+    with session.lock:
+        engine = get_engine("mupdf")
+        threads = comment_threads(session.document)
+        labels = page_labels(session.document)
+        pdf = summary_pdf(engine, threads, session.display_name, labels)
+        pages = engine.open(pdf).page_count
+    assert pdf.startswith(b"%PDF") and pages >= 1
+    first = threads[0].comment
+    record("page_count_pikepdf", pdf, pages=pages)
+    record("text_contains_pdfium", pdf, page=0, text=first.contents)
+    record("text_contains_pdfium", pdf, page=0, text=f"Page {labels[first.page_index]}")
+
+
+@dataclass
+class _NoHtmlEngine:
+    """Only what summary_pdf reads before it refuses: a capability set without html_layout."""
+
+    capabilities: Capabilities = field(default_factory=Capabilities)
+
+
+def test_summary_pdf_refuses_without_html_layout(session: DocumentSession) -> None:
+    _populate(session)
+    with session.lock:
+        threads = comment_threads(session.document)
+        labels = page_labels(session.document)
+        engine = cast(Engine, _NoHtmlEngine())
+        assert not engine.capabilities.html_layout
+        with pytest.raises(UnsupportedFeature, match="cannot lay out HTML"):
+            summary_pdf(engine, threads, session.display_name, labels)
+
+
+def test_page_labels_fall_back_to_numbers(session: DocumentSession) -> None:
+    with session.lock:
+        labels = page_labels(session.document)
+    assert len(labels) == session.document.page_count
+    assert all(label for label in labels)
+
+
+def test_xfdf_with_doctype_or_entity_is_refused(session: DocumentSession) -> None:
+    body = '<annots><text page="0" rect="0,0,10,10" contents="x"/></annots>'
+    hostile = [
+        f'<?xml version="1.0"?><!DOCTYPE xfdf [<!ENTITY a "b">]>'
+        f'<xfdf xmlns="http://ns.adobe.com/xfdf/">{body}</xfdf>',
+        f'<?xml version="1.0"?><!ENTITY a "b"><xfdf xmlns="http://ns.adobe.com/xfdf/">{body}</xfdf>',
+    ]
+    for text in hostile:
+        with session.lock, pytest.raises(ValueError, match="not XFDF"):
+            parse_xfdf(text, session.document)
+
+
+def test_non_xfdf_root_is_refused(session: DocumentSession) -> None:
+    with session.lock, pytest.raises(ValueError, match="not XFDF"):
+        parse_xfdf("<html><body/></html>", session.document)

@@ -78,6 +78,7 @@ class Capabilities:
     structure: bool = False  # read/edit tags and accessibility settings
     auto_tag: bool = False  # tag untagged documents from layout analysis (experimental)
     optimize: bool = False
+    html_layout: bool = False  # html_to_pdf: lay out HTML/CSS into a finished PDF
 
 
 @dataclass(frozen=True, slots=True)
@@ -571,6 +572,15 @@ class Engine(Protocol):
         """An embeddable program for a standard (base-14) font or a metric-compatible stand-in
         (Arial -> Helvetica, Times New Roman -> Times, Courier New -> Courier); None if there
         is none. Used to embed fonts a PDF only names (PDF/A)."""
+        ...
+
+    def html_to_pdf(self, html: str, css: str, page: Rect, margin: float) -> bytes:
+        """Lay out ``html`` (styled by ``css``) on pages of size ``page``, inset by ``margin``
+        points, and return the finished PDF. Text flows onto as many pages as it needs.
+
+        Only needed when ``capabilities.html_layout`` is set. No engine object escapes: the
+        result is plain bytes, and the caller holds the engine lock while this runs.
+        """
         ...
 
     def text_width(self, text: str, font: str, size: float) -> float:

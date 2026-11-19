@@ -191,8 +191,18 @@ def _geometry_out(el: ET.Element, a: AnnotationModel, m: Matrix) -> None:
 
 # -- import -----------------------------------------------------------------------------------
 def parse_xfdf(text: str, doc: Document) -> list[AnnotationModel]:
-    """Parse XFDF into models in visible space. Replies carry ``extra["irt_name"]``."""
+    """Parse XFDF into models in visible space. Replies carry ``extra["irt_name"]``.
+
+    Raises ``ValueError`` for input that is not XFDF, and ``ET.ParseError`` for malformed XML.
+    A DOCTYPE or ENTITY declaration is refused outright: XFDF never needs one, and entity
+    declarations are the usual vehicle for XML amplification attacks.
+    """
+    lowered = text.lower()
+    if "<!doctype" in lowered or "<!entity" in lowered:
+        raise ValueError("not XFDF: DOCTYPE and ENTITY declarations are not allowed")
     root = ET.fromstring(text)
+    if root.tag.split("}")[-1] != "xfdf":
+        raise ValueError("not XFDF: the root element is not xfdf")
     annots = root.find(f"{{{NS}}}annots")
     if annots is None:
         annots = root.find("annots")
