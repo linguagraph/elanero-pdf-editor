@@ -24,6 +24,9 @@ import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
 import { useTabSession } from './engine/engineConnection';
+import { jobWorkerBootOptions } from './engine/bootOptions';
+import { startJobWorker } from './engine/start';
+import { SplitDialog } from './split/SplitDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
@@ -63,6 +66,7 @@ export interface AppProps {
 
 export function App({ engine, startPrintWorker }: AppProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const docs = useDocuments(engine);
@@ -84,11 +88,13 @@ export function App({ engine, startPrintWorker }: AppProps) {
     print: () => setPrintOpen(true),
     open: () => docs.openPicker(),
     'open-recent': () => docs.showStartPage(),
+    'split-document': () => setSplitOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
   const session = useTabSession(activeId);
+  const rpc = engine.client();
   // One scheduler per open session: the document view and the thumbnails panel share its cache and
   // its render limit (W5.2).
   const scheduler = useMemo(
@@ -202,6 +208,16 @@ export function App({ engine, startPrintWorker }: AppProps) {
       }
     >
       <PreferencesDialog isOpen={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
+      {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
+        <SplitDialog
+          isOpen={splitOpen}
+          onClose={() => setSplitOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          pageCount={activeTab.pages}
+          startWorker={() => startJobWorker(jobWorkerBootOptions())}
+        />
+      ) : null}
       <PrintDialog
         isOpen={printOpen}
         onClose={() => setPrintOpen(false)}
