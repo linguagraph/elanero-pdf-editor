@@ -261,6 +261,23 @@ export const EN = {
   'job.percent': '{percent}% done',
   'job.done': 'Done: {label}',
 
+  // Print dialog (W6.5, W1.6 section 5).
+  'print.title': 'Print',
+  'print.scope.legend': 'Pages to print',
+  'print.scope.all': 'All pages',
+  'print.scope.current': 'Current page',
+  'print.scope.range': 'Pages',
+  'print.range.hint': 'Separate pages with commas and use a dash for a range, such as 1-3, 5.',
+  'print.range.invalid': 'Enter pages that exist in this document, such as 1-3, 5.',
+  'print.dpi.label': 'Resolution',
+  'print.dpi.150': '150 dpi (faster)',
+  'print.dpi.300': '300 dpi (sharper)',
+  'print.comments.label': 'Include comments',
+  'print.large': 'This prints {count} pages. A lower resolution or a page range uses less memory.',
+  'print.start': 'Print',
+  'print.busy': 'Another task is running. Try printing again when it finishes.',
+  'print.noDocument': 'Open a document to print it.',
+
   // Start page, document tabs and opening files (W1.6 section 3, W4.2b).
   'start.heading': 'Open a PDF',
   'start.open': 'Open file',

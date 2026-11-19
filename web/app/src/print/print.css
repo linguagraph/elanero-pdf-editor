@@ -1,0 +1,27 @@
+/* The print dialog's form (W6.5). Colours and sizes come from the theme tokens. */
+.print-form {
+  display: grid;
+  gap: 12px;
+}
+
+.print-scope {
+  display: grid;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.print-range {
+  min-height: 44px;
+}
+
+.print-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.print-error {
+  margin: 0;
+  color: var(--color-danger);
+}

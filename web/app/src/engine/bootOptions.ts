@@ -12,3 +12,14 @@ export function engineBootOptions(): StartOptions {
     assetBaseUrl: new URL('engine-assets/', page).href,
   };
 }
+
+// Where the built job worker is (W3.7). Read only by main.tsx, like the engine's options above.
+import jobWorkerUrl from './jobworker.ts?worker&url';
+
+export function jobWorkerBootOptions(): StartOptions {
+  const page = new URL(import.meta.env.BASE_URL, globalThis.location.href);
+  return {
+    workerUrl: jobWorkerUrl,
+    assetBaseUrl: new URL('engine-assets/', page).href,
+  };
+}

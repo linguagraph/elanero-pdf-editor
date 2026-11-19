@@ -592,7 +592,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W6.2** R3 Split dialog
 - [ ] **W6.3** R6 Combine dialog
 - [ ] **W6.4** R5 Compress dialog
-- [ ] **W6.5** R7 Print
+- [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi and the browser print path are built and tested; the job run is not end to end yet: the job worker's adapter answers only engine methods, `job.run` is not in the generated catalogue, and a reply carries one binary value, so multi-page output cannot cross; print_pages sends no partial notices, so the pages come in the final result)_
 - [ ] **W6.6** R4 Translate
 - [ ] **W6.7a** R1a select, move and delete page objects
 - [ ] **W6.7b** R1a add shapes; add, replace and export images
