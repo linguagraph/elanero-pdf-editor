@@ -187,12 +187,12 @@ jobs:
       # Our own launcher: the prebuilt one is flagged by antivirus (#90). MSVC is on the image.
       - run: uv run python scripts/build_bootloader.py
       - run: uv run python scripts/build_exe.py --all --clean-env --no-window-check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: elanero-exe
           path: dist/Elanero.exe
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request'
         with:
           name: elanero-folder
@@ -205,7 +205,7 @@ jobs:
       - name: Build the installer from this build
         if: needs.changes.outputs.packaging == 'true'
         run: uv run python scripts/build_exe.py --skip-build --installer
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: needs.changes.outputs.packaging == 'true'
         with:
           name: elanero-installer
