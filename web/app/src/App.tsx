@@ -401,6 +401,7 @@ export function App({
               <AppMenu registry={REGISTRY} state={state} handlers={handlers} />
               <BrandMark />
             </div>
+            <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
             <button
               type="button"
               onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
@@ -531,7 +532,6 @@ export function App({
       ) : null}
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
-      <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
       <div className="app-main">
         <UpdatePrompt />
         <PasswordPrompt />
