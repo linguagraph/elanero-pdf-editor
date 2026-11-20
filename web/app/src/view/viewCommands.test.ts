@@ -50,6 +50,7 @@ function fakeView(): DocumentViewHandle {
     setCommentTool: vi.fn(),
     setRedacting: vi.fn(),
     selectPageText: vi.fn(),
+    revealRect: vi.fn(),
   };
 }
 

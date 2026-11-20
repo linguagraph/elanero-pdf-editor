@@ -1,7 +1,7 @@
 // The Remove Security dialog (W7.5 S4), as ui/protect_controller.py remove_security: a file with
 // no security says so; a pending change that was never saved is dropped with no confirmation; an
 // encrypted file needs the owner password, then a confirmation, then one security.remove call.
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
@@ -84,9 +84,21 @@ function RemoveBody({ deps, name, onDone }: BodyProps) {
   // Bumped after an unlock, so the state (and the owner access) is read again.
   const [reload, setReload] = useState(0);
 
+  // The decision may drop a pending change (a mutation), so it runs once per (deps, reload). StrictMode
+  // runs this effect twice on mount; the second run reuses the in-flight decision and does not start
+  // another. The ref survives that re-run, since it is the same mounted component.
+  const decision = useRef<{
+    readonly deps: SecurityDeps;
+    readonly reload: number;
+    readonly next: Promise<Next>;
+  } | null>(null);
+
   useEffect(() => {
     let live = true;
-    void decideRemove(deps).then((next) => {
+    if (decision.current?.deps !== deps || decision.current.reload !== reload) {
+      decision.current = { deps, reload, next: decideRemove(deps) };
+    }
+    void decision.current.next.then((next) => {
       if (!live) return;
       setStage(next.stage);
       setMessage(next.message ?? null);

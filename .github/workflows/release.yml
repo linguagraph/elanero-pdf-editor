@@ -52,11 +52,11 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: elanero-exe
           path: assets
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: elanero-installer
           path: assets
@@ -78,11 +78,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - run: uv venv && uv pip install -e ".[build]"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: elanero-folder
           path: dist/Elanero
@@ -96,7 +96,7 @@ jobs:
       # Unsigned: the Store signs the package. CI built the app with our own launcher (--all fails
       # otherwise), and this only packs that build, self-testing it first.
       - run: uv run python scripts/build_exe.py --skip-build --msix
-      - uses: microsoft/microsoft-store-apppublisher@v1.1
+      - uses: microsoft/microsoft-store-apppublisher@v1.4
       - name: Upload the package to a new draft submission
         env:
           MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}

@@ -177,6 +177,50 @@ export function scrollTopForSpread(
   return null;
 }
 
+// A rectangle on a page, in points (the page's visible space, origin top-left).
+export interface PageRectPt {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+// The scroll position that brings a rectangle on a page into the viewport. A rectangle already in
+// view keeps the scroll it has; otherwise its top-left corner moves to the viewport's top-left,
+// backed off by the page gap so it does not sit on the edge. Both axes are handled, since a page
+// can be wider than the viewport.
+export function scrollForRect(
+  box: PageBox,
+  rect: PageRectPt,
+  zoom: number,
+  scroll: { readonly top: number; readonly left: number },
+  viewport: { readonly height: number; readonly width: number },
+): { top: number; left: number } {
+  const k = zoom * CSS_PX_PER_POINT;
+  const margin = PAGE_GAP_PT * k;
+  return {
+    top: revealAxis(
+      scroll.top,
+      box.top + rect.y0 * k,
+      box.top + rect.y1 * k,
+      viewport.height,
+      margin,
+    ),
+    left: revealAxis(
+      scroll.left,
+      box.left + rect.x0 * k,
+      box.left + rect.x1 * k,
+      viewport.width,
+      margin,
+    ),
+  };
+}
+
+function revealAxis(start: number, from: number, to: number, size: number, margin: number): number {
+  if (from >= start && to <= start + size) return start;
+  return Math.max(0, from - margin);
+}
+
 // Distance from the centre of a page to the centre of the viewport, in CSS pixels.
 export function distanceToCentre(box: PageBox, scrollTop: number, viewportHeight: number): number {
   return Math.abs(box.top + box.height / 2 - (scrollTop + viewportHeight / 2));
@@ -244,4 +288,32 @@ export function fitPageZoom(
   if (!(viewHeightPx > 0) || !(pageHeightPt > 0)) return byWidth;
   const byHeight = clampZoom(viewHeightPx / (CSS_PX_PER_POINT * (pageHeightPt + 2 * PAGE_GAP_PT)));
   return Math.min(byWidth, byHeight);
+}
+
+// Where the reader is: the page whose box the top of the viewport falls in, and how far down that
+// box the top edge is, as a fraction of the page's height. A top edge in the gap above a page gives
+// a negative fraction. Every box scales linearly with the zoom and the layout only moves boxes, so
+// the same anchor names the same spot after a zoom or a layout change (W5.1a S2).
+export interface ViewAnchor {
+  readonly page: number;
+  readonly yFraction: number;
+}
+
+// The anchor at a scroll position. The page is the first whose bottom edge is below the top of the
+// viewport (the page the reader sees at the top); past the last page, the last one, with a fraction
+// over 1. Null when there are no pages.
+export function viewAnchor(boxes: readonly PageBox[], scrollTop: number): ViewAnchor | null {
+  const box =
+    boxes.find((candidate) => candidate.top + candidate.height > scrollTop) ?? boxes.at(-1);
+  if (box === undefined) return null;
+  const yFraction = box.height > 0 ? (scrollTop - box.top) / box.height : 0;
+  return { page: box.index, yFraction };
+}
+
+// The scroll position an anchor names in a layout: the same fraction down the same page. Null for a
+// page index out of range.
+export function scrollTopForAnchor(boxes: readonly PageBox[], anchor: ViewAnchor): number | null {
+  const box = boxes[anchor.page];
+  if (box === undefined) return null;
+  return Math.max(0, box.top + anchor.yFraction * box.height);
 }

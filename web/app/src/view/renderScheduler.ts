@@ -186,7 +186,9 @@ export class RenderScheduler {
       revision: request.revision,
       scale_milli: request.scaleMilli,
       rotation: request.rotation,
-      annotations: false,
+      // Comments are part of the page image (W1.4 section 1), as on the desktop; without this a
+      // comment the user just placed is saved and listed but never drawn.
+      annotations: true,
     };
     const pending: Promise<Methods['render.page']['result']> =
       tile === undefined

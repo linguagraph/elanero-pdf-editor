@@ -707,6 +707,7 @@ export function App({
             handle={session.handle}
             onMarks={(marks) => setSearchMarks(marks === null ? null : { tabId: activeId, marks })}
             onGoTo={goTo}
+            onReveal={(page, rect) => viewRef.current?.revealRect(page, rect)}
             onClose={() => closePanel('left')}
             focusRequest={searchFocus}
             currentPage={viewState.page - 1}

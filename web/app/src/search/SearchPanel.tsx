@@ -3,14 +3,15 @@
 // round as the desktop does. Stop ends the run after the slice in flight, and the hits found so far
 // stay; a new query cancels the run in progress. Enter and Shift+Enter step through the hits of the
 // query already searched. The hits are drawn on the page views through onMarks, and choosing one
-// asks the view to scroll to its page through onGoTo.
+// asks the view to scroll to its page through onGoTo, and to bring the hit's rectangle into sight
+// through onReveal.
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import { RpcError } from '../rpc/client';
-import type { SearchHitDto, SearchOptionsDto } from '../rpc/generated';
-import { collectSearch, nextHit, previousHit, type SearchMarks } from './search';
+import type { RectDto, SearchHitDto, SearchOptionsDto } from '../rpc/generated';
+import { collectSearch, hitBounds, nextHit, previousHit, type SearchMarks } from './search';
 import './search.css';
 
 // A request from Find Next (F3) or Find Previous (Shift+F3). A new id is a new request.
@@ -26,6 +27,8 @@ export interface SearchPanelProps {
   readonly onMarks: (marks: SearchMarks | null) => void;
   // Called with the zero-based page of a hit the user chose or the first hit found.
   readonly onGoTo: (page: number) => void;
+  // Called with the chosen hit's page and its rectangle in points, so the view can scroll to the text.
+  readonly onReveal?: (page: number, rect: RectDto) => void;
   readonly onClose: () => void;
   // Bumped by the caller to move focus to the query box, also when the panel is already open (Ctrl+F).
   readonly focusRequest?: number;
@@ -87,6 +90,7 @@ export function SearchPanel({
   handle,
   onMarks,
   onGoTo,
+  onReveal,
   onClose,
   focusRequest = 0,
   currentPage = 0,
@@ -108,6 +112,7 @@ export function SearchPanel({
   const runRef = useRef<AbortController | null>(null);
   const onMarksRef = useRef(onMarks);
   const onGoToRef = useRef(onGoTo);
+  const onRevealRef = useRef(onReveal);
   // The step of the latest render, for a Find Next or Previous request (an effect, so it is late).
   const stepRef = useRef<(direction: 1 | -1) => void>(() => undefined);
   const handledFind = useRef(findRequest?.id ?? 0);
@@ -115,7 +120,8 @@ export function SearchPanel({
   useEffect(() => {
     onMarksRef.current = onMarks;
     onGoToRef.current = onGoTo;
-  }, [onMarks, onGoTo]);
+    onRevealRef.current = onReveal;
+  }, [onMarks, onGoTo, onReveal]);
 
   const { hits, current } = view;
   useEffect(() => {
@@ -138,6 +144,7 @@ export function SearchPanel({
     if (hit === undefined) return;
     setView((previous) => ({ ...previous, current: index }));
     onGoTo(hit.page);
+    onReveal?.(hit.page, hitBounds(hit));
   };
 
   const count = view.hits.length;
@@ -187,7 +194,11 @@ export function SearchPanel({
         if (runRef.current !== controller) return;
         const first = found.length === 0 && sliceHits.length > 0;
         found = [...found, ...sliceHits];
-        if (first) onGoToRef.current(found[0]?.page ?? 0);
+        const firstHit = first ? found[0] : undefined;
+        if (firstHit !== undefined) {
+          onGoToRef.current(firstHit.page);
+          onRevealRef.current?.(firstHit.page, hitBounds(firstHit));
+        }
         setView((previous) => ({
           ...previous,
           hits: found,
