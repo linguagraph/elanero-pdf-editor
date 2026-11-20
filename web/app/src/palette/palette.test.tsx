@@ -265,6 +265,27 @@ describe('command palette', () => {
     expect(rows()[1]?.dataset.recent).toBeUndefined();
   });
 
+  it('focuses the page field after the palette closes when Go to Page runs from it', async () => {
+    // The page field stands in for the status bar's, which focusPageField focuses in the app.
+    const handlers = spies();
+    handlers['go-to-page'] = vi.fn(() => {
+      document.querySelector<HTMLInputElement>('#field')?.focus();
+    });
+    render(OPEN_STATE, handlers);
+    document.querySelector<HTMLButtonElement>('#invoker')?.focus();
+    openPalette();
+    type('go to page');
+    key(input(), { key: 'Enter' });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    // The palette restores focus to the invoker on the next frame; Go to Page runs after that.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(handlers['go-to-page']).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(document.querySelector('#field'));
+  });
+
   it('does not record a run that is refused because the command is disabled', () => {
     render(NO_DOCUMENT_STATE, spies());
     openPalette();
