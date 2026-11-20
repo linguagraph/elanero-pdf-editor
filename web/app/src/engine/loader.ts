@@ -55,12 +55,50 @@ export interface EngineHandle {
     buffers?: readonly ArrayBuffer[],
     onNotice?: (notice: Notice) => void,
   ): CallResult;
+  // Installs fontTools the first time a text edit needs it (W6.8a). Resolves in every case: without
+  // fontTools the edit still runs, with a degraded character map, so a failure only logs a warning.
+  ensureFontTools?(): Promise<void>;
 }
 
 export type LoadEngine = (options: LoadOptions) => Promise<EngineHandle>;
 
 // The Pyodide package the engine imports at module level (see scripts/stage_engine_assets.mjs).
 export const PILLOW_PACKAGE = 'pillow';
+
+// fontTools (W6.8a). Pyodide's pure-Python wheel is staged next to the engine (scripts/
+// stage_engine_assets.mjs). Its bytes are read before the network lock, then installed by
+// FONTTOOLS_INSTALL_PY on the first text edit. A lock bump must change this name with the lock.
+export const FONTTOOLS_WHEEL_FILE = 'fonttools-4.62.1-py3-none-any.whl';
+const FONTTOOLS_WHEEL_PATH = `/home/pyodide/${FONTTOOLS_WHEEL_FILE}`;
+
+// The requests that need fontTools: the text edits, whose ToUnicode and glyph checks read it.
+const FONTTOOLS_ACTIONS = new Set(['content.replace_text', 'content.add_text']);
+
+// True when a request is an action that needs fontTools, so the worker installs it first.
+export function needsFontTools(request: string): boolean {
+  try {
+    const parsed = JSON.parse(request) as { method?: unknown; params?: { name?: unknown } };
+    return (
+      parsed.method === 'actions.run' &&
+      typeof parsed.params?.name === 'string' &&
+      FONTTOOLS_ACTIONS.has(parsed.params.name)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Unzips the staged wheel into site-packages (it is pure Python, so no Pyodide package load, which
+// would need fetch, is required) and checks that fontTools imports.
+const FONTTOOLS_INSTALL_PY = `
+import importlib, os, sysconfig, zipfile
+wheel = "${FONTTOOLS_WHEEL_PATH}"
+with zipfile.ZipFile(wheel) as archive:
+    archive.extractall(sysconfig.get_paths()["purelib"])
+os.remove(wheel)
+importlib.invalidate_caches()
+import fontTools.ttLib
+`;
 
 // Python run once after the packages. The zip carries the pdfeditor package at its top level.
 const UNPACK_PY = `
@@ -265,6 +303,9 @@ export async function loadEngine(options: LoadOptions): Promise<EngineHandle> {
     return module.loadPyodide({ indexURL: new URL('./', base).href });
   });
 
+  const isJob = options.role === 'job';
+  // Set once the fontTools wheel is in the Pyodide file system (before the network lock).
+  let fontWheelStaged = false;
   emit('packages');
   await attempt('packages', async () => {
     // Pillow is a Pyodide package, not part of the wheel: the engine imports it at module level,
@@ -277,9 +318,18 @@ export async function loadEngine(options: LoadOptions): Promise<EngineHandle> {
     const zip = await fetchBytes(new URL(WEB_ZIP_FILE, base).href);
     pyodide.FS.writeFile(`/home/pyodide/${WEB_ZIP_FILE}`, new Uint8Array(zip));
     await pyodide.runPythonAsync(UNPACK_PY);
+    if (!isJob) {
+      // Best effort: without the wheel, text edits still run (see ensureFontTools).
+      try {
+        const wheel = await fetchBytes(new URL(FONTTOOLS_WHEEL_FILE, base).href);
+        pyodide.FS.writeFile(FONTTOOLS_WHEEL_PATH, new Uint8Array(wheel));
+        fontWheelStaged = true;
+      } catch (error) {
+        console.warn(`fontTools wheel not staged: ${messageOf(error)}`);
+      }
+    }
   });
 
-  const isJob = options.role === 'job';
   emit('engine');
   const dispatch = await attempt('engine', async () => {
     options.beforeEngine?.();
@@ -298,6 +348,24 @@ export async function loadEngine(options: LoadOptions): Promise<EngineHandle> {
     return dispatcher;
   });
 
+  // Memoized: the first text edit installs fontTools, later ones reuse the result (a failure too,
+  // so a broken install is not retried on every edit).
+  let fontTools: Promise<void> | undefined;
+  const ensureFontTools = (): Promise<void> => {
+    if (fontTools === undefined) {
+      // A wheel that was not staged was already reported by the packages stage: nothing to add.
+      const install = fontWheelStaged
+        ? pyodide.runPythonAsync(FONTTOOLS_INSTALL_PY).then(() => undefined)
+        : Promise.resolve();
+      fontTools = install.catch((error: unknown) => {
+        console.warn(
+          `fontTools did not load; text edits keep a degraded character map: ${messageOf(error)}`,
+        );
+      });
+    }
+    return fontTools;
+  };
+
   emit('ready');
-  return { dispatch };
+  return { dispatch, ensureFontTools: isJob ? undefined : ensureFontTools };
 }

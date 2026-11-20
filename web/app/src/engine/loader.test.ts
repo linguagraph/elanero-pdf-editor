@@ -110,6 +110,9 @@ describe('loadEngine', () => {
       `fetch ${BASE}pdfeditor-web.zip`,
       'writeFile /home/pyodide/pdfeditor-web.zip',
       'unpack',
+      // fontTools is staged before the network lock; it is installed later, on the first edit.
+      `fetch ${BASE}fonttools-4.62.1-py3-none-any.whl`,
+      'writeFile /home/pyodide/fonttools-4.62.1-py3-none-any.whl',
       'beforeEngine',
       'adapter',
     ]);

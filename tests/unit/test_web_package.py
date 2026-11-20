@@ -221,3 +221,22 @@ def test_run_writes_manifest_and_exits_1_over_budget(
     assert zip_info["gzip_bytes"] == bww.gzip_size((out / bww.ZIP_NAME).read_bytes())
     on_disk = sum(p.stat().st_size for p in package.rglob("*") if p.is_file())
     assert zip_info["uncompressed_bytes"] == on_disk
+
+
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
+def test_font_preview_ships_and_imports_without_fonttools() -> None:
+    # The text editor's preview copy (W6.8a) runs in the web worker, so the module must ship, and
+    # it must import with fontTools blocked: fontTools is imported only inside the function.
+    assert "pdfeditor.services.font_preview" in wp.web_modules()
+    assert "services/font_preview.py" in [str(f) for f in wp.web_files()]
+    failures = _import_failures(["pdfeditor.services.font_preview"], blocked=("fontTools",))
+    assert failures == {}, failures
+
+
+def test_private_copy_refuses_when_fonttools_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A missing fontTools is the web worker before its install: the copy is refused, not raised.
+    from pdfeditor.services.font_preview import private_copy
+
+    monkeypatch.setitem(sys.modules, "fontTools", None)
+    monkeypatch.setitem(sys.modules, "fontTools.ttLib", None)
+    assert private_copy(b"not a font", "PDF Font test") == b""
