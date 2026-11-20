@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
 import { type CommandHandlers, runCommand } from './commands/run';
@@ -43,7 +43,8 @@ import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
-import { DocumentStatusBar, type DocumentStatusBarHandle } from './view/DocumentStatusBar';
+import { DocumentStatusBar } from './view/DocumentStatusBar';
+import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
@@ -164,17 +165,14 @@ export function App({
       engine.dispose();
     };
   }, [engine]);
-  // The status bar's page field, focused by Go to Page (Alt+G).
-  const statusBarRef = useRef<DocumentStatusBarHandle>(null);
   // Next and Previous Document (W4.3b D6): step through the tabs in order and wrap, as the
   // desktop does. With no tab active, Next starts at the first and Previous at the last.
   const cycleDocument = (step: 1 | -1): void => {
     const id = neighbourTabId(docs.tabs, step);
     if (id !== null) docs.selectTab(id);
   };
-  const handlers: CommandHandlers = {
+  const baseHandlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
-    'go-to-page': () => statusBarRef.current?.focusPageField(),
     'next-document': () => cycleDocument(1),
     'previous-document': () => cycleDocument(-1),
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
@@ -263,22 +261,43 @@ export function App({
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
   };
+  // The View zoom and Home navigate commands run on the open document's view (W4.2a S6). The view is
+  // read when a command runs, not during render; with no document no handler is given, and the
+  // registry's "needs a document" rule applies first.
+  const runView = useCallback((id: ViewCommandId) => {
+    const view = viewRef.current;
+    if (view !== null) runViewCommand(id, view);
+  }, []);
+  const handlers: CommandHandlers = {
+    ...baseHandlers,
+    ...(documentShown
+      ? {
+          // Go to Page (W4.3b) focuses the canvas pill's page field.
+          'go-to-page': () => viewRef.current?.focusPageField(),
+          'zoom-in': () => runView('zoom-in'),
+          'zoom-out': () => runView('zoom-out'),
+          'fit-width': () => runView('fit-width'),
+          'fit-page': () => runView('fit-page'),
+          'actual-size': () => runView('actual-size'),
+          'previous-page': () => runView('previous-page'),
+          'next-page': () => runView('next-page'),
+          back: () => stepBack(-1),
+          forward: () => stepBack(1),
+        }
+      : {}),
+  };
   return (
     <AppFrame
       statusBar={
         documentShown ? (
           <DocumentStatusBar
-            ref={statusBarRef}
-            page={viewState.page}
-            total={activeTab?.pages ?? 0}
             zoom={viewState.zoom}
             layout={viewState.layout}
-            labels={viewState.labels}
             canBack={canGoBack(history)}
             canForward={canGoForward(history)}
-            onGoTo={goTo}
             onBack={() => stepBack(-1)}
             onForward={() => stepBack(1)}
+            onFocusPageField={() => viewRef.current?.focusPageField()}
           />
         ) : undefined
       }
