@@ -17,6 +17,11 @@
     "url": "https://files.pythonhosted.org/packages/58/8c/d897dcd32a25b58186c968b15ce4324ca029e9d96460de12325314e390be/pymupdf-1.28.2-cp313-abi3-pyemscripten_2025_0_wasm32.whl",
     "sha256": "2e1b574c0fd2cb238021033fd3c0f9c4388816638df064e4bfb56d9d81736dc8"
   },
+  "builtWheel": {
+    "file": "pymupdf-1.28.2-cp314-none-pyemscripten_2026_0_wasm32.whl",
+    "sha256": "26548c141e7f4c57971e58a0f24088375e3c39915f967a4970c87ec2b763c787",
+    "source": "route 3 build in the CI cache (web-pytest.yml and web-deploy.yml, key pymupdf-1.28.2-pyodide-314.0.8-*), the wheel the engine ships"
+  },
   "packageRoots": [
     "fonttools",
     "pillow",

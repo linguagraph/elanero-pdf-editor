@@ -62,10 +62,12 @@ async function run() {
     throw new Error(`the wheel ${wheelName} is not PyMuPDF ${VERSIONS.pymupdf}`);
   }
   const wheelBytes = fs.readFileSync(wheel);
-  // The PyPI copy is checked against the sha256 recorded in versions.json. Other wheels (a
-  // self-built one) are recorded in the manifest and checked by whoever built them.
-  if (VERSIONS.pypiWheel?.file === wheelName && sha256(wheelBytes) !== VERSIONS.pypiWheel.sha256) {
-    throw new Error(`${wheelName} does not match the sha256 in versions.json`);
+  // The PyPI copy and the route-3 build are each checked against the sha256 recorded in
+  // versions.json. Any other wheel is recorded in the manifest and checked by whoever built it.
+  for (const known of [VERSIONS.pypiWheel, VERSIONS.builtWheel]) {
+    if (known?.file === wheelName && sha256(wheelBytes) !== known.sha256) {
+      throw new Error(`${wheelName} does not match the sha256 in versions.json`);
+    }
   }
 
   // Start clean, so a removed package does not linger in the served folder.
