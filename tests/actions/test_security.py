@@ -94,6 +94,27 @@ def test_sanitized_file_is_clean_in_every_reader(open_copy: Opener, tmp_path: Pa
     record("render_size_pdfium", out, page=0, scale=1)
 
 
+def test_sanitize_keeps_the_form_field_and_resets_its_value(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("annotations_form")
+    run(s, "document.sanitize", SanitizeDocument())
+    out = s.save(tmp_path / "form.pdf")
+
+    record("form_fields_pikepdf", out, fields={"Name1": ""})
+    record("render_size_pdfium", out, page=0, scale=1)
+
+
+def test_sanitize_without_form_data_keeps_the_field_value(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("annotations_form")
+    run(s, "document.sanitize", SanitizeDocument(SanitizeOptions(form_data=False)))
+    out = s.save(tmp_path / "form.pdf")
+
+    record("form_fields_pikepdf", out, fields={"Name1": "Ada"})
+
+
 # -- security.set --------------------------------------------------------------------------
 
 
