@@ -60,6 +60,12 @@ class StaleObject(ActionError):
     code = "STALE_OBJECT"
 
 
+class InvalidArgs(ActionError):
+    """The arguments name something that does not exist, or are out of range (W5.2)."""
+
+    code = "INVALID_ARGS"
+
+
 def ensure_idle(session: DocumentSession) -> None:
     """Raise :class:`Busy` while a background task makes the document read-only.
 

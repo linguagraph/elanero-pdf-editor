@@ -10,7 +10,14 @@ from __future__ import annotations
 
 import logging
 
-from pdfeditor.actions.base import ActionError, Busy, NotSupported, Refused, StaleObject
+from pdfeditor.actions.base import (
+    ActionError,
+    Busy,
+    InvalidArgs,
+    NotSupported,
+    Refused,
+    StaleObject,
+)
 from pdfeditor.core.jobs import Cancelled
 from pdfeditor.engine.base import (
     EngineError,
@@ -129,6 +136,7 @@ _MAPPING: tuple[tuple[type[BaseException], str], ...] = (
     (Refused, REFUSED),
     (Cancelled, CANCELLED),
     (Busy, BUSY),
+    (InvalidArgs, INVALID_ARGS),
     (StaleObject, STALE_OBJECT),
     (NotSupported, NOT_SUPPORTED),
     (EngineError, ENGINE_ERROR),
