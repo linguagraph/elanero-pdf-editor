@@ -253,6 +253,7 @@ def test_security_remove_that_loses_a_race_with_a_task_raises_busy(
 SIGNED_MESSAGE = (
     r"This document is signed\. Changing its security would invalidate the signatures\."
 )
+SANITIZE_MESSAGE = r"This document is signed\. Sanitizing it would invalidate the signatures\."
 
 
 def test_set_security_on_a_signed_document_is_refused(
@@ -274,6 +275,20 @@ def test_remove_security_on_a_signed_document_is_refused(
     with pytest.raises(Refused, match=SIGNED_MESSAGE):
         run(s, "security.remove", RemoveSecurity())
     assert _pending(s) is None
+
+
+def test_sanitize_on_a_signed_document_is_refused_before_any_rewrite(
+    open_copy: Opener, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A sanitize is a full rewrite, which would break the signatures: refused before the snapshot,
+    # so no undo step is recorded and the full-save flag is not set.
+    s = open_copy("report")
+    pretend_signed(s, monkeypatch)
+    with pytest.raises(Refused, match=SANITIZE_MESSAGE) as refused:
+        run(s, "document.sanitize", SanitizeDocument())
+    assert refused.value.reason == "signed_document"
+    assert s.undo_stack.can_undo is False
+    assert s.require_full_save is False
 
 
 def test_security_settings_repr_hides_both_passwords() -> None:
