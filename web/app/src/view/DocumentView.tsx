@@ -222,11 +222,14 @@ export function DocumentView({
     redactionTools.controller.setActive(false);
   }, [tool, redactionTools.controller]);
   // Esc ends the crop box tool with no box, from anywhere in the page (the pointer may have left the
-  // view's focus), and the dialog reopens unchanged.
+  // view's focus), and the dialog reopens unchanged. An Esc another part already handled, or one
+  // meant for an open dialog (which owns Escape, as in useDismissablePanels), is left alone.
   useEffect(() => {
     if (tool !== 'cropBox') return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCropBoxEnd?.(null);
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('.overlay-backdrop')) return;
+      onCropBoxEnd?.(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);

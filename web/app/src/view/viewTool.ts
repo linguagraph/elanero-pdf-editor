@@ -30,6 +30,14 @@ export function forgetViewTool(tabId: number): void {
   if (tools.delete(tabId)) notify();
 }
 
+// Leaves the crop box tool when its tab is left (switched away from, or closed). Other tools are
+// kept: Hand stays on its tab, as before. A closed tab drops its entry instead.
+export function leaveCropBox(tabId: number, stillOpen: boolean): void {
+  if (toolOf(tabId) !== 'cropBox') return;
+  if (stillOpen) setViewTool(tabId, 'select');
+  else forgetViewTool(tabId);
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => {

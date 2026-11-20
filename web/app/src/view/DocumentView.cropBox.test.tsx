@@ -114,3 +114,32 @@ describe('DocumentView with the crop box tool (W4.11 S5)', () => {
     expect(commentButton().getAttribute('aria-pressed')).toBe('false');
   });
 });
+
+describe('DocumentView crop box Esc (W4.11 S5)', () => {
+  it('ignores Esc that was already handled', async () => {
+    const onCropBoxEnd = vi.fn();
+    await mount('cropBox', onCropBoxEnd);
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+    event.preventDefault();
+    act(() => {
+      document.dispatchEvent(event);
+    });
+    expect(onCropBoxEnd).not.toHaveBeenCalled();
+  });
+
+  it('ignores Esc while an overlay is open, so the dialog owns it', async () => {
+    const onCropBoxEnd = vi.fn();
+    await mount('cropBox', onCropBoxEnd);
+    const backdrop = document.createElement('div');
+    backdrop.className = 'overlay-backdrop';
+    document.body.append(backdrop);
+    try {
+      act(() => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+      expect(onCropBoxEnd).not.toHaveBeenCalled();
+    } finally {
+      backdrop.remove();
+    }
+  });
+});

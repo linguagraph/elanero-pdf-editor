@@ -99,6 +99,14 @@ function CropForm({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const mounted = useRef(true);
+  // A drawn box is applied to the form once, when it opens: the stored values then match what the
+  // dialog shows, so Draw on page and Esc again keep the drawn margins.
+  const announced = useRef(false);
+  useEffect(() => {
+    if (announced.current || !drawn) return;
+    announced.current = true;
+    onValuesChange?.(values);
+  }, [drawn, values, onValuesChange]);
 
   useEffect(() => {
     mounted.current = true;
