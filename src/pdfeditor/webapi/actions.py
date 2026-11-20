@@ -12,6 +12,7 @@ engine object leaves this module.
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from datetime import datetime
 
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.base import Change
@@ -20,6 +21,7 @@ from pdfeditor.model.annotations import AnnotationModel
 from pdfeditor.model.color import Color
 from pdfeditor.model.pages import MarkKind
 from pdfeditor.services import stamping
+from pdfeditor.services.comments import comment_threads
 from pdfeditor.services.comments import flattenable as flattenable_comments
 from pdfeditor.services.redaction import redaction_marks
 from pdfeditor.services.xfdf import XfdfTooLarge, preview_xfdf
@@ -152,6 +154,58 @@ def list_redactions(params: dto.HandleParams) -> dto.RedactionListResult:
     truncated = len(found) > MAX_REDACTION_MARKS
     marks = tuple(_redaction_dto(m) for m in found[:MAX_REDACTION_MARKS])
     return dto.RedactionListResult(marks=marks, truncated=truncated)
+
+
+# The most comment entries (a thread's root and its replies) one list reply holds (W7.1b
+# section 3): a comment is about 300 bytes of JSON, so this keeps the reply near 1.5 MB. Whole
+# threads only, so a thread past the cap is left out with every reply and ``truncated`` is set.
+MAX_COMMENT_ENTRIES = 5000
+
+
+def _iso(value: datetime | None) -> str | None:
+    return None if value is None else value.isoformat()
+
+
+def _comment_dto(a: AnnotationModel) -> dto.CommentDto:
+    rect = a.rect
+    return dto.CommentDto(
+        page=a.page_index,
+        name=a.name,
+        type=a.type,
+        author=a.author,
+        contents=a.contents,
+        subject=a.subject,
+        created=_iso(a.created),
+        modified=_iso(a.modified),
+        state=a.state,
+        locked=a.locked,
+        rect=dto.RectDto(rect.x0, rect.y0, rect.x1, rect.y1),
+    )
+
+
+def list_comments(params: dto.HandleParams) -> dto.CommentListResult:
+    """The comment threads of the document, read-only: the web's Comments panel. The order and the
+    replies are the desktop panel's (``comment_threads``). Empty without ``annotations_read``."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        if not session.engine.capabilities.annotations_read:
+            return dto.CommentListResult(threads=(), truncated=False)
+        threads = comment_threads(session.document)
+    kept: list[dto.CommentThreadDto] = []
+    used = 0
+    for thread in threads:
+        size = 1 + len(thread.replies)
+        if used + size > MAX_COMMENT_ENTRIES:
+            break
+        used += size
+        kept.append(
+            dto.CommentThreadDto(
+                comment=_comment_dto(thread.comment),
+                replies=tuple(_comment_dto(r) for r in thread.replies),
+                status=thread.status,
+            )
+        )
+    return dto.CommentListResult(threads=tuple(kept), truncated=len(kept) < len(threads))
 
 
 def undo(params: dto.UndoParams) -> dto.HistoryResult:

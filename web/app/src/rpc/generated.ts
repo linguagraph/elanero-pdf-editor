@@ -60,6 +60,8 @@ export type SpaceCategoryKey = (typeof SPACE_CATEGORY_KEYS)[number];
 
 export type Align = 'left' | 'center' | 'right' | 'justify';
 
+export type AnnotationType = 'Text' | 'FreeText' | 'Line' | 'Square' | 'Circle' | 'Polygon' | 'PolyLine' | 'Highlight' | 'Underline' | 'Squiggly' | 'StrikeOut' | 'Stamp' | 'Caret' | 'Ink' | 'Popup' | 'FileAttachment' | 'Redact' | 'Link' | 'Widget' | 'Other';
+
 export type EncryptionMethod = 'none' | 'rc4-40' | 'rc4-128' | 'aes-128' | 'aes-256' | 'unknown';
 
 /**
@@ -74,6 +76,8 @@ export type ObjectType = 'text' | 'image' | 'form' | 'path';
 
 /** The kind of a security change queued for the next save (``session.security``). */
 export type PendingSecurity = 'encrypt' | 'remove';
+
+export type ReviewState = 'None' | 'Accepted' | 'Rejected' | 'Cancelled' | 'Completed';
 
 /**
  * W1.1 section 4: ``in_place`` keeps signatures (incremental when signed); ``copy`` is a full
@@ -143,6 +147,41 @@ export interface ColorDto {
   g: number;
   b: number;
   a: number;
+}
+
+/**
+ * One comment or reply (W7.1b S1). ``name`` is the /NM or the engine's synthetic name, which
+ * the annotation actions take as ``AnnotRef.name``. Dates are ISO 8601 strings, or null.
+ */
+export interface CommentDto {
+  /** 0-based */
+  page: number;
+  name: string;
+  type: AnnotationType;
+  author: string;
+  contents: string;
+  subject: string;
+  created: string | null;
+  modified: string | null;
+  state: ReviewState;
+  locked: boolean;
+  /** visible page points, origin top-left */
+  rect: RectDto;
+}
+
+export interface CommentListResult {
+  /** page, then y, then x (comment_threads order) */
+  threads: CommentThreadDto[];
+  /** True when some threads were left out at the entry cap */
+  truncated: boolean;
+}
+
+export interface CommentThreadDto {
+  comment: CommentDto;
+  /** oldest first */
+  replies: CommentDto[];
+  /** the latest state set on the comment or a reply */
+  status: ReviewState;
 }
 
 export interface ContentObjectsResult {
@@ -678,6 +717,7 @@ export interface Methods {
   'actions.run': { params: RunParams; result: RunResult; deadline: 'action' };
   'actions.undo': { params: UndoParams; result: HistoryResult; deadline: 'edit' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
+  'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
@@ -713,6 +753,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'actions.run': 'action',
   'actions.undo': 'edit',
   'comments.flattenable': 'instant',
+  'comments.list': 'instant',
   'comments.xfdf_preview': 'action',
   'content.objects': 'render',
   'hello': 'instant',
@@ -753,6 +794,7 @@ export const RESULT_DECODERS: {
   'actions.run': decodeRunResult,
   'actions.undo': decodeHistoryResult,
   'comments.flattenable': decodeFlattenableResult,
+  'comments.list': decodeCommentListResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
   'content.objects': decodeContentObjectsResult,
   'hello': decodeHelloResult,
@@ -922,6 +964,55 @@ export function decodeColorDto(
     g: expectNumber(field(o, 'g', path), `${path}.g`),
     b: expectNumber(field(o, 'b', path), `${path}.b`),
     a: expectNumber(field(o, 'a', path), `${path}.a`),
+  };
+}
+
+export function decodeCommentDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CommentDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['page', 'name', 'type', 'author', 'contents', 'subject', 'created', 'modified', 'state', 'locked', 'rect'], path);
+  return {
+    page: expectInteger(field(o, 'page', path), `${path}.page`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    type: expectOneOf(field(o, 'type', path), ['Text', 'FreeText', 'Line', 'Square', 'Circle', 'Polygon', 'PolyLine', 'Highlight', 'Underline', 'Squiggly', 'StrikeOut', 'Stamp', 'Caret', 'Ink', 'Popup', 'FileAttachment', 'Redact', 'Link', 'Widget', 'Other'] as const, `${path}.type`),
+    author: expectString(field(o, 'author', path), `${path}.author`),
+    contents: expectString(field(o, 'contents', path), `${path}.contents`),
+    subject: expectString(field(o, 'subject', path), `${path}.subject`),
+    created: orNull(field(o, 'created', path), `${path}.created`, (v1, p1) => expectString(v1, p1)),
+    modified: orNull(field(o, 'modified', path), `${path}.modified`, (v1, p1) => expectString(v1, p1)),
+    state: expectOneOf(field(o, 'state', path), ['None', 'Accepted', 'Rejected', 'Cancelled', 'Completed'] as const, `${path}.state`),
+    locked: expectBoolean(field(o, 'locked', path), `${path}.locked`),
+    rect: decodeRectDto(field(o, 'rect', path), ctx, `${path}.rect`),
+  };
+}
+
+export function decodeCommentListResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CommentListResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['threads', 'truncated'], path);
+  return {
+    threads: expectArray(field(o, 'threads', path), `${path}.threads`).map((item1, index1) => decodeCommentThreadDto(item1, ctx, `${`${path}.threads`}[${index1}]`)),
+    truncated: expectBoolean(field(o, 'truncated', path), `${path}.truncated`),
+  };
+}
+
+export function decodeCommentThreadDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CommentThreadDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['comment', 'replies', 'status'], path);
+  return {
+    comment: decodeCommentDto(field(o, 'comment', path), ctx, `${path}.comment`),
+    replies: expectArray(field(o, 'replies', path), `${path}.replies`).map((item1, index1) => decodeCommentDto(item1, ctx, `${`${path}.replies`}[${index1}]`)),
+    status: expectOneOf(field(o, 'status', path), ['None', 'Accepted', 'Rejected', 'Cancelled', 'Completed'] as const, `${path}.status`),
   };
 }
 
