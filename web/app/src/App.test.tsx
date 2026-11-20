@@ -765,6 +765,33 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     return found?.getAttribute('aria-pressed');
   }
 
+  it('has every toolbar button do its job in the open document', async () => {
+    await openDocument();
+    const click = (label: string) => {
+      const found = [...host.querySelectorAll<HTMLButtonElement>('.doc-view-toolbar button')].find(
+        (el) => el.textContent?.trim() === label,
+      );
+      if (found === undefined) throw new Error(`no toolbar button ${label}`);
+      act(() => found.click());
+    };
+    click(t('view.layoutTwoPage'));
+    expect(toolbarPressed(t('view.layoutTwoPage'))).toBe('true');
+    click(t('view.night'));
+    expect(toolbarPressed(t('view.night'))).toBe('true');
+    for (const key of ['comment.tool.note', 'comment.tool.rectangle', 'comment.tool.highlight']) {
+      click(t(key as Parameters<typeof t>[0]));
+      expect(toolbarPressed(t(key as Parameters<typeof t>[0]))).toBe('true');
+    }
+    click(t('redact.mark'));
+    expect(toolbarPressed(t('redact.mark'))).toBe('true');
+    expect(toolbarPressed(t('comment.tool.highlight'))).toBe('false');
+  });
+
+  it('drops the main region padding while a document is shown, so the view has no thick frame', async () => {
+    await openDocument();
+    expect(host.querySelector('.app-main')?.classList.contains('app-main--document')).toBe(true);
+  });
+
   it('Note turns the comment tool on in the open document, and a second press turns it off', async () => {
     await openDocument();
     selectTab(t('ribbon.tab.comment'));

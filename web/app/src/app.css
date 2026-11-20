@@ -65,6 +65,12 @@ body {
   padding: var(--space-4);
 }
 
+/* A document fills the region edge to edge: the 16 px frame is for the start page and the About text,
+   and around the document view it showed as a thick border. */
+.app-main--document {
+  padding: 0;
+}
+
 .app-main a {
   color: var(--color-accent-text);
 }
