@@ -261,6 +261,7 @@ export const EN = {
   'prefs.theme.system': 'Same as system',
   'prefs.theme.light': 'Light',
   'prefs.theme.dark': 'Dark',
+  'theme.system': 'System',
   'prefs.ribbonCompact': 'Compact ribbon',
   'prefs.reduceMotion.label': 'Reduce motion',
   'prefs.reduceMotion.hint': 'Turns off animations where Elanero has them.',
