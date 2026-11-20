@@ -499,11 +499,19 @@ export function DocumentView({
     enabled: selecting,
   });
   const selectModel = textSelection.select;
-  // The model's selection as of the last render, read by Copy (selectedText) outside the render.
+  // The model's selection as of the last render, read by Copy (selectedText) outside the render. It
+  // counts only while the Select tool is on (`selecting`): once Hand or an armed comment or redaction
+  // tool takes over, a stale selection must not override the browser's native one.
   const modelSelection = useRef<TextSelection | null>(null);
+  const selectingNow = useRef(false);
   useEffect(() => {
-    modelSelection.current = textSelection.selection;
+    selectingNow.current = selecting;
+    modelSelection.current = selecting ? textSelection.selection : null;
   });
+  // Leaving Select clears the model's selection, so it is neither drawn nor copied later.
+  useEffect(() => {
+    if (!selecting) selectModel(null);
+  }, [selecting, selectModel]);
   const pan = useHandPan(
     tool === 'hand' || selecting,
     scrollPerScenePixel(layout.height, scroll.height || window.innerHeight),
@@ -848,9 +856,11 @@ export function DocumentView({
         selectModel(TextSelection.ofPage(page, index.length));
       },
       selectedText: () =>
-        modelSelectedText(modelSelection.current, (page) =>
-          textLayers.readyIndex(page, scheduler.revisionOf(page)),
-        ),
+        selectingNow.current
+          ? modelSelectedText(modelSelection.current, (page) =>
+              textLayers.readyIndex(page, scheduler.revisionOf(page)),
+            )
+          : null,
     }),
     [
       scrollToPage,
