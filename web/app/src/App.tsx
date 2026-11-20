@@ -44,6 +44,7 @@ import { createJobWorkerPool, type JobWorkerPool } from './engine/jobPool';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { CropDialog } from './crop/CropDialog';
+import type { CropValues, DrawnCrop } from './crop/cropChoice';
 import type { ChangedDto } from './rpc/generated';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
@@ -170,6 +171,10 @@ export function App({
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
+  // The crop dialog's form, kept across Draw on page and Esc, and the box drawn on a page, if any
+  // (W4.11 S5). The box opens the dialog with its margins; the form is what the user had.
+  const [cropValues, setCropValues] = useState<CropValues | undefined>(undefined);
+  const [cropDrawn, setCropDrawn] = useState<DrawnCrop | null>(null);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
@@ -381,6 +386,22 @@ export function App({
     setSearchMarks(null);
     setStructureRevision((value) => value + 1);
     scheduler?.noteRevisions(changed?.revisions ?? {});
+  };
+  // Draw on page (W4.11 S5) closes the dialog and starts the crop box tool on this tab; the box, or
+  // Esc, ends the tool and reopens the dialog with its margins (or as it was).
+  const drawOnPage = () => {
+    setCropOpen(false);
+    setCropDrawn(null);
+    if (activeId !== null) setViewTool(activeId, 'cropBox');
+  };
+  const onCropBoxEnd = (drawn: DrawnCrop | null) => {
+    if (activeId !== null) setViewTool(activeId, 'select');
+    setCropDrawn(drawn);
+    setCropOpen(true);
+  };
+  const closeCrop = () => {
+    setCropOpen(false);
+    setCropDrawn(null);
   };
   const handlers: CommandHandlers = {
     ...baseHandlers,
@@ -677,13 +698,17 @@ export function App({
       {documentShown && session !== null && activeTab !== undefined ? (
         <CropDialog
           isOpen={cropOpen}
-          onClose={() => setCropOpen(false)}
+          onClose={closeCrop}
           rpc={session.rpc}
           handle={session.handle}
           pageCount={activeTab.pages}
-          currentPage={viewState.page}
+          currentPage={cropDrawn?.page ?? viewState.page}
           signed={activeTab.signed}
           onChanged={onCropped}
+          initialValues={cropValues}
+          onValuesChange={setCropValues}
+          drawn={cropDrawn}
+          onDrawOnPage={drawOnPage}
         />
       ) : null}
       {documentShown && session !== null ? (
@@ -751,6 +776,7 @@ export function App({
             onToolChange={(tool) => {
               if (activeId !== null) setViewTool(activeId, tool);
             }}
+            onCropBoxEnd={onCropBoxEnd}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }

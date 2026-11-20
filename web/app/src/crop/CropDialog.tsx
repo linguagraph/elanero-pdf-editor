@@ -11,7 +11,14 @@ import { Overlay } from '../layout/Overlay';
 import { RpcError } from '../rpc/client';
 import { mapRpcError } from '../rpc/errors';
 import type { ChangedDto, PageSize } from '../rpc/generated';
-import { checkCrop, type CropScope, type CropUnit, type CropValues } from './cropChoice';
+import {
+  checkCrop,
+  withDrawnBox,
+  type CropScope,
+  type CropUnit,
+  type CropValues,
+  type DrawnCrop,
+} from './cropChoice';
 import { runCrop } from './runCrop';
 import './crop.css';
 
@@ -27,7 +34,24 @@ export interface CropDialogProps {
   // Redraws the pages a crop or its Undo changed.
   readonly onChanged?: (changed: ChangedDto | null) => void;
   readonly store?: ToastStore;
+  // The form as the user left it, so a dialog reopened after a drawn box or Esc keeps its values.
+  readonly initialValues?: CropValues;
+  readonly onValuesChange?: (values: CropValues) => void;
+  // A box drawn on a page (W4.11 S5): the form opens with its margins on that page.
+  readonly drawn?: DrawnCrop | null;
+  // Shows "Draw on page", which closes the dialog for the caller to start the crop box tool.
+  readonly onDrawOnPage?: () => void;
 }
+
+const DEFAULT_VALUES: CropValues = {
+  left: '0',
+  top: '0',
+  right: '0',
+  bottom: '0',
+  unit: 'pt',
+  scope: 'all',
+  range: '',
+};
 
 const UNITS: readonly CropUnit[] = ['pt', 'mm', 'in'];
 const UNIT_LABELS: Readonly<Record<CropUnit, MessageId>> = {
@@ -49,8 +73,8 @@ export function CropDialog(props: CropDialogProps) {
   );
 }
 
-// Mounted only while the dialog is open, so each open starts from the defaults and reads the page
-// sizes again (the document may have changed since the last one).
+// Mounted only while the dialog is open, so each open starts from the kept values (or the defaults)
+// and reads the page sizes again (the document may have changed since the last one).
 function CropForm({
   onClose,
   rpc,
@@ -60,16 +84,15 @@ function CropForm({
   signed,
   onChanged,
   store,
+  initialValues,
+  onValuesChange,
+  drawn,
+  onDrawOnPage,
 }: CropDialogProps) {
   const ids = useId();
-  const [values, setValues] = useState<CropValues>({
-    left: '0',
-    top: '0',
-    right: '0',
-    bottom: '0',
-    unit: 'pt',
-    scope: 'all',
-    range: '',
+  const [values, setValues] = useState<CropValues>(() => {
+    const kept = initialValues ?? DEFAULT_VALUES;
+    return drawn ? withDrawnBox(kept, drawn) : kept;
   });
   const [sizes, setSizes] = useState<readonly PageSize[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -95,8 +118,10 @@ function CropForm({
   }, [rpc, handle]);
 
   const set = (patch: Partial<CropValues>) => {
-    setValues((current) => ({ ...current, ...patch }));
+    const next = { ...values, ...patch };
+    setValues(next);
     setError(null);
+    onValuesChange?.(next);
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -214,6 +239,11 @@ function CropForm({
         <button type="submit" disabled={running || sizes === null}>
           {t('crop.apply')}
         </button>
+        {onDrawOnPage ? (
+          <button type="button" onClick={onDrawOnPage} disabled={running}>
+            {t('crop.draw')}
+          </button>
+        ) : null}
         <button type="button" onClick={onClose} disabled={running}>
           {t('crop.cancel')}
         </button>

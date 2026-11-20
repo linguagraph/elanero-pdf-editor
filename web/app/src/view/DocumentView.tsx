@@ -42,6 +42,8 @@ import { marksOnPage, type SearchMarks } from '../search/search';
 import { PageTextLayer } from '../text/PageTextLayer';
 import { useHandPan } from './useHandPan';
 import type { ViewTool } from './viewTool';
+import { CropLayer } from '../crop/CropLayer';
+import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
 import { CommentToolbar } from '../comments/CommentToolbar';
 import type { PageRect } from '../comments/coordinates';
@@ -111,6 +113,9 @@ export interface DocumentViewProps {
   // Called when the view itself asks for another tool: a comment or mark tool chosen here sets it
   // back to Select, so the two never read as on together.
   readonly onToolChange?: (tool: ViewTool) => void;
+  // The crop box tool (W4.11 S5) reports the box it drew, as margins on its page (1-based), or null
+  // when Esc ends the tool with no box. The app ends the tool and reopens the crop dialog.
+  readonly onCropBoxEnd?: (drawn: DrawnCrop | null) => void;
 }
 
 // The job worker is missing: the apply reports its failure, as any other failed job does.
@@ -153,6 +158,7 @@ export function DocumentView({
   redaction,
   tool = 'select',
   onToolChange,
+  onCropBoxEnd,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   // The page labels, from the same session.pages reply as the sizes (W5.3).
@@ -202,18 +208,29 @@ export function DocumentView({
     controller: redaction,
   });
   const pan = useHandPan(tool === 'hand');
-  // The Hand tool and the comment or mark tools are not on together: choosing Hand turns them off
-  // (the last tool chosen wins, as the desktop has one tool per document). The comment tool is
-  // reset while rendering, when the tool prop changes, so no effect sets state.
+  // The Hand and crop box tools and the comment or mark tools are not on together: choosing one of
+  // the view tools turns them off (the last tool chosen wins, as the desktop has one tool per
+  // document). The comment tool is reset while rendering, when the tool prop changes, so no effect
+  // sets state.
   const [seenTool, setSeenTool] = useState(tool);
   if (seenTool !== tool) {
     setSeenTool(tool);
-    if (tool === 'hand') setCommentTool(null);
+    if (tool !== 'select') setCommentTool(null);
   }
   useEffect(() => {
-    if (tool !== 'hand') return;
+    if (tool === 'select') return;
     redactionTools.controller.setActive(false);
   }, [tool, redactionTools.controller]);
+  // Esc ends the crop box tool with no box, from anywhere in the page (the pointer may have left the
+  // view's focus), and the dialog reopens unchanged.
+  useEffect(() => {
+    if (tool !== 'cropBox') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCropBoxEnd?.(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [tool, onCropBoxEnd]);
   // The text layers of this document, one per page and revision (W5.4).
   const textLayers = useMemo(() => new TextLayerCache(rpc, handle), [rpc, handle]);
 
@@ -490,12 +507,14 @@ export function DocumentView({
         'doc-view',
         night ? 'doc-view--night' : '',
         tool === 'hand' ? 'doc-view--hand' : '',
+        tool === 'cropBox' ? 'doc-view--crop-box' : '',
         pan.panning ? 'doc-view--panning' : '',
       ]
         .filter((name) => name !== '')
         .join(' ')}
       aria-label={t('view.label')}
     >
+      {tool === 'cropBox' ? <p className="crop-draw-hint">{t('crop.drawHint')}</p> : null}
       <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.label')}>
         <div role="group" aria-label={t('view.layoutLabel')}>
           <button
@@ -626,6 +645,21 @@ export function DocumentView({
                     rects={selectedRectsOn(redactionTools.state, box.index)}
                     zoom={zoom}
                   />
+                  {tool === 'cropBox' && sizes !== null ? (
+                    <CropLayer
+                      zoom={zoom}
+                      widthPt={sizes[box.index]?.width ?? 0}
+                      heightPt={sizes[box.index]?.height ?? 0}
+                      onDraw={(rect) => {
+                        const size = sizes[box.index];
+                        if (size !== undefined)
+                          onCropBoxEnd?.({
+                            page: box.index + 1,
+                            margins: marginsFromBox(rect, size),
+                          });
+                      }}
+                    />
+                  ) : null}
                   {redactionTools.state.active && sizes !== null ? (
                     <RedactLayer
                       zoom={zoom}

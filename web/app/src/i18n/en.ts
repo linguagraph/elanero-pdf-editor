@@ -439,6 +439,8 @@ export const EN = {
   'crop.pages.range': 'Pages',
   'crop.apply': 'Crop',
   'crop.cancel': 'Cancel',
+  'crop.draw': 'Draw on page',
+  'crop.drawHint': 'Drag a box on a page. Esc cancels.',
   'crop.signedNote':
     'This document is signed. Cropping keeps the signature, but it will show that the pages changed after signing.',
   'crop.error.number': 'Enter each margin as a number, such as 36 or 12.5.',
