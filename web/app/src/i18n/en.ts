@@ -417,6 +417,13 @@ export const EN = {
   'redact.confirm.cancel': 'Cancel',
   'redact.applied': 'Redactions applied.',
   'redact.markFailed': 'The area could not be marked. Try again.',
+  'command.copy.label': 'Copy',
+  'command.select-all.label': 'Select All',
+  'copy.done': 'Copied to clipboard.',
+  'copy.nothingSelected': 'Select some text on a page first, then press Copy.',
+  'copy.tooLarge':
+    'The selection is too large to copy at once (about 50 MB of text). Select fewer pages.',
+  'copy.failed': 'The browser did not copy the text. Click the page and try again.',
   'redact.selectTextFirst': 'Select some text on a page first, then press Mark Text.',
   'redact.notReady': 'The document is not ready yet. Press Mark Text again in a moment.',
   'redact.markedText': {

@@ -119,6 +119,8 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'export-comments': 'file-output',
   'import-comments': 'file-input',
   'go-to-page': 'text-cursor-input',
+  copy: 'copy',
+  'select-all': 'scan-text',
 };
 
 const DECLARED_COMMANDS: readonly CommandDef[] = [
@@ -147,6 +149,9 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('next-page', 'command.next-page.label', 'home.navigate', NOT_LAST_PAGE),
   // Alt+G (web override, W4.3b): focuses the status bar's page field.
   cmd('go-to-page', 'command.go-to-page.label', 'home.navigate'),
+  // Copy and Select All work on the page text (W5.4 S4): the text of the selection, or of the page.
+  cmd('copy', 'command.copy.label', 'home.tools'),
+  cmd('select-all', 'command.select-all.label', 'home.tools'),
 
   // Edit
   {

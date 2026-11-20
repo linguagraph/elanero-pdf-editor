@@ -120,7 +120,12 @@ is reloaded until you press it.
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is
   not kept when you reload the page.
-- **Keyboard shortcuts.** A few web keys work so far: **Alt+Left** and **Alt+Right** go back and
+- **Copy and Select All.** Drag over the text of a page to select it, then choose **Copy** in the
+  Home tab's Tools group or press **Ctrl+C**: the selected text goes to the clipboard, with a line
+  break where each line ends and between pages. **Select All** (Ctrl+A, also in the Home tab) selects
+  the text of the page at the top of the view. Copy says so when nothing is selected, and when the
+  selection is too large to copy at once (about 50 MB of text). A scanned page has no text to copy.
+- **Keyboard shortcuts.** A few web keys work so far: **Ctrl+C** (Copy) and **Ctrl+A** (Select All), **Alt+Left** and **Alt+Right** go back and
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
   document, wrapping at the ends. Go to Page and the two document keys are also in the command

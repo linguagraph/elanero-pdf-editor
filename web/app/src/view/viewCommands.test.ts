@@ -47,6 +47,7 @@ function fakeView(): DocumentViewHandle {
     cachedLines: vi.fn(() => undefined),
     setCommentTool: vi.fn(),
     setRedacting: vi.fn(),
+    selectPageText: vi.fn(),
   };
 }
 

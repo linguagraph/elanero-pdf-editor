@@ -39,6 +39,7 @@ import {
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
+import { selectPageText as selectPageTextLayer } from '../text/copy';
 import { PageTextLayer } from '../text/PageTextLayer';
 import { useHandPan } from './useHandPan';
 import type { ViewTool } from './viewTool';
@@ -94,6 +95,8 @@ export interface DocumentViewHandle {
   setCommentTool(tool: CommentToolId | null): void;
   // Turns the redaction mark tool on or off, as the toolbar's Mark button does (W4.3a S7).
   setRedacting(on: boolean): void;
+  // Selects the text of the page at the top of the view, for Select All (W5.4 S4).
+  selectPageText(): void;
 }
 
 // What the view reports to its host for the status bar and the ribbon's checked states: the page at
@@ -562,6 +565,12 @@ export function DocumentView({
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
       setCommentTool: chooseCommentTool,
       setRedacting: chooseRedacting,
+      selectPageText: () =>
+        selectPageTextLayer(
+          window.getSelection(),
+          scrollRef.current?.querySelector(`[data-page="${topPage.current}"] .page-text-layer`) ??
+            null,
+        ),
     }),
     [
       scrollToPage,
