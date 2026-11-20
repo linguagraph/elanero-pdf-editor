@@ -608,6 +608,11 @@ def _corners(quads) -> list[tuple[float, float]]:
     return [(p.x, p.y) for q in quads for p in (q.ul, q.ur, q.ll, q.lr)]
 
 
+def _flat(quads) -> list[float]:
+    # pytest 9.2 rejects pytest.approx on nested sequences, so compare the coordinates flat.
+    return [c for xy in _corners(quads) for c in xy]
+
+
 def test_two_line_redaction_mark_round_trips_quads_and_colour(
     writable: Engine, fixture_pdf, tmp_path: Path
 ) -> None:
@@ -622,12 +627,12 @@ def test_two_line_redaction_mark_round_trips_quads_and_colour(
         text_color=RED,
     )
     stored = doc.page(0).add_annotation(mark)
-    assert _corners(stored.quads) == pytest.approx(_corners(lines))  # add
+    assert _flat(stored.quads) == pytest.approx(_flat(lines))  # add
     assert stored.text_color == RED
 
     again = _save_and_reopen(writable, doc, path, "/Redact")
     reopened = next(a for a in again.page(0).annotations() if a.name == stored.name)
-    assert _corners(reopened.quads) == pytest.approx(_corners(lines))
+    assert _flat(reopened.quads) == pytest.approx(_flat(lines))
     assert reopened.text_color == RED
     assert reopened.overlay_text == "REDACTED"
     again.close()
@@ -662,7 +667,7 @@ def test_redaction_mark_update_persists_fill_overlay_and_text_colour(
     assert (updated.fill, updated.overlay_text, updated.text_color) == (BLUE, "EXEMPT", BLUE)
     assert updated.rect == stored.rect and updated.name == stored.name
     assert updated.contents == "secret"
-    assert _corners(updated.quads) == pytest.approx(_corners(lines))  # no cross-out change
+    assert _flat(updated.quads) == pytest.approx(_flat(lines))  # no cross-out change
 
     # Clearing the overlay text removes it; the box colour and text colour stay as set.
     cleared = doc.page(0).update_annotation(dataclasses.replace(updated, overlay_text=""))
@@ -672,7 +677,7 @@ def test_redaction_mark_update_persists_fill_overlay_and_text_colour(
     reopened = next(a for a in again.page(0).annotations() if a.name == stored.name)
     assert reopened.fill == BLUE and reopened.text_color == BLUE
     assert reopened.overlay_text == ""
-    assert _corners(reopened.quads) == pytest.approx(_corners(lines))
+    assert _flat(reopened.quads) == pytest.approx(_flat(lines))
     again.close()
     record(
         "redact_annot_pikepdf",
