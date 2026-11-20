@@ -133,6 +133,14 @@ export interface ClosedEvent {
   handle: string;
 }
 
+export interface ColorDto {
+  /** 0..1 per channel */
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
 export interface DocInfo {
   encrypted: boolean;
   has_signatures: boolean;
@@ -403,6 +411,31 @@ export interface RectDto {
   y1: number;
 }
 
+export interface RedactionListResult {
+  /** document order: page ascending, then annotation order */
+  marks: RedactionMarkDto[];
+  /** True when the document has more marks than the list holds */
+  truncated: boolean;
+}
+
+export interface RedactionMarkDto {
+  /** 0-based */
+  page: number;
+  /** /NM, or the engine's synthetic name for an unnamed mark (MarkRef.name) */
+  name: string;
+  /** visible page points, origin top-left */
+  rect: RectDto;
+  /** box colour after apply; None = the file has no /IC (drawn black) */
+  fill: ColorDto | null;
+  /** "" when none */
+  overlay_text: string;
+  text_color: ColorDto | null;
+  /** the marked text for a text mark, "" for an area */
+  contents: string;
+  author: string;
+  locked: boolean;
+}
+
 export interface RenderPageParams {
   handle: string;
   /** 0-based, in visible page order */
@@ -599,6 +632,7 @@ export interface Methods {
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
+  'redaction.list': { params: HandleParams; result: RedactionListResult; deadline: 'instant' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
   'render.tile': { params: RenderTileParams; result: PageImage; deadline: 'render' };
   'save.autosave_bytes': { params: HandleParams; result: AutosaveResult; deadline: 'io' };
@@ -632,6 +666,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
   'marks.list': 'instant',
+  'redaction.list': 'instant',
   'render.page': 'render',
   'render.tile': 'render',
   'save.autosave_bytes': 'io',
@@ -670,6 +705,7 @@ export const RESULT_DECODERS: {
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
   'marks.list': decodeMarksResult,
+  'redaction.list': decodeRedactionListResult,
   'render.page': decodePageImage,
   'render.tile': decodePageImage,
   'save.autosave_bytes': decodeAutosaveResult,
@@ -816,6 +852,21 @@ export function decodeClosedEvent(
   checkKeys(o, ['handle'], path);
   return {
     handle: expectString(field(o, 'handle', path), `${path}.handle`),
+  };
+}
+
+export function decodeColorDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): ColorDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['r', 'g', 'b', 'a'], path);
+  return {
+    r: expectNumber(field(o, 'r', path), `${path}.r`),
+    g: expectNumber(field(o, 'g', path), `${path}.g`),
+    b: expectNumber(field(o, 'b', path), `${path}.b`),
+    a: expectNumber(field(o, 'a', path), `${path}.a`),
   };
 }
 
@@ -1288,6 +1339,39 @@ export function decodeRectDto(
     y0: expectNumber(field(o, 'y0', path), `${path}.y0`),
     x1: expectNumber(field(o, 'x1', path), `${path}.x1`),
     y1: expectNumber(field(o, 'y1', path), `${path}.y1`),
+  };
+}
+
+export function decodeRedactionListResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): RedactionListResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['marks', 'truncated'], path);
+  return {
+    marks: expectArray(field(o, 'marks', path), `${path}.marks`).map((item1, index1) => decodeRedactionMarkDto(item1, ctx, `${`${path}.marks`}[${index1}]`)),
+    truncated: expectBoolean(field(o, 'truncated', path), `${path}.truncated`),
+  };
+}
+
+export function decodeRedactionMarkDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): RedactionMarkDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['page', 'name', 'rect', 'fill', 'overlay_text', 'text_color', 'contents', 'author', 'locked'], path);
+  return {
+    page: expectInteger(field(o, 'page', path), `${path}.page`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    rect: decodeRectDto(field(o, 'rect', path), ctx, `${path}.rect`),
+    fill: orNull(field(o, 'fill', path), `${path}.fill`, (v1, p1) => decodeColorDto(v1, ctx, p1)),
+    overlay_text: expectString(field(o, 'overlay_text', path), `${path}.overlay_text`),
+    text_color: orNull(field(o, 'text_color', path), `${path}.text_color`, (v1, p1) => decodeColorDto(v1, ctx, p1)),
+    contents: expectString(field(o, 'contents', path), `${path}.contents`),
+    author: expectString(field(o, 'author', path), `${path}.author`),
+    locked: expectBoolean(field(o, 'locked', path), `${path}.locked`),
   };
 }
 

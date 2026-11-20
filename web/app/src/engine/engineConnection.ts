@@ -218,6 +218,7 @@ export interface PageRpc {
       | 'comments.flattenable'
       | 'comments.xfdf_preview'
       | 'marks.list'
+      | 'redaction.list'
       | 'system.memory',
   >(
     method: M,

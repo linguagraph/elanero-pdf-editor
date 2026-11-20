@@ -531,6 +531,20 @@ def sensitive() -> None:
     doc.close()
 
 
+def redact_marks_preexisting() -> None:
+    """Two redaction marks already in the file, made by another tool: one with an /NM name and
+    one without, over the email and the SSN of ``sensitive``. The web's list must show both."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 128), "Email: jane.example@example.com", fontsize=12)
+    page.insert_text((72, 200), "SSN: 123-45-6789", fontsize=12)
+    page.insert_text((72, 300), "Public paragraph that must survive.", fontsize=12)
+    named = page.add_redact_annot(pymupdf.Rect(70, 116, 330, 132))
+    doc.xref_set_key(named.xref, "NM", pymupdf.get_pdf_str("preexisting-email"))
+    page.add_redact_annot(pymupdf.Rect(70, 188, 260, 204))  # no /NM: the engine names it
+    _save(doc, "redact_marks_preexisting.pdf")
+
+
 def report() -> None:
     """Structured content for export: headings, paragraphs, a ruled table and an image."""
     doc = pymupdf.open()
@@ -1071,6 +1085,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "heavy": heavy,
     "report": report,
     "sensitive": sensitive,
+    "redact_marks_preexisting": redact_marks_preexisting,
     "mixed_content": mixed_content,
     "layers": layers,
     "hidden_layers": hidden_layers,
