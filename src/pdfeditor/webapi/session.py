@@ -22,6 +22,7 @@ from pdfeditor.model.platform import current as platform_current
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.errors import (
     FILE_TOO_LARGE,
+    OPEN_FAILED,
     PASSWORD_REQUIRED,
     TOO_MANY_PAGES,
     WRONG_PASSWORD,
@@ -59,6 +60,10 @@ def open_document(params: dto.OpenParams) -> dto.OpenResult:
     try:
         with session.lock:
             pages = session.document.page_count
+        if pages == 0:
+            # A page tree with no pages opens, but nothing can be saved from it: refuse it here.
+            # The failed open below closes the engine document.
+            raise RpcFailure(OPEN_FAILED, "the file has no readable pages", {"pages": 0})
         if pages > limits.MAX_PAGES:
             raise RpcFailure(
                 TOO_MANY_PAGES,

@@ -721,8 +721,13 @@ class MuDocument:
         does: names unnamed annotations and subsets the fonts this app embedded. Done in the
         open document too. It counts as a change (bumps the edit counter) only when it changed
         something: a repeat copy of an unchanged document must not spend the in-place lineage."""
-        changed = self._name_unnamed_annotations() > 0
-        changed = self._subset_gained_fonts(options) or changed
+        try:
+            changed = self._name_unnamed_annotations() > 0
+            changed = self._subset_gained_fonts(options) or changed
+        except pymupdf.mupdf.FzErrorBase as exc:
+            # Naming an annotation loads its page, which a damaged page tree can refuse.
+            log.info("save preparation failed: %s", exc)
+            raise SaveError("the document's page tree is too damaged to save") from exc
         if changed:
             self._edits += 1
 
@@ -1021,8 +1026,16 @@ class MuDocument:
         # Garbage collection (garbage >= 2) compacts the open document's objects in place, which
         # would change the state an in-place update of a signed document is built on. Such a
         # write goes through a scratch copy instead.
-        source = self._scratch_copy() if options.garbage >= 2 and self._lineage_on else self
-        data = bytes(source._fz.tobytes(**source._save_kwargs(options)))
+        try:
+            source = self._scratch_copy() if options.garbage >= 2 and self._lineage_on else self
+            if source.page_count == 0:
+                raise SaveError("the document has no pages, so it can't be saved")
+            data = bytes(source._fz.tobytes(**source._save_kwargs(options)))
+        except pymupdf.mupdf.FzErrorBase as exc:
+            # The open accepted a page tree or object that MuPDF cannot write back (the scratch
+            # copy of a signed document's write included).
+            log.info("save failed: %s", exc)
+            raise SaveError("the document's page tree is too damaged to write") from exc
         if options.garbage == 0:  # keeps object numbers: a snapshot that may be loaded back
             key = hashlib.sha1(data).digest()
             self._snapshot_fonts[key] = (self._loaded_xrefs, self._gained_file_fonts)
