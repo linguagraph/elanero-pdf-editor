@@ -3,7 +3,13 @@
 // the document stays as it is. Its one file is reduced.pdf; the dialog decides whether to offer it.
 import type { ResultFile } from '../files/downloads';
 import { type FileJobDeps, runFileJobOutput } from '../files/fileJob';
-import { REDUCE_PRESETS, SPACE_CATEGORY_KEYS, type SpaceCategoryKey } from '../rpc/generated';
+import {
+  REDUCE_DPI_RANGE,
+  REDUCE_PRESETS,
+  REDUCE_QUALITY_RANGE,
+  SPACE_CATEGORY_KEYS,
+  type SpaceCategoryKey,
+} from '../rpc/generated';
 import { expectArray, expectInteger, expectObject, expectOneOf, field, orNull } from '../rpc/shape';
 
 // The presets, by the keys the reduce_size job takes (ReduceSizeArgs in webapi/dto.py). The order is
@@ -27,6 +33,27 @@ export interface ReduceOptions {
 export interface CompressSettings {
   readonly preset: CompressPreset | 'custom';
   readonly options: ReduceOptions;
+}
+
+// The image resolution is either null (keep it) or a whole number of dpi in range.
+export function dpiIsValid(dpi: number | null): boolean {
+  return (
+    dpi === null ||
+    (Number.isInteger(dpi) && dpi >= REDUCE_DPI_RANGE[0] && dpi <= REDUCE_DPI_RANGE[1])
+  );
+}
+
+export function qualityIsValid(quality: number): boolean {
+  return (
+    Number.isInteger(quality) &&
+    quality >= REDUCE_QUALITY_RANGE[0] &&
+    quality <= REDUCE_QUALITY_RANGE[1]
+  );
+}
+
+// Whether the settings can be sent: the job refuses an out-of-range value, so the dialog never sends one.
+export function optionsAreValid(options: ReduceOptions): boolean {
+  return dpiIsValid(options.image_dpi) && qualityIsValid(options.jpeg_quality);
 }
 
 // The space audit (SpaceAuditTable reads it): the stored bytes of the whole document and of each

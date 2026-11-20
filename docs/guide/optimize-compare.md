@@ -36,7 +36,11 @@ the open document is left unchanged.
 Removing document information or thumbnails removes that data from the copy only.
 
 In the web version, **Tools ▸ Reduce File Size** offers the four presets (Smallest, Balanced, High
-quality and Lossless) and no custom settings. **Compress** runs in the background with a progress
+quality and Lossless) and **Custom**. The fields below the presets are the same as the desktop's
+image settings (resolution, JPEG quality, grayscale) and **Fonts and structure**; changing one makes
+the settings Custom. Keep image resolution turns off the resolution field. Out-of-range values are
+marked, and **Compress** stays off until they are fixed. **Optimize for fast web view** is not on the
+web. **Compress** runs in the background with a progress
 bar and **Cancel**. The result shows the size before and after, and **Download reduced.pdf** saves
 the copy. If the preset does not make the file smaller, the dialog says so and offers no download:
 keep the original.

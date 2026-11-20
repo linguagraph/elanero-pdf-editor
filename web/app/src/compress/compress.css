@@ -89,3 +89,42 @@
   align-items: center;
   min-height: 44px;
 }
+
+.compress-fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.compress-images {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.compress-check,
+.compress-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+
+.compress-field input {
+  width: 8rem;
+  min-height: 44px;
+}
+
+.compress-advanced {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.compress-advanced summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
