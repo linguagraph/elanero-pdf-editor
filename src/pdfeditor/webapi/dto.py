@@ -89,6 +89,20 @@ class FontsResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class LayerEntry:
+    id: int  # the engine's optional-content id, used by layers.set_visible (a later slice)
+    name: str  # from the file; untrusted text, shown as text only
+    visible: bool  # the view state the document's default gives
+    depth: int  # nesting depth in the layer tree (0 at the top)
+    locked: bool  # a locked layer can't be toggled
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class LayersResult:
+    layers: tuple[LayerEntry, ...]  # in the engine's UI order; empty when there are none
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class OpenResult:
     handle: str  # opaque; every later call on the document names it
     info: DocInfo

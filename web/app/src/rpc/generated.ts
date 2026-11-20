@@ -347,6 +347,24 @@ export interface JobPrepareResult {
   state: DocStateDto | null;
 }
 
+export interface LayerEntry {
+  /** the engine's optional-content id, used by layers.set_visible (a later slice) */
+  id: number;
+  /** from the file; untrusted text, shown as text only */
+  name: string;
+  /** the view state the document's default gives */
+  visible: boolean;
+  /** nesting depth in the layer tree (0 at the top) */
+  depth: number;
+  /** a locked layer can't be toggled */
+  locked: boolean;
+}
+
+export interface LayersResult {
+  /** in the engine's UI order; empty when there are none */
+  layers: LayerEntry[];
+}
+
 /**
  * ``save.mark_saved`` (W1.2 section 12): ``saved`` is True when this call cleared the dirty
  * flag, and False when the document was already clean (a no-op, with no ``saved`` event).
@@ -746,6 +764,7 @@ export interface Methods {
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
+  'layers.list': { params: HandleParams; result: LayersResult; deadline: 'instant' };
   'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
   'redaction.list': { params: HandleParams; result: RedactionListResult; deadline: 'instant' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
@@ -783,6 +802,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
+  'layers.list': 'instant',
   'marks.list': 'instant',
   'redaction.list': 'instant',
   'render.page': 'render',
@@ -825,6 +845,7 @@ export const RESULT_DECODERS: {
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
+  'layers.list': decodeLayersResult,
   'marks.list': decodeMarksResult,
   'redaction.list': decodeRedactionListResult,
   'render.page': decodePageImage,
@@ -1311,6 +1332,34 @@ export function decodeJobPrepareResult(
     mutating: expectBoolean(field(o, 'mutating', path), `${path}.mutating`),
     document: takeBinary(field(o, 'document', path), ctx, `${path}.document`),
     state: orNull(field(o, 'state', path), `${path}.state`, (v1, p1) => decodeDocStateDto(v1, ctx, p1)),
+  };
+}
+
+export function decodeLayerEntry(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LayerEntry {
+  const o = expectObject(value, path);
+  checkKeys(o, ['id', 'name', 'visible', 'depth', 'locked'], path);
+  return {
+    id: expectInteger(field(o, 'id', path), `${path}.id`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    visible: expectBoolean(field(o, 'visible', path), `${path}.visible`),
+    depth: expectInteger(field(o, 'depth', path), `${path}.depth`),
+    locked: expectBoolean(field(o, 'locked', path), `${path}.locked`),
+  };
+}
+
+export function decodeLayersResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LayersResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['layers'], path);
+  return {
+    layers: expectArray(field(o, 'layers', path), `${path}.layers`).map((item1, index1) => decodeLayerEntry(item1, ctx, `${`${path}.layers`}[${index1}]`)),
   };
 }
 
