@@ -5,7 +5,7 @@
 // the viewport) after them. Each kind has its own queue, since a plan replaces only the entries of
 // its own kind.
 import type { PageRpc } from '../engine/engineConnection';
-import type { Methods } from '../rpc/generated';
+import type { RenderReply } from '../rpc/client';
 import { PageCache, pageCacheKey, readDeviceMemory, thumbnailCacheKey } from './pageCache';
 import { type QueueEntry, type RenderRequest, RenderQueue, requestKey } from './renderQueue';
 import { cacheBudgetBytes, TILE_PX } from './tiles';
@@ -190,7 +190,7 @@ export class RenderScheduler {
       // comment the user just placed is saved and listed but never drawn.
       annotations: true,
     };
-    const pending: Promise<Methods['render.page']['result']> =
+    const pending: Promise<RenderReply> =
       tile === undefined
         ? this.rpc.call('render.page', base)
         : this.rpc.call('render.tile', {
@@ -202,16 +202,20 @@ export class RenderScheduler {
     pending.then(
       (reply) => {
         this.finish(kind, id);
+        // A bitmap reply (W5.1b S5) keeps its bitmap, and its pixels are the empty buffer.
+        const bitmap = reply.format === 'bitmap' ? reply.bitmap : undefined;
         if (reply.revision === request.revision) {
           this.cache.set(cacheKey, {
             width: reply.width,
             height: reply.height,
             pixels: reply.pixels,
+            ...(bitmap === undefined ? {} : { bitmap }),
           });
           if (kind === 'page') this.resolveFirstPage();
         } else {
           // The page changed since the caller last saw it. The reply carries no pixels, so the
-          // page is asked for again at the revision the worker reported.
+          // page is asked for again at the revision the worker reported. Its bitmap is unused.
+          bitmap?.close();
           this.revisions.set(request.page, reply.revision);
         }
         this.notify();
