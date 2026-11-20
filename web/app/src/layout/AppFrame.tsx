@@ -1,7 +1,11 @@
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { t } from '../i18n/t';
+import { LAYOUT_PX } from '../theme/tokens';
 import { layoutForWidth } from './breakpoints';
 import { LayoutProvider } from './LayoutContext';
+import { PanelResizer } from './PanelResizer';
+import { clampPanelWidth, maxPanelWidth, readPanelWidths, writePanelWidth } from './panelWidths';
+import type { PanelWidths } from './panelWidths';
 import type { Side } from './sidePanels';
 import { useDismissablePanels } from './useDismissablePanels';
 import { useViewportWidth } from './useViewportWidth';
@@ -36,7 +40,23 @@ export function AppFrame({
   railsHidden = false,
   onDismissPanel,
 }: AppFrameProps) {
-  const regions = layoutForWidth(useViewportWidth());
+  const windowWidth = useViewportWidth();
+  const regions = layoutForWidth(windowWidth);
+  // The remembered widths, kept clamped to the window for display; the stored value is not changed
+  // by a narrower window, so a wider one shows the panel at its remembered width again.
+  const [widths, setWidths] = useState<PanelWidths>(readPanelWidths);
+  const shownWidth: PanelWidths = {
+    left: clampPanelWidth(widths.left, windowWidth),
+    right: clampPanelWidth(widths.right, windowWidth),
+  };
+  const maxWidth = maxPanelWidth(windowWidth);
+  const showWidth = (side: Side, width: number) => {
+    setWidths((previous) => ({ ...previous, [side]: width }));
+  };
+  const saveWidth = (side: Side, width: number) => {
+    showWidth(side, width);
+    writePanelWidth(side, width);
+  };
   const hasLeftPanel = leftPanel !== undefined && leftPanel !== null && leftPanel !== false;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null && rightPanel !== false;
   const frameRef = useRef<HTMLDivElement>(null);
@@ -73,8 +93,21 @@ export function AppFrame({
             id="app-panel-left"
             className="app-panel app-panel-left"
             aria-label={t('layout.leftPanel')}
+            style={{ width: shownWidth.left, flexBasis: shownWidth.left }}
           >
             {leftPanel}
+            <PanelResizer
+              side="left"
+              value={shownWidth.left}
+              min={LAYOUT_PX.minPanelWidth}
+              max={maxWidth}
+              onChange={(width) => {
+                showWidth('left', width);
+              }}
+              onCommit={(width) => {
+                saveWidth('left', width);
+              }}
+            />
           </aside>
         ) : null}
         <main className="app-page-area" aria-label={t('layout.document')}>
@@ -85,8 +118,21 @@ export function AppFrame({
             id="app-panel-right"
             className="app-panel app-panel-right"
             aria-label={t('layout.rightPanel')}
+            style={{ width: shownWidth.right, flexBasis: shownWidth.right }}
           >
             {rightPanel}
+            <PanelResizer
+              side="right"
+              value={shownWidth.right}
+              min={LAYOUT_PX.minPanelWidth}
+              max={maxWidth}
+              onChange={(width) => {
+                showWidth('right', width);
+              }}
+              onCommit={(width) => {
+                saveWidth('right', width);
+              }}
+            />
           </aside>
         ) : null}
         <div

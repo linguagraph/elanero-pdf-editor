@@ -148,6 +148,15 @@ export function readPreferences(): Preferences {
   };
 }
 
+// Reads one raw value, or null when the key is missing or the browser refuses the read. Never throws.
+export function readStoredValue(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 // Saves every preference. The theme goes through the theme module, so it is applied to the page
 // as well. Returns false when the browser would not keep the values; the theme still applies.
 export function writePreferences(prefs: Preferences): boolean {
