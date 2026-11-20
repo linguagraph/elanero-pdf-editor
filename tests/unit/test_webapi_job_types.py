@@ -25,6 +25,7 @@ from PIL import Image
 from pdfeditor.core.jobs import CancelToken
 from pdfeditor.engine import mupdf as mupdf_engine
 from pdfeditor.model import platform as model_platform
+from pdfeditor.services.export.fonts import program_fs_type
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
     CANCELLED,
@@ -226,6 +227,7 @@ READ_ONLY_CASES = [
     ("split", {"mode": "pages", "pages_per_file": 1}, "files"),
     ("print_pages", {"pages": [0]}, "files"),
     ("extract_images", {"name": "a.pdf"}, "files"),
+    ("extract_fonts", {"name": "a.pdf"}, "files"),
 ]
 
 
@@ -925,3 +927,51 @@ def test_a_dot_only_document_name_gives_a_zip_name_that_does_not_start_with_a_do
     ((zip_name, _, _),) = files_of(ok(reply), out)
     assert not zip_name.startswith(".")
     assert zip_name == "document-images.zip"
+
+
+# -- extract_fonts (W4.16): the embedded fonts whose licence allows saving them, read-only ------
+
+
+def licensed_fonts_bytes(fixture_pdf: Any) -> bytes:
+    return bytes(fixture_pdf("licensed_fonts").read_bytes())
+
+
+def test_extract_fonts_refuses_a_font_whose_licence_forbids_it(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(licensed_fonts_bytes(fixture_pdf), "licensed.pdf")
+    args = {"name": "licensed.pdf"}
+    _, copy = prepare(handle, "extract_fonts", args)
+    reply, out = run_on_copy("extract_fonts", args, copy)
+    result = ok(reply)
+    # the refused fonts are reported by name, and nothing is saved for them
+    assert result["value"] == {
+        "saved": ["Free Sans Regular.ttf", "Print Sans Regular.ttf"],
+        "not_embedded": [],
+        "refused": [
+            {"name": "Bitmap Sans Regular", "reason": "bitmap_only"},
+            {"name": "Mixed Sans Regular", "reason": "restricted"},
+            {"name": "Restricted Sans Regular", "reason": "restricted"},
+        ],
+    }
+    ((name, mime, data),) = files_of(result, out)
+    assert (name, mime) == ("licensed-fonts.zip", "application/zip")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert sorted(archive.namelist()) == [
+            "Free Sans Regular.ttf",
+            "Print Sans Regular.ttf",
+        ]
+        # each saved program reads back as the TrueType font it was, with its own fsType
+        fs_types = {program_fs_type(archive.read(n)) for n in archive.namelist()}
+    assert fs_types == {0, 0x0004}
+
+
+def test_extract_fonts_of_a_document_without_embedded_fonts(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"name": "text.pdf"}
+    _, copy = prepare(handle, "extract_fonts", args)
+    reply, _ = run_on_copy("extract_fonts", args, copy)
+    result = ok(reply)
+    assert result["files"] == []
+    assert result["value"]["saved"] == []
+    assert result["value"]["refused"] == []
+    # the base-14 fonts have no program in the file, so they are named as not embedded
+    assert result["value"]["not_embedded"]

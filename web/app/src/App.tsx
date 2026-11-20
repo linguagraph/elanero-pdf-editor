@@ -51,6 +51,7 @@ import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
+import { ExtractFontsDialog } from './extract/ExtractFontsDialog';
 import { ExtractImagesDialog } from './extract/ExtractImagesDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
@@ -180,6 +181,7 @@ export function App({
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [extractImagesOpen, setExtractImagesOpen] = useState(false);
+  const [extractFontsOpen, setExtractFontsOpen] = useState(false);
   const [compressOpen, setCompressOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
@@ -250,6 +252,7 @@ export function App({
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
     'extract-images': () => setExtractImagesOpen(true),
+    'extract-fonts': () => setExtractFontsOpen(true),
     'reduce-file-size': () => setCompressOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
@@ -788,6 +791,16 @@ export function App({
           handle={session.handle}
           pageCount={activeTab.pages}
           currentPage={viewState.page}
+          startWorker={jobs.acquire}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
+        <ExtractFontsDialog
+          isOpen={extractFontsOpen}
+          onClose={() => setExtractFontsOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          name={activeTab.name}
           startWorker={jobs.acquire}
         />
       ) : null}

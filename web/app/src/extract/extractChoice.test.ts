@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ReplyShapeError } from '../rpc/shape';
-import { checkExtractPages, extractImagesArgs, readExtractImagesValue } from './extractChoice';
+import {
+  checkExtractPages,
+  extractFontsArgs,
+  extractImagesArgs,
+  readExtractFontsValue,
+  readExtractImagesValue,
+} from './extractChoice';
 
 describe('checkExtractPages', () => {
   it('takes every page as null', () => {
@@ -46,5 +52,35 @@ describe('readExtractImagesValue', () => {
     expect(() => readExtractImagesValue({ count: 'three', too_large: 0 })).toThrow(ReplyShapeError);
     expect(() => readExtractImagesValue(null)).toThrow(ReplyShapeError);
     expect(() => readExtractImagesValue({ count: -1, too_large: 0 })).toThrow(ReplyShapeError);
+  });
+});
+
+describe('extract_fonts arguments and value', () => {
+  it('sends the document name only', () => {
+    expect(extractFontsArgs('Report.pdf')).toEqual({ name: 'Report.pdf' });
+  });
+
+  it('reads the saved, not-embedded and refused fonts', () => {
+    expect(
+      readExtractFontsValue({
+        saved: ['Free Sans.ttf'],
+        not_embedded: ['Helvetica'],
+        refused: [{ name: 'Restricted Sans', reason: 'restricted' }],
+      }),
+    ).toEqual({
+      saved: ['Free Sans.ttf'],
+      notEmbedded: ['Helvetica'],
+      refused: [{ name: 'Restricted Sans', reason: 'restricted' }],
+    });
+  });
+
+  it('refuses a value of another shape', () => {
+    expect(() => readExtractFontsValue({ saved: 'x', not_embedded: [], refused: [] })).toThrow(
+      ReplyShapeError,
+    );
+    expect(() =>
+      readExtractFontsValue({ saved: [], not_embedded: [], refused: [{ name: 'A' }] }),
+    ).toThrow(ReplyShapeError);
+    expect(() => readExtractFontsValue(null)).toThrow(ReplyShapeError);
   });
 });

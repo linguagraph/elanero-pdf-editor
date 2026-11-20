@@ -53,6 +53,7 @@ from pdfeditor.services.export.images import (
     ImageFormat,
     PageImageOptions,
     export_pages,
+    extract_fonts,
     extract_images,
     oversized_images,
 )
@@ -330,6 +331,10 @@ _MIME = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".xfdf": "application/vnd.adobe.xfdf",
     ".csv": "text/csv",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".pfa": "application/x-font-type1",  # Type 1 fonts; CFF (.cff) has no registered type
+    ".pfb": "application/x-font-type1",
 }
 TEXT_FORMATS = {
     "txt": TextFormat.TEXT,
@@ -695,6 +700,35 @@ def _run_extract_images(
     )
 
 
+def _convert_extract_fonts(data: object, buffers: BufferTable) -> dto.ExtractFontsArgs:
+    args: dto.ExtractFontsArgs = from_json(dto.ExtractFontsArgs, data, buffers, "args")
+    return args
+
+
+def _run_extract_fonts(
+    session: DocumentSession | None, args: dto.ExtractFontsArgs, ctx: JobContext
+) -> JobOutput:
+    # The embedded font programs, as stored (the desktop's Extract Fonts). A font whose licence
+    # forbids saving it is reported by name and not written, as the desktop reports it.
+    owner = _session(session)
+    stem = _stem(args.name)
+    ctx.token.check()
+    with owner.lock, tempfile.TemporaryDirectory() as folder:
+        extraction = extract_fonts(
+            owner.document, Path(folder), token=ctx.token, progress=ctx.progress
+        )
+        files = _as_archive(_collect(Path(folder)), name=f"{stem}-fonts.zip")
+    value = dto.ExtractFontsValue(
+        saved=tuple(sorted(path.name for path in extraction.written)),
+        not_embedded=tuple(sorted(set(extraction.not_embedded))),
+        refused=tuple(
+            dto.RefusedFontDto(name=name, reason=reason)
+            for name, reason in sorted(extraction.refused)
+        ),
+    )
+    return JobOutput(files=files, value=value)
+
+
 JOB_TYPES: dict[str, JobType] = {
     "action": JobType("action", True, _convert_action, _run_action),
     "reduce_size": JobType("reduce_size", False, _convert_reduce, _run_reduce),
@@ -707,6 +741,7 @@ JOB_TYPES: dict[str, JobType] = {
     "extract_images": JobType(
         "extract_images", False, _convert_extract_images, _run_extract_images
     ),
+    "extract_fonts": JobType("extract_fonts", False, _convert_extract_fonts, _run_extract_fonts),
     "comments_export": JobType(
         "comments_export", False, _convert_comments_export, _run_comments_export
     ),

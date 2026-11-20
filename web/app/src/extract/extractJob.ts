@@ -5,8 +5,11 @@ import type { ResultFile } from '../files/downloads';
 import { type FileJobDeps, runFileJobOutput } from '../files/fileJob';
 import {
   type ExtractChoice,
+  type ExtractFontsValue,
   type ExtractImagesValue,
+  extractFontsArgs,
   extractImagesArgs,
+  readExtractFontsValue,
   readExtractImagesValue,
 } from './extractChoice';
 
@@ -32,4 +35,22 @@ export async function runExtractImages(
     extractImagesArgs(name, choice),
   );
   return { files: output.files, value: readExtractImagesValue(output.value) };
+}
+
+export const EXTRACT_FONTS_JOB = 'extract_fonts';
+
+export interface ExtractFontsOutput {
+  readonly files: ResultFile[];
+  readonly value: ExtractFontsValue;
+}
+
+// Runs one font extraction over the whole document. Resolves with the files and the value; rejects
+// with an RpcError, or FileJobCancelled.
+export async function runExtractFonts(
+  deps: FileJobDeps,
+  handle: string,
+  name: string,
+): Promise<ExtractFontsOutput> {
+  const output = await runFileJobOutput(deps, handle, EXTRACT_FONTS_JOB, extractFontsArgs(name));
+  return { files: output.files, value: readExtractFontsValue(output.value) };
 }

@@ -78,6 +78,11 @@ image is saved in the format it is stored in, not re-encoded. One image comes ba
 several come together in one ZIP file. A very large image is skipped, because the browser cannot
 decode it safely, and the dialog says how many were skipped.
 
+In the web version, **Extract Fonts** (in the same group, or from the command palette) saves the
+fonts embedded in the whole document, with no page choice. Each font is saved as its program file.
+Several fonts come together in one ZIP file. A font whose licence forbids saving it is not saved,
+and the dialog names it, as the desktop message does. A document with no embedded fonts says so.
+
 ## Create a PDF from an Office file
 
 **From Office** in the **Create** group of the **Tools** tab (**File ▸ Create PDF from Office File…**)
