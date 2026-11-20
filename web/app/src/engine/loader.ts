@@ -125,8 +125,29 @@ type PyCallable = (
   onNotice?: (text: string) => void,
 ) => unknown;
 
+// pyodide.mjs decides at evaluation time whether it runs in a classic worker by calling
+// globalThis.importScripts("data:text/javascript,") inside a try/catch. That call is a
+// string-to-script sink, so under the page's require-trusted-types-for 'script' (csp.ts) Firefox
+// and WebKit report a CSP violation for it. The probe still answers "not classic" (a module worker
+// has no importScripts that works), so the engine loads either way; the violation was log noise
+// that fails the CSP checks. Hiding importScripts for the evaluation makes the probe's call fail
+// on its own, with the same answer and no sink. No Trusted Types policy is needed, so the CSP is
+// not loosened. The function is put back afterwards.
+export async function withoutImportScripts<T>(run: () => Promise<T>): Promise<T> {
+  const scope = globalThis as { importScripts?: unknown };
+  const had = 'importScripts' in scope;
+  const saved = scope.importScripts;
+  scope.importScripts = undefined;
+  try {
+    return await run();
+  } finally {
+    if (had) scope.importScripts = saved;
+    else delete scope.importScripts;
+  }
+}
+
 const defaultImport = (url: string): Promise<PyodideModule> =>
-  import(/* @vite-ignore */ url) as Promise<PyodideModule>;
+  withoutImportScripts(() => import(/* @vite-ignore */ url) as Promise<PyodideModule>);
 
 async function defaultFetch(url: string): Promise<ArrayBuffer> {
   const response = await fetch(url);
