@@ -69,8 +69,11 @@ the **Comment** tab (**Ctrl+Shift+C**).
 
 - Every comment in the document is listed as a thread, with its page, type, author and status.
 - Click a comment to go to it on the page.
-- **Reply…** adds a reply to a thread. **Set Status** marks a comment as Accepted, Rejected,
-  Cancelled or Completed (or None), for review workflows.
+- **Reply** opens a box under the thread. Type the reply and choose **Post reply** (Escape or
+  **Cancel** closes the box without adding anything). The reply is signed with your name from the
+  preferences.
+- **Set status** marks the thread as Accepted, Rejected, Cancelled or Completed, for review
+  workflows. Each reply and status change can be undone with the **Undo** button on its notice.
 - Filter the list by type, author or status, or search it.
 - Export comments as XFDF (for another PDF editor), as a CSV summary, or as a summary PDF. Import
   XFDF to bring in comments from another review.

@@ -711,10 +711,15 @@ export function App({
         ) : documentShown &&
           leftPanelOpen === 'comments' &&
           activeId !== null &&
-          comments !== null ? (
+          comments !== null &&
+          session !== null &&
+          scheduler !== null ? (
           <CommentsPanel
             key={activeId}
             controller={comments}
+            rpc={session.rpc}
+            handle={session.handle}
+            scheduler={scheduler}
             onGoTo={(page) => goTo(page)}
             onClose={() => closePanel('left')}
           />

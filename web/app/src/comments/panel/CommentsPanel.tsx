@@ -2,18 +2,28 @@
 // replies under it. A row shows the page, the type (for the root), the author, the date, the
 // thread's status and the text. The filters (search, type, author, status) come from the
 // controller, which keeps a thread whole when a reply matches. Clicking a row, or pressing Enter on
-// it, goes to the comment's page. Reply, status and edit come in later slices.
-import { useId, useSyncExternalStore } from 'react';
+// it, goes to the comment's page. Each thread takes a reply and a new status (S4, through
+// annotations.reply, with Undo); edit and delete come in S5.
+import { useId, useState, useSyncExternalStore } from 'react';
 import { formatDate } from '../../i18n/format';
 import type { MessageId } from '../../i18n/en';
 import { t } from '../../i18n/t';
 import { Panel } from '../../layout/Panel';
+import type { PageRpc } from '../../engine/engineConnection';
 import type { AnnotationType, CommentDto, ReviewState } from '../../rpc/generated';
+import type { RenderScheduler } from '../../view/renderScheduler';
 import type { CommentsController } from './controller';
+import { type EditDeps, replyTo, setStatus, STATUS_CHOICES } from './edits';
+import { ReplyBox } from './ReplyBox';
 import './panel.css';
 
 export interface CommentsPanelProps {
   readonly controller: CommentsController;
+  // The document the replies and status changes go to, and the scheduler that redraws the pages
+  // they change.
+  readonly rpc: PageRpc;
+  readonly handle: string;
+  readonly scheduler: Pick<RenderScheduler, 'noteRevisions'>;
   // Called with the comment's page (zero-based) and its name, so selection can come later
   // without a change here (W7.1a).
   readonly onGoTo: (page: number, name: string) => void;
@@ -86,10 +96,20 @@ function Entry({ comment, root, status, onGoTo }: EntryProps) {
   );
 }
 
-export function CommentsPanel({ controller, onGoTo, onClose }: CommentsPanelProps) {
+export function CommentsPanel({
+  controller,
+  rpc,
+  handle,
+  scheduler,
+  onGoTo,
+  onClose,
+}: CommentsPanelProps) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const searchId = useId();
+  // The thread whose reply box is open, by its key (page and name); one box at a time.
+  const [replying, setReplying] = useState<string | null>(null);
   const { threads, visible, options, filter, loaded, truncated } = state;
+  const editDeps: EditDeps = { rpc, handle, scheduler, controller };
 
   let body;
   if (!loaded) {
@@ -177,20 +197,53 @@ export function CommentsPanel({ controller, onGoTo, onClose }: CommentsPanelProp
           </p>
         ) : (
           <ul aria-label={t('comments.list')} className="comments-list">
-            {visible.map((thread) => (
-              <li key={`${thread.comment.page}:${thread.comment.name}`} className="comments-thread">
-                <Entry comment={thread.comment} root status={thread.status} onGoTo={onGoTo} />
-                {thread.replies.length === 0 ? null : (
-                  <ul aria-label={t('comments.replies')} className="comments-replies">
-                    {thread.replies.map((reply) => (
-                      <li key={`${reply.page}:${reply.name}`}>
-                        <Entry comment={reply} root={false} onGoTo={onGoTo} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
+            {visible.map((thread) => {
+              const key = `${thread.comment.page}:${thread.comment.name}`;
+              return (
+                <li key={key} className="comments-thread">
+                  <Entry comment={thread.comment} root status={thread.status} onGoTo={onGoTo} />
+                  <div className="comments-thread-actions">
+                    <button type="button" onClick={() => setReplying(key)}>
+                      {t('comments.reply.open')}
+                    </button>
+                    <select
+                      aria-label={t('comments.status.set')}
+                      value=""
+                      onChange={(event) => {
+                        const choice = pick(STATUS_CHOICES, event.target.value);
+                        if (choice !== null) void setStatus(editDeps, thread.comment, choice);
+                      }}
+                    >
+                      <option value="">{t('comments.status.set')}</option>
+                      {STATUS_CHOICES.map((choice) => (
+                        <option key={choice} value={choice}>
+                          {t(STATUS_LABEL[choice])}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {thread.replies.length === 0 ? null : (
+                    <ul aria-label={t('comments.replies')} className="comments-replies">
+                      {thread.replies.map((reply) => (
+                        <li key={`${reply.page}:${reply.name}`}>
+                          <Entry comment={reply} root={false} onGoTo={onGoTo} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {replying === key ? (
+                    <ReplyBox
+                      onPost={(text) =>
+                        void replyTo(editDeps, thread.comment, text).then((sent) => {
+                          if (sent) setReplying(null);
+                        })
+                      }
+                      onCancel={() => setReplying(null)}
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </>
