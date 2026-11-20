@@ -77,6 +77,8 @@ export type ObjectType = 'text' | 'image' | 'form' | 'path';
 /** The kind of a security change queued for the next save (``session.security``). */
 export type PendingSecurity = 'encrypt' | 'remove';
 
+export type PreviewFamily = 'sans-serif' | 'serif' | 'monospace';
+
 export type ReviewState = 'None' | 'Accepted' | 'Rejected' | 'Cancelled' | 'Completed';
 
 /**
@@ -541,6 +543,23 @@ export interface PointDto {
   y: number;
 }
 
+export interface PreviewFontParams {
+  handle: string;
+  /** 0-based */
+  page: number;
+  /** the text's font name as the page reports it, at most 256 characters */
+  font_name: string;
+}
+
+export interface PreviewFontResult {
+  /** True when the embedded font has a character map; no glyph check per text */
+  found: boolean;
+  /** the generic family to show when the program isn't usable */
+  family: PreviewFamily;
+  /** the embedded font program's bytes, as a $bin buffer; None if not found */
+  program: ArrayBuffer | null;
+}
+
 export interface QuadDto {
   ul: PointDto;
   ur: PointDto;
@@ -791,6 +810,7 @@ export interface Methods {
   'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
+  'content.preview_font': { params: PreviewFontParams; result: PreviewFontResult; deadline: 'render' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
@@ -831,6 +851,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'comments.list': 'instant',
   'comments.xfdf_preview': 'action',
   'content.objects': 'render',
+  'content.preview_font': 'render',
   'hello': 'instant',
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
@@ -876,6 +897,7 @@ export const RESULT_DECODERS: {
   'comments.list': decodeCommentListResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
   'content.objects': decodeContentObjectsResult,
+  'content.preview_font': decodePreviewFontResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
@@ -1687,6 +1709,34 @@ export function decodePointDto(
   return {
     x: expectNumber(field(o, 'x', path), `${path}.x`),
     y: expectNumber(field(o, 'y', path), `${path}.y`),
+  };
+}
+
+export function decodePreviewFontParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): PreviewFontParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'page', 'font_name'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    page: expectInteger(field(o, 'page', path), `${path}.page`),
+    font_name: expectString(field(o, 'font_name', path), `${path}.font_name`),
+  };
+}
+
+export function decodePreviewFontResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): PreviewFontResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['found', 'family', 'program'], path);
+  return {
+    found: expectBoolean(field(o, 'found', path), `${path}.found`),
+    family: expectOneOf(field(o, 'family', path), ['sans-serif', 'serif', 'monospace'] as const, `${path}.family`),
+    program: orNull(field(o, 'program', path), `${path}.program`, (v1, p1) => takeBinary(v1, ctx, p1)),
   };
 }
 

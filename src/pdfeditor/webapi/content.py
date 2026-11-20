@@ -12,7 +12,8 @@ from __future__ import annotations
 import logging
 
 from pdfeditor.model.geometry import Rect
-from pdfeditor.model.objects import PageObject, TextStyle
+from pdfeditor.model.objects import PageObject, TextStyle, family_of
+from pdfeditor.services.font_preview import preview_font_program
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
 from pdfeditor.webapi.registry import REGISTRY
@@ -55,6 +56,51 @@ def list_objects(params: dto.PageParams) -> dto.ContentObjectsResult:
         objects=tuple(_object_dto(o) for o in found[:MAX_PAGE_OBJECTS]),
         truncated=len(found) > MAX_PAGE_OBJECTS,
     )
+
+
+# The longest font name the preview call takes; a PDF font name is far shorter.
+MAX_FONT_NAME = 256
+# The largest program the preview call returns (W6.8a); a bigger one is reported as not found.
+MAX_PREVIEW_BYTES = 16 * 1024 * 1024
+
+_PREVIEW_FAMILIES = {
+    "sans": dto.PreviewFamily.SANS,
+    "serif": dto.PreviewFamily.SERIF,
+    "mono": dto.PreviewFamily.MONOSPACE,
+}
+
+
+def preview_font(params: dto.PreviewFontParams) -> dto.PreviewFontResult:
+    """The embedded font program behind a text's font name, for the text editor's preview
+    (W6.8a). Read-only: it issues no Command, so the document and its undo history are unchanged.
+
+    The program is returned only when it has a character map (a subset MuPDF wrote on save has
+    none, and the preview then falls back to ``family``). That is the whole check: the call takes
+    no text, so it does not test that the program has glyphs for any particular edit. The bytes
+    are the embedded program as the PDF stores it. An unknown name, a base-14 font that isn't
+    embedded, or a program fontTools can't read is "not found", not an error.
+    """
+    if len(params.font_name) > MAX_FONT_NAME:
+        raise RpcFailure(
+            INVALID_ARGS,
+            f"params.font_name: at most {MAX_FONT_NAME} characters",
+            {"path": "params.font_name"},
+        )
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        count = session.document.page_count
+        if not 0 <= params.page < count:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "params.page: the page is out of range",
+                {"path": "params.page", "pages": count},
+            )
+        program = session.document.page(params.page).font_program(params.font_name)
+    family = _PREVIEW_FAMILIES[family_of(params.font_name)]
+    usable = None if program is None else preview_font_program(program)
+    if usable is None or len(usable) > MAX_PREVIEW_BYTES:
+        return dto.PreviewFontResult(found=False, family=family, program=None)
+    return dto.PreviewFontResult(found=True, family=family, program=usable)
 
 
 def _log_malformed(handle: str, page: int, revision: int) -> None:

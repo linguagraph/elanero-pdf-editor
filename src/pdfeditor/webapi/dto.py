@@ -650,6 +650,26 @@ class ContentObjectsResult:
     truncated: bool  # True when the page has more objects than the reply holds
 
 
+class PreviewFamily(Enum):
+    SANS = "sans-serif"
+    SERIF = "serif"
+    MONOSPACE = "monospace"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PreviewFontParams:
+    handle: str
+    page: int  # 0-based
+    font_name: str  # the text's font name as the page reports it, at most 256 characters
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PreviewFontResult:
+    found: bool  # True when the embedded font has a character map; no glyph check per text
+    family: PreviewFamily  # the generic family to show when the program isn't usable
+    program: bytes | None  # the embedded font program's bytes, as a $bin buffer; None if not found
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class JobPrepareParams:
     handle: str
