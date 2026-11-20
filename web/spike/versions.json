@@ -19,8 +19,7 @@
   },
   "builtWheel": {
     "file": "pymupdf-1.28.2-cp314-none-pyemscripten_2026_0_wasm32.whl",
-    "sha256": "26548c141e7f4c57971e58a0f24088375e3c39915f967a4970c87ec2b763c787",
-    "source": "route 3 build in the CI cache (web-pytest.yml and web-deploy.yml, key pymupdf-1.28.2-pyodide-314.0.8-*), the wheel the engine ships"
+    "source": "route 3 build (web-pytest.yml and web-deploy.yml, cache key pymupdf-1.28.2-pyodide-314.0.8-*); not byte-reproducible, so checked by the workflow's sha256sum, not pinned here"
   },
   "packageRoots": [
     "fonttools",
