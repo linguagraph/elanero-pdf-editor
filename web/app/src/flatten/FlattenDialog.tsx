@@ -25,6 +25,8 @@ export interface FlattenDialogProps {
   readonly onChanged?: (changed: ChangedDto | null) => void;
   readonly progress?: JobProgressStore;
   readonly store?: ToastStore;
+  // A signed document is allowed, with a note that its signatures will show the change (as Crop).
+  readonly signed?: boolean;
 }
 
 // The comment count as the dialog reads it: null while it is read.
@@ -56,6 +58,7 @@ function FlattenBody({
   onChanged,
   progress,
   store = toasts,
+  signed = false,
 }: FlattenDialogProps) {
   const [reading, setReading] = useState<Reading>({ status: 'counting' });
   useEffect(() => {
@@ -118,6 +121,7 @@ function FlattenBody({
   return (
     <div className="redact-confirm">
       <p>{t('flatten.confirm.body')}</p>
+      {signed ? <p>{t('flatten.signedNote')}</p> : null}
       <div className="redact-actions">
         <button type="button" onClick={confirm}>
           {t('flatten.confirm.run')}

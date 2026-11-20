@@ -511,6 +511,28 @@ def _no_annots_pikepdf(data: bytes, page: int) -> None:
         assert not pdf.pages[page].obj.get(pikepdf.Name.Annots)
 
 
+@host_check("signed_form_pikepdf")
+def _signed_form_pikepdf(data: bytes, page: int, field: str, flags: int) -> None:
+    """/SigFlags is ``flags``, and the page's only annotations are widgets, one named ``field``."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert int(pdf.Root.AcroForm.SigFlags) == flags
+        annots = list(pdf.pages[page].obj.get(pikepdf.Name.Annots, []))
+        assert annots and all(str(a.get("/Subtype")) == "/Widget" for a in annots)
+        assert any(str(a.get("/T")) == field for a in annots)
+
+
+@host_check("widget_count_pikepdf")
+def _widget_count_pikepdf(data: bytes, page: int, count: int) -> None:
+    """The page has exactly ``count`` form widgets (signature and text fields alike)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = list(pdf.pages[page].obj.get(pikepdf.Name.Annots, []))
+        assert sum(str(a.get("/Subtype")) == "/Widget" for a in annots) == count
+
+
 @host_check("annot_keys_pikepdf")
 def _annot_keys_pikepdf(
     data: bytes,
