@@ -135,8 +135,15 @@ jobs:
       - run: uv run python scripts/make_fixtures.py
       - run: uv run python scripts/fetch_tessdata.py
       # A busy runner fails the performance budgets by itself (#104), so pull requests leave them
-      # to the nightly run and releases.
-      - run: uv run pytest ${{ github.event_name == 'pull_request' && '--ignore=tests/benchmarks' || '' }}
+      # to the nightly run and releases. Pull requests also skip the slow tests (the long fuzz
+      # runs, #484), which otherwise run past the job's time limit. The nightly run and releases
+      # run everything.
+      - name: pytest (pull request)
+        if: github.event_name == 'pull_request'
+        run: uv run pytest --ignore=tests/benchmarks -m "not slow"
+      - name: pytest (nightly and release)
+        if: github.event_name != 'pull_request'
+        run: uv run pytest
 
   test-linux:
     # Offscreen Qt differs enough here to find real bugs, but nothing ships for Linux.
