@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import struct
 import uuid
 from collections.abc import Sequence
 
@@ -41,6 +42,35 @@ STANDARD_TWIN = {
     "serif": ("Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic"),
     "mono": ("Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"),
 }
+
+
+def program_fs_type(program: bytes) -> int | None:
+    """The OS/2 fsType of an sfnt program (TrueType, OpenType, the first face of a .ttc).
+
+    ``None`` for a program with no OS/2 table, and for one that isn't sfnt at all (Type1, bare
+    CFF), which carry no fsType. Raises ``ValueError`` when the table directory or the OS/2
+    record points past the end of the data. Pure Python: the web build ships without fontTools.
+    """
+    tag = program[:4]
+    if tag == b"ttcf":
+        base = struct.unpack_from(">I", program, 12)[0] if len(program) >= 16 else -1
+    elif tag in (b"\x00\x01\x00\x00", b"true", b"OTTO"):
+        base = 0
+    else:
+        return None
+    if base < 0 or base + 12 > len(program):
+        raise ValueError("truncated sfnt header")
+    count = struct.unpack_from(">H", program, base + 4)[0]
+    if base + 12 + 16 * count > len(program):
+        raise ValueError("truncated sfnt table directory")
+    for i in range(count):
+        record = base + 12 + 16 * i
+        if program[record : record + 4] == b"OS/2":
+            offset = struct.unpack_from(">I", program, record + 8)[0]
+            if offset + 10 > len(program):
+                raise ValueError("OS/2 table outside the font program")
+            return int(struct.unpack_from(">H", program, offset + 8)[0])
+    return None
 
 
 def metric_twin(family: str) -> str | None:

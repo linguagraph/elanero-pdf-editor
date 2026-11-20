@@ -278,6 +278,29 @@ def subset_fonts() -> None:
     _save(doc, "subset_fonts.pdf")
 
 
+def licensed_fonts() -> None:
+    """Four embedded TrueType faces, each with a different fsType (the OS/2 embedding flags):
+    the licence rules of services/export/images.py ``extract_fonts`` decide which are saved.
+    MuPDF embeds them as given, so no program is patched after the fact."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    chars = "".join(dict.fromkeys("Hello World 123"))  # each glyph once
+    faces = [
+        ("Free Sans", 0x0000),  # installable: saved
+        ("Print Sans", 0x0004),  # preview and print: saved
+        ("Restricted Sans", 0x0002),  # restricted licence: refused
+        ("Bitmap Sans", 0x0200),  # bitmap embedding only: refused
+        ("Mixed Sans", 0x0202),  # both refusal bits: refused as restricted
+    ]
+    for i, (family, fs_type) in enumerate(faces):
+        face = _build_face(family, "Regular", 400, False, chars, fs_type=fs_type)
+        buffer = io.BytesIO()
+        face.save(buffer)
+        page.insert_font(fontname=f"F{i}", fontbuffer=buffer.getvalue())
+        page.insert_text((72, 72 + 24 * i), "Hello World 123", fontsize=14, fontname=f"F{i}")
+    _save(doc, "licensed_fonts.pdf")
+
+
 def large_doc(pages: int = 1000) -> None:
     doc = pymupdf.open()
     for i in range(pages):
@@ -1202,6 +1225,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "rotated_pages": rotated_pages,
     "cjk_text": cjk_text,
     "subset_fonts": subset_fonts,
+    "licensed_fonts": licensed_fonts,
     "large_1000": large_doc,
     "perf_mixed_10": lambda: perf_mixed(10),
     "perf_mixed_200": lambda: perf_mixed(200),

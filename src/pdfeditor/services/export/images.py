@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -12,9 +13,11 @@ from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
 from pdfeditor.engine.base import ColorMode, Document, RenderRequest
+from pdfeditor.model.fonts import licence_refusal
 from pdfeditor.model.geometry import Matrix
 from pdfeditor.model.metadata import ImageInfo
 from pdfeditor.model.platform import current
+from pdfeditor.services.export.fonts import program_fs_type
 
 
 class ImageFormat(Enum):
@@ -176,30 +179,72 @@ def extract_images(
     return written
 
 
+@dataclass(frozen=True)
+class FontExtraction:
+    """What ``extract_fonts`` did: the files written, and the fonts it did not save."""
+
+    written: list[Path]
+    not_embedded: list[str]  # no program in the document (base-14 or Type3, or unextractable)
+    refused: list[tuple[str, str]]  # (font name, reason): "restricted", "bitmap_only", "unreadable"
+
+
+_UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9 ._+-]")
+
+
+def _safe_file_name(name: str, fallback: str = "font") -> str:
+    """A file name with no path parts. A PDF name can hold "/" or a leading "..", so the
+    characters are replaced first, then the leading dots and spaces are dropped."""
+    cleaned = re.sub(r"\.{2,}", "_", _UNSAFE_NAME_CHARS.sub("_", name)).lstrip(". ")
+    stem, dot, ext = cleaned.rpartition(".")
+    if not dot:
+        stem, ext = cleaned, ""
+    stem = stem.rstrip(" ")[:100] or fallback
+    ext = re.sub(r"[^A-Za-z0-9]", "", ext)
+    return f"{stem}.{ext}" if ext else stem
+
+
+def _licence_refusal(program: bytes) -> str | None:
+    """Why the program's licence forbids saving it, or None. An unreadable OS/2 table is refused
+    too: the safe side of the licence rule, since its fsType cannot be checked."""
+    try:
+        return licence_refusal(program_fs_type(program))
+    except ValueError:
+        return "unreadable"
+
+
 def extract_fonts(
     doc: Document,
     folder: Path,
     token: CancelToken | None = None,
     progress: ProgressFn = no_progress,
-) -> tuple[list[Path], list[str]]:
-    """Save every embedded font program; returns (written files, names of fonts not embedded)."""
+) -> FontExtraction:
+    """Save every embedded font program whose licence allows it.
+
+    A font whose embedding flags forbid saving (restricted, or bitmap only) is reported in
+    ``refused`` and not written, so the same fonts are refused as in embedding and .docx export.
+    """
     folder.mkdir(parents=True, exist_ok=True)
     fonts = doc.fonts()
     written: list[Path] = []
-    skipped: list[str] = []
+    not_embedded: list[str] = []
+    refused: list[tuple[str, str]] = []
     for n, font in enumerate(fonts):
         if token is not None:
             token.check()
         if not font.embedded:
-            skipped.append(font.name)
-            continue
-        try:
-            name, data = doc.extract_font(font.ref)
-        except ValueError:
-            skipped.append(font.name)
-            continue
-        path = _unique(folder, name)
-        path.write_bytes(data)
-        written.append(path)
+            not_embedded.append(font.name)
+        else:
+            try:
+                name, data = doc.extract_font(font.ref)
+            except ValueError:
+                not_embedded.append(font.name)
+            else:
+                reason = _licence_refusal(data)
+                if reason is None:
+                    path = _unique(folder, _safe_file_name(name))
+                    path.write_bytes(data)
+                    written.append(path)
+                else:
+                    refused.append((font.name, reason))
         progress(n + 1, len(fonts))
-    return written, skipped
+    return FontExtraction(written, not_embedded, refused)

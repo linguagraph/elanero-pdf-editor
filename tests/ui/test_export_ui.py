@@ -135,6 +135,17 @@ def test_extract_images_and_fonts(window: MainWindow, view, tmp_path: Path) -> N
     assert "not embedded" in window.export.last_message
 
 
+def test_extract_fonts_names_the_fonts_the_licence_refuses(
+    window: MainWindow, fixture_pdf, tmp_path: Path
+) -> None:
+    window.open_path(fixture_pdf("licensed_fonts"))
+    written = wait_for(window.export.extract_fonts(tmp_path / "fonts"))
+    assert sorted(p.name for p in written) == ["Free Sans Regular.ttf", "Print Sans Regular.ttf"]
+    message = window.export.last_message
+    assert "3 not saved: the font licence does not allow it" in message
+    assert "Restricted Sans Regular" in message and "Bitmap Sans Regular" in message
+
+
 def test_office_without_libreoffice_explains(window: MainWindow, monkeypatch) -> None:
     shown: list[str] = []
     monkeypatch.setattr("pdfeditor.ui.export_controller.find_soffice", lambda: None)

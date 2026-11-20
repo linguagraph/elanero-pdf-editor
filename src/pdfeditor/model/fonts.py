@@ -17,6 +17,21 @@ RESTRICTED = 0x0002
 BITMAP_ONLY = 0x0200
 
 
+def licence_refusal(fs_type: int | None) -> str | None:
+    """Why a font program with this fsType must not be saved, or None when it may be.
+
+    ``None`` (a Type1 or bare CFF program, which carries no fsType) is allowed. Restricted is
+    named before bitmap-only, so a font with both bits set reports "restricted".
+    """
+    if fs_type is None:
+        return None
+    if fs_type & RESTRICTED:
+        return "restricted"
+    if fs_type & BITMAP_ONLY:
+        return "bitmap_only"
+    return None
+
+
 class FontRefKind(Enum):
     STANDARD = "standard"  # one of the base-14 PDF fonts, by name (e.g. "Helvetica")
     DOCUMENT = "document"  # a font already embedded in the document, by its resource name
