@@ -484,6 +484,7 @@ export const EN = {
   'tabs.close': 'Close {name}',
   'tabs.unsaved': 'Unsaved changes',
   'tabs.menu': 'Open documents',
+  'tabs.menuNamed': 'Open documents: {name}',
   'tabs.menuClose': 'Close this document',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
   'open.largeFile': '{name} is large, so opening and editing may be slow.',

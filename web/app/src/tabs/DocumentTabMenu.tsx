@@ -16,10 +16,18 @@ export interface DocumentTabMenuProps {
 export function DocumentTabMenu({ state, onSelect, onClose }: DocumentTabMenuProps) {
   const active = state.tabs.find((tab) => tab.id === state.activeId);
   const closeKey = 'close';
+  // The accessible name carries the active document and its unsaved state: a name on the button
+  // replaces its content for assistive technology, so the marker has to be in the name too.
+  const accessibleName =
+    active === undefined
+      ? t('tabs.menu')
+      : t('tabs.menuNamed', {
+          name: active.dirty ? `${active.name} (${t('tabs.unsaved')})` : active.name,
+        });
   return (
     <div className="doc-tabs-menu">
       <MenuTrigger>
-        <Button className="doc-tabs-menu-button" aria-label={t('tabs.menu')}>
+        <Button className="doc-tabs-menu-button" aria-label={accessibleName}>
           <span className="doc-tab-name">{active?.name ?? ''}</span>
           {active?.dirty ? (
             <span className="doc-tab-dirty">
@@ -35,6 +43,8 @@ export function DocumentTabMenu({ state, onSelect, onClose }: DocumentTabMenuPro
           <Menu
             aria-label={t('tabs.menu')}
             className="app-menu"
+            selectionMode="single"
+            selectedKeys={active === undefined ? [] : [String(active.id)]}
             onAction={(key) => {
               if (key === closeKey) {
                 if (active !== undefined) onClose(active.id);

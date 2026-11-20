@@ -55,7 +55,7 @@ function openMenu(): void {
 }
 
 function items(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  return [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"]')];
 }
 
 describe('document tab drop-down', () => {
@@ -64,11 +64,31 @@ describe('document tab drop-down', () => {
     expect(host.querySelector('.doc-tabs-menu-button')?.textContent).toContain('b.pdf');
   });
 
-  it('names the button and marks an unsaved active document', () => {
+  it('names the button with the active document and marks it when unsaved', () => {
     render(setDirty(activateTab(threeTabs(), 1), 1, true));
     const button = host.querySelector<HTMLElement>('.doc-tabs-menu-button');
-    expect(button?.getAttribute('aria-label')).toBe(t('tabs.menu'));
+    expect(button?.getAttribute('aria-label')).toBe(
+      t('tabs.menuNamed', { name: `a.pdf (${t('tabs.unsaved')})` }),
+    );
     expect(button?.textContent).toContain(t('tabs.unsaved'));
+  });
+
+  it('puts the active document name in the accessible name of the button', () => {
+    render(activateTab(threeTabs(), 2));
+    const button = host.querySelector<HTMLElement>('.doc-tabs-menu-button');
+    expect(button?.getAttribute('aria-label')).toBe(t('tabs.menuNamed', { name: 'b.pdf' }));
+    expect(button?.getAttribute('aria-label')).toContain('b.pdf');
+  });
+
+  it('marks the active document as checked and no other', () => {
+    render(activateTab(threeTabs(), 2));
+    openMenu();
+    // react-aria exposes a single-selection item as a menuitemradio with aria-checked.
+    const checked = items().filter((item) => item.getAttribute('aria-checked') === 'true');
+    expect(checked).toHaveLength(1);
+    expect(checked[0]?.textContent).toContain('b.pdf');
+    const other = items().find((item) => item.textContent?.includes('c.pdf'));
+    expect(other?.getAttribute('aria-checked')).toBe('false');
   });
 
   it('lists every open document when opened', () => {
@@ -87,6 +107,15 @@ describe('document tab drop-down', () => {
       items()[2]?.click();
     });
     expect(onSelect).toHaveBeenCalledWith(3);
+  });
+
+  it('still selects a document after the active one is marked', () => {
+    const { onSelect } = render(activateTab(threeTabs(), 1));
+    openMenu();
+    act(() => {
+      items()[0]?.click();
+    });
+    expect(onSelect).toHaveBeenCalledWith(1);
   });
 
   it('puts the unsaved mark in the accessible name of a dirty document', () => {
