@@ -1011,7 +1011,7 @@ export function App({
       />
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
-      <div className="app-main">
+      <div className={documentShown ? 'app-main app-main--document' : 'app-main'}>
         <UpdatePrompt />
         <PasswordPrompt />
         <ToastRegion />
