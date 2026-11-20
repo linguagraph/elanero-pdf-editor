@@ -1,6 +1,7 @@
 // The document tabs as plain data (W1.6 section 3, W4.2b). A tab holds the engine handle of its
 // open document and the page count the engine reported. The File itself is not kept: its bytes
 // went to the engine when the document opened, and nothing here is written to storage.
+import type { DocStateDto } from '../rpc/generated';
 
 export interface DocumentTab {
   readonly id: number;
@@ -12,6 +13,14 @@ export interface DocumentTab {
   // True when the document is encrypted (its open result says so). Such a document is never
   // reopened from an autosave copy (W3.9 S3, D2).
   readonly encrypted: boolean;
+  // True when the document carries signatures (its open result says so). Its in-place saves are
+  // incremental, so they are refused once the lineage is broken (W4.8).
+  readonly signed: boolean;
+  // The engine's undo and redo state, from its state events (W4.8 S1).
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  // True while a background task makes the document read-only (the engine's busy field).
+  readonly busy: boolean;
 }
 
 // A document the engine has opened, as the tab needs it.
@@ -20,7 +29,11 @@ export interface OpenedTab {
   readonly handle: string;
   readonly pages: number;
   readonly encrypted?: boolean;
+  readonly signed?: boolean;
 }
+
+// The fields of the engine's document state that the tab shows (its state events, W4.8 S1).
+export type TabDocState = Pick<DocStateDto, 'dirty' | 'can_undo' | 'can_redo' | 'busy'>;
 
 export interface TabState {
   readonly tabs: readonly DocumentTab[];
@@ -39,6 +52,10 @@ export function addTab(state: TabState, opened: OpenedTab): TabState {
     handle: opened.handle,
     pages: opened.pages,
     encrypted: opened.encrypted === true,
+    signed: opened.signed === true,
+    canUndo: false,
+    canRedo: false,
+    busy: false,
   };
   return { tabs: [...state.tabs, tab], activeId: tab.id, nextId: state.nextId + 1 };
 }
@@ -73,6 +90,31 @@ export function setDirty(state: TabState, id: number, dirty: boolean): TabState 
   return {
     ...state,
     tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, dirty } : tab)),
+  };
+}
+
+// Applies the engine's state of one document to its tab (W4.8 S1). A handle no tab holds is
+// ignored, and so is a state that changes nothing: the state is the source of the dirty dot, the
+// unload warning and the autosave of the tab.
+export function applyDocState(state: TabState, handle: string, doc: TabDocState): TabState {
+  const found = state.tabs.find((tab) => tab.handle === handle);
+  if (found === undefined) return state;
+  const busy = doc.busy !== '';
+  if (
+    found.dirty === doc.dirty &&
+    found.canUndo === doc.can_undo &&
+    found.canRedo === doc.can_redo &&
+    found.busy === busy
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) =>
+      tab.handle === handle
+        ? { ...tab, dirty: doc.dirty, canUndo: doc.can_undo, canRedo: doc.can_redo, busy }
+        : tab,
+    ),
   };
 }
 

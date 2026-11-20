@@ -4,6 +4,8 @@
 import { vi, type Mock } from 'vitest';
 import { createEngineLoadStore, type EngineLoadStore } from '../feedback/engineLoad';
 import type { EngineClient, EngineConnection } from './engineConnection';
+import type { RpcEventListener } from '../rpc/client';
+import type { RpcEvent } from '../rpc/generated';
 
 export interface FakeEngine extends EngineConnection {
   readonly store: EngineLoadStore;
@@ -11,14 +13,26 @@ export interface FakeEngine extends EngineConnection {
   readonly dispose: Mock<() => void>;
   readonly restart: Mock<() => boolean>;
   setClient(client: EngineClient | undefined): void;
+  // Delivers change events to the listeners, as a reply's events would reach them.
+  emit(events: readonly RpcEvent[]): void;
 }
 
 export function fakeEngine(client?: EngineClient): FakeEngine {
   let current = client;
   let waiters: ((ready: EngineClient) => void)[] = [];
+  const listeners = new Set<RpcEventListener>();
   return {
     store: createEngineLoadStore(),
     client: () => current,
+    onEvents(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    emit(events) {
+      for (const listener of [...listeners]) listener(events);
+    },
     whenReady: () =>
       current !== undefined
         ? Promise.resolve(current)

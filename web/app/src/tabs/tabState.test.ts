@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activateTab,
   addTab,
+  applyDocState,
   closeTab,
   EMPTY_TABS,
   hasDirtyTab,
@@ -9,6 +10,7 @@ import {
   replaceHandle,
   setDirty,
   setPageCount,
+  type TabDocState,
   type TabState,
 } from './tabState';
 
@@ -126,5 +128,61 @@ describe('replaceHandle (W3.9 restart)', () => {
     const state = withThree();
 
     expect(replaceHandle(state, 99, 'handle-x', 1)).toEqual(state);
+  });
+});
+
+describe('applyDocState (W4.8 S1)', () => {
+  const doc = (overrides: Partial<TabDocState> = {}): TabDocState => ({
+    dirty: false,
+    can_undo: false,
+    can_redo: false,
+    busy: '',
+    ...overrides,
+  });
+
+  it('sets the dirty flag, undo state and busy flag of the tab with the handle, and no other', () => {
+    const state = withThree();
+
+    const next = applyDocState(
+      state,
+      'handle-b.pdf',
+      doc({ dirty: true, can_undo: true, busy: 'save' }),
+    );
+
+    expect(next.tabs[1]).toMatchObject({ dirty: true, canUndo: true, canRedo: false, busy: true });
+    expect(next.tabs[0]).toEqual(state.tabs[0]);
+    expect(next.tabs[2]).toEqual(state.tabs[2]);
+  });
+
+  it('clears the dirty flag when the engine reports the document clean', () => {
+    const dirty = setDirty(withThree(), 2, true);
+
+    const next = applyDocState(dirty, 'handle-b.pdf', doc());
+
+    expect(next.tabs.find((tab) => tab.id === 2)?.dirty).toBe(false);
+  });
+
+  it('ignores a state for a handle no tab holds', () => {
+    const state = withThree();
+
+    expect(applyDocState(state, 'handle-unknown', doc({ dirty: true }))).toBe(state);
+  });
+
+  it('returns the same state when nothing changed', () => {
+    const state = withThree();
+
+    expect(applyDocState(state, 'handle-a.pdf', doc())).toBe(state);
+  });
+
+  it('gives a new tab the signed flag of its open result, and starts it clean and idle', () => {
+    const state = addTab(EMPTY_TABS, { ...pdf('signed.pdf'), signed: true });
+
+    expect(state.tabs[0]).toMatchObject({
+      signed: true,
+      canUndo: false,
+      canRedo: false,
+      busy: false,
+    });
+    expect(addTab(EMPTY_TABS, pdf('plain.pdf')).tabs[0]?.signed).toBe(false);
   });
 });
