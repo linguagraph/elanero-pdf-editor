@@ -114,6 +114,14 @@ def decode_boxes(data: bytes) -> list[tuple[float, float, float, float]]:
     return [tuple(values[i : i + 4]) for i in range(0, len(values), 4)]  # type: ignore[misc]
 
 
+def split_chars(out: list[bytes]) -> tuple[bytes, bytes]:
+    """The text layer's one buffer: the char boxes (16 bytes a char), then the line numbers."""
+    assert len(out) == 1
+    count = len(out[0]) // 20
+    assert len(out[0]) == count * 20
+    return out[0][: count * 16], out[0][count * 16 :]
+
+
 def decode_u32(data: bytes) -> list[int]:
     return list(struct.unpack(f"<{len(data) // 4}I", data))
 
@@ -126,11 +134,11 @@ def test_text_layer_boxes_are_visible_space_points(web: None, fixture_pdf: Any) 
     width, height = page_rect(handle, 2)
     reply, _, out = call_raw("text.layer", {"handle": handle, "page": 2})
     result = ok(reply)
-    assert len(out) == 2  # the char boxes and the line numbers, one buffer each
+    box_bytes, line_bytes = split_chars(out)  # a reply carries one buffer
     text = result["text"]
     assert "needle-3" in text
-    boxes = decode_boxes(out[0])
-    lines = decode_u32(out[1])
+    boxes = decode_boxes(box_bytes)
+    lines = decode_u32(line_bytes)
     assert len(boxes) == len(text) == len(lines)
     start = text.index("needle-3")
     for x0, y0, x1, y1 in boxes[start : start + len("needle-3")]:
@@ -148,7 +156,7 @@ def test_text_layer_top_of_page_is_small_y(web: None, fixture_pdf: Any) -> None:
     _, height = page_rect(handle, 0)
     reply, _, out = call_raw("text.layer", {"handle": handle, "page": 0})
     text = ok(reply)["text"]
-    boxes = decode_boxes(out[0])
+    boxes = decode_boxes(split_chars(out)[0])
     start = text.index("heading")
     for _x0, _y0, _x1, y1 in boxes[start : start + 7]:
         assert y1 < height * 0.2  # the heading is at 72 pt from the top
@@ -160,7 +168,7 @@ def test_text_layer_separators_have_empty_boxes(web: None, fixture_pdf: Any) -> 
     result = ok(reply)
     text = result["text"]
     assert LINE_SEP in text
-    boxes = decode_boxes(out[0])
+    boxes = decode_boxes(split_chars(out)[0])
     for i, ch in enumerate(text):
         if ch == LINE_SEP:
             assert boxes[i] == (0.0, 0.0, 0.0, 0.0)
@@ -184,7 +192,7 @@ def test_text_layer_on_rotated_pages_stays_in_the_visible_rect(web: None, fixtur
     sizes = ok(call("session.pages", {"handle": handle}))["pages"]
     for page, size in enumerate(sizes):
         reply, _, out = call_raw("text.layer", {"handle": handle, "page": page})
-        boxes = decode_boxes(out[0])
+        boxes = decode_boxes(split_chars(out)[0])
         for x0, y0, x1, y1 in boxes:
             if x0 == y0 == x1 == y1 == 0.0:
                 continue

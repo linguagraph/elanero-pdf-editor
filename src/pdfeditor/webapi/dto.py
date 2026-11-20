@@ -208,8 +208,10 @@ class TextLayerResult:
     revision: int  # the page revision the layer was built from
     text: str  # LINE_SEP between lines, so offsets map 1:1 to the char boxes
     line_rects: tuple[RectDto, ...]
-    char_boxes: bytes  # Float32 x 4 per char (x0, y0, x1, y1); zeros for line separators
-    line_numbers: bytes  # Uint32 per char: the line it belongs to
+    # One buffer, because a reply carries at most one (the worker adapter in engine/loader.ts): per
+    # char, Float32 x 4 (x0, y0, x1, y1; zeros for line separators), all chars first, then Uint32
+    # per char (the line it belongs to): 20 bytes a char, split on the web side at 16 * chars.
+    chars: bytes
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

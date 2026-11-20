@@ -2,8 +2,7 @@
 // services/text.py PageTextIndex. The chars are the layer's code points in reading order, so an
 // offset here is the engine's offset; the hit test, the word and line ranges and the selection
 // rectangles follow the desktop's rules, and web/test/vectors/text.json pins them case by case.
-import type { TextLayerResult } from '../rpc/generated';
-import type { AreaPoint, AreaRect } from './textLayer';
+import type { AreaPoint, AreaRect, SplitTextLayer } from './textLayer';
 
 // The separator the engine puts between lines (services/text.py LINE_SEP).
 export const LINE_SEP = '\n';
@@ -60,7 +59,7 @@ export class PageTextIndex {
 
   // The index of a layer the engine answered (text.layer).
   static fromLayer(
-    layer: Pick<TextLayerResult, 'text' | 'line_rects' | 'char_boxes' | 'line_numbers'>,
+    layer: Pick<SplitTextLayer, 'text' | 'line_rects' | 'char_boxes' | 'line_numbers'>,
   ): PageTextIndex {
     return new PageTextIndex({
       text: layer.text,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTextLayer, placeLines, selectionAreas } from './textLayer';
+import { decodeTextLayer, placeLines, selectionAreas, splitCharData } from './textLayer';
 
 // Five chars: "ab", a line separator, "cd". The separator has a zero box, as the engine gives it.
 const TEXT = 'ab\ncd';
@@ -167,5 +167,24 @@ describe('placeLines', () => {
       width: 42 * (96 / 72),
       height: 24 * (96 / 72),
     });
+  });
+});
+
+describe('splitCharData', () => {
+  it('splits the one char buffer into the boxes and the line numbers', () => {
+    const boxes = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    const numbers = new Uint32Array([0, 1]);
+    const joined = new Uint8Array(boxes.byteLength + numbers.byteLength);
+    joined.set(new Uint8Array(boxes.buffer), 0);
+    joined.set(new Uint8Array(numbers.buffer), boxes.byteLength);
+    const split = splitCharData(joined.buffer);
+    expect([...new Float32Array(split.char_boxes)]).toEqual([...boxes]);
+    expect([...new Uint32Array(split.line_numbers)]).toEqual([0, 1]);
+  });
+
+  it('gives empty parts for an empty buffer', () => {
+    const split = splitCharData(new ArrayBuffer(0));
+    expect(split.char_boxes.byteLength).toBe(0);
+    expect(split.line_numbers.byteLength).toBe(0);
   });
 });
