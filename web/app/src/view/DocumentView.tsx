@@ -3,7 +3,7 @@
 // viewport are mounted; the visible ones are rendered through render.page, queued and cached by the
 // render scheduler, which the thumbnails panel of the same tab shares. Each page also gets its text
 // layer (W5.4) and the search highlights. Pages above 4 MP are drawn as tiles (W5.1b, tiles.ts);
-// no annotations here.
+// comments are drawn into the page image by the engine.
 import {
   type Ref,
   useCallback,
