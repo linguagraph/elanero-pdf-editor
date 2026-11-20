@@ -271,3 +271,38 @@ def test_a_page_count_mismatch_on_reopen_refuses_the_save(
     monkeypatch.setattr(session.engine, "open", lambda data, password=None: _Wrong())
     err = error(save(handle, "copy")[0])
     assert err["code"] == SAVE_FAILED
+
+
+def test_an_in_place_save_of_an_encrypted_document_keeps_its_password(
+    web: None, fixture_pdf: Any
+) -> None:
+    # Both modes keep the encryption: the engine holds the open password and reopens the bytes
+    # with it, so no owner password is needed to save (W4.8 S2).
+    handle = open_data(fixture_pdf("encrypted").read_bytes(), "encrypted.pdf", password="user")
+    assert ok(rotate(handle))["executed"] is True
+    result, saved = saved_bytes(handle, "in_place")
+    assert result["incremental"] is False
+    record("refuses_without_password_pikepdf", saved)  # still encrypted
+    record("encrypted_pages_pikepdf", saved, pages=1, password="user")
+    reopened = open_data(saved, "saved.pdf", password="user")
+    pages = ok(call("session.pages", {"handle": reopened}))["pages"]
+    assert pages[0]["rotation"] == 90
+
+
+def test_require_full_save_survives_mark_saved(web: None) -> None:
+    # A sanitize leaves the in-memory document as the original plus the removal, so an incremental
+    # update would append to the original and carry the removed content. The web's mark_saved does
+    # not clear the flag (the desktop clears it only because its document is then the new file).
+    # The sanitize action sets the same flag, but its scrub fails in MuPDF on this sample, so the
+    # flag is set directly after a real edit.
+    handle = open_data(SIGNED.read_bytes(), "signed.pdf")
+    assert ok(rotate(handle))["executed"] is True
+    session = REGISTRY.get(handle)
+    session.require_full_save = True
+    result, saved = saved_bytes(handle, "in_place")
+    assert result["incremental"] is False
+    record("page_count_pikepdf", saved, pages=page_total(handle))
+    assert ok(call("save.mark_saved", {"handle": handle}))["saved"] is True
+    assert session.require_full_save is True
+    again, _ = saved_bytes(handle, "in_place")
+    assert again["incremental"] is False

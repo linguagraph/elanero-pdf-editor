@@ -506,7 +506,7 @@ describe('App help, about and quick access (W4.3a S4)', () => {
     });
   }
 
-  it('shows the quick-access buttons in the header, with Save disabled until its handler lands', () => {
+  it('shows the quick-access buttons in the header, with Save disabled while no document is open', () => {
     renderApp();
     const save = host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
     expect(save).not.toBeNull();
@@ -529,5 +529,137 @@ describe('App help, about and quick access (W4.3a S4)', () => {
       return found;
     });
     expect(dialog.textContent).toContain(APP_VERSION);
+  });
+});
+
+// An engine that also answers the two save calls (W4.8): save_bytes returns a small file and
+// mark_saved answers clean. Every call is recorded, so a test can read the order.
+function savingEngine(): { client: EngineClient; calls: string[] } {
+  const base = drawingEngine().client;
+  const calls: string[] = [];
+  const call = vi.fn((method: string, params: Record<string, unknown>) => {
+    calls.push(method);
+    if (method === 'save.save_bytes') {
+      return Promise.resolve({
+        data: new ArrayBuffer(8),
+        size: 8,
+        incremental: false,
+        verified: true,
+        name: 'report',
+      });
+    }
+    if (method === 'save.mark_saved') return Promise.resolve({ saved: true, state: {} });
+    return (base.call as unknown as (m: string, p: unknown) => Promise<unknown>)(method, params);
+  });
+  return { client: { call } as unknown as EngineClient, calls };
+}
+
+describe('App Save (W4.8 S2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  let downloads: string[];
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    openPanel('pages');
+    closePanel('right');
+    // A download is an object URL clicked from an anchor: record the name it is given instead.
+    downloads = [];
+    URL.createObjectURL = vi.fn(() => 'blob:save-test');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download);
+    });
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  async function openDocument(name: string, engine: EngineClient): Promise<void> {
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(<App engine={fakeEngine(engine)} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf(name)] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => saveButton()?.getAttribute('aria-disabled') === null);
+  }
+
+  function saveButton(): HTMLElement | null {
+    return host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+  }
+
+  it('Save is enabled with a document open and downloads it under the document name, then marks it saved', async () => {
+    const engine = savingEngine();
+    await openDocument('report.pdf', engine.client);
+    expect(saveButton()?.getAttribute('aria-disabled')).toBeNull();
+
+    act(() => {
+      saveButton()?.click();
+    });
+    await until(() => downloads.length > 0 && engine.calls.includes('save.mark_saved'));
+
+    expect(downloads).toEqual(['report.pdf']);
+    expect(engine.calls.filter((method) => method.startsWith('save.'))).toEqual([
+      'save.save_bytes',
+      'save.mark_saved',
+    ]);
+  });
+
+  it('Ctrl+S saves the open document and stops the browser save dialog', async () => {
+    const engine = savingEngine();
+    await openDocument('report.pdf', engine.client);
+
+    const event = new KeyboardEvent('keydown', {
+      key: 's',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      document.body.dispatchEvent(event);
+    });
+    await until(() => downloads.length > 0);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(downloads).toEqual(['report.pdf']);
+  });
+
+  it('Ctrl+S with no document open does nothing, but still stops the browser save dialog', () => {
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(<App engine={fakeEngine()} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const event = new KeyboardEvent('keydown', {
+      key: 's',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      document.body.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(downloads).toEqual([]);
   });
 });

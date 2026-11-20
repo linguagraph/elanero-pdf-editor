@@ -518,6 +518,17 @@ export const EN = {
   'tabs.label': 'Open documents',
   'tabs.close': 'Close {name}',
   'tabs.unsaved': 'Unsaved changes',
+  // Save (W4.8): the download under the document's name, and what the user does with it.
+  'save.untitled': 'Document',
+  'save.downloaded': 'Saved {name}. Replace the original with the downloaded file.',
+  'save.downloadedSigned':
+    'Saved {name}. Replace the original with the downloaded file to keep its signatures valid.',
+  'save.changedSince':
+    'The document changed while it was being saved. The file has the state from before the change, and the document still has unsaved changes.',
+  'save.signedRestored':
+    'This signed document was reopened after the engine restarted, so it cannot be saved in place. Save it as a new file instead; its signatures stay in the original.',
+  'save.downloadBlocked':
+    'The browser blocked the download of {name}. Your changes are still here; download the file again.',
   'tabs.menu': 'Open documents',
   'tabs.menuNamed': 'Open documents: {name}',
   'tabs.menuClose': 'Close this document',
@@ -665,6 +676,8 @@ export const EN = {
   'action.saveAsNew': 'Save as a new file',
   'action.reloadPage': 'Reload page',
   'action.closeDocument': 'Close document',
+  'action.download': 'Download',
+  'action.downloadAgain': 'Download again',
 
   // One message per RPC error code (W1.2 section 4), plus the variants the mapping chooses.
   'error.UNKNOWN': 'Something went wrong. Try again; if it keeps happening, reload the page.',

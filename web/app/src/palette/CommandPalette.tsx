@@ -113,7 +113,9 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
         return;
       }
       if (isOpen || isTextEntry(event.target)) return;
-      if (runCommand(registry, id, state, handlers)) event.preventDefault();
+      // Ctrl+S is kept even when Save cannot run yet (no document): the browser's own Save
+      // dialog must not open over the app (W4.8).
+      if (runCommand(registry, id, state, handlers) || id === 'save') event.preventDefault();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);

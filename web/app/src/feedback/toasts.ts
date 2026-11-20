@@ -3,7 +3,7 @@
 // VISIBLE_TOASTS show at once; the rest wait in order and move up as room frees. The queue logic is
 // pure, so it is tested without a DOM, and the store is the only shared state.
 import { useSyncExternalStore } from 'react';
-import { mapRpcError } from '../rpc/errors';
+import { type ErrorContext, mapRpcError } from '../rpc/errors';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
 
@@ -113,9 +113,15 @@ export function useToasts(store: ToastStore = toasts): ToastQueue {
 }
 
 // Shows a failed RPC call as an error toast, worded through the catalogue (W4.7). A failure the
-// user asked for (a cancel) shows nothing, as the mapping says.
-export function reportRpcError(store: ToastStore, error: RpcError): number | undefined {
-  const presentation = mapRpcError(error);
+// user asked for (a cancel) shows nothing, as the mapping says. The context and the action are for
+// the callers that know more (a save of a signed document, W4.8).
+export function reportRpcError(
+  store: ToastStore,
+  error: RpcError,
+  context?: ErrorContext,
+  action?: ToastAction,
+): number | undefined {
+  const presentation = mapRpcError(error, context);
   if (presentation.silent) return undefined;
-  return store.push('error', t(presentation.messageId, presentation.params));
+  return store.push('error', t(presentation.messageId, presentation.params), action);
 }

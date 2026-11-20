@@ -102,8 +102,8 @@ is reloaded until you press it.
   are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
   button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
   a link to the source code. Close in the app menu closes the open document. Select and Hand switch
-  the tool of the open tab (see Hand tool below). The Undo, Redo and Save buttons are greyed out for
-  now, and they work once their commands are added.
+  the tool of the open tab (see Hand tool below). Save works (see Saving below). The Undo and Redo
+  buttons are greyed out for now, and they work once their commands are added.
 - **Search tools.** The box at the right of the tab row (the search icon alone in a narrow window
   or a compact ribbon) opens the command palette. Type in the box and the palette opens already
   filtered by what you typed; the icon opens the palette empty.
@@ -178,9 +178,27 @@ The target is the current Chrome, Edge, Firefox and Safari on a desktop computer
 on a best-effort basis. Testing in every one of these browsers is still to come, so report a problem
 if you see one.
 
-Saving a document in place needs the browser's File System Access API. The plan is that where the
-browser has that API, Save writes back to the original file, and elsewhere Save downloads a copy and
-says so. Saving is coming soon, so this is not yet working.
+## Saving
+
+**Save** (Ctrl+S, the ribbon's Home tab or the quick-access buttons) checks the whole document and
+downloads it under the document's own name, so your browser's downloads folder gets the saved file.
+Replace the original with it. The browser cannot write over the file you opened, so Save does not
+change the original. A download with the same name as an existing file gets a number added by the
+browser, so nothing is overwritten.
+
+- After a Save the tab is clean: its dot goes and closing it no longer warns. If the document changed
+  while it was being saved, the tab stays unsaved and the app says so.
+- A **signed** document is saved as an update to the original, so its signatures stay valid in the
+  download. Once you have saved it, a later change cannot be saved in place: Save says so and asks
+  you to save it as a new file (the signatures stay in the original). A signed document reopened
+  after the engine restarted cannot be saved in place either.
+- An **encrypted** document keeps its password and its permissions in the download.
+- If a task (such as OCR or a redaction) is still running on the document, Save asks you to wait and
+  downloads nothing.
+- If the browser blocks the download, the tab stays unsaved and a **Download** button is offered.
+
+Writing back to the original file in place needs the browser's File System Access API, and is not
+available yet.
 
 ## Where your data is stored
 
@@ -214,7 +232,7 @@ full policy, with what the desktop app stores, is in the
 | Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
-| Open, view, search and save PDFs | Yes | Coming soon |
+| Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and some Alt keys work; the full palette and shortcut list are coming soon |
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |

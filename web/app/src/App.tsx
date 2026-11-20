@@ -36,7 +36,7 @@ import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
-import { neighbourTabId } from './tabs/tabState';
+import { type DocumentTab, neighbourTabId } from './tabs/tabState';
 import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
@@ -67,6 +67,10 @@ import { RailButton } from './layout/RailButton';
 import { RAIL_ICONS } from './layout/railIcons';
 import { closePanel, openPanel, togglePanel, useOpenPanel } from './layout/sidePanels';
 import { APP_VERSION } from './version';
+import { downloadBytes } from './files/downloads';
+import { createSaver } from './save/saver';
+import { reportSaveOutcome } from './save/saveReport';
+import { pdfFileName } from './save/fileName';
 import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
 
@@ -163,6 +167,11 @@ export function App({
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
+  // The Save flow of the open tabs (W4.8): one saver for the page, one save at a time per document.
+  const saver = useMemo(
+    () => createSaver({ client: () => engine.client(), download: downloadBytes }),
+    [engine],
+  );
   // Files the OS hands to the app open through the same path as the Open button (W4.6 S1).
   useEffect(() => launches.attach(docs.openFiles), [launches, docs.openFiles]);
   useEffect(() => {
@@ -292,6 +301,19 @@ export function App({
     },
   ];
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
+  // Save writes the document as a download under its own name, and marks it clean (W4.8).
+  const saveTab = async (tab: DocumentTab): Promise<void> => {
+    const outcome = await saver.save(
+      {
+        handle: tab.handle,
+        name: pdfFileName(tab.name, t('save.untitled')),
+        signed: tab.signed,
+        restored: tab.restored,
+      },
+      'in_place',
+    );
+    reportSaveOutcome(outcome, downloadBytes);
+  };
   // The page and zoom the document view reports, for the status bar under the document.
   const [viewState, setViewState] = useState<DocumentViewState>({
     page: 1,
@@ -352,6 +374,10 @@ export function App({
           'next-page': () => runView('next-page'),
           back: () => stepBack(-1),
           forward: () => stepBack(1),
+          // Save (W4.8) writes the open document back as a download; Ctrl+S runs it too.
+          save: () => {
+            if (activeTab !== undefined) void saveTab(activeTab);
+          },
           // Close (W4.3a S4) closes the open tab, as the tab's own close button does.
           close: () => {
             if (activeId !== null) docs.closeTab(activeId);
