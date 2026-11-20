@@ -143,3 +143,12 @@
   color: var(--color-danger);
   white-space: nowrap;
 }
+
+/* Touch targets are at least 44 px under a coarse pointer (W1.6, touch; W8.5 S5). */
+@media (pointer: coarse) {
+  .canvas-pill button,
+  .canvas-pill input {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
