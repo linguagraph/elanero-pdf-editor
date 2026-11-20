@@ -7,10 +7,12 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'rea
 import { Label, Radio, RadioGroup } from 'react-aria-components';
 import { downloadLinks, type ResultFile, revokeLinks } from '../files/downloads';
 import { FileJobCancelled, type FileJobEngine, type JobWorker } from '../files/fileJob';
-import type { JobProgressStore } from '../feedback/jobRun';
+import { jobProgress, type JobProgressStore } from '../feedback/jobRun';
 import type { MessageId } from '../i18n/en';
 import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
+import { RpcError } from '../rpc/client';
+import { mapRpcError } from '../rpc/errors';
 import { checkExtractPages, type ExtractImagesValue, type ExtractPageMode } from './extractChoice';
 import { runExtractImages } from './extractJob';
 import '../export/export.css';
@@ -38,6 +40,16 @@ const PAGE_LABELS: Readonly<Record<ExtractPageMode, MessageId>> = {
 interface Result {
   readonly files: readonly ResultFile[];
   readonly value: ExtractImagesValue;
+}
+
+// The line for a failed run. An engine refusal the catalogue names (BUSY: another task runs) shows
+// its reason; any other failure keeps the generic text.
+function failureText(failure: unknown): string {
+  if (!(failure instanceof RpcError)) return t('extract.failed');
+  const presented = mapRpcError(failure);
+  return presented.messageId === 'error.UNKNOWN'
+    ? t('extract.failed')
+    : t(presented.messageId, presented.params);
 }
 
 // The dialog on the Overlay host. Its form is mounted only while the dialog is open, so each open
@@ -72,6 +84,7 @@ function ExtractImagesForm({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const mounted = useRef(true);
+  const runningRef = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -79,6 +92,18 @@ function ExtractImagesForm({
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    runningRef.current = running;
+  }, [running]);
+
+  // The form unmounts when the dialog closes (Escape, a tap outside or the parent). A run still
+  // going is cancelled the way the job bar's Cancel cancels it, since its result has nowhere to go.
+  useEffect(() => {
+    return () => {
+      if (runningRef.current) void (progress ?? jobProgress).cancel();
+    };
+  }, [progress]);
 
   const links = useMemo(() => downloadLinks(result?.files ?? []), [result]);
   useEffect(() => {
@@ -105,9 +130,9 @@ function ExtractImagesForm({
       (failure: unknown) => {
         if (!mounted.current) return;
         setRunning(false);
-        // A cancel is the user's own choice. A failure the job bar already reported is not
-        // repeated here; this line says the extraction did not finish.
-        if (!(failure instanceof FileJobCancelled)) setError(t('extract.failed'));
+        // A cancel is the user's own choice. This line says the extraction did not finish, and why
+        // when the catalogue names the reason; the job bar's toast may say it too.
+        if (!(failure instanceof FileJobCancelled)) setError(failureText(failure));
       },
     );
   };
@@ -162,7 +187,7 @@ function ExtractImagesForm({
         <button type="submit" className="export-submit" disabled={running}>
           {t('extract.submit')}
         </button>
-        <button type="button" onClick={onClose}>
+        <button type="button" onClick={onClose} disabled={running}>
           {t('extract.close')}
         </button>
       </div>

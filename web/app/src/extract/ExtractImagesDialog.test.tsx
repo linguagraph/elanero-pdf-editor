@@ -181,4 +181,105 @@ describe('ExtractImagesDialog', () => {
     expect(call).not.toHaveBeenCalled();
     expect(document.body.querySelector('[role="alert"]')?.textContent).toBeTruthy();
   });
+
+  // The job arguments of the first prepare call.
+  function prepareArgs(call: { mock: { calls: unknown[][] } }): unknown {
+    const request = call.mock.calls[0]?.[1];
+    return request;
+  }
+
+  function chooseRadio(label: string) {
+    const radio = [...document.body.querySelectorAll('input[type="radio"]')].find(
+      (candidate) => candidate.closest('label')?.textContent === label,
+    ) as HTMLInputElement;
+    act(() => radio.click());
+  }
+
+  function typeRange(value: string) {
+    const input = document.body.querySelector<HTMLInputElement>('.export input[type="text"]');
+    if (input === null) throw new Error('no range input');
+    // React tracks the value itself, so the native setter is what makes the change visible to it.
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  it('the current-page choice runs the job on the viewer page, 0-based', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, currentPage: 4 });
+    chooseRadio(t('export.pages.current'));
+
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+
+    expect(prepareArgs(call)).toMatchObject({ args: { pages: [3] } });
+  });
+
+  it('a page range runs the job on those pages, 0-based, in the order typed', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+    chooseRadio(t('export.pages.range'));
+    typeRange('2-3');
+
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+
+    expect(prepareArgs(call)).toMatchObject({ args: { pages: [1, 2] } });
+  });
+
+  it('closing the dialog during a run cancels the job, and Close is disabled while it runs', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const terminate = vi.fn();
+    const worker: JobWorker = {
+      call: vi.fn(() => new Promise<CallResult>(() => undefined)),
+      terminate,
+    };
+    const onClose = vi.fn();
+    render({ engine, progress, onClose, startWorker: () => worker });
+
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+    expect(findButton(t('extract.close')).disabled).toBe(true);
+    expect(progress.getState().job).toBeDefined();
+
+    render({ engine, progress, onClose, startWorker: () => worker, isOpen: false });
+    await flush();
+
+    expect(call).toHaveBeenCalledWith('jobs.abort', { handle: 'doc-1', token: 'j1' });
+    expect(terminate).toHaveBeenCalled();
+    expect(progress.getState().job).toBeUndefined();
+  });
+
+  it('a failed job shows the failure message', async () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const worker: JobWorker = {
+      call: vi.fn(() => Promise.reject(new Error('boom'))),
+      terminate: vi.fn(),
+    };
+    render({ engine, progress, startWorker: () => worker });
+
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(t('extract.failed'));
+  });
+
+  it('a refused job (BUSY) shows the reason the catalogue gives for it', async () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    // Another job holds the bar, so this one is refused when it starts.
+    progress.begin({ handle: 'doc-1', token: 'other', label: 'OCR' });
+    render({ engine, progress });
+
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(t('error.BUSY'));
+  });
 });
