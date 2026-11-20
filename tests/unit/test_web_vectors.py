@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +30,8 @@ def _cases(vectors: dict[str, Any], fn: str) -> Iterator[dict[str, Any]]:
     return (c for c in vectors["cases"] if c["fn"] == fn)
 
 
-def test_the_text_vectors_file_is_up_to_date() -> None:
+def test_the_text_vectors_file_is_up_to_date(fixture_pdf: Callable[[str], Path]) -> None:
+    fixture_pdf("text_multipage")  # the generator reads tests/fixtures/generated; ensure it exists
     assert make_web_vectors.main(["--check"]) == 0
 
 
