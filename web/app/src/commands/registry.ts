@@ -101,8 +101,11 @@ export type Enabled = (state: CommandState) => DisabledReason | null;
 
 export const ALWAYS: Enabled = () => null;
 export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'needsDocument');
-export const CAN_UNDO: Enabled = (state) => (state.canUndo ? null : 'nothingToUndo');
-export const CAN_REDO: Enabled = (state) => (state.canRedo ? null : 'nothingToRedo');
+// Undo and Redo need an open document first, then their own step (the engine's can-undo flags).
+export const CAN_UNDO: Enabled = (state) =>
+  NEEDS_DOCUMENT(state) ?? (state.canUndo ? null : 'nothingToUndo');
+export const CAN_REDO: Enabled = (state) =>
+  NEEDS_DOCUMENT(state) ?? (state.canRedo ? null : 'nothingToRedo');
 export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');
 // Back and Forward need an open document, then an entry in the history that way (W5.3).
 export const CAN_GO_BACK: Enabled = (state) => {

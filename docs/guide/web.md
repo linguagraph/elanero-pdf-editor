@@ -102,8 +102,11 @@ is reloaded until you press it.
   are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
   button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
   a link to the source code. Close in the app menu closes the open document. Select and Hand switch
-  the tool of the open tab (see Hand tool below). Save works (see Saving below). The Undo and Redo
-  buttons are greyed out for now, and they work once their commands are added.
+  the tool of the open tab (see Hand tool below). Save works (see Saving below).
+- **Undo and Redo.** Undo (Ctrl+Z) and Redo (Ctrl+Y) step back and forward through the changes to
+  the open document, in the Home tab's History group and in the quick-access buttons. Each is
+  enabled only when there is a step to take; with no document open, the disabled note says so.
+  Each document keeps its own steps, and they are cleared when the document is closed.
 - **Search tools.** The box at the right of the tab row (the search icon alone in a narrow window
   or a compact ribbon) opens the command palette. Type in the box and the palette opens already
   filtered by what you typed; the icon opens the palette empty.

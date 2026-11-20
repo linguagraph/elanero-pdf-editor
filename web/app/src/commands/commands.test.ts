@@ -13,7 +13,8 @@ import {
   TAB_ORDER,
   type ViewCommandState,
 } from './registry';
-import { menuSections, ribbonLayout, runCommand } from './run';
+import { commandDisabledReason, menuSections, ribbonLayout, runCommand } from './run';
+import { addTab, applyDocState, EMPTY_TABS } from '../tabs/tabState';
 
 const SHARED: Record<string, { keys: string[] }> = shortcutTable.commands;
 
@@ -198,6 +199,51 @@ describe('visibility and running', () => {
     const undo = vi.fn();
     expect(runCommand(REGISTRY, 'undo', withDoc, { undo })).toBe(false);
     expect(runCommand(REGISTRY, 'undo', { ...withDoc, canUndo: true }, { undo })).toBe(true);
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the disabled reason of undo and redo: no document, then nothing to step back', () => {
+    const handlers = { undo: vi.fn(), redo: vi.fn() };
+    const undo = REGISTRY.get('undo');
+    const redo = REGISTRY.get('redo');
+    if (undo === undefined || redo === undefined) throw new Error('undo and redo are declared');
+    expect(commandDisabledReason(undo, state(), handlers)).toBe('needsDocument');
+    expect(commandDisabledReason(redo, state(), handlers)).toBe('needsDocument');
+    expect(commandDisabledReason(undo, withDoc, handlers)).toBe('nothingToUndo');
+    expect(commandDisabledReason(redo, withDoc, handlers)).toBe('nothingToRedo');
+    expect(commandDisabledReason(undo, { ...withDoc, canUndo: true }, handlers)).toBeNull();
+    expect(commandDisabledReason(redo, { ...withDoc, canRedo: true }, handlers)).toBeNull();
+  });
+
+  it('follows the engine history: the tab flags from a state event decide undo', () => {
+    let tabs = addTab(EMPTY_TABS, {
+      name: 'a.pdf',
+      handle: 'h1',
+      pages: 1,
+      encrypted: false,
+      signed: false,
+    });
+    const undo = vi.fn();
+    const enabled = (): boolean =>
+      runCommand(
+        REGISTRY,
+        'undo',
+        state({ hasDocument: true, canUndo: tabs.tabs[0]?.canUndo ?? false }),
+        { undo },
+      );
+    expect(enabled()).toBe(false);
+    // A change: the engine's state event says it can undo now.
+    tabs = applyDocState(tabs, 'h1', { dirty: true, can_undo: true, can_redo: false, busy: '' });
+    expect(enabled()).toBe(true);
+    // The undo: the engine's state event says there is nothing left to undo.
+    tabs = applyDocState(tabs, 'h1', {
+      dirty: false,
+      can_undo: false,
+      can_redo: true,
+      busy: '',
+    });
+    expect(enabled()).toBe(false);
+    expect(tabs.tabs[0]?.canRedo).toBe(true);
     expect(undo).toHaveBeenCalledTimes(1);
   });
 

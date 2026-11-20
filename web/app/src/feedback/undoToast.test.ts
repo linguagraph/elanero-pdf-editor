@@ -101,8 +101,10 @@ describe('offerUndo', () => {
 
 // Every Undo goes through the helper, so the stale and error policy is in one place (W4.4b). A
 // caller that sent actions.undo itself would skip the history check.
-describe('actions.undo has one caller', () => {
-  it('is sent only from undoToast.ts', () => {
+describe('actions.undo has two callers', () => {
+  // undoToast.ts sends an offered step with expect_history (W4.4b). The Undo command (W4.3a S8)
+  // takes the newest step, as the desktop's Ctrl+Z does, and sends no guard. No other sender.
+  it('is sent only from undoToast.ts and the Undo command', () => {
     const src = resolve(dirname(fileURLToPath(import.meta.url)), '..');
     const files: string[] = [];
     const walk = (dir: string): void => {
@@ -114,8 +116,9 @@ describe('actions.undo has one caller', () => {
     };
     walk(src);
     const senders = files.filter((file) => /'actions\.undo'\s*,/.test(readFileSync(file, 'utf8')));
-    expect(senders.map((file) => relative(src, file).split(/[\\/]/).join('/'))).toEqual([
+    expect(senders.map((file) => relative(src, file).split(/[\\/]/).join('/')).sort()).toEqual([
       'feedback/undoToast.ts',
+      'history/runHistory.ts',
     ]);
   });
 });

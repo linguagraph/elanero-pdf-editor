@@ -360,6 +360,7 @@ export const EN = {
   'toast.actionNamed': '{action}: {text}',
   'toast.undo.stale': 'Nothing was undone: the document has changed since.',
   'toast.undo.failed': 'Nothing was undone, because something went wrong.',
+  'toast.redo.failed': 'Nothing was redone, because something went wrong.',
   'job.cancel': 'Cancel',
   'job.working': 'Working',
   'job.percent': '{percent}% done',
