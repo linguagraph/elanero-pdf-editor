@@ -62,4 +62,28 @@ test.describe('engine staged', () => {
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
+
+  test('a search jumps to its hit and highlights it on the hit page', async ({ page }) => {
+    const problems = watchPage(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+
+    // The hit on page 1 is the current one: its mark is drawn on that page, and only one mark is
+    // the current one.
+    await page.locator('[data-panel="search"]').click();
+    const query = page.getByRole('searchbox', { name: 'Search text' });
+    await query.fill('needle');
+    await query.press('Enter');
+    await expect(page.locator('.search-status')).toHaveText('1 of 5 matches');
+    await expect(page.locator('.search-mark--current')).toHaveCount(1);
+    await expect(page.locator('[data-page="0"] .search-mark--current')).toHaveCount(1);
+
+    // Next moves the current highlight to page 2, and the hit is in view there.
+    await page.getByRole('button', { name: 'Next match', exact: true }).click();
+    await expect(page.locator('[data-page="1"] .search-mark--current')).toHaveCount(1);
+    await expect(page.locator('[data-page="0"] .search-mark--current')).toHaveCount(0);
+    await expect.poll(() => currentMarkInView(page)).toBe(true);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
 });
