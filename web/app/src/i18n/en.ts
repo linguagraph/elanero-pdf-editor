@@ -150,6 +150,8 @@ export const EN = {
   'command.select-tool.label': 'Select',
   'command.hand-tool.label': 'Hand',
   'command.find.label': 'Find',
+  'command.find-next.label': 'Find Next',
+  'command.find-previous.label': 'Find Previous',
   'command.back.label': 'Back',
   'command.forward.label': 'Forward',
   'command.previous-page.label': 'Previous Page',
@@ -818,6 +820,9 @@ export const EN = {
     other: 'Search stopped. {count} matches found so far.',
   },
   'search.failed': 'The search could not finish. Check the search text and try again.',
+  'search.badQuery': 'This search cannot run: {reason}',
+  'search.emptyHint':
+    'Type text and press Enter to search this document. Pages with no text, such as scanned pages, have nothing to find.',
 
   // Update prompt for a new app version (W4.6).
   'update.ready': 'A new version of Elanero is ready.',

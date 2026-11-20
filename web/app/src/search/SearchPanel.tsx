@@ -1,14 +1,23 @@
 // The search side panel (W5.4, W1.6 section 4): a query, its options, the hits in page order and
-// next and previous. The engine searches in slices (text.search); Stop ends the run after the slice
-// in flight, and the hits found so far stay. The hits are drawn on the page views through onMarks,
-// and choosing one asks the view to scroll to its page through onGoTo.
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+// next and previous. The engine searches in slices (text.search) from the current page, wrapping
+// round as the desktop does. Stop ends the run after the slice in flight, and the hits found so far
+// stay; a new query cancels the run in progress. Enter and Shift+Enter step through the hits of the
+// query already searched. The hits are drawn on the page views through onMarks, and choosing one
+// asks the view to scroll to its page through onGoTo.
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
+import { RpcError } from '../rpc/client';
 import type { SearchHitDto, SearchOptionsDto } from '../rpc/generated';
 import { collectSearch, nextHit, previousHit, type SearchMarks } from './search';
 import './search.css';
+
+// A request from Find Next (F3) or Find Previous (Shift+F3). A new id is a new request.
+export interface FindRequest {
+  readonly direction: 1 | -1;
+  readonly id: number;
+}
 
 export interface SearchPanelProps {
   readonly rpc: Pick<PageRpc, 'chunked'>;
@@ -20,19 +29,34 @@ export interface SearchPanelProps {
   readonly onClose: () => void;
   // Bumped by the caller to move focus to the query box, also when the panel is already open (Ctrl+F).
   readonly focusRequest?: number;
+  // The zero-based page the search starts from. It wraps round to the first page (W1.4 section 10).
+  readonly currentPage?: number;
+  readonly findRequest?: FindRequest;
 }
 
-type Status = 'idle' | 'searching' | 'done' | 'stopped' | 'failed';
+type Status = 'idle' | 'searching' | 'done' | 'stopped' | 'failed' | 'badQuery';
 
 interface RunView {
   readonly status: Status;
+  // The query the hits came from. Enter steps through them only while the query box still holds it.
+  readonly query: string;
   readonly hits: readonly SearchHitDto[];
   readonly current: number;
   readonly pagesDone: number;
   readonly total: number;
+  // The engine's reason for a refused query (status badQuery).
+  readonly reason: string;
 }
 
-const IDLE: RunView = { status: 'idle', hits: [], current: -1, pagesDone: 0, total: 0 };
+const IDLE: RunView = {
+  status: 'idle',
+  query: '',
+  hits: [],
+  current: -1,
+  pagesDone: 0,
+  total: 0,
+  reason: '',
+};
 
 const NO_OPTIONS: SearchOptionsDto = { case_sensitive: false, whole_word: false, regex: false };
 
@@ -44,13 +68,17 @@ function statusText(view: RunView): string {
       return tp('search.stopped', view.hits.length);
     case 'failed':
       return t('search.failed');
+    case 'badQuery':
+      return t('search.badQuery', { reason: view.reason });
     case 'done':
       if (view.hits.length === 0) return t('search.noMatches');
       return view.current >= 0
         ? tp('search.count', view.hits.length, { current: view.current + 1 })
         : tp('search.countTotal', view.hits.length);
     case 'idle':
-      return view.hits.length > 0 ? tp('search.countTotal', view.hits.length) : '';
+      return view.hits.length > 0
+        ? tp('search.countTotal', view.hits.length)
+        : t('search.emptyHint');
   }
 }
 
@@ -61,6 +89,8 @@ export function SearchPanel({
   onGoTo,
   onClose,
   focusRequest = 0,
+  currentPage = 0,
+  findRequest,
 }: SearchPanelProps) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +108,9 @@ export function SearchPanel({
   const runRef = useRef<AbortController | null>(null);
   const onMarksRef = useRef(onMarks);
   const onGoToRef = useRef(onGoTo);
+  // The step of the latest render, for a Find Next or Previous request (an effect, so it is late).
+  const stepRef = useRef<(direction: 1 | -1) => void>(() => undefined);
+  const handledFind = useRef(findRequest?.id ?? 0);
 
   useEffect(() => {
     onMarksRef.current = onMarks;
@@ -100,6 +133,28 @@ export function SearchPanel({
     [],
   );
 
+  const choose = (index: number) => {
+    const hit = view.hits[index];
+    if (hit === undefined) return;
+    setView((previous) => ({ ...previous, current: index }));
+    onGoTo(hit.page);
+  };
+
+  const count = view.hits.length;
+  const step = (direction: 1 | -1) => {
+    const index = direction > 0 ? nextHit(view.current, count) : previousHit(view.current, count);
+    if (index >= 0) choose(index);
+  };
+
+  useEffect(() => {
+    stepRef.current = step;
+  });
+  useEffect(() => {
+    if (findRequest === undefined || findRequest.id === handledFind.current) return;
+    handledFind.current = findRequest.id;
+    stepRef.current(findRequest.direction);
+  }, [findRequest]);
+
   const stop = () => {
     const running = runRef.current;
     if (running === null) return;
@@ -120,49 +175,55 @@ export function SearchPanel({
     const controller = new AbortController();
     runRef.current = controller;
     let found: SearchHitDto[] = [];
-    setView({ status: 'searching', hits: [], current: -1, pagesDone: 0, total: 0 });
-    collectSearch(rpc, handle, query, options, controller.signal, (hits, pagesDone, total) => {
-      if (runRef.current !== controller) return;
-      const first = found.length === 0 && hits.length > 0;
-      found = [...found, ...hits];
-      if (first) onGoToRef.current(found[0]?.page ?? 0);
-      setView((previous) => ({
-        ...previous,
-        hits: found,
-        current: first ? 0 : previous.current,
-        pagesDone,
-        total,
-      }));
-    }).then(
+    setView({ ...IDLE, status: 'searching', query });
+    collectSearch(
+      rpc,
+      handle,
+      query,
+      options,
+      currentPage,
+      controller.signal,
+      (sliceHits, pagesDone, total) => {
+        if (runRef.current !== controller) return;
+        const first = found.length === 0 && sliceHits.length > 0;
+        found = [...found, ...sliceHits];
+        if (first) onGoToRef.current(found[0]?.page ?? 0);
+        setView((previous) => ({
+          ...previous,
+          hits: found,
+          current: first ? 0 : previous.current,
+          pagesDone,
+          total,
+        }));
+      },
+    ).then(
       () => {
         if (runRef.current !== controller) return;
         runRef.current = null;
         setView((previous) => ({ ...previous, status: 'done' }));
       },
-      () => {
+      (error: unknown) => {
         if (runRef.current !== controller) return;
         runRef.current = null;
-        setView((previous) => ({ ...previous, status: 'failed' }));
+        // The engine names the part of the query it refused, such as a regex that does not parse.
+        const refused = error instanceof RpcError && error.code === 'INVALID_ARGS';
+        setView((previous) =>
+          refused
+            ? { ...previous, status: 'badQuery', reason: error.message }
+            : { ...previous, status: 'failed' },
+        );
       },
     );
   };
 
-  const choose = (index: number) => {
-    const hit = view.hits[index];
-    if (hit === undefined) return;
-    setView((previous) => ({ ...previous, current: index }));
-    onGoTo(hit.page);
+  // Enter steps to the next hit and Shift+Enter to the previous one, while the query box still
+  // holds the query that was searched. Otherwise Enter searches as usual.
+  const onQueryKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || count === 0 || view.query !== query) return;
+    event.preventDefault();
+    step(event.shiftKey ? -1 : 1);
   };
 
-  const count = view.hits.length;
-  const goPrevious = () => {
-    const index = previousHit(view.current, count);
-    if (index >= 0) choose(index);
-  };
-  const goNext = () => {
-    const index = nextHit(view.current, count);
-    if (index >= 0) choose(index);
-  };
   const setOption = (key: keyof SearchOptionsDto, value: boolean) =>
     setOptions((previous) => ({ ...previous, [key]: value }));
 
@@ -175,6 +236,7 @@ export function SearchPanel({
           aria-label={t('search.query')}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
+          onKeyDown={onQueryKeyDown}
         />
         <button type="submit">{t('search.submit')}</button>
       </form>
@@ -205,10 +267,10 @@ export function SearchPanel({
         </label>
       </div>
       <div className="search-actions">
-        <button type="button" disabled={count === 0} onClick={goPrevious}>
+        <button type="button" disabled={count === 0} onClick={() => step(-1)}>
           {t('search.previous')}
         </button>
-        <button type="button" disabled={count === 0} onClick={goNext}>
+        <button type="button" disabled={count === 0} onClick={() => step(1)}>
           {t('search.next')}
         </button>
         {view.status === 'searching' ? (

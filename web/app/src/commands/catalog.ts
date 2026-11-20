@@ -121,6 +121,8 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'go-to-page': 'text-cursor-input',
   copy: 'copy',
   'select-all': 'scan-text',
+  'find-next': 'chevron-down',
+  'find-previous': 'chevron-up',
 };
 
 const DECLARED_COMMANDS: readonly CommandDef[] = [
@@ -143,6 +145,9 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     checked: (state) => state.viewTool === 'hand',
   },
   aliased(cmd('find', 'command.find.label', 'home.search'), 'command.find.keywords'),
+  // F3 and Shift+F3 step through the hits of the last search (W5.4 S5); the keys are the shared table's.
+  cmd('find-next', 'command.find-next.label', 'home.search'),
+  cmd('find-previous', 'command.find-previous.label', 'home.search'),
   cmd('back', 'command.back.label', 'home.navigate', CAN_GO_BACK),
   cmd('forward', 'command.forward.label', 'home.navigate', CAN_GO_FORWARD),
   cmd('previous-page', 'command.previous-page.label', 'home.navigate', NOT_FIRST_PAGE),

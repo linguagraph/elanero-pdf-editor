@@ -16,7 +16,8 @@ export interface SearchMarks {
 
 export type SearchRun = 'done' | 'stopped';
 
-// Runs text.search for the whole document in slices. Each slice's hits go to onSlice in page
+// Runs text.search for the whole document in slices, starting at startPage and wrapping round to
+// the first page (the desktop's order, W1.4 section 10). Each slice's hits go to onSlice in that
 // order. Stopping the signal ends the run after the call in flight; the caller decides what the
 // hits so far mean. An error from the engine is thrown, except when the run was stopped.
 export async function collectSearch(
@@ -24,13 +25,14 @@ export async function collectSearch(
   handle: string,
   query: string,
   options: SearchOptionsDto,
+  startPage: number,
   signal: AbortSignal,
   onSlice: (hits: readonly SearchHitDto[], pagesDone: number, total: number) => void,
 ): Promise<SearchRun> {
   try {
     for await (const slice of rpc.chunked(
       'text.search',
-      { handle, query, options, start_page: 0, budget_ms: SEARCH_BUDGET_MS },
+      { handle, query, options, start_page: startPage, budget_ms: SEARCH_BUDGET_MS },
       { signal },
     )) {
       if (signal.aborted) return 'stopped';
