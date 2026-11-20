@@ -104,3 +104,15 @@
 .doc-tab-close:focus-visible {
   outline: 2px solid var(--color-focus-ring);
 }
+
+/* Touch targets are at least 44 px under a coarse pointer (W1.6, touch; W8.5 S5). */
+@media (pointer: coarse) {
+  .doc-tab {
+    min-height: 44px;
+  }
+
+  .doc-tab-close {
+    width: 44px;
+    height: 44px;
+  }
+}

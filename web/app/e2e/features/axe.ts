@@ -11,9 +11,31 @@ import { classify, type AxeRule } from '../../src/test/axe';
 // The WCAG 2.2 AA rule set (W8.5 section 3): every rule these tags select, with no rule switched off.
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 
-export async function checkAxe(page: Page, testInfo: TestInfo): Promise<void> {
+// A violation a screen still has, excused on one node only: the rule, a part of the node's target
+// selector, and the reason with the open decision it waits on (W8.5 S5). Nothing else is excused.
+export interface KnownIssue {
+  readonly rule: string;
+  readonly target: string;
+  readonly reason: string;
+}
+
+export async function checkAxe(
+  page: Page,
+  testInfo: TestInfo,
+  known: readonly KnownIssue[] = [],
+): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  const violations = results.violations as unknown as AxeRule[];
+  const violations = (results.violations as unknown as AxeRule[])
+    .map((rule) => ({
+      ...rule,
+      nodes: rule.nodes.filter(
+        (node) =>
+          !known.some(
+            (k) => k.rule === rule.id && node.target.some((part) => part.includes(k.target)),
+          ),
+      ),
+    }))
+    .filter((rule) => rule.nodes.length > 0);
   const { blocking, advisory } = classify(violations);
 
   await testInfo.attach('axe-violations.json', {
