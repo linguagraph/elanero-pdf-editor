@@ -7,13 +7,13 @@ import { PYMUPDF_VERSION, PYMUPDF_WHEEL_FILE, PYODIDE_VERSION, WEBAPI_PROTOCOL }
 const here = dirname(fileURLToPath(import.meta.url));
 const versions = JSON.parse(
   readFileSync(resolve(here, '..', '..', '..', 'spike', 'versions.json'), 'utf8'),
-) as { pyodide: string; pymupdf: string; pypiWheel: { file: string } };
+) as { pyodide: string; pymupdf: string; builtWheel: { file: string } };
 
 describe('engine pins', () => {
   it('match web/spike/versions.json (the one source of the pins)', () => {
     expect(PYODIDE_VERSION).toBe(versions.pyodide);
     expect(PYMUPDF_VERSION).toBe(versions.pymupdf);
-    expect(PYMUPDF_WHEEL_FILE).toBe(versions.pypiWheel.file);
+    expect(PYMUPDF_WHEEL_FILE).toBe(versions.builtWheel.file);
   });
 
   it('match the webapi protocol version in the Python package', () => {
