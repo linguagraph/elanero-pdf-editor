@@ -7,14 +7,21 @@ import { TextLayerCache, type TextRpc } from './textLayerCache';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+function joinChars(boxes: Float32Array, numbers: Uint32Array): ArrayBuffer {
+  const joined = new Uint8Array(boxes.byteLength + numbers.byteLength);
+  joined.set(new Uint8Array(boxes.buffer), 0);
+  joined.set(new Uint8Array(numbers.buffer), boxes.byteLength);
+  return joined.buffer;
+}
+
 // One line "hi" at 72 points from the left and top: at zoom 1 that is 96 CSS px.
 function layerReply(): Methods['text.layer']['result'] {
   return {
     revision: 0,
     text: 'hi',
     line_rects: [],
-    char_boxes: new Float32Array([72, 72, 84, 84, 84, 72, 96, 84]).buffer,
-    line_numbers: new Uint32Array([0, 0]).buffer,
+    // The boxes, then the line numbers, in the reply's one buffer.
+    chars: joinChars(new Float32Array([72, 72, 84, 84, 84, 72, 96, 84]), new Uint32Array([0, 0])),
   };
 }
 

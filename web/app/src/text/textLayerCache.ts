@@ -3,7 +3,7 @@
 // Each entry holds the page's character index (pageTextIndex.ts) and the lines drawn from it.
 import type { Methods } from '../rpc/generated';
 import { PageTextIndex } from './pageTextIndex';
-import { decodeTextLayer, type TextLine } from './textLayer';
+import { decodeTextLayer, splitCharData, type TextLine } from './textLayer';
 
 // The calls the text layer makes. RpcClient satisfies it; tests pass a fake.
 export interface TextRpc {
@@ -58,7 +58,8 @@ export class TextLayerCache {
     // that is still cached under this key may store its result.
     const pending: Promise<TextLayerEntry> = this.rpc
       .call('text.layer', { handle: this.handle, page })
-      .then((layer) => {
+      .then((reply) => {
+        const layer = { ...reply, ...splitCharData(reply.chars) };
         const entry: TextLayerEntry = {
           index: PageTextIndex.fromLayer(layer),
           lines: decodeTextLayer(layer),

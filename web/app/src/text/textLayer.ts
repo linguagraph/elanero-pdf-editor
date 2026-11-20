@@ -73,11 +73,29 @@ interface LineInProgress {
   boxed: boolean;
 }
 
+// The layer as the decoders read it: the reply's one char buffer split into its two parts.
+export type SplitTextLayer = Omit<TextLayerResult, 'chars'> & {
+  char_boxes: ArrayBuffer;
+  line_numbers: ArrayBuffer;
+};
+
+// The engine sends the char data as one buffer, because a reply carries at most one: Float32 x 4
+// per char (the boxes) for all chars, then Uint32 per char (the line numbers), so 20 bytes a char.
+export function splitCharData(
+  chars: ArrayBuffer,
+): Pick<SplitTextLayer, 'char_boxes' | 'line_numbers'> {
+  const count = Math.floor(chars.byteLength / 20);
+  return {
+    char_boxes: chars.slice(0, count * 16),
+    line_numbers: chars.slice(count * 16, count * 20),
+  };
+}
+
 // Splits the layer into lines. Chars are counted as code points, the same as the engine's
 // indexes; a line ends at a separator or where the line number changes. A char without a box
 // (zeros) keeps its text but does not stretch the line's box.
 export function decodeTextLayer(
-  layer: Pick<TextLayerResult, 'text' | 'char_boxes' | 'line_numbers'>,
+  layer: Pick<SplitTextLayer, 'text' | 'char_boxes' | 'line_numbers'>,
 ): TextLine[] {
   const chars = Array.from(layer.text);
   const boxes = new Float32Array(layer.char_boxes);

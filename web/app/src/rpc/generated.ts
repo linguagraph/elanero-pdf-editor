@@ -650,10 +650,7 @@ export interface TextLayerResult {
   /** LINE_SEP between lines, so offsets map 1:1 to the char boxes */
   text: string;
   line_rects: RectDto[];
-  /** Float32 x 4 per char (x0, y0, x1, y1); zeros for line separators */
-  char_boxes: ArrayBuffer;
-  /** Uint32 per char: the line it belongs to */
-  line_numbers: ArrayBuffer;
+  chars: ArrayBuffer;
 }
 
 export interface TextPosition {
@@ -1762,13 +1759,12 @@ export function decodeTextLayerResult(
   path: string,
 ): TextLayerResult {
   const o = expectObject(value, path);
-  checkKeys(o, ['revision', 'text', 'line_rects', 'char_boxes', 'line_numbers'], path);
+  checkKeys(o, ['revision', 'text', 'line_rects', 'chars'], path);
   return {
     revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
     text: expectString(field(o, 'text', path), `${path}.text`),
     line_rects: expectArray(field(o, 'line_rects', path), `${path}.line_rects`).map((item1, index1) => decodeRectDto(item1, ctx, `${`${path}.line_rects`}[${index1}]`)),
-    char_boxes: takeBinary(field(o, 'char_boxes', path), ctx, `${path}.char_boxes`),
-    line_numbers: takeBinary(field(o, 'line_numbers', path), ctx, `${path}.line_numbers`),
+    chars: takeBinary(field(o, 'chars', path), ctx, `${path}.chars`),
   };
 }
 

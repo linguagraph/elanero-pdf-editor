@@ -53,8 +53,7 @@ def text_layer(params: dto.PageParams) -> dto.TextLayerResult:
         revision=revision,
         text=index.text,
         line_rects=tuple(_rect(r) for r in index.line_rects),
-        char_boxes=_little_endian(boxes).tobytes(),
-        line_numbers=_little_endian(numbers).tobytes(),
+        chars=_little_endian(boxes).tobytes() + _little_endian(numbers).tobytes(),
     )
 
 
