@@ -96,7 +96,7 @@ jobs:
       # Unsigned: the Store signs the package. CI built the app with our own launcher (--all fails
       # otherwise), and this only packs that build, self-testing it first.
       - run: uv run python scripts/build_exe.py --skip-build --msix
-      - uses: microsoft/microsoft-store-apppublisher@v1.1
+      - uses: microsoft/microsoft-store-apppublisher@v1.4
       - name: Upload the package to a new draft submission
         env:
           MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
