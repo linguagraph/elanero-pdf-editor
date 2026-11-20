@@ -245,6 +245,7 @@ export interface PageRpc {
       | 'marks.list'
       | 'attachments.list'
       | 'attachments.get'
+      | 'layers.list'
       | 'redaction.list'
       | 'comments.list'
       | 'system.memory',

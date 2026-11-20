@@ -156,6 +156,11 @@ is reloaded until you press it.
   **Save** to download it to your computer. The file is saved as it is; the browser never opens or
   runs it. If the document has no attachments, the panel says so. The panel is read-only for now:
   you cannot add or remove attachments yet.
+- **Layers.** The **Layers** button on the left rail lists the optional content layers of the
+  document, in the order the file gives them. Each row shows whether the layer is visible in the
+  document's default view, and a layer that the file locks is marked **Locked**. Nested layers
+  are indented. If the document has no layers, the panel says so. The panel is read-only for now:
+  you cannot show or hide a layer yet.
 - **Search.** The **Search** button on the left rail opens a panel that finds text in the open
   document. Type in the box and press Enter (or **Search**). The search starts at the page you are
   on and wraps round to the first page. Each match is listed with its page and the text around it,

@@ -411,6 +411,7 @@ describe('App side rails (W4.2a S2)', () => {
       'pages',
       'bookmarks',
       'attachments',
+      'layers',
       'redactions',
       'search',
       'comments',
