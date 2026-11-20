@@ -58,6 +58,7 @@ import { ApplyConfirm } from './redaction/ApplyConfirm';
 import { RedactionController } from './redaction/controller';
 import { MarkPagesDialog } from './redaction/MarkPagesDialog';
 import { markSelectedText } from './redaction/markText';
+import { copySelectedText } from './text/copy';
 import { RedactionsPanel } from './redaction/RedactionsPanel';
 import { RedactionPropertiesDialog } from './redaction/RedactionPropertiesDialog';
 import { useRedactionState } from './redaction/useRedaction';
@@ -259,6 +260,13 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
+    // Copy (Ctrl+C) copies the browser's selection over the page text, as the desktop does (W5.4 S4).
+    copy: () =>
+      copySelectedText({
+        selection: window.getSelection(),
+        lookup: (page) => viewRef.current?.cachedLines(page),
+        clipboard: navigator.clipboard,
+      }),
     // Ctrl+F: the search panel, on the left, with focus in its query box (also when it is open).
     find: () => {
       openPanel('search');
@@ -486,6 +494,7 @@ export function App({
       ? {
           // Go to Page (W4.3b) focuses the canvas pill's page field.
           'go-to-page': () => viewRef.current?.focusPageField(),
+          'select-all': () => viewRef.current?.selectPageText(),
           // Mark Pages (W4.13) opens the dialog that marks whole pages; nothing is applied.
           'mark-whole-pages': () => {
             if (redaction === null) {

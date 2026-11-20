@@ -1,0 +1,215 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ToastStore } from '../feedback/toasts';
+import { EN } from '../i18n/en';
+import { COMMANDS, REGISTRY } from '../commands/catalog';
+import { commandForEvent } from '../commands/shortcuts';
+import { commandDisabledReason, runCommand, type CommandHandlers } from '../commands/run';
+import type { CommandState } from '../commands/registry';
+import { copySelectedText, selectPageText, selectedText } from './copy';
+import { type TextLineLookup, domSelectionAreas } from './selection';
+import { decodeTextLayer, type TextLine } from './textLayer';
+
+// Page 0: "ab" and "cd", two lines. Page 1: "ef", one line (the layers of selection.test.ts).
+const LAYER_0 = {
+  text: 'ab\ncd',
+  char_boxes: new Float32Array([
+    10, 20, 20, 30, 20, 20, 30, 30, 0, 0, 0, 0, 10, 40, 20, 52, 20, 40, 31, 52,
+  ]).buffer,
+  line_numbers: new Uint32Array([0, 0, 0, 1, 1]).buffer,
+};
+const LAYER_1 = {
+  text: 'ef',
+  char_boxes: new Float32Array([100, 100, 110, 110, 110, 100, 120, 110]).buffer,
+  line_numbers: new Uint32Array([0, 0]).buffer,
+};
+const LINES_0 = decodeTextLayer(LAYER_0);
+const LINES_1 = decodeTextLayer(LAYER_1);
+const lookup: TextLineLookup = (page) => (page === 0 ? LINES_0 : page === 1 ? LINES_1 : undefined);
+
+// The page elements as PageTextLayer renders them: one span per line inside the page's text layer.
+function mountPage(index: number, lines: readonly TextLine[]): HTMLElement {
+  const page = document.createElement('div');
+  page.className = 'doc-page';
+  page.dataset.page = String(index);
+  const layer = document.createElement('div');
+  layer.className = 'page-text-layer';
+  lines.forEach((line, lineIndex) => {
+    const span = document.createElement('div');
+    span.className = 'page-text-line';
+    span.dataset.line = String(lineIndex);
+    span.textContent = line.text;
+    layer.append(span);
+  });
+  page.append(layer);
+  document.body.append(page);
+  return page;
+}
+
+function textOf(page: HTMLElement, lineIndex: number): Text {
+  const text = page.querySelectorAll('.page-text-line')[lineIndex]?.firstChild;
+  if (!(text instanceof Text)) throw new Error('no text node');
+  return text;
+}
+
+function select(startNode: Node, startOffset: number, endNode: Node, endOffset: number): Selection {
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+  const selection = window.getSelection();
+  if (selection === null) throw new Error('no selection');
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return selection;
+}
+
+function fakeStore(): ToastStore & { push: ReturnType<typeof vi.fn> } {
+  return { push: vi.fn() } as unknown as ToastStore & { push: ReturnType<typeof vi.fn> };
+}
+
+function state(overrides: Partial<CommandState> = {}): CommandState {
+  return {
+    hasDocument: false,
+    hasRecentFiles: false,
+    canUndo: false,
+    canRedo: false,
+    capabilities: new Set(),
+    ribbonCompact: false,
+    ribbonCollapsed: false,
+    viewTool: 'select',
+    commentTool: null,
+    redacting: false,
+    canApplyRedactions: false,
+    canGoBack: false,
+    canGoForward: false,
+    view: null,
+    ...overrides,
+  };
+}
+
+afterEach(() => {
+  window.getSelection()?.removeAllRanges();
+  document.body.innerHTML = '';
+  vi.restoreAllMocks();
+});
+
+describe('selectedText', () => {
+  it('joins the lines of a page with a line break', () => {
+    const page = mountPage(0, LINES_0);
+    // From the "b" of "ab" to the "c" of "cd": "b", a line break, then "c".
+    const selection = select(textOf(page, 0), 1, textOf(page, 1), 1);
+    expect(selectedText(selection, lookup)).toBe('b\nc');
+  });
+
+  it('copies a selection across two pages, the pages joined by a line break', () => {
+    const first = mountPage(0, LINES_0);
+    const second = mountPage(1, LINES_1);
+    const selection = select(textOf(first, 1), 0, textOf(second, 0), 1);
+    expect(selectedText(selection, lookup)).toBe('cd\ne');
+  });
+
+  it('gives no text for an empty selection, a null selection or a page without lines', () => {
+    const page = mountPage(0, LINES_0);
+    expect(selectedText(select(textOf(page, 0), 1, textOf(page, 0), 1), lookup)).toBe('');
+    expect(selectedText(null, lookup)).toBe('');
+    const selection = select(textOf(page, 0), 0, textOf(page, 0), 2);
+    expect(selectedText(selection, () => undefined)).toBe('');
+  });
+});
+
+describe('copySelectedText', () => {
+  it('writes the selected text to the clipboard and confirms it', async () => {
+    const page = mountPage(0, LINES_0);
+    const selection = select(textOf(page, 0), 0, textOf(page, 1), 2);
+    const writeText = vi.fn(() => Promise.resolve());
+    const store = fakeStore();
+    copySelectedText({ selection, lookup, clipboard: { writeText }, store });
+    expect(writeText).toHaveBeenCalledWith('ab\ncd');
+    await vi.waitFor(() => expect(store.push).toHaveBeenCalledWith('success', EN['copy.done']));
+  });
+
+  it('writes synchronously, so the browser still counts the keypress as user activation', () => {
+    const page = mountPage(0, LINES_0);
+    const selection = select(textOf(page, 0), 0, textOf(page, 0), 2);
+    const writeText = vi.fn(() => Promise.resolve());
+    copySelectedText({ selection, lookup, clipboard: { writeText }, store: fakeStore() });
+    expect(writeText).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so, through the message catalogue, when nothing is selected', () => {
+    const page = mountPage(0, LINES_0);
+    const writeText = vi.fn(() => Promise.resolve());
+    const store = fakeStore();
+    copySelectedText({
+      selection: select(textOf(page, 0), 1, textOf(page, 0), 1),
+      lookup,
+      clipboard: { writeText },
+      store,
+    });
+    expect(writeText).not.toHaveBeenCalled();
+    expect(store.push).toHaveBeenCalledWith('info', EN['copy.nothingSelected']);
+  });
+
+  it('reports a clipboard that refuses the text', async () => {
+    const page = mountPage(0, LINES_0);
+    const selection = select(textOf(page, 0), 0, textOf(page, 0), 2);
+    const writeText = vi.fn(() => Promise.reject(new Error('denied')));
+    const store = fakeStore();
+    copySelectedText({ selection, lookup, clipboard: { writeText }, store });
+    await vi.waitFor(() => expect(store.push).toHaveBeenCalledWith('error', EN['copy.failed']));
+  });
+});
+
+describe('selectPageText (Select All)', () => {
+  it('selects the whole text layer of the page, so the copy reads all of its lines', () => {
+    const page = mountPage(0, LINES_0);
+    const layer = page.querySelector('.page-text-layer');
+    selectPageText(window.getSelection(), layer);
+    expect(selectedText(window.getSelection(), lookup)).toBe('ab\ncd');
+    expect(domSelectionAreas(window.getSelection(), lookup)).toHaveLength(1);
+  });
+
+  it('selects nothing when the page has no text layer', () => {
+    const selection = window.getSelection();
+    selectPageText(selection, null);
+    expect(selectedText(selection, lookup)).toBe('');
+  });
+});
+
+describe('Copy and Select All enable rules', () => {
+  const handlers: CommandHandlers = { copy: vi.fn(), 'select-all': vi.fn() };
+
+  it('need an open document and a handler', () => {
+    for (const id of ['copy', 'select-all']) {
+      const def = REGISTRY.get(id);
+      expect(def).toBeDefined();
+      if (def === undefined) continue;
+      expect(commandDisabledReason(def, state(), handlers)).toBe('needsDocument');
+      expect(commandDisabledReason(def, state({ hasDocument: true }), handlers)).toBeNull();
+      expect(commandDisabledReason(def, state({ hasDocument: true }), {})).toBe('notAvailableYet');
+    }
+    expect(COMMANDS.some((def) => def.id === 'copy')).toBe(true);
+  });
+
+  it('run through runCommand only with a document', () => {
+    const run = vi.fn();
+    const local: CommandHandlers = { copy: run };
+    expect(runCommand(REGISTRY, 'copy', state(), local)).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(runCommand(REGISTRY, 'copy', state({ hasDocument: true }), local)).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('bind Ctrl+C and Ctrl+A to the commands', () => {
+    const ctrl = (key: string) => ({
+      key,
+      code: `Key${key.toUpperCase()}`,
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+    });
+    const open = state({ hasDocument: true });
+    expect(commandForEvent(ctrl('c'), REGISTRY, open, false)).toBe('copy');
+    expect(commandForEvent(ctrl('a'), REGISTRY, open, false)).toBe('select-all');
+  });
+});
