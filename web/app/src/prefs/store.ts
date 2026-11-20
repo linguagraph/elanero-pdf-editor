@@ -28,6 +28,10 @@ export interface Preferences {
   // Night reading inverts the pages in the document view (a view setting, W1.6; not a theme).
   readonly nightReading: boolean;
   readonly pageLayout: PageLayoutChoice;
+  // The ribbon's own choices (W1.6 section 8): compact shows icons only, collapsed shows the tab
+  // row only. They apply on top of the width's form, and survive a restart.
+  readonly ribbonCompact: boolean;
+  readonly ribbonCollapsed: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -38,6 +42,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   reduceMotion: false,
   nightReading: false,
   pageLayout: 'continuous',
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 
 // The non-theme preferences are one JSON object. The theme keeps its own key (theme.ts), because
@@ -131,6 +137,14 @@ export function readPreferences(): Preferences {
         ? record.nightReading
         : DEFAULT_PREFERENCES.nightReading,
     pageLayout: pickChoice(record.pageLayout, PAGE_LAYOUT_CHOICES, DEFAULT_PREFERENCES.pageLayout),
+    ribbonCompact:
+      typeof record.ribbonCompact === 'boolean'
+        ? record.ribbonCompact
+        : DEFAULT_PREFERENCES.ribbonCompact,
+    ribbonCollapsed:
+      typeof record.ribbonCollapsed === 'boolean'
+        ? record.ribbonCollapsed
+        : DEFAULT_PREFERENCES.ribbonCollapsed,
   };
 }
 
@@ -144,6 +158,8 @@ export function writePreferences(prefs: Preferences): boolean {
     reduceMotion: prefs.reduceMotion,
     nightReading: prefs.nightReading,
     pageLayout: pickChoice(prefs.pageLayout, PAGE_LAYOUT_CHOICES, DEFAULT_PREFERENCES.pageLayout),
+    ribbonCompact: prefs.ribbonCompact,
+    ribbonCollapsed: prefs.ribbonCollapsed,
   };
   setTheme(prefs.theme);
   const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));

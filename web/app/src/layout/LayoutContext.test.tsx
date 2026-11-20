@@ -47,6 +47,8 @@ const NO_DOCUMENT: CommandState = {
   canUndo: false,
   canRedo: false,
   capabilities: new Set(),
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 
 describe('layout context tiers', () => {
@@ -97,13 +99,22 @@ describe('layout context tiers', () => {
 });
 
 describe('ribbon collapse follows the context', () => {
-  it('collapses only below 768 px', () => {
+  it('collapses below 768 px', () => {
     setWidth(767);
     render(<Ribbon registry={REGISTRY} state={NO_DOCUMENT} handlers={{}} />);
     expect(host.querySelector('.ribbon-collapsed')).not.toBeNull();
+  });
 
+  it('collapses at the tablet tier, from 768 px to 1023 px', () => {
     setWidth(768);
     render(<Ribbon registry={REGISTRY} state={NO_DOCUMENT} handlers={{}} />);
+    expect(host.querySelector('.ribbon-collapsed')).not.toBeNull();
+  });
+
+  it('is compact, not collapsed, from 1024 px', () => {
+    setWidth(1024);
+    render(<Ribbon registry={REGISTRY} state={NO_DOCUMENT} handlers={{}} />);
     expect(host.querySelector('.ribbon-collapsed')).toBeNull();
+    expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('compact');
   });
 });

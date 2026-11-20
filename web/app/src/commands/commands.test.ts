@@ -22,6 +22,8 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     canUndo: false,
     canRedo: false,
     capabilities: new Set(),
+    ribbonCompact: false,
+    ribbonCollapsed: false,
     ...overrides,
   };
 }

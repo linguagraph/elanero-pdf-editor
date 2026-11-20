@@ -19,6 +19,8 @@ const SAVED: Preferences = {
   reduceMotion: true,
   nightReading: true,
   pageLayout: 'twoPage',
+  ribbonCompact: true,
+  ribbonCollapsed: true,
 };
 
 afterEach(() => {
@@ -43,6 +45,8 @@ describe('preferences round trip', () => {
       reduceMotion: true,
       nightReading: true,
       pageLayout: 'twoPage',
+      ribbonCompact: true,
+      ribbonCollapsed: true,
     });
   });
 

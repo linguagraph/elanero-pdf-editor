@@ -82,6 +82,14 @@ is reloaded until you press it.
   Organize, Protect, Comment, View and Tools). Each command shows its icon above its label, the same
   icon as on the desktop. A command that is not available in the web version yet, or that needs an
   open document, stays visible but greyed out; point at it to see why.
+- **Ribbon forms.** The ribbon follows the window width. From 1280 px it shows the full ribbon, with
+  icons and labels. From 1024 px to 1279 px it is compact: icons only, with each command's name in
+  its tooltip. Below 1024 px the ribbon is collapsed to one row of tabs; each tab opens its commands
+  in a drop-down that closes when a command runs. On a narrow window that row scrolls sideways.
+- **Collapse and compact.** The chevron at the right of the tab row collapses the ribbon to its
+  tabs, and shows it again. Press **Ctrl+F1** to do the same. Pressing a tab, or double-clicking
+  one, also brings a collapsed ribbon back. **Compact ribbon** in Preferences (Appearance) shows
+  icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
 - **Keyboard shortcuts.** Only three are active in the web version so far: **Alt+Left** and
   **Alt+Right** go back and forward through the pages you have visited, and **Alt+G** moves the
   cursor to the page box in the status bar. The web version will use

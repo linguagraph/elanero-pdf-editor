@@ -65,6 +65,7 @@ export const GROUPS: readonly GroupDef[] = [
   { id: 'app.file', tab: null, labelId: 'ribbon.group.app.file' },
   { id: 'app.settings', tab: null, labelId: 'ribbon.group.app.settings' },
   { id: 'app.help', tab: null, labelId: 'ribbon.group.app.help' },
+  { id: 'app.ribbon', tab: null, labelId: 'ribbon.group.app.ribbon' },
 ];
 
 // Adds search aliases to a declared command (W4.3b D3). A keyword only widens what the palette
@@ -93,6 +94,7 @@ const OPEN_ANYTIME = ALWAYS;
 // with none. Each name is checked against the bundled set when the registry is built.
 const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'about-elanero': 'info',
+  'compact-ribbon': 'panel-top',
   help: 'circle-help',
   'keyboard-shortcuts': 'list-checks',
   preferences: 'settings-2',
@@ -291,6 +293,13 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('whats-different', 'command.whats-different.label', 'app.help', OPEN_ANYTIME),
   cmd('install-app', 'command.install-app.label', 'app.help', OPEN_ANYTIME, 'pwa_install'),
   cmd('about-elanero', 'command.about-elanero.label', 'app.help', OPEN_ANYTIME),
+
+  // Ribbon forms (W4.3a S2): not in the app menu; Ctrl+F1 is the shared key of collapse-ribbon.
+  cmd('collapse-ribbon', 'command.collapse-ribbon.label', 'app.ribbon', OPEN_ANYTIME),
+  {
+    ...cmd('compact-ribbon', 'command.compact-ribbon.label', 'app.ribbon', OPEN_ANYTIME),
+    checked: (state) => state.ribbonCompact,
+  },
 ];
 
 export const COMMANDS: readonly CommandDef[] = DECLARED_COMMANDS.map((def) => {

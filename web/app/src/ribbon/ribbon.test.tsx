@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REGISTRY } from '../commands/catalog';
 import { type CommandState, TAB_LABELS } from '../commands/registry';
 import { ribbonLayout } from '../commands/run';
 import { t } from '../i18n/t';
+import { CommandPalette } from '../palette/CommandPalette';
 import { AppMenu } from './AppMenu';
 import { Ribbon } from './Ribbon';
 
@@ -72,6 +73,8 @@ const withDoc: CommandState = {
   canUndo: false,
   canRedo: false,
   capabilities: new Set(['signing', 'ocr', 'office_import', 'pdfa', 'pwa_install']),
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 const noDoc: CommandState = { ...withDoc, hasDocument: false };
 
@@ -306,5 +309,244 @@ describe('AppMenu', () => {
       item('preferences')?.click();
     });
     expect(preferences).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Ribbon forms (W4.3a S2)', () => {
+  const realWidth = window.innerWidth;
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function setWidth(width: number): void {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  function withPrefs(prefs: Partial<CommandState>): CommandState {
+    return { ...withDoc, ...prefs };
+  }
+
+  function tabAt(index: number): HTMLElement {
+    const tab = host.querySelectorAll<HTMLElement>('[role="tab"]')[index];
+    if (tab === undefined) throw new Error(`no tab ${index}`);
+    return tab;
+  }
+
+  it('is compact at 1100 px: icons only, the label as the name, and the captions still name the groups', () => {
+    setWidth(1100);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('compact');
+    expect(host.querySelector('.ribbon-command-label')).toBeNull();
+    const save = button('save');
+    expect(save.getAttribute('aria-label')).toBe(t('command.save.label'));
+    const labelId = save.closest('[role="group"]')?.getAttribute('aria-labelledby');
+    expect(labelId).toBeTruthy();
+    expect(document.getElementById(labelId ?? '')?.textContent).toBeTruthy();
+  });
+
+  it('is full at 1280 px and shows the labels', () => {
+    setWidth(1280);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('full');
+    expect(host.querySelector('.ribbon-command-label')).not.toBeNull();
+    expect(host.querySelector('.ribbon-chevron')).not.toBeNull();
+  });
+
+  it('is forced compact at 1100 px even when the user has not asked for it', () => {
+    setWidth(1100);
+    render(
+      <Ribbon registry={REGISTRY} state={withPrefs({ ribbonCompact: false })} handlers={{}} />,
+    );
+    expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('compact');
+  });
+
+  it('drops the chevron at the tablet tier, where the tabs open drop-downs', () => {
+    setWidth(900);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon')?.getAttribute('data-collapsed-by')).toBe('tier');
+    expect(host.querySelector('.ribbon-chevron')).toBeNull();
+  });
+
+  it('runs collapse-ribbon from the chevron, and hides the panels while the user has collapsed it', () => {
+    setWidth(1280);
+    const toggle = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ 'collapse-ribbon': toggle }} />);
+    act(() => {
+      host.querySelector<HTMLElement>('.ribbon-chevron')?.click();
+    });
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the tab row only when collapsed by the user, and a tab press expands it', () => {
+    setWidth(1280);
+    const toggle = vi.fn();
+    render(
+      <Ribbon
+        registry={REGISTRY}
+        state={withPrefs({ ribbonCollapsed: true })}
+        handlers={{ 'collapse-ribbon': toggle }}
+      />,
+    );
+    expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('collapsed');
+    expect(host.querySelector('[role="tabpanel"]')).toBeNull();
+    expect(host.querySelector('.ribbon-chevron')?.getAttribute('aria-label')).toBe(
+      t('ribbon.expand'),
+    );
+    act(() => {
+      tabAt(1).click();
+    });
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles on a double-click of a tab, but not on the one that expanded the ribbon', () => {
+    setWidth(1280);
+    const toggle = vi.fn();
+    const dblclick = () => {
+      act(() => {
+        tabAt(0).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      });
+    };
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ 'collapse-ribbon': toggle }} />);
+    dblclick();
+    expect(toggle).toHaveBeenCalledTimes(1);
+    toggle.mockClear();
+
+    host.remove();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    render(
+      <Ribbon
+        registry={REGISTRY}
+        state={withPrefs({ ribbonCollapsed: true })}
+        handlers={{ 'collapse-ribbon': toggle }}
+      />,
+    );
+    act(() => {
+      tabAt(0).click();
+    });
+    dblclick();
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A ribbon whose collapse state lives in a parent, next to the command palette that owns the
+// document Ctrl+F1 listener, so a key press runs the real path: keydown, runCommand, the handler.
+function CollapsibleRibbon({ initialCollapsed }: { initialCollapsed: boolean }) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const state: CommandState = { ...withDoc, ribbonCollapsed: collapsed };
+  const handlers = { 'collapse-ribbon': () => setCollapsed((value) => !value) };
+  return (
+    <>
+      <Ribbon registry={REGISTRY} state={state} handlers={handlers} />
+      <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
+    </>
+  );
+}
+
+describe('Ribbon collapse keys (W4.3a S2)', () => {
+  const realWidth = window.innerWidth;
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function setWidth(width: number): void {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  function tabAt(index: number): HTMLElement {
+    const tab = host.querySelectorAll<HTMLElement>('[role="tab"]')[index];
+    if (tab === undefined) throw new Error(`no tab ${index}`);
+    return tab;
+  }
+
+  function dblclickTab(index: number): void {
+    act(() => {
+      tabAt(index).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+  }
+
+  function panelsShown(): boolean {
+    return host.querySelector('[role="tabpanel"]') !== null;
+  }
+
+  function pressCtrlF1(): void {
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'F1', ctrlKey: true, bubbles: true }),
+      );
+    });
+  }
+
+  it('toggles the ribbon on Ctrl+F1 keydown, hiding and then showing the panels', () => {
+    setWidth(1280);
+    render(<CollapsibleRibbon initialCollapsed={false} />);
+    expect(panelsShown()).toBe(true);
+
+    pressCtrlF1();
+    expect(panelsShown()).toBe(false);
+    expect(host.querySelector('.ribbon')?.getAttribute('data-collapsed-by')).toBe('user');
+
+    pressCtrlF1();
+    expect(panelsShown()).toBe(true);
+  });
+
+  it('does not toggle the ribbon on a plain F1 keydown', () => {
+    setWidth(1280);
+    render(<CollapsibleRibbon initialCollapsed={false} />);
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1', bubbles: true }));
+    });
+    expect(panelsShown()).toBe(true);
+  });
+
+  it('a press 500 ms after the expanding press is a new press, and collapses the ribbon again', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    setWidth(1280);
+    render(<CollapsibleRibbon initialCollapsed={true} />);
+    expect(panelsShown()).toBe(false);
+
+    // The press expands the ribbon and starts the double-click window.
+    act(() => {
+      tabAt(0).click();
+    });
+    expect(panelsShown()).toBe(true);
+
+    // The next press lands 500 ms later, outside the window, so it toggles the ribbon back.
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    dblclickTab(0);
+    expect(panelsShown()).toBe(false);
+  });
+
+  it('a double-click 499 ms after the expanding press leaves the ribbon open', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    setWidth(1280);
+    render(<CollapsibleRibbon initialCollapsed={true} />);
+    act(() => {
+      tabAt(0).click();
+    });
+    act(() => {
+      vi.advanceTimersByTime(499);
+    });
+    dblclickTab(0);
+    expect(panelsShown()).toBe(true);
+  });
+
+  it('a keyboard Enter on a focused tab expands a ribbon the user has collapsed', () => {
+    setWidth(1280);
+    render(<CollapsibleRibbon initialCollapsed={true} />);
+    expect(panelsShown()).toBe(false);
+
+    act(() => {
+      tabAt(0).focus();
+    });
+    act(() => {
+      tabAt(0).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(panelsShown()).toBe(true);
+    expect(host.querySelector('.ribbon')?.getAttribute('data-collapsed-by')).toBeNull();
   });
 });

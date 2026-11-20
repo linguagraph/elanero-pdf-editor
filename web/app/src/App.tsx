@@ -17,8 +17,10 @@ import { AppFrame } from './layout/AppFrame';
 import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { AppMenu } from './ribbon/AppMenu';
+import { type RibbonPrefs } from './ribbon/form';
 import { Ribbon } from './ribbon/Ribbon';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
+import { onPreferencesChanged, readPreferences, writePreferences } from './prefs/store';
 import { CombineDialog } from './combine/CombineDialog';
 import { PropertiesDialog } from './properties/PropertiesDialog';
 import { CommandPalette } from './palette/CommandPalette';
@@ -64,6 +66,8 @@ const BASE_COMMAND_STATE: CommandState = {
   canUndo: false,
   canRedo: false,
   capabilities: new Set(),
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 
 // Placeholder shell: the region frame is in place (W4.2a); the ribbon and the features come later.
@@ -111,6 +115,28 @@ export function App({
   // Keyboard Shortcuts (W4.5 S2): from the app menu, the ribbon or Preferences. It opens above
   // Preferences, which keeps its unsaved draft.
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The ribbon's compact and collapse choices (W4.3a S2). The page keeps its own copy, so a toggle
+  // works even where the browser refuses to store it; a saved change (from Preferences too) wins.
+  const [ribbonPrefs, setRibbonPrefs] = useState<RibbonPrefs>(() => {
+    const prefs = readPreferences();
+    return { compact: prefs.ribbonCompact, collapsed: prefs.ribbonCollapsed };
+  });
+  useEffect(
+    () =>
+      onPreferencesChanged(() => {
+        const prefs = readPreferences();
+        setRibbonPrefs({ compact: prefs.ribbonCompact, collapsed: prefs.ribbonCollapsed });
+      }),
+    [],
+  );
+  function setRibbonChoice(choice: RibbonPrefs): void {
+    setRibbonPrefs(choice);
+    writePreferences({
+      ...readPreferences(),
+      ribbonCompact: choice.compact,
+      ribbonCollapsed: choice.collapsed,
+    });
+  }
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [compressOpen, setCompressOpen] = useState(false);
@@ -139,6 +165,8 @@ export function App({
   }, [engine]);
   const handlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
+    'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
+    'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
     'keyboard-shortcuts': () => setShortcutsOpen(true),
     print: () => setPrintOpen(true),
     open: () => docs.openPicker(),
@@ -220,6 +248,8 @@ export function App({
     ...BASE_COMMAND_STATE,
     hasDocument: documentShown,
     hasRecentFiles: docs.recent.length > 0,
+    ribbonCompact: ribbonPrefs.compact,
+    ribbonCollapsed: ribbonPrefs.collapsed,
   };
   return (
     <AppFrame

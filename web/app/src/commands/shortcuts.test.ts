@@ -22,6 +22,8 @@ const STATE: CommandState = {
   canUndo: true,
   canRedo: true,
   capabilities: new Set(),
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 
 function event(init: Partial<KeyEventLike> & { key: string }): KeyEventLike {

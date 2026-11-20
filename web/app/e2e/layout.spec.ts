@@ -230,3 +230,28 @@ test('a tall block that is not the list scrolls in the panel body at 1280x500', 
   });
   await expect(page.getByText('Last line')).toBeInViewport();
 });
+
+// W4.3a S2: the ribbon's form follows the width (W1.6 section 8). Collapsed at the tablet tier
+// (768 to 1023 px), compact at the medium tier (1024 to 1279 px), full from 1280 px.
+const RIBBON_FORMS: ReadonlyArray<[number, string]> = [
+  [800, 'collapsed'],
+  [1023, 'collapsed'],
+  [1024, 'compact'],
+  [1279, 'compact'],
+  [1280, 'full'],
+  [1366, 'full'],
+];
+
+for (const [width, form] of RIBBON_FORMS) {
+  test(`ribbon at ${width} px takes the ${form} form`, async ({ page }) => {
+    await openAtWidth(page, width, 768);
+    await expect(page.locator('.app-frame-header .ribbon')).toHaveAttribute('data-form', form);
+  });
+}
+
+for (const width of [390, 800, 1023, 1024, 1279, 1280]) {
+  test(`ribbon forms at ${width} px: no horizontal page scroll`, async ({ page }) => {
+    await openAtWidth(page, width, 768);
+    expect(await horizontalOverflow(page)).toBe(0);
+  });
+}
