@@ -37,6 +37,8 @@ export interface TextSelectionPointer {
   // Called from the pointer-down of the pages' container. True when the press started a selection
   // (the caller must not pan); false otherwise, and then the caller pans.
   startPress(event: ReactPointerEvent<HTMLElement>): boolean;
+  // Sets the model's selection, or clears it with null (Select All selects a page's whole text).
+  select(selection: TextSelection | null): void;
 }
 
 export function useTextSelection(options: TextSelectionOptions): TextSelectionPointer {
@@ -52,6 +54,7 @@ export function useTextSelection(options: TextSelectionOptions): TextSelectionPo
 
   return {
     selection,
+    select: setSelection,
     startPress(event) {
       const current = latest.current;
       if (!current.enabled || event.button !== 0 || event.pointerType === 'touch') return false;

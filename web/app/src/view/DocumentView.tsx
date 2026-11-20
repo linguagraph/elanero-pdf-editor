@@ -46,7 +46,8 @@ import {
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
-import { selectPageText as selectPageTextLayer } from '../text/copy';
+import { modelSelectedText, selectPageText as selectPageTextLayer } from '../text/copy';
+import { TextSelection } from '../text/textSelection';
 import { PageTextLayer } from '../text/PageTextLayer';
 import { useTextSelection } from '../text/useTextSelection';
 import { textLayerPassive } from '../text/textLayerPassive';
@@ -122,8 +123,11 @@ export interface DocumentViewHandle {
   setCommentTool(tool: CommentToolId | null): void;
   // Turns the redaction mark tool on or off, as the toolbar's Mark button does (W4.3a S7).
   setRedacting(on: boolean): void;
-  // Selects the text of the page at the top of the view, for Select All (W5.4 S4).
+  // Selects the text of the page at the top of the view, for Select All (W5.4 S4): the model's
+  // selection of the whole page, or the browser's when the page has no index yet.
   selectPageText(): void;
+  // The text of the model's selection, or null when the model has none (Copy reads it first).
+  selectedText(): string | null;
   // Scrolls so a rectangle on the page (in points) is in view, as the search panel does for a hit.
   revealRect(index: number, rect: PageRectPt): void;
 }
@@ -494,6 +498,12 @@ export function DocumentView({
     scroll: scrollRef,
     enabled: selecting,
   });
+  const selectModel = textSelection.select;
+  // The model's selection as of the last render, read by Copy (selectedText) outside the render.
+  const modelSelection = useRef<TextSelection | null>(null);
+  useEffect(() => {
+    modelSelection.current = textSelection.selection;
+  });
   const pan = useHandPan(
     tool === 'hand' || selecting,
     scrollPerScenePixel(layout.height, scroll.height || window.innerHeight),
@@ -825,11 +835,21 @@ export function DocumentView({
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
       setCommentTool: chooseCommentTool,
       setRedacting: chooseRedacting,
-      selectPageText: () =>
-        selectPageTextLayer(
-          window.getSelection(),
-          scrollRef.current?.querySelector(`[data-page="${topPage.current}"] .page-text-layer`) ??
-            null,
+      selectPageText: () => {
+        const page = topPage.current;
+        const index = textLayers.readyIndex(page, scheduler.revisionOf(page));
+        if (index === undefined) {
+          selectPageTextLayer(
+            window.getSelection(),
+            scrollRef.current?.querySelector(`[data-page="${page}"] .page-text-layer`) ?? null,
+          );
+          return;
+        }
+        selectModel(TextSelection.ofPage(page, index.length));
+      },
+      selectedText: () =>
+        modelSelectedText(modelSelection.current, (page) =>
+          textLayers.readyIndex(page, scheduler.revisionOf(page)),
         ),
     }),
     [
@@ -845,6 +865,7 @@ export function DocumentView({
       chooseRedacting,
       changeLayout,
       chooseNight,
+      selectModel,
     ],
   );
 
