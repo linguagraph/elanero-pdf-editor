@@ -583,7 +583,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W4.13** Mark Whole Pages ribbon handler: mark every object on the chosen pages for redaction. _(on main: #379)_
 - [x] **W4.14** Redaction Properties ribbon handler: the fill colour, overlay text and text colour of new marks (the settings the W7.4b panel shows). _(on main: #371)_
 - [x] **W4.15** Extract Images ribbon handler: save the images of the document or the selected pages to files, as a read-only job. _(done: #375 service and engine, #378 web dialog, job and guide)_
-- [ ] **W4.16** Extract Fonts ribbon handler: save the embedded fonts to files, where the licence allows, as a read-only job. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
+- [x] **W4.16** Extract Fonts ribbon handler: save the embedded fonts to files, where the licence allows, as a read-only job. _(on main: #399 S1, the job and engine, with the licence refusal; #408 S2, the web dialog and job type)_
 
 **W5 Viewer and navigation, #138**
 
@@ -592,7 +592,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
 - [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails panel built and tested with a fake engine (Vitest); bookmarks panel read-only built and tested (pytest for `session.outline`, Vitest for the tree); pending: bookmarks editing, attachments, layers)_
 - [ ] **W5.3** Links, navigation history, page jump, page labels _(partial: page jump, navigation history (Back/Forward, Alt+Left/Right) and page label display are built and tested with Vitest; pending: links (needs an engine call the catalogue does not have yet); page labels from the engine are done (#277, #283))_
-- [ ] **W5.4** Text selection and copy; search panel _(partial: the text layer and the search panel are built and unit-tested; copy is the browser's native selection over the layer and has no automated test yet; the desktop selection model of W1.4 §10 is not ported)_
+- [ ] **W5.4** Text selection and copy; search panel _(partial: on main: shared selection and search vectors #393, TypeScript port of the selection model #402, Copy and Select All #407, text-layer buffer fix #414; pending: the search panel, the selection view, and the Playwright specs)_
 
 **W6 Required features, #139**
 
@@ -602,7 +602,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W6.4** R5 Compress dialog _(partial: the four presets, Compress through the reduce_size job with progress and Cancel, the result with both sizes and the download, and the "not smaller" message with no download are built and tested with a fake job worker (Vitest); pending: custom options (the reduce_size job takes only a preset), and the space audit before and after (the audit job exists but is not wired to the dialog); the end-to-end run in the app is not yet checked)_
 - [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi and the browser print path are built and tested; the job worker answers `job.run` (#265) and a reply carries a buffer list, so multi-page output can cross; print_pages sends no partial notices, so the pages come in the final result; pending: a print run end to end in the app)_
 - [ ] **W6.6** R4 Translate
-- [ ] **W6.7a** R1a select, move and delete page objects _(partial: web S1 to S5 done: the `content.objects` call, the shared geometry, the web object model and hit test, the Edit layer with previews, and the move, resize and delete commits through `content.transform` and `content.delete` with Undo, stale handling and reselection, tested with Python round trips (pikepdf and pypdfium2) and Vitest; pending: the Playwright run (move, delete, undo, save and reopen), the `content_edit` capability check that disables the commands, and the desktop's `tests/ui` edit-tool run)_
+- [ ] **W6.7a** R1a select, move and delete page objects _(partial: on main: geometry and test vectors #384, `content.objects` call #385, web object cache and hit test #392, Edit layer and previews #403, commit of moves and deletes with Undo #411; pending: the `content_edit` capability gate that disables the commands (the engine's NOT_SUPPORTED currently shows as a toast), and the Playwright spec)_
 - [ ] **W6.7b** R1a add shapes; add, replace and export images
 - [ ] **W6.8a** R1b in-place paragraph editor and add text
 - [ ] **W6.8b** R1b font picker
@@ -611,7 +611,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W7 Added features, #140**
 
 - [ ] **W7.1a** A4 Comment tools and `annotations.create` _(partial: `annotations.create` with the sticky note, rectangle and highlight builders (`actions/comment_tools.py`) and the web toolbar with Undo are done and tested; pending: the text box, callout, pen, oval, line, arrow, polygon, polyline, stamp and attach tools; the desktop tools not yet moved onto the shared builders; comment selection, move and resize; the note popup for an existing note; keyboard use of the tools)_
-- [ ] **W7.1b** A4 Comments panel
+- [ ] **W7.1b** A4 Comments panel _(partial: on main: `comments.list` #389, controller and filters #401, read-only panel #409; pending: reply and set status, edit and delete, the Comments command and the Import and Export buttons, and the undo, redo and save refresh test)_
 - [ ] **W7.2** A5 Comment summary export and XFDF import/export _(partial: comment summary PDF and XFDF import hardening (#276) and comment export as a read-only job, `comments_export` (#282), are done; pending: the export dialog and the XFDF import UI)_
 - [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds _(partial: `marks.list` (#273) and the web mark argument builders (#284) are done; pending: the marks dialogs)_
 - [ ] **W7.4** A7 Redaction and sanitize _(partial: redaction marks, apply and sanitize are done in the web app (#259); the Redactions panel (the list of marks and their properties) is not in the web app yet, so this item stays open until W7.4b is done)_
@@ -624,11 +624,11 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W8 Quality, #141**
 
-- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers
+- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: on main: harness #395, nightly workflow #400, open, view and navigate specs #405, redaction spec #412; the Mark Text test in `web/app/e2e/features/redaction.spec.ts` is still `test.fixme` on main (the #414 fix did not un-skip it); pending: the crop, save-as and print specs, and a first run of the nightly workflow in Actions)_
 - [ ] **W8.2** Visual golden tests for rendering
 - [ ] **W8.3** Performance tests in CI
 - [x] **W8.4** Fuzz and robustness tests
-- [ ] **W8.5** Accessibility checks
+- [ ] **W8.5** Accessibility checks _(partial: on main: axe component checks #394, contrast and motion tests #391, Playwright axe on the start page and dialogs #404, keyboard and F6 walkthrough #410; pending: the document view with forced colours, reduced motion and touch targets (slice S5), and the web-a11y run in Actions)_
 - [ ] **W8.6** Security review
 
 **W9 Build, release and docs, #142**
