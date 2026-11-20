@@ -21,6 +21,7 @@ describe('side panel store', () => {
       bookmarks: 'left',
       search: 'left',
       redactions: 'left',
+      comments: 'left',
       organizer: 'right',
     });
   });

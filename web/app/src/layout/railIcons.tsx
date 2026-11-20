@@ -36,6 +36,11 @@ export const RAIL_ICONS: Readonly<Record<PanelKey, ReactNode>> = {
       <path d="m5 11 9 9" />
     </Icon>
   ),
+  comments: (
+    <Icon>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </Icon>
+  ),
   organizer: (
     <Icon>
       <rect width="7" height="7" x="3" y="3" rx="1" />

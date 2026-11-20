@@ -29,3 +29,15 @@ export function useComments(options: UseCommentsOptions): {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   return { controller, state };
 }
+
+// The rail count: the number of threads, read by a caller that does not own the controller. Zero
+// when no document is open.
+const noSubscribe = (): (() => void) => () => {};
+const noThreads = (): number => 0;
+
+export function useCommentsCount(controller: CommentsController | null): number {
+  return useSyncExternalStore(
+    controller ? controller.subscribe : noSubscribe,
+    controller ? () => controller.getSnapshot().threads.length : noThreads,
+  );
+}

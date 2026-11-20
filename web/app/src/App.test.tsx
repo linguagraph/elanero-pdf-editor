@@ -394,7 +394,7 @@ describe('App side rails (W4.2a S2)', () => {
     const leftPanels = [...host.querySelectorAll<HTMLElement>('.app-rail-left [data-panel]')].map(
       (button) => button.dataset.panel,
     );
-    expect(leftPanels).toEqual(['pages', 'bookmarks', 'redactions', 'search']);
+    expect(leftPanels).toEqual(['pages', 'bookmarks', 'redactions', 'search', 'comments']);
     expect(
       [...host.querySelectorAll<HTMLElement>('.app-rail-right [data-panel]')].map(
         (button) => button.dataset.panel,
