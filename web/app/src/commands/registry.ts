@@ -7,6 +7,7 @@
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import type { MessageId } from '../i18n/en';
 import { ICONS, type IconName } from '../theme/icons.generated';
+import type { ViewTool } from '../view/viewTool';
 
 export const TAB_ORDER = [
   'home',
@@ -46,6 +47,8 @@ export interface CommandState {
   // The ribbon's own choices (W4.3a S2): the user's, not the form the width forces.
   readonly ribbonCompact: boolean;
   readonly ribbonCollapsed: boolean;
+  // The document's view tool (W4.10): Select or Hand. Select when no document is open.
+  readonly viewTool: ViewTool;
 }
 
 // notAvailableYet is not an enabled rule: the caller reports it when a command has no handler.

@@ -26,6 +26,7 @@ const STATE_WITH_DOCUMENT: CommandState = {
   capabilities: new Set(),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 const STATE_NO_DOCUMENT: CommandState = { ...STATE_WITH_DOCUMENT, hasDocument: false };
 

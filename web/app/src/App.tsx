@@ -53,6 +53,7 @@ import { type DocumentViewHandle, type DocumentViewState, DocumentView } from '.
 import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
+import { setViewTool, useViewTool } from './view/viewTool';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -77,6 +78,7 @@ const BASE_COMMAND_STATE: CommandState = {
   capabilities: new Set(),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 
 // Placeholder shell: the region frame is in place (W4.2a); the ribbon and the features come later.
@@ -285,6 +287,8 @@ export function App({
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).
   const history = useNavHistory(activeId);
+  // The view tool of the open tab (W4.10): Select or Hand. It is view state, not a document change.
+  const viewTool = useViewTool(activeId);
   const goTo = (index: number) => {
     if (activeId !== null) recordTabJump(activeId, viewState.page - 1, index);
     viewRef.current?.scrollToPage(index);
@@ -302,6 +306,7 @@ export function App({
     hasRecentFiles: docs.recent.length > 0,
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
+    viewTool,
   };
   // The View zoom and Home navigate commands run on the open document's view (W4.2a S6). The view is
   // read when a command runs, not during render; with no document no handler is given, and the
@@ -321,6 +326,13 @@ export function App({
           'fit-width': () => runView('fit-width'),
           'fit-page': () => runView('fit-page'),
           'actual-size': () => runView('actual-size'),
+          // Select and Hand (W4.10). Hand pressed again returns to Select, as on the desktop.
+          'select-tool': () => {
+            if (activeId !== null) setViewTool(activeId, 'select');
+          },
+          'hand-tool': () => {
+            if (activeId !== null) setViewTool(activeId, viewTool === 'hand' ? 'select' : 'hand');
+          },
           'previous-page': () => runView('previous-page'),
           'next-page': () => runView('next-page'),
           back: () => stepBack(-1),
@@ -616,6 +628,10 @@ export function App({
             scheduler={scheduler}
             onViewChange={setViewState}
             startWorker={jobs.acquire}
+            tool={viewTool}
+            onToolChange={(tool) => {
+              if (activeId !== null) setViewTool(activeId, tool);
+            }}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }

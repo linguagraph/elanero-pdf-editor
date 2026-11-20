@@ -8,6 +8,7 @@ import {
   TabList,
   TabPanel,
   Tabs,
+  ToggleButton,
   Toolbar,
   Tooltip,
   TooltipTrigger,
@@ -408,25 +409,38 @@ export function CommandButton({
   // A compact command with an icon shows only the icon, so its label is the accessible name and
   // the tooltip. A command with no icon keeps its label as text.
   const iconOnly = compact && icon !== undefined;
-  const button = (
-    <Button
-      className="ribbon-command"
-      data-command={def.id}
-      aria-label={iconOnly ? label : undefined}
-      aria-disabled={reasonText === undefined ? undefined : 'true'}
-      aria-describedby={describedBy === '' ? undefined : describedBy}
-      onPress={() => {
-        if (reasonText !== undefined) {
-          onBlocked?.(reasonText);
-          return;
-        }
-        if (runCommand(registry, def.id, state, handlers)) onRun?.();
-      }}
-    >
+  const press = () => {
+    if (reasonText !== undefined) {
+      onBlocked?.(reasonText);
+      return;
+    }
+    if (runCommand(registry, def.id, state, handlers)) onRun?.();
+  };
+  const common = {
+    className: 'ribbon-command',
+    'data-command': def.id,
+    'aria-label': iconOnly ? label : undefined,
+    'aria-disabled': reasonText === undefined ? undefined : true,
+    'aria-describedby': describedBy === '' ? undefined : describedBy,
+  };
+  const content = (
+    <>
       {icon === undefined ? null : <Icon name={icon} size={20} />}
       {iconOnly ? null : <span className="ribbon-command-label">{label}</span>}
-    </Button>
+    </>
   );
+  // A checked command (a toggle, such as Select and Hand) is a ToggleButton, so aria-pressed follows
+  // its state. Its press still goes through the registry, so a blocked press reads the same.
+  const button =
+    def.checked === undefined ? (
+      <Button {...common} onPress={press}>
+        {content}
+      </Button>
+    ) : (
+      <ToggleButton {...common} isSelected={def.checked(state)} onChange={press}>
+        {content}
+      </ToggleButton>
+    );
   const tip = shortcut === undefined ? label : t('ribbon.commandTip', { label, keys: shortcut });
   return (
     <>

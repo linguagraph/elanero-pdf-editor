@@ -76,6 +76,7 @@ const withDoc: CommandState = {
   capabilities: new Set(['signing', 'ocr', 'office_import', 'pdfa', 'pwa_install']),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 const noDoc: CommandState = { ...withDoc, hasDocument: false };
 
@@ -755,5 +756,40 @@ describe('Ribbon help button (W4.3a S4)', () => {
     });
     expect(open).toHaveBeenCalledWith(`${GUIDE_URL}getting-started/`, '_blank', expect.any(String));
     open.mockRestore();
+  });
+});
+
+describe('Ribbon: the Select and Hand toggles (W4.10)', () => {
+  it('shows aria-pressed on Select while the view tool is Select, and on Hand while it is Hand', () => {
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(button('select-tool').getAttribute('aria-pressed')).toBe('true');
+    expect(button('hand-tool').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('moves the pressed state with the view tool', () => {
+    render(<Ribbon registry={REGISTRY} state={{ ...withDoc, viewTool: 'hand' }} handlers={{}} />);
+    expect(button('select-tool').getAttribute('aria-pressed')).toBe('false');
+    expect(button('hand-tool').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('runs the handler once per press', () => {
+    const hand = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ 'hand-tool': hand }} />);
+    act(() => {
+      button('hand-tool').click();
+    });
+    expect(hand).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a disabled toggle disabled, with its reason, and does not run it', () => {
+    const hand = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={noDoc} handlers={{ 'hand-tool': hand }} />);
+    const el = button('hand-tool');
+    expect(el.getAttribute('aria-disabled')).toBe('true');
+    expect(describedText(el)).toContain(t('disabled.needsDocument'));
+    act(() => {
+      el.click();
+    });
+    expect(hand).not.toHaveBeenCalled();
   });
 });
