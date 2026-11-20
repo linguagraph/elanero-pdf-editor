@@ -707,6 +707,7 @@ export function App({
             <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
             <button
               type="button"
+              className="app-header-prefs"
               onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
             >
               {t('command.preferences.label')}

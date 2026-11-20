@@ -25,6 +25,17 @@ body {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* The header's Preferences button has no colours of its own. Without these, WebKit's dark default
+   puts white text on grey (1.8:1, W8.5 S3), so it takes the theme's text and surface colours. */
+.app-header-prefs {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+}
+
 /* The app menu button and the logo sit together at the start of the header bar. */
 .app-header-start {
   display: flex;

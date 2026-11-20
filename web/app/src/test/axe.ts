@@ -37,7 +37,7 @@ interface AxeNode {
   failureSummary?: string;
 }
 
-interface AxeRule {
+export interface AxeRule {
   id: string;
   impact?: Impact | null;
   help: string;
@@ -53,16 +53,12 @@ function lines(rule: AxeRule): string[] {
   });
 }
 
-// Runs axe over the subtree of `context` (or the whole body, for portalled dialogs).
-export async function runAxe(context: Element = document.body): Promise<AxeReport> {
-  const rules: Record<string, { enabled: false }> = {};
-  for (const id of JSDOM_DISABLED_RULES) rules[id] = { enabled: false };
-  const results = (await axe.run(context, { rules, resultTypes: ['violations'] })) as unknown as {
-    violations: AxeRule[];
-  };
+// Splits axe's violations into the lines that block a test and the advisories for the report. The
+// browser check (W8.5 S3) uses the same split, so both fail on the same findings.
+export function classify(violations: AxeRule[]): AxeReport {
   const blocking: string[] = [];
   const advisory: string[] = [];
-  for (const rule of results.violations) {
+  for (const rule of violations) {
     const impact = rule.impact ?? 'minor';
     if (BLOCKING.includes(impact)) {
       blocking.push(...lines(rule));
@@ -75,4 +71,14 @@ export async function runAxe(context: Element = document.body): Promise<AxeRepor
     }
   }
   return { blocking, advisory };
+}
+
+// Runs axe over the subtree of `context` (or the whole body, for portalled dialogs).
+export async function runAxe(context: Element = document.body): Promise<AxeReport> {
+  const rules: Record<string, { enabled: false }> = {};
+  for (const id of JSDOM_DISABLED_RULES) rules[id] = { enabled: false };
+  const results = (await axe.run(context, { rules, resultTypes: ['violations'] })) as unknown as {
+    violations: AxeRule[];
+  };
+  return classify(results.violations);
 }
