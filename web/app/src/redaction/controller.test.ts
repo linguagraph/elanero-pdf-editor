@@ -118,7 +118,7 @@ describe('RedactionController (W7.4)', () => {
       'jobs.apply': () => ({
         applied: true,
         changed: { revisions: { '0': 5 }, pages: [0] },
-        state: {},
+        state: { history: 7 },
       }),
     });
     await controller.add(0, BOX);
@@ -143,6 +143,10 @@ describe('RedactionController (W7.4)', () => {
     const visible = store.getState().visible;
     expect(visible.map((toast) => toast.text)).toContain(t('redact.applied'));
     expect(visible.some((toast) => toast.action !== undefined)).toBe(true);
+    // The Undo offer names the apply's history, so a press after a later edit is refused.
+    visible.find((toast) => toast.action !== undefined)?.action?.run();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: 7 });
   });
 
   it('keeps the marks and says so when the document is encrypted', async () => {

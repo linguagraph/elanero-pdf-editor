@@ -98,6 +98,11 @@ is reloaded until you press it.
   tabs, and shows it again. Press **Ctrl+F1** to do the same. Pressing a tab, or double-clicking
   one, also brings a collapsed ribbon back. **Compact ribbon** in Preferences (Appearance) shows
   icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
+- **Quick access and help.** Above the ribbon, next to the menu button, the quick-access buttons
+  are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
+  button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
+  a link to the source code. Close in the app menu closes the open document. The Select, Hand, Undo,
+  Redo and Save buttons are greyed out for now, and they work once their commands are added.
 - **Keyboard shortcuts.** A few web keys work so far: **Alt+Left** and **Alt+Right** go back and
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
@@ -130,6 +135,8 @@ is reloaded until you press it.
   password, up to five times. Extract downloads the selected pages as a new PDF named
   "<name> (extract).pdf"; the document itself does not change. Each change, other than an
   extract, can be undone from the notice that follows it. Dragging pages is not available yet.
+  Undo on a notice undoes only that change; if you have changed the document since, nothing is
+  undone and the notice says so.
 
 ## Going to a page
 
@@ -155,7 +162,7 @@ version yet:
 - comments other than sticky notes, rectangles and highlights, the Comments panel, redaction, stamps and watermarks, password protection, and comparing files;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
 - printing, and translation (which will be turned on only when you ask for it);
-- the **Install App** command and the **What's Different on the Web** menu entry.
+- the **Install App** command.
 
 ## Browser support
 

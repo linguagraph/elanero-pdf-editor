@@ -1,10 +1,11 @@
-// Placing and undoing a comment (W7.1a): one actions.run of annotations.create, then the changed
-// pages are drawn again and an info toast offers Undo, which calls actions.undo. Nothing here
+// Placing a comment (W7.1a): one actions.run of annotations.create, then the changed pages are
+// drawn again and an info toast offers Undo for that step (the shared helper, W4.4b). Nothing here
 // builds a comment; the engine does (the actions layer, W1.3).
 import type { PageRpc } from '../engine/engineConnection';
+import { offerUndo } from '../feedback/undoToast';
+import { reportRpcError, type ToastStore, toasts } from '../feedback/toasts';
 import { readPreferences } from '../prefs/store';
 import { t } from '../i18n/t';
-import { reportRpcError, type ToastStore, toasts, undoAction } from '../feedback/toasts';
 import { RpcError } from '../rpc/client';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { PageRect } from './coordinates';
@@ -40,25 +41,13 @@ export async function placeComment(
     });
     if (!reply.executed) return;
     deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
-    store.push(
-      'info',
-      t('comment.added'),
-      undoAction(() => void undoComment(deps)),
-    );
-  } catch (error) {
-    reportFailure(store, error);
-  }
-}
-
-// Reverses the last step (the comment just added, when the toast's Undo is pressed).
-export async function undoComment(deps: PlacementDeps): Promise<void> {
-  const store = deps.store ?? toasts;
-  try {
-    const reply = await deps.rpc.call('actions.undo', {
+    offerUndo('info', t('comment.added'), {
+      rpc: deps.rpc,
       handle: deps.handle,
-      expect_history: null,
+      history: reply.state.history,
+      onUndone: (undone) => deps.scheduler.noteRevisions(undone.changed?.revisions ?? {}),
+      store,
     });
-    if (reply.done) deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
   } catch (error) {
     reportFailure(store, error);
   }

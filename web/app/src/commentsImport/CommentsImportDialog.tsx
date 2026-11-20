@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { reportActionError } from '../actionJob/errors';
 import type { PageRpc } from '../engine/engineConnection';
 import { toasts, type ToastStore } from '../feedback/toasts';
+import { offerUndo } from '../feedback/undoToast';
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import type { ChangedDto } from '../rpc/generated';
@@ -109,7 +110,14 @@ function CommentsImportBody({
       const reply = await importXfdf(engine, handle, text);
       onChanged?.(reply.changed);
       onClose();
-      store.push('info', t('commentsImport.done', { count: importedCount(reply.value) }));
+      // The import is one step, so its Undo offer names that step's history (W4.4b).
+      offerUndo('info', t('commentsImport.done', { count: importedCount(reply.value) }), {
+        rpc: engine,
+        handle,
+        history: reply.state.history,
+        onUndone: (undone) => onChanged?.(undone.changed),
+        store,
+      });
     } catch (error) {
       if (error instanceof RpcError && error.code === 'REFUSED') {
         setPhase({ status: 'invalid' });

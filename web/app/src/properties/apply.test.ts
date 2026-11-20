@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
+import { RpcError } from '../rpc/client';
 import type { DocInfo } from '../rpc/generated';
-import { applyProperties, loadProperties, type PropertiesDeps, undoProperties } from './apply';
+import { applyProperties, loadProperties, type PropertiesDeps } from './apply';
 import { editableValues, MAX_FIELD_LENGTH } from './metadata';
 
 const info: DocInfo = {
@@ -24,9 +25,15 @@ function setup(executed = true) {
   const call = vi.fn(async (method: string) => {
     if (method === 'session.info') return info;
     if (method === 'actions.run') {
-      return { label: 'Edit Document Properties', executed, value: null, changed: null, state: {} };
+      return {
+        label: 'Edit Document Properties',
+        executed,
+        value: null,
+        changed: null,
+        state: { history: 7 },
+      };
     }
-    return { done: true, label: 'Edit Document Properties', changed: null, state: {} };
+    return { done: true, label: 'Edit Document Properties', changed: null, state: { history: 7 } };
   });
   const store = createToastStore();
   const deps: PropertiesDeps = { rpc: { call } as unknown as PageRpc, handle: 'h1', store };
@@ -76,7 +83,7 @@ describe('document properties', () => {
     await applyProperties(deps, info, { ...editableValues(info), title: 'New' });
     store.getState().visible[0]?.action?.run();
     await settle();
-    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: null });
+    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: 7 });
   });
 
   it('calls nothing when no field changed', async () => {
@@ -102,10 +109,12 @@ describe('document properties', () => {
     expect(store.getState().visible).toEqual([]);
   });
 
-  it('an undo call that fails reports an error toast', async () => {
+  it('a stale Undo leaves the properties as they are and says so', async () => {
     const { call, store, deps } = setup();
-    call.mockRejectedValueOnce(new Error('boom'));
-    await undoProperties(deps);
-    expect(store.getState().visible[0]?.kind).toBe('error');
+    await applyProperties(deps, info, { ...editableValues(info), title: 'New' });
+    call.mockRejectedValueOnce(new RpcError('STALE_OBJECT', 'changed', { history: 9 }));
+    store.getState().visible[0]?.action?.run();
+    await settle();
+    expect(store.getState().visible.at(-1)?.text).toBe(t('toast.undo.stale'));
   });
 });

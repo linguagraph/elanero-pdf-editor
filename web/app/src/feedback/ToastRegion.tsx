@@ -59,6 +59,7 @@ export function ToastRegion({ store = toasts }: { store?: ToastStore }) {
   return (
     <section
       className="toast-region"
+      data-region="notifications"
       aria-label={t('toast.region')}
       onPointerEnter={() => setPaused(true)}
       onPointerLeave={() => setPaused(false)}

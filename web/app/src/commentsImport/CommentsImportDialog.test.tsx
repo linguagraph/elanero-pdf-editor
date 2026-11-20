@@ -72,7 +72,13 @@ const TWO_COMMENTS = {
     executed: true,
     value: 2,
     changed: { changes: [], revisions: { '0': 7 } },
-    state: {},
+    state: { history: 7 },
+  }),
+  'actions.undo': () => ({
+    done: true,
+    label: 'Import 2 Comments',
+    changed: { changes: [], revisions: { '0': 8 } },
+    state: { history: 6 },
   }),
 };
 
@@ -133,9 +139,17 @@ describe('CommentsImportDialog', () => {
     });
     expect(onChanged).toHaveBeenCalledWith({ changes: [], revisions: { '0': 7 } });
     expect(onClose).toHaveBeenCalled();
-    expect(store.getState().visible.map((toast) => toast.text)).toContain(
-      t('commentsImport.done', { count: 2 }),
-    );
+    const done = store
+      .getState()
+      .visible.find((toast) => toast.text === t('commentsImport.done', { count: 2 }));
+    expect(done?.action?.label).toBe(t('toast.undo'));
+
+    // The Undo names the import's history, and redraws the pages it brings back.
+    onChanged.mockClear();
+    done?.action?.run();
+    await settle();
+    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: 7 });
+    expect(onChanged).toHaveBeenCalledWith({ changes: [], revisions: { '0': 8 } });
   });
 
   it('refuses an oversize file without asking the engine', async () => {
