@@ -5,6 +5,7 @@
 // layer (W5.4) and the search highlights. Pages above 4 MP are drawn as tiles (W5.1b, tiles.ts);
 // comments are drawn into the page image by the engine.
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type Ref,
   useCallback,
   useEffect,
@@ -74,7 +75,14 @@ import { planPageRenders, tileRect, tilesInViewport } from './tiles';
 import { CanvasPill } from './CanvasPill';
 import { DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
 import type { ZoomRequest } from './zoomBox';
-import { anchoredScroll, isZoomWheel, takeWheelSteps, wheelDeltaPixels } from './wheel';
+import {
+  anchoredScroll,
+  isZoomWheel,
+  keyScrollPixels,
+  takeWheelSteps,
+  takeWholePixels,
+  wheelDeltaPixels,
+} from './wheel';
 import {
   isScaledSpace,
   sceneTopForScroll,
@@ -164,6 +172,17 @@ export interface DocumentViewProps {
   readonly onCommentToolChange?: (tool: CommentToolId | null) => void;
 }
 
+// A button, link or ARIA widget inside the scroller keeps its own Space and arrow keys (W5.1a S4 fix).
+// The match must lie inside the scroller: an ancestor outside it (a region around the whole view)
+// does not make the scroller's keys belong to a control. role="group" is not a control: each page
+// div has it, and a key on a page's own content must still scroll the scene.
+const INTERACTIVE_SELECTOR = 'button, a[href], [role]:not([role="group"])';
+
+function isInsideControl(target: HTMLElement, scroller: HTMLElement): boolean {
+  const control = target.closest<HTMLElement>(INTERACTIVE_SELECTOR);
+  return control !== null && control !== scroller && scroller.contains(control);
+}
+
 // The job worker is missing: the apply reports its failure, as any other failed job does.
 function noJobWorker(): ActionJobWorker {
   throw new Error('the job worker is not available');
@@ -250,6 +269,9 @@ export function DocumentView({
   // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
   const pageFieldRef = useRef<HTMLInputElement>(null);
   const wheelPending = useRef(0);
+  // The fraction of a pixel the scaled scroll still owes the spacer (one scroller per view), carried
+  // from one wheel or key event to the next so small deltas are not lost (W5.1a S4 fix).
+  const scaledRemainder = useRef(0);
   // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
   const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
   // The page at the top of the view, kept up to date (the selection of the page at the top uses it).
@@ -576,7 +598,27 @@ export function DocumentView({
     const element = scrollRef.current;
     if (element === null || sizes === null) return;
     const onWheel = (event: WheelEvent) => {
-      if (!isZoomWheel(event)) return;
+      if (!isZoomWheel(event)) {
+        // Above the scaled-space limit a native scroll would move the spacer, not the scene, so the
+        // wheel scrolls the spacer at the scene's rate instead (W5.1a S4). Below it, native scrolling.
+        if (!isScaledSpace(contentHeight.current)) {
+          scaledRemainder.current = 0;
+          return;
+        }
+        event.preventDefault();
+        const ratio = scrollPerScenePixel(
+          contentHeight.current,
+          viewportOf(element, contentHeight.current).height,
+        );
+        const step = takeWholePixels(scaledRemainder.current, wheelDeltaPixels(event) * ratio);
+        scaledRemainder.current = step.remainder;
+        element.scrollTop += step.whole;
+        element.scrollLeft += wheelDeltaPixels({
+          deltaY: event.deltaX,
+          deltaMode: event.deltaMode,
+        });
+        return;
+      }
       event.preventDefault();
       const step = takeWheelSteps(wheelPending.current, wheelDeltaPixels(event));
       wheelPending.current = step.pending;
@@ -601,6 +643,41 @@ export function DocumentView({
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
   }, [sizes]);
+
+  // The arrow, page and space keys scroll the spacer; above the scaled-space limit they move it by the
+  // scene's rate, as the wheel does (W5.1a S4). Home and End need nothing: both ends map to each other.
+  // A key typed into a field or a control is left to it.
+  const scrollByKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    const element = event.currentTarget;
+    if (!isScaledSpace(contentHeight.current)) {
+      scaledRemainder.current = 0;
+      return;
+    }
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.closest('input, textarea, select, [contenteditable]') ||
+        isInsideControl(target, element))
+    )
+      return;
+    const height = viewportOf(element, contentHeight.current).height;
+    const px = keyScrollPixels(event.key, event.shiftKey, height);
+    if (px === null) return;
+    event.preventDefault();
+    const before = element.scrollTop;
+    const step = takeWholePixels(
+      scaledRemainder.current,
+      px * scrollPerScenePixel(contentHeight.current, height),
+    );
+    element.scrollTop = before + step.whole;
+    // A browser stops the write at the end of the range: then the owed fraction points past the end
+    // and is dropped, so the next key starts from the end and not from a stale fraction. A fractional
+    // scrollTop (HiDPI) can differ from the whole pixels written by under 1 px with no clamp, so that
+    // gap still counts as an unclamped move and keeps its remainder.
+    const clamped = Math.abs(element.scrollTop - (before + step.whole)) >= 1;
+    scaledRemainder.current = clamped ? 0 : step.remainder;
+  };
 
   // Runs once a new layout (a zoom, a fit refit or a layout change) is in the DOM, so the scroll range
   // already has the new size. A wheel zoom restores the point under the pointer (its own anchor);
@@ -836,6 +913,7 @@ export function DocumentView({
           tabIndex={0}
           aria-label={t('view.pages')}
           onScroll={measure}
+          onKeyDown={scrollByKey}
           onFocus={(event) => {
             // Focus inside a page pins that page; focus outside the pages (the pill, the scroller) unpins it.
             const page =
