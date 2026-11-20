@@ -95,9 +95,12 @@ export const BREAKPOINTS_PX = {
   tablet: 768,
 } as const;
 
-// Side rail and panel widths. The panel is the desktop's default side panel width (240 px,
-// ui/side_panels.py). The rail is 48 px so its 44 px touch targets fit with a margin.
+// Side rail and panel widths. The panels take the desktop's defaults (ui/main_window.py: 220 px on
+// the left, 260 px on the right), can be resized down to 160 px, and are remembered per side. The
+// rail is 48 px so its 44 px touch targets fit with a margin.
 export const LAYOUT_PX = {
   railWidth: 48,
-  panelWidth: 240,
+  leftPanelWidth: 220,
+  rightPanelWidth: 260,
+  minPanelWidth: 160,
 } as const;

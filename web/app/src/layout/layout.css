@@ -147,9 +147,12 @@
 }
 
 /* A panel fills the full height of its region (the frame's body row); its list scrolls inside it. */
+/* The width is the default of each side; AppFrame sets the remembered width inline (W4.2a S4). The
+   resizer sits on the inner edge, so it is positioned against the panel. */
 .app-panel {
+  position: relative;
   display: flex;
-  flex: 0 0 var(--layout-panel-width);
+  flex: 0 0 auto;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
@@ -158,11 +161,42 @@
 }
 
 .app-panel-left {
+  width: var(--layout-left-panel-width);
   border-right: 1px solid var(--color-border);
 }
 
 .app-panel-right {
+  width: var(--layout-right-panel-width);
   border-left: 1px solid var(--color-border);
+}
+
+/* The separator on a panel's inner edge (W1.6 section 4): a thin strip that shows the grip on hover
+   and focus. touch-action stops a touch drag from scrolling the page instead. */
+.app-panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.app-panel-resizer-left {
+  right: 0;
+}
+
+.app-panel-resizer-right {
+  left: 0;
+}
+
+.app-panel-resizer:hover {
+  background: var(--color-border-strong);
+}
+
+.app-panel-resizer:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
 }
 
 /* A left drawer floats over the page area, beside the left rail when the rail shows. */

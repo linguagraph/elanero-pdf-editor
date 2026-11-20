@@ -34,7 +34,9 @@
   --breakpoint-medium: 1024px;
   --breakpoint-tablet: 768px;
   --layout-rail-width: 48px;
-  --layout-panel-width: 240px;
+  --layout-left-panel-width: 220px;
+  --layout-right-panel-width: 260px;
+  --layout-min-panel-width: 160px;
 }
 
 @media (prefers-color-scheme: dark) {
