@@ -4,16 +4,11 @@ name: Web accessibility (W8.5)
 # @axe-core/playwright on the production build, on the start page and the dialogs that open with no
 # document, in light and dark, in Chromium, Firefox and WebKit. Serious and critical findings fail
 # the job; moderate and minor ones go to the step summary. Not a required check (W8.5 decision 1):
-# it runs on PRs that touch the web app, nightly, and on demand. It folds into web-e2e once W8.1
-# lands, and the owner decides about the ruleset then.
+# it runs on demand only (workflow_dispatch, manual). It takes up to an hour, nothing depends on it,
+# and it is not a required check. It is not run on PRs or on a schedule. It folds into web-e2e once
+# W8.1 lands, and the owner decides about the ruleset then.
 
 on:
-  pull_request:
-    paths:
-      - 'web/app/**'
-      - '.github/workflows/web-a11y.yml'
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
