@@ -3,6 +3,7 @@ import {
   DEFAULT_REDACT_OPTIONS,
   MIN_MARK_PT,
   markRefsJson,
+  pageAreaJson,
   redactionAreaJson,
   redactionRect,
 } from './marks';
@@ -69,5 +70,24 @@ describe('the JSON the calls send', () => {
 
   it('uses the desktop defaults for the apply options', () => {
     expect(DEFAULT_REDACT_OPTIONS).toEqual({ images: 'pixels', graphics: 'covered', text: true });
+  });
+});
+
+describe('pageAreaJson (W4.12 S2)', () => {
+  it('sends the box, one quad per line and the text', () => {
+    const quad = {
+      ul: { x: 1, y: 2 },
+      ur: { x: 3, y: 2 },
+      ll: { x: 1, y: 4 },
+      lr: { x: 3, y: 4 },
+    };
+    expect(
+      pageAreaJson({ page: 1, rect: { x0: 1, y0: 2, x1: 3, y1: 4 }, quads: [quad], text: 'ab' }),
+    ).toEqual({
+      page: 1,
+      rect: { x0: 1, y0: 2, x1: 3, y1: 4 },
+      quads: [quad],
+      text: 'ab',
+    });
   });
 });

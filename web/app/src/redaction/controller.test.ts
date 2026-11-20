@@ -182,6 +182,59 @@ describe('RedactionController (W7.4, W7.4b)', () => {
     expect(controller.getSnapshot().marks.map((mark) => mark.name)).toEqual(['m1']);
   });
 
+  it('marks the areas of a selection as one call, with their quads and text', async () => {
+    const { call, controller, noteRevisions } = setup({
+      'actions.run': () => {
+        listed = [markDto('m1'), markDto('m2', 1)];
+        return {
+          ...MARK_REPLY,
+          value: [
+            { page: 0, name: 'm1' },
+            { page: 1, name: 'm2' },
+          ],
+        };
+      },
+    });
+    controller.setActive(true);
+    const quad = {
+      ul: { x: 1, y: 2 },
+      ur: { x: 30, y: 2 },
+      ll: { x: 1, y: 40 },
+      lr: { x: 30, y: 40 },
+    };
+    const areas = [
+      { page: 0, rect: BOX, quads: [quad], text: 'jane' },
+      { page: 1, rect: BOX, quads: [quad], text: 'jane' },
+    ];
+    expect(await controller.markAreas(areas)).toBe(2);
+    await flush();
+
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h1',
+      name: 'redaction.mark',
+      args: {
+        areas: [
+          { page: 0, rect: BOX, quads: [quad], text: 'jane' },
+          { page: 1, rect: BOX, quads: [quad], text: 'jane' },
+        ],
+        author: '',
+        style: {
+          fill: { r: 0, g: 0, b: 0 },
+          overlay_text: '',
+          text_color: { r: 1, g: 1, b: 1 },
+        },
+      },
+    });
+    expect(noteRevisions).toHaveBeenCalledWith({ '0': 4 });
+    expect(controller.getSnapshot().marks).toHaveLength(2);
+  });
+
+  it('sends nothing for an empty selection, and adds nothing while busy', async () => {
+    const { call, controller } = setup({});
+    expect(await controller.markAreas([])).toBe(0);
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toHaveLength(0);
+  });
+
   it("clears every mark of the document, the file's too, in one call", async () => {
     listed = [markDto('m1'), markDto('m2', 1)];
     const { call, controller } = setup({

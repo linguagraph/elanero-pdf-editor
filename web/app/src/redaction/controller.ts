@@ -9,6 +9,7 @@ import { ActionJobCancelled, type ActionJobWorker } from '../actionJob/actionJob
 import { reportActionError } from '../actionJob/errors';
 import type { PageRect } from '../comments/coordinates';
 import type { PageRpc } from '../engine/engineConnection';
+import type { PageArea } from '../text/textLayer';
 import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
 import { offerUndo } from '../feedback/undoToast';
 import { toasts, type ToastStore } from '../feedback/toasts';
@@ -17,11 +18,13 @@ import type { ColorJson } from '../prefs/colour';
 import { RpcError } from '../rpc/client';
 import type { ColorDto, RedactionMarkDto } from '../rpc/generated';
 import type { RenderScheduler } from '../view/renderScheduler';
-import type { MarkRef, MarkStylePatch } from './marks';
+import { type MarkRef, type MarkStylePatch, pageAreaJson } from './marks';
 import {
+  addRedactionAreas,
   addRedactionMark,
   applyRedactions,
   listRedactionMarks,
+  type MarksResult,
   removeRedactionMarks,
   restyleRedactionMarks,
 } from './redaction';
@@ -163,15 +166,32 @@ export class RedactionController {
 
   // Marks one box drawn on a page. Refused while an apply runs, since the document is read-only.
   async add(page: number, rect: PageRect): Promise<void> {
-    if (this.snapshot.busy) return;
+    await this.send(() => addRedactionMark(this.deps.rpc, this.deps.handle, page, rect));
+  }
+
+  // Marks the areas of a text selection (W4.12): one mark per area, one undo step. Resolves to the
+  // number of marks added, 0 when nothing was added (busy, or the call failed).
+  markAreas(areas: readonly PageArea[]): Promise<number> {
+    if (areas.length === 0) return Promise.resolve(0);
+    return this.send(() =>
+      addRedactionAreas(this.deps.rpc, this.deps.handle, areas.map(pageAreaJson)),
+    );
+  }
+
+  // Runs one mark call, then notes its revisions and reloads the list. Returns the marks added.
+  private async send(mark: () => Promise<MarksResult>): Promise<number> {
+    if (this.snapshot.busy) return 0;
+    let added: number;
     try {
-      const { changed } = await addRedactionMark(this.deps.rpc, this.deps.handle, page, rect);
+      const { marks, changed } = await mark();
       this.deps.scheduler.noteRevisions(changed?.revisions ?? {});
+      added = marks.length;
     } catch (error) {
       reportActionError(this.store, error, 'redact.markFailed');
-      return;
+      return 0;
     }
     void this.reload();
+    return added;
   }
 
   // Deletes the named marks: one undo step. A name the document no longer has is ignored.

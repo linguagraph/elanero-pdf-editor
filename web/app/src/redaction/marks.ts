@@ -3,6 +3,7 @@
 // mark. Page points are visible space with the origin top-left, as the engine expects (W1.3).
 import { type PagePoint, type PageRect, pagePointAt, rectBetween } from '../comments/coordinates';
 import type { ColorJson } from '../prefs/colour';
+import type { PageArea } from '../text/textLayer';
 
 // A drag shorter than this (page points) is a click, not a box.
 export const MIN_MARK_PT = 2;
@@ -50,6 +51,40 @@ export function redactionAreaJson(
   rect: PageRect,
 ): { page: number; rect: { x0: number; y0: number; x1: number; y1: number } } {
   return { page, rect: { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 } };
+}
+
+// A mark area as redaction.mark takes it (W4.12 S2). A drawn box sends the rect only; a text
+// selection also sends one quad per line (the engine's quadPoints order) and the selected text.
+export interface RedactionAreaJson {
+  readonly page: number;
+  readonly rect: {
+    readonly x0: number;
+    readonly y0: number;
+    readonly x1: number;
+    readonly y1: number;
+  };
+  readonly quads?: readonly {
+    readonly ul: { readonly x: number; readonly y: number };
+    readonly ur: { readonly x: number; readonly y: number };
+    readonly ll: { readonly x: number; readonly y: number };
+    readonly lr: { readonly x: number; readonly y: number };
+  }[];
+  readonly text?: string;
+}
+
+// A selection's area as the calls send it. The quads and the text are the selected runs.
+export function pageAreaJson(area: PageArea): RedactionAreaJson {
+  return {
+    page: area.page,
+    rect: { x0: area.rect.x0, y0: area.rect.y0, x1: area.rect.x1, y1: area.rect.y1 },
+    quads: area.quads.map((quad) => ({
+      ul: { x: quad.ul.x, y: quad.ul.y },
+      ur: { x: quad.ur.x, y: quad.ur.y },
+      ll: { x: quad.ll.x, y: quad.ll.y },
+      lr: { x: quad.lr.x, y: quad.lr.y },
+    })),
+    text: area.text,
+  };
 }
 
 // The job's marks as the apply takes them: each named by its page and name.
