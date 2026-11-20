@@ -24,7 +24,7 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
 // An engine that opens every PDF and answers the first page render with pixels, so the first
 // page is drawn and the scheduler's firstPage resolves. Other calls never answer.
 // With `marks`, the engine lists one mark on every open document, so Apply Redactions is enabled.
-function drawingEngine(options: { marks?: boolean } = {}): {
+function drawingEngine(options: { marks?: boolean; contentEdit?: boolean } = {}): {
   client: EngineClient;
   renders: () => number;
 } {
@@ -61,6 +61,13 @@ function drawingEngine(options: { marks?: boolean } = {}): {
         revision: params['revision'],
         format: 'rgba',
         pixels: new ArrayBuffer(4),
+      });
+    }
+    // The open reads the engine's content_edit flag (W6.7a); the Edit tool's commands follow it.
+    if (method === 'session.capabilities') {
+      return Promise.resolve({
+        engine: { content_edit: options.contentEdit ?? true },
+        platform: {},
       });
     }
     if (method !== 'session.open') return new Promise<never>(() => undefined);
@@ -715,12 +722,12 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     vi.restoreAllMocks();
   });
 
-  async function openDocument(marks = false): Promise<void> {
+  async function openDocument(marks = false, contentEdit = true): Promise<void> {
     const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
     act(() => {
       root.render(
         <App
-          engine={fakeEngine(drawingEngine({ marks }).client)}
+          engine={fakeEngine(drawingEngine({ marks, contentEdit }).client)}
           jobs={jobs as unknown as JobWorkerPool}
         />,
       );
@@ -772,6 +779,32 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     });
     expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('false');
     expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
+  });
+
+  it('Edit Text & Images is off with its reason when the engine lacks content_edit', async () => {
+    await openDocument(false, false);
+    selectTab(t('ribbon.tab.edit'));
+    const edit = ribbonButton('edit-text-images');
+    expect(edit.getAttribute('aria-disabled')).toBe('true');
+    const described = (edit.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain(t('disabled.contentEditOff'));
+    act(() => {
+      edit.click();
+    });
+    expect(ribbonButton('edit-text-images').getAttribute('aria-pressed')).not.toBe('true');
+  });
+
+  it('Edit Text & Images is enabled when the engine has content_edit, and turns the tool on', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.edit'));
+    expect(ribbonButton('edit-text-images').getAttribute('aria-disabled')).toBeNull();
+    act(() => {
+      ribbonButton('edit-text-images').click();
+    });
+    expect(ribbonButton('edit-text-images').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('Redact turns the mark tool on, the same as the toolbar Mark button', async () => {

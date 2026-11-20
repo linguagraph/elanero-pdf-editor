@@ -25,6 +25,7 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     canUndo: false,
     canRedo: false,
     capabilities: new Set(),
+    contentEdit: false,
     ribbonCompact: false,
     ribbonCollapsed: false,
     viewTool: 'select',
@@ -386,6 +387,30 @@ describe('the comment and redaction tools (W4.3a S7)', () => {
     const busy = state({ hasDocument: true, canApplyRedactions: false, redactionBusy: true });
     expect(commandDisabledReasonOf('apply-redactions', busy)).toBe('redactionBusy');
     expect(DISABLED_REASON_LABELS.redactionBusy).toBe('disabled.redactionBusy');
+  });
+
+  it('disables the Edit tool commands without the content_edit capability, with the reason', () => {
+    // The engine's content_edit flag (W6.7a): without it the commands say why, and never run.
+    const edit = ['edit-text-images', 'delete-selected-objects'];
+    const off = state({ hasDocument: true, contentEdit: false });
+    const on = state({ hasDocument: true, contentEdit: true });
+    for (const id of edit) {
+      expect(commandDisabledReasonOf(id, state())).toBe('needsDocument');
+      expect(commandDisabledReasonOf(id, off)).toBe('contentEditOff');
+      expect(commandDisabledReasonOf(id, on)).toBeNull();
+      expect(DISABLED_REASON_LABELS.contentEditOff).toBe('disabled.contentEditOff');
+    }
+    // The reason is a message the app shows: it resolves to the English text, not a bare key.
+    expect(EN[DISABLED_REASON_LABELS.contentEditOff]).toMatch(/cannot be edited/);
+    const handler = vi.fn();
+    expect(runCommand(REGISTRY, 'edit-text-images', off, { 'edit-text-images': handler })).toBe(
+      false,
+    );
+    expect(handler).not.toHaveBeenCalled();
+    expect(runCommand(REGISTRY, 'edit-text-images', on, { 'edit-text-images': handler })).toBe(
+      true,
+    );
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it('runs Redact through its handler, and not without a document', () => {

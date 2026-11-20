@@ -64,6 +64,7 @@ const state: CommandState = {
   canUndo: false,
   canRedo: false,
   capabilities: new Set(['signing', 'ocr', 'office_import', 'pdfa', 'pwa_install']),
+  contentEdit: false,
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',

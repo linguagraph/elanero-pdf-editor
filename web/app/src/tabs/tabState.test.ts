@@ -24,6 +24,12 @@ function withThree(): TabState {
 }
 
 describe('tab state', () => {
+  it('keeps the content_edit flag of the open document, off unless the engine reported it', () => {
+    expect(addTab(EMPTY_TABS, pdf('a.pdf')).tabs[0]?.contentEdit).toBe(false);
+    const state = addTab(EMPTY_TABS, { ...pdf('b.pdf'), contentEdit: true });
+    expect(state.tabs[0]?.contentEdit).toBe(true);
+  });
+
   it('adds a tab at the end and makes it active', () => {
     const state = addTab(EMPTY_TABS, pdf('a.pdf'));
     expect(state.tabs.map((tab) => tab.name)).toEqual(['a.pdf']);

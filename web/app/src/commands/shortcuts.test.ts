@@ -22,6 +22,7 @@ const STATE: CommandState = {
   canUndo: true,
   canRedo: true,
   capabilities: new Set(),
+  contentEdit: false,
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',

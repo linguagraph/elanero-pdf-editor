@@ -102,6 +102,7 @@ const BASE_COMMAND_STATE: CommandState = {
   canUndo: false,
   canRedo: false,
   capabilities: new Set(),
+  contentEdit: false,
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
@@ -469,6 +470,8 @@ export function App({
       !redactionState.busy &&
       redactionState.marks.length > 0,
     redactionBusy: documentShown && (redactionState?.busy ?? false),
+    // The engine's content_edit flag (W6.7a): the Edit tool's commands are off without it.
+    contentEdit: documentShown && (activeTab?.contentEdit ?? false),
     canGoBack: canGoBack(history),
     canGoForward: canGoForward(history),
     view: documentShown
