@@ -60,7 +60,7 @@ The **Page Setup** group:
 
 - **Crop Pages…** (**Ctrl+Shift+T**) trims margins by the amounts you enter, or removes white
   margins automatically, for the page ranges you choose. Cropping hides the margins from view and
-  print; the content stays in the file.
+  print; the content stays in the file. Margins that would leave nothing of a page are refused.
 - **Page Labels…** sets how pages are numbered in the navigator, the thumbnails and the print dialog.
   Each rule starts at a page and gives a numbering style (or none, for a prefix only), an optional
   prefix and the number to start at. For example, a front matter numbered `i, ii, iii` followed by

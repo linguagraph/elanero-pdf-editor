@@ -287,6 +287,82 @@ def test_crop_rect_clips_each_page_to_the_rectangle(open_copy: Opener) -> None:
     assert s.undo() and rects(s) == before
 
 
+def test_crop_margins_wider_than_the_page_is_refused_and_changes_nothing(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = rects(s)
+    # A4 is 595 pt wide: 400 + 400 leaves nothing (MuPDF would wrap it into a wrong strip).
+    with pytest.raises(Refused) as exc:
+        page_actions.crop_margins(s, CropMargins((0, 1), 400, 0, 400, 0))
+    assert exc.value.reason == "crop_too_large"
+    assert rects(s) == before
+    assert not s.undo()  # no undo step was added
+
+
+@pytest.mark.parametrize(
+    "margins",
+    [(-1.0, 0.0, 0.0, 0.0), (0.0, 0.0, float("nan"), 0.0), (0.0, float("inf"), 0.0, 0.0)],
+)
+def test_crop_margins_negative_or_non_finite_is_refused(
+    open_copy: Opener, margins: tuple[float, float, float, float]
+) -> None:
+    s = open_copy("text_multipage")
+    before = rects(s)
+    with pytest.raises(Refused) as exc:
+        page_actions.crop_margins(s, CropMargins((0,), *margins))
+    assert exc.value.reason == "invalid_margins"
+    assert rects(s) == before
+    assert not s.undo()
+
+
+def test_crop_margins_on_a_page_index_outside_the_document_is_refused(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = rects(s)
+    with pytest.raises(Refused) as exc:
+        page_actions.crop_margins(s, CropMargins((s.page_count,), 1, 1, 1, 1))
+    assert exc.value.reason == "invalid_pages"
+    with pytest.raises(Refused) as negative:
+        page_actions.crop_margins(s, CropMargins((-1,), 1, 1, 1, 1))
+    assert negative.value.reason == "invalid_pages"
+    assert rects(s) == before
+    assert not s.undo()
+
+
+def test_crop_margins_with_no_pages_or_zero_margins_is_not_executed(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = rects(s)
+    empty = page_actions.crop_margins(s, CropMargins((), 10, 10, 10, 10))
+    assert empty.executed is False
+    zero = page_actions.crop_margins(s, CropMargins((0, 1), 0, 0, 0, 0))
+    assert zero.executed is False
+    assert rects(s) == before
+    assert not s.undo()  # nothing to undo
+
+
+def test_crop_rect_outside_the_page_is_refused(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = rects(s)
+    with pytest.raises(Refused) as exc:
+        page_actions.crop_rect(s, CropRect((0,), Rect(2000, 2000, 3000, 3000)))
+    assert exc.value.reason == "crop_too_large"
+    with pytest.raises(Refused) as bad_page:
+        page_actions.crop_rect(s, CropRect((9,), Rect(0, 0, 100, 100)))
+    assert bad_page.value.reason == "invalid_pages"
+    assert rects(s) == before
+    assert not s.undo()
+
+
+def test_crop_margins_on_a_rotated_page_uses_the_visible_edges(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    original = rects(s)
+    page_actions.rotate(s, RotatePages((0,), 90))
+    rotated = rects(s)
+    visible = rotated[0]
+    page_actions.crop_margins(s, CropMargins((0,), 10, 20, 30, 40))
+    assert_size(rects(s)[0], Rect(0, 0, visible.width - 40, visible.height - 60))
+    assert s.undo() and rects(s) == rotated  # the crop is one step, the rotation another
+    assert s.undo() and rects(s) == original
+
+
 def test_trim_white_margins_skips_blank_pages(open_copy: Opener) -> None:
     s = open_copy("text_multipage")
     n = s.page_count
