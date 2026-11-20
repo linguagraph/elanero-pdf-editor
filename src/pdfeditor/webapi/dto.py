@@ -793,6 +793,24 @@ class ExtractImagesValue:
     too_large: int  # the images skipped for being above the pixel ceiling
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExtractFontsArgs:
+    name: str  # the document's display name: the ZIP's stem
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RefusedFontDto:
+    name: str  # the font's name in the document
+    reason: str  # "restricted", "bitmap_only" or "unreadable" (the licence rule, W4.16)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExtractFontsValue:
+    saved: tuple[str, ...]  # the file names written, as they are in the reply
+    not_embedded: tuple[str, ...]  # font names with no program in the document, sorted
+    refused: tuple[RefusedFontDto, ...]  # fonts whose licence forbids saving them, sorted by name
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 

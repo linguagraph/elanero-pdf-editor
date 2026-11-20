@@ -965,6 +965,21 @@ export const EN = {
   'extract.close': 'Close',
   'extract.running': 'Extracting. The progress bar shows how far it has got.',
   'extract.failed': 'The images could not be extracted. Try again.',
+  'extract.fonts.title': 'Extract Fonts',
+  'extract.fonts.hint':
+    'Saves the fonts embedded in the document. A font whose licence forbids saving it is not saved, and is named below.',
+  'extract.fonts.saved': { one: '{count} font saved.', other: '{count} fonts saved.' },
+  'extract.fonts.none': 'This document has no embedded fonts.',
+  'extract.fonts.refused': {
+    one: '{count} font was not saved because its licence does not allow it: {names}.',
+    other: '{count} fonts were not saved because their licence does not allow it: {names}.',
+  },
+  'extract.fonts.notEmbedded': {
+    one: '{count} font is not embedded in the document: {names}.',
+    other: '{count} fonts are not embedded in the document: {names}.',
+  },
+  'extract.fonts.more': 'and {count} more',
+  'extract.fonts.failed': 'The fonts could not be extracted. Try again.',
   'compress.title': 'Reduce file size',
   'compress.intro': 'Saves a smaller copy; the open document is left unchanged.',
   'compress.preset.label': 'Preset',
