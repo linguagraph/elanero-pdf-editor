@@ -189,12 +189,21 @@ class FontExtraction:
 
 
 _UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9 ._+-]")
+_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 
 
 def _safe_file_name(name: str, fallback: str = "font") -> str:
     """A file name with no path parts. A PDF name can hold "/" or a leading "..", so the
     characters are replaced first, then the leading dots and spaces are dropped."""
     cleaned = re.sub(r"\.{2,}", "_", _UNSAFE_NAME_CHARS.sub("_", name)).lstrip(". ")
+    # Windows maps CON, NUL, COM1... to devices even with an extension, so "CON.ttf" would
+    # write nowhere; the underscore makes it an ordinary file name on every platform
+    if cleaned.split(".", 1)[0].upper() in _RESERVED_NAMES:
+        cleaned = "_" + cleaned
     stem, dot, ext = cleaned.rpartition(".")
     if not dot:
         stem, ext = cleaned, ""

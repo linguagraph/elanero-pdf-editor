@@ -49,7 +49,8 @@ def program_fs_type(program: bytes) -> int | None:
 
     ``None`` for a program with no OS/2 table, and for one that isn't sfnt at all (Type1, bare
     CFF), which carry no fsType. Raises ``ValueError`` when the table directory or the OS/2
-    record points past the end of the data. Pure Python: the web build ships without fontTools.
+    table points past the end of the data, or the OS/2 table is too short to hold fsType.
+    Pure Python: the web build ships without fontTools.
     """
     tag = program[:4]
     if tag == b"ttcf":
@@ -66,8 +67,11 @@ def program_fs_type(program: bytes) -> int | None:
     for i in range(count):
         record = base + 12 + 16 * i
         if program[record : record + 4] == b"OS/2":
-            offset = struct.unpack_from(">I", program, record + 8)[0]
-            if offset + 10 > len(program):
+            offset, length = struct.unpack_from(">II", program, record + 8)
+            # fsType sits at byte 8 and is 2 bytes long, so a shorter declared table can't hold it
+            if length < 10:
+                raise ValueError("OS/2 table too short for fsType")
+            if offset + length > len(program):
                 raise ValueError("OS/2 table outside the font program")
             return int(struct.unpack_from(">H", program, offset + 8)[0])
     return None

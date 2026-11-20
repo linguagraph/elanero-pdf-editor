@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import struct
 from pathlib import Path
 from typing import Any, cast
 
@@ -57,6 +58,53 @@ def test_fs_type_missing_os2_table_is_none(sans: bytes) -> None:
 def test_fs_type_of_non_sfnt_programs_is_none() -> None:
     assert program_fs_type(b"%!PS-AdobeFont-1.0 garbage") is None  # Type1
     assert program_fs_type(b"\x01\x00\x04\x04 bare cff") is None  # CFF
+
+
+def _os2_record(program: bytes) -> int:
+    """The byte position of the OS/2 entry in the table directory."""
+    count = struct.unpack_from(">H", program, 4)[0]
+    for i in range(count):
+        record = 12 + 16 * i
+        if program[record : record + 4] == b"OS/2":
+            return record
+    raise AssertionError("no OS/2 table")
+
+
+def _patched_os2(program: bytes, *, offset: int | None = None, length: int | None = None) -> bytes:
+    patched = bytearray(program)
+    record = _os2_record(program)
+    if offset is not None:
+        struct.pack_into(">I", patched, record + 8, offset)
+    if length is not None:
+        struct.pack_into(">I", patched, record + 12, length)
+    return bytes(patched)
+
+
+def test_os2_declared_length_shorter_than_fs_type_is_unreadable(
+    sans: bytes, tmp_path: Path
+) -> None:
+    short = _patched_os2(sans, length=4)  # fsType (offset 8, 2 bytes) lies past the declared end
+    with pytest.raises(ValueError):
+        program_fs_type(short)
+    doc = _FakeDoc([_FakeFont(1, "Short.ttf", short), _FakeFont(2, "Ok.ttf", sans)])
+    result = extract_fonts(cast(Any, doc), tmp_path / "out")
+    assert result.refused == [("Short.ttf", "unreadable")]
+    assert [p.name for p in result.written] == ["Ok.ttf"]
+
+
+def test_os2_table_extending_past_the_end_of_the_file_is_unreadable(
+    sans: bytes, tmp_path: Path
+) -> None:
+    length_past_end = _patched_os2(sans, length=len(sans))
+    with pytest.raises(ValueError):
+        program_fs_type(length_past_end)
+    offset_past_end = _patched_os2(sans, offset=len(sans) + 1000)
+    with pytest.raises(ValueError):
+        program_fs_type(offset_past_end)
+    doc = _FakeDoc([_FakeFont(1, "Far.ttf", offset_past_end), _FakeFont(2, "Ok.ttf", sans)])
+    result = extract_fonts(cast(Any, doc), tmp_path / "out")
+    assert result.refused == [("Far.ttf", "unreadable")]
+    assert [p.name for p in result.written] == ["Ok.ttf"]
 
 
 def test_fs_type_past_the_end_of_the_data_is_an_error(sans: bytes) -> None:
@@ -161,6 +209,29 @@ def test_safe_file_names() -> None:
     assert _safe_file_name("..") == "_"
     assert _safe_file_name("") == "font"
     assert _safe_file_name("x" * 300 + ".ttf") == "x" * 100 + ".ttf"
+    assert _safe_file_name("CON.ttf") == "_CON.ttf"
+    assert _safe_file_name("nul") == "_nul"
+    assert _safe_file_name("com1.ttf") == "_com1.ttf"
+    assert _safe_file_name("LPT9.a.otf") == "_LPT9.a.otf"
+    assert _safe_file_name("CONSOLE.ttf") == "CONSOLE.ttf"  # only the exact device names
+
+
+@pytest.mark.parametrize(
+    ("font_name", "written_name"),
+    [
+        ("CON.ttf", "_CON.ttf"),
+        ("nul.ttf", "_nul.ttf"),
+        ("COM1.otf", "_COM1.otf"),
+        ("LPT9", "_LPT9"),
+    ],
+)
+def test_reserved_device_names_are_written_as_ordinary_files(
+    sans: bytes, tmp_path: Path, font_name: str, written_name: str
+) -> None:
+    doc = _FakeDoc([_FakeFont(1, font_name, sans)])
+    result = extract_fonts(cast(Any, doc), tmp_path / "out")
+    assert [p.name for p in result.written] == [written_name]
+    assert result.written[0].read_bytes() == sans
 
 
 def test_unreadable_os2_table_is_refused(sans: bytes, tmp_path: Path) -> None:
