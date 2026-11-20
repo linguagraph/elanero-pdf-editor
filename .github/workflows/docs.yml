@@ -4,6 +4,8 @@ name: Docs
 # under /guide/, built strictly, so broken links and pages missing from the nav fail the pull
 # request; the landing page (docs/landing) at the root; and redirect stubs for the guide's old
 # addresses. Pushes to main (and a manual run from main) publish the site to GitHub Pages.
+# Pages replaces the whole site on each deployment, so the deploy does not upload its own copy: it
+# calls web-deploy.yml (workflow_call), which builds the same site and adds the web app under /app/.
 # Pages must be set to "GitHub Actions" as its source (Settings > Pages) once.
 on:
   pull_request:
@@ -41,30 +43,15 @@ jobs:
           python -c "import sys, subprocess, tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['docs']; subprocess.check_call([sys.executable, '-m', 'pip', 'install', *deps])"
       - name: "Build the website (the user guide is built strictly: broken links and pages missing from the nav fail)"
         run: python scripts/build_site.py --site-dir site
-      - name: Configure GitHub Pages
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/configure-pages@v5
-      - name: Upload the site
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
 
   deploy:
     needs: site
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    # Only deploys queue on the Pages group: a pull request build never cancels or waits for one.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    runs-on: ubuntu-latest
+    # web-deploy.yml builds the guide and the app into one site and deploys it. Its deploy job
+    # needs these grants, which a called workflow cannot widen. The "pages" group is shared with
+    # web-deploy.yml's own push deploys, so two deploys never overlap.
     permissions:
+      contents: read
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Publish to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    uses: ./.github/workflows/web-deploy.yml
