@@ -44,6 +44,7 @@ import { createJobWorkerPool, type JobWorkerPool } from './engine/jobPool';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { CropDialog } from './crop/CropDialog';
+import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto } from './rpc/generated';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
@@ -172,13 +173,18 @@ export function App({
   const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
-  const [cropOpen, setCropOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
   const [saveAsTab, setSaveAsTab] = useState<DocumentTab | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
+  // The crop dialog's session (W4.11 S5): the form kept across Draw on page and Esc, and the box
+  // drawn on a page, if any. A change of tab clears it and leaves the crop box tool.
+  const crop = useCropSession(
+    docs.tabs.activeId,
+    docs.tabs.tabs.map((tab) => tab.id),
+  );
   // The Save flow of the open tabs (W4.8): one saver for the page, one save at a time per document.
   const saver = useMemo(
     () => createSaver({ client: () => engine.client(), download: downloadBytes }),
@@ -413,7 +419,7 @@ export function App({
             if (activeTab !== undefined) void saveTab(activeTab);
           },
           // Crop (W4.11) opens the crop dialog for the open document.
-          'crop-pages': () => setCropOpen(true),
+          'crop-pages': () => crop.openDialog(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
           'save-as': () => {
             if (activeTab !== undefined) setSaveAsTab(activeTab);
@@ -684,14 +690,18 @@ export function App({
       ) : null}
       {documentShown && session !== null && activeTab !== undefined ? (
         <CropDialog
-          isOpen={cropOpen}
-          onClose={() => setCropOpen(false)}
+          isOpen={crop.open}
+          onClose={crop.close}
           rpc={session.rpc}
           handle={session.handle}
           pageCount={activeTab.pages}
-          currentPage={viewState.page}
+          currentPage={crop.scopePage ?? viewState.page}
           signed={activeTab.signed}
           onChanged={onCropped}
+          initialValues={crop.values}
+          onValuesChange={crop.setValues}
+          drawn={crop.drawn}
+          onDrawOnPage={crop.drawOnPage}
         />
       ) : null}
       {documentShown && session !== null ? (
@@ -759,6 +769,7 @@ export function App({
             onToolChange={(tool) => {
               if (activeId !== null) setViewTool(activeId, tool);
             }}
+            onCropBoxEnd={crop.boxEnded}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }

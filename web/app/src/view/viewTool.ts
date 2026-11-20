@@ -4,7 +4,8 @@
 // the document view, because the view remounts on a tab switch and after each structure change.
 import { useSyncExternalStore } from 'react';
 
-export type ViewTool = 'select' | 'hand';
+// cropBox draws a crop box on a page (W4.11 S5); the crop dialog is closed while it is on.
+export type ViewTool = 'select' | 'hand' | 'cropBox';
 
 const tools = new Map<number, ViewTool>();
 const listeners = new Set<() => void>();
@@ -27,6 +28,14 @@ export function setViewTool(tabId: number, tool: ViewTool): void {
 // Drops a closed tab's tool. Harmless to skip, since an unknown tab reads as Select.
 export function forgetViewTool(tabId: number): void {
   if (tools.delete(tabId)) notify();
+}
+
+// Leaves the crop box tool when its tab is left (switched away from, or closed). Other tools are
+// kept: Hand stays on its tab, as before. A closed tab drops its entry instead.
+export function leaveCropBox(tabId: number, stillOpen: boolean): void {
+  if (toolOf(tabId) !== 'cropBox') return;
+  if (stillOpen) setViewTool(tabId, 'select');
+  else forgetViewTool(tabId);
 }
 
 function subscribe(listener: () => void): () => void {

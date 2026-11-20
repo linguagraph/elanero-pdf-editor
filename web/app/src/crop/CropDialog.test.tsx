@@ -6,6 +6,7 @@ import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { RunResult } from '../rpc/generated';
+import type { CropValues } from './cropChoice';
 import { CropDialog } from './CropDialog';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -177,5 +178,150 @@ describe('CropDialog', () => {
     });
     await settle();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the crop box tool from Draw on page', async () => {
+    const { rpc } = fakeRpc(() => Promise.resolve(reply(true)));
+    const onDrawOnPage = vi.fn();
+    act(() => {
+      root.render(
+        <CropDialog
+          isOpen
+          onClose={vi.fn()}
+          rpc={rpc}
+          handle="doc-1"
+          pageCount={2}
+          currentPage={2}
+          signed={false}
+          store={createToastStore()}
+          onDrawOnPage={onDrawOnPage}
+        />,
+      );
+    });
+    await settle();
+    const draw = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === t('crop.draw'),
+    );
+    act(() => {
+      draw?.click();
+    });
+    expect(onDrawOnPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens with the margins of a drawn box on its page, and reports each change', async () => {
+    const { rpc } = fakeRpc(() => Promise.resolve(reply(true)));
+    const onValuesChange = vi.fn();
+    act(() => {
+      root.render(
+        <CropDialog
+          isOpen
+          onClose={vi.fn()}
+          rpc={rpc}
+          handle="doc-1"
+          pageCount={2}
+          currentPage={1}
+          signed={false}
+          store={createToastStore()}
+          drawn={{ page: 2, margins: { left: 72, top: 108, right: 396, bottom: 576 } }}
+          onValuesChange={onValuesChange}
+        />,
+      );
+    });
+    await settle();
+    expect(field('left').value).toBe('72');
+    expect(field('bottom').value).toBe('576');
+    const current = document.querySelector<HTMLInputElement>('input[value="current"]');
+    expect(current?.checked).toBe(true);
+    typeText(field('top'), '110');
+    expect(onValuesChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ top: '110', scope: 'current', unit: 'pt' }),
+    );
+  });
+
+  it('reopens with the values the user had when given them back', async () => {
+    const { rpc } = fakeRpc(() => Promise.resolve(reply(true)));
+    const kept = {
+      left: '9',
+      top: '0',
+      right: '0',
+      bottom: '0',
+      unit: 'pt' as const,
+      scope: 'all' as const,
+      range: '',
+    };
+    act(() => {
+      root.render(
+        <CropDialog
+          isOpen
+          onClose={vi.fn()}
+          rpc={rpc}
+          handle="doc-1"
+          pageCount={2}
+          currentPage={1}
+          signed={false}
+          store={createToastStore()}
+          initialValues={kept}
+        />,
+      );
+    });
+    await settle();
+    expect(field('left').value).toBe('9');
+  });
+});
+
+describe('CropDialog with a drawn box (W4.11 S5)', () => {
+  it('stores the drawn margins, so a Draw on page then Esc reopens with them', async () => {
+    const { rpc } = fakeRpc(() => Promise.resolve(reply(true)));
+    const onValuesChange = vi.fn();
+    const drawn = { page: 1, margins: { left: 5, top: 6, right: 7, bottom: 8 } };
+    act(() => {
+      root.render(
+        <CropDialog
+          isOpen
+          onClose={vi.fn()}
+          rpc={rpc}
+          handle="doc-1"
+          pageCount={2}
+          currentPage={1}
+          signed={false}
+          store={createToastStore()}
+          drawn={drawn}
+          onValuesChange={onValuesChange}
+        />,
+      );
+    });
+    await settle();
+    expect(field('left').value).toBe('5');
+    const stored = onValuesChange.mock.calls.at(-1)?.[0] as CropValues | undefined;
+    expect(stored).toMatchObject({
+      left: '5',
+      top: '6',
+      right: '7',
+      bottom: '8',
+      scope: 'current',
+    });
+
+    // Esc after Draw on page again: the caller reopens with the stored form and no drawn box.
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        <CropDialog
+          isOpen
+          onClose={vi.fn()}
+          rpc={rpc}
+          handle="doc-1"
+          pageCount={2}
+          currentPage={1}
+          signed={false}
+          store={createToastStore()}
+          initialValues={stored}
+          drawn={null}
+        />,
+      );
+    });
+    await settle();
+    expect(field('right').value).toBe('7');
+    expect(field('bottom').value).toBe('8');
   });
 });

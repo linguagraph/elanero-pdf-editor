@@ -2,6 +2,7 @@
 // conversion to points, the page scope, and the checks that run before the engine is called. The
 // engine check stays authoritative (pages of one document can differ in size); this one only saves
 // a round trip and names the page that would be too small.
+import type { PageRect } from '../comments/coordinates';
 import { parsePageRange } from '../print/printRange';
 import { t } from '../i18n/t';
 import type { PageSize } from '../rpc/generated';
@@ -20,6 +21,51 @@ export interface CropValues {
   readonly unit: CropUnit;
   readonly scope: CropScope;
   readonly range: string;
+}
+
+// Margins in points, visible space: the edges of a page the user sees.
+export interface CropMargins {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+// A crop box drawn on a page (W4.11 S5): its margins, and the page it was drawn on (1-based, as the
+// view reports pages).
+export interface DrawnCrop {
+  readonly page: number;
+  readonly margins: CropMargins;
+}
+
+// The margins a box on a page leaves around it. The box is in the page's visible space, so its
+// right and bottom margins are measured from the far edges. Rounded to 0.01 pt, as the form does.
+export function marginsFromBox(
+  rect: PageRect,
+  size: { readonly width: number; readonly height: number },
+): CropMargins {
+  const side = (points: number) => Math.max(0, Math.round(points * 100) / 100);
+  return {
+    left: side(rect.x0),
+    top: side(rect.y0),
+    right: side(size.width - rect.x1),
+    bottom: side(size.height - rect.y1),
+  };
+}
+
+// The form after a drawn box: its margins, in points, on that page only (the scope is Current page,
+// as the box was drawn on one page). The other fields, and the range text, are kept.
+export function withDrawnBox(values: CropValues, drawn: DrawnCrop): CropValues {
+  const { left, top, right, bottom } = drawn.margins;
+  return {
+    ...values,
+    left: String(left),
+    top: String(top),
+    right: String(right),
+    bottom: String(bottom),
+    unit: 'pt',
+    scope: 'current',
+  };
 }
 
 // The arguments of `pages.crop_margins`: 0-based pages, margins in points (visible space).
