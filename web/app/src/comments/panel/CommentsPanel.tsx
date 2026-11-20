@@ -3,7 +3,9 @@
 // thread's status and the text. The filters (search, type, author, status) come from the
 // controller, which keeps a thread whole when a reply matches. Clicking a row, or pressing Enter on
 // it, goes to the comment's page. Each thread takes a reply and a new status (S4, through
-// annotations.reply, with Undo); edit and delete come in S5.
+// annotations.reply, with Undo). A thread's root takes an edit of its text and a delete, which
+// removes its replies too (S5, through annotations.set_text and annotations.delete, with Undo); both
+// are disabled for a locked comment, and Delete or Backspace on the row deletes it.
 import { useId, useState, useSyncExternalStore } from 'react';
 import { formatDate } from '../../i18n/format';
 import type { MessageId } from '../../i18n/en';
@@ -13,7 +15,8 @@ import type { PageRpc } from '../../engine/engineConnection';
 import type { AnnotationType, CommentDto, ReviewState } from '../../rpc/generated';
 import type { RenderScheduler } from '../../view/renderScheduler';
 import type { CommentsController } from './controller';
-import { type EditDeps, replyTo, setStatus, STATUS_CHOICES } from './edits';
+import { deleteThread, type EditDeps, editText, replyTo, setStatus, STATUS_CHOICES } from './edits';
+import { EditBox } from './EditBox';
 import { ReplyBox } from './ReplyBox';
 import './panel.css';
 
@@ -72,15 +75,23 @@ interface EntryProps {
   readonly root: boolean;
   readonly status?: ReviewState;
   readonly onGoTo: (page: number, name: string) => void;
+  // Delete or Backspace on the row deletes the thread; not offered for a locked comment.
+  readonly onDelete?: () => void;
 }
 
-function Entry({ comment, root, status, onGoTo }: EntryProps) {
+function Entry({ comment, root, status, onGoTo, onDelete }: EntryProps) {
   const when = comment.created === null ? null : formatDate(new Date(comment.created));
   return (
     <button
       type="button"
       className={root ? 'comments-entry' : 'comments-entry comments-reply'}
       onClick={() => onGoTo(comment.page, comment.name)}
+      onKeyDown={(event) => {
+        if (onDelete !== undefined && (event.key === 'Delete' || event.key === 'Backspace')) {
+          event.preventDefault();
+          onDelete();
+        }
+      }}
     >
       <span className="comments-meta">
         <span>{t('comments.page', { page: comment.page + 1 })}</span>
@@ -108,6 +119,8 @@ export function CommentsPanel({
   const searchId = useId();
   // The thread whose reply box is open, by its key (page and name); one box at a time.
   const [replying, setReplying] = useState<string | null>(null);
+  // The thread whose text is being edited, by the same key; one editor at a time.
+  const [editing, setEditing] = useState<string | null>(null);
   const { threads, visible, options, filter, loaded, truncated } = state;
   const editDeps: EditDeps = { rpc, handle, scheduler, controller };
 
@@ -201,7 +214,29 @@ export function CommentsPanel({
               const key = `${thread.comment.page}:${thread.comment.name}`;
               return (
                 <li key={key} className="comments-thread">
-                  <Entry comment={thread.comment} root status={thread.status} onGoTo={onGoTo} />
+                  {editing === key ? (
+                    <EditBox
+                      initial={thread.comment.contents}
+                      onSave={(text) =>
+                        void editText(editDeps, thread.comment, text).then((done) => {
+                          if (done) setEditing(null);
+                        })
+                      }
+                      onCancel={() => setEditing(null)}
+                    />
+                  ) : (
+                    <Entry
+                      comment={thread.comment}
+                      root
+                      status={thread.status}
+                      onGoTo={onGoTo}
+                      onDelete={
+                        thread.comment.locked
+                          ? undefined
+                          : () => void deleteThread(editDeps, thread.comment)
+                      }
+                    />
+                  )}
                   <div className="comments-thread-actions">
                     <button type="button" onClick={() => setReplying(key)}>
                       {t('comments.reply.open')}
@@ -221,6 +256,24 @@ export function CommentsPanel({
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="comments-thread-edit">
+                    <button
+                      type="button"
+                      disabled={thread.comment.locked}
+                      title={thread.comment.locked ? t('comments.locked') : undefined}
+                      onClick={() => setEditing(key)}
+                    >
+                      {t('comments.edit.open')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={thread.comment.locked}
+                      title={thread.comment.locked ? t('comments.locked') : undefined}
+                      onClick={() => void deleteThread(editDeps, thread.comment)}
+                    >
+                      {t('comments.delete.open')}
+                    </button>
                   </div>
                   {thread.replies.length === 0 ? null : (
                     <ul aria-label={t('comments.replies')} className="comments-replies">

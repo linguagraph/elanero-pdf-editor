@@ -379,7 +379,11 @@ def delete(session: DocumentSession, args: DeleteAnnotations) -> ActionResult[No
     ensure_idle(session)
     by_page: dict[int, list[str]] = {}
     for ref in args.refs:
-        by_page.setdefault(ref.page, []).append(_current(session, ref).name)
+        cur = _current(session, ref)
+        # A locked comment stays. The desktop's UI skips it too, so both apps share the rule.
+        if cur.locked:
+            continue
+        by_page.setdefault(ref.page, []).append(cur.name)
     # the label is passed to every command, so two comments on one page read "Delete Comments"
     label = "Delete Comments" if sum(map(len, by_page.values())) > 1 else "Delete Comment"
     commands: list[Command] = [

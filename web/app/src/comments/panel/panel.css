@@ -79,6 +79,7 @@
 
 /* The reply and status controls (W7.1b S4). Each button keeps a 44px target, as the rows do. */
 .comments-thread-actions,
+.comments-thread-edit,
 .comments-actions {
   display: flex;
   flex-wrap: wrap;
@@ -89,6 +90,7 @@
 
 .comments-thread-actions button,
 .comments-thread-actions select,
+.comments-thread-edit button,
 .comments-actions button {
   min-height: 44px;
   font: inherit;

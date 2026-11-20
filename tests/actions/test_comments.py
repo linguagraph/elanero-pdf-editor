@@ -754,6 +754,19 @@ def test_delete_two_comments_on_one_page_says_comments(open_copy: Opener) -> Non
     assert_same(state(s), before)
 
 
+def test_delete_skips_a_locked_comment_and_refuses_when_none_is_left(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    comments.restyle(s, restyle_args((ref("fitz-A0"),), "locked", True, "Lock Comment"))
+    before = state(s)
+    assert not comments.delete(s, DeleteAnnotations((ref("fitz-A0"),))).executed
+    assert_same(state(s), before)
+    # the unlocked comment in the same call is still deleted
+    mixed = comments.delete(s, DeleteAnnotations((ref("fitz-A0"), ref("fitz-A3"))))
+    assert mixed.executed and mixed.label == "Delete Comment"
+    names = {row[0] for row in state(s)}
+    assert "fitz-A0" in names and "fitz-A3" not in names
+
+
 def test_delete_nothing_is_not_executed(open_copy: Opener) -> None:
     s = open_copy("annotations")
     result = comments.delete(s, DeleteAnnotations(()))

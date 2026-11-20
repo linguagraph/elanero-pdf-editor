@@ -74,6 +74,10 @@ the **Comment** tab (**Ctrl+Shift+C**).
   preferences.
 - **Set status** marks the thread as Accepted, Rejected, Cancelled or Completed, for review
   workflows. Each reply and status change can be undone with the **Undo** button on its notice.
+- **Edit** changes the text of a comment in place. Save the text, or press Escape to keep the old
+  text. **Delete** removes the comment and its replies; press Delete or Backspace on a selected
+  thread to do the same. Both can be undone. A locked comment cannot be edited or deleted until it
+  is unlocked. Edit and Delete work on the thread's comment, not on its replies.
 - Filter the list by type, author or status, or search it.
 - Export comments as XFDF (for another PDF editor), as a CSV summary, or as a summary PDF. Import
   XFDF to bring in comments from another review.

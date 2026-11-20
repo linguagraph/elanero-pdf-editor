@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../../engine/engineConnection';
 import { t } from '../../i18n/t';
+import { RpcError } from '../../rpc/client';
 import type { CommentDto, CommentListResult, CommentThreadDto } from '../../rpc/generated';
 import { CommentsPanel } from './CommentsPanel';
 import { CommentsController } from './controller';
@@ -347,4 +348,138 @@ describe('CommentsPanel', () => {
     );
     expect(statusMenu(1).value).toBe('');
   });
+
+  it('edits the text of a thread root, and offers Undo for the change', async () => {
+    const setupResult = setup();
+    await mount(setupResult, setupResult.onGoTo);
+
+    act(() => editButton(0).click());
+    expect(replyText()?.value).toBe('Check the total');
+    change(replyText() as HTMLTextAreaElement, 'Revised total');
+    await act(async () => postButton().click());
+    await settle();
+
+    expect(setupResult.rpc.call).toHaveBeenCalledWith('actions.run', {
+      handle: 'doc-1',
+      name: 'annotations.set_text',
+      args: { ref: { page: 0, name: 'a0' }, text: 'Revised total' },
+    });
+    expect(offerUndo).toHaveBeenCalledWith(
+      'info',
+      t('comments.edit.done'),
+      expect.objectContaining({ handle: 'doc-1', history: 7 }),
+    );
+    expect(replyText()).toBeNull();
+  });
+
+  it('closes the editor on Escape without sending', async () => {
+    const setupResult = setup();
+    await mount(setupResult, setupResult.onGoTo);
+
+    act(() => editButton(1).click());
+    act(() => {
+      replyText()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(replyText()).toBeNull();
+    expect(setupResult.rpc.call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+  });
+
+  it('deletes a thread from its Delete button, and offers Undo', async () => {
+    const setupResult = setup();
+    await mount(setupResult, setupResult.onGoTo);
+
+    await act(async () => deleteButton(1).click());
+    await settle();
+
+    expect(setupResult.rpc.call).toHaveBeenCalledWith('actions.run', {
+      handle: 'doc-1',
+      name: 'annotations.delete',
+      args: { refs: [{ page: 2, name: 'c2' }] },
+    });
+    expect(offerUndo).toHaveBeenCalledWith(
+      'info',
+      t('comments.delete.done'),
+      expect.objectContaining({ handle: 'doc-1', history: 7 }),
+    );
+  });
+
+  it('deletes the focused thread on the Delete and Backspace keys', async () => {
+    const setupResult = setup();
+    await mount(setupResult, setupResult.onGoTo);
+
+    await act(async () => {
+      rows()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    });
+    await settle();
+    await act(async () => {
+      rows()[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+    });
+    await settle();
+
+    expect(setupResult.rpc.call).toHaveBeenCalledWith('actions.run', {
+      handle: 'doc-1',
+      name: 'annotations.delete',
+      args: { refs: [{ page: 0, name: 'a0' }] },
+    });
+    expect(setupResult.rpc.call).toHaveBeenCalledWith('actions.run', {
+      handle: 'doc-1',
+      name: 'annotations.delete',
+      args: { refs: [{ page: 2, name: 'c2' }] },
+    });
+  });
+
+  it('disables Edit and Delete for a locked comment, and the Delete key does nothing', async () => {
+    const locked: CommentThreadDto[] = [
+      {
+        comment: comment(0, 'a0', 'Ana', 'Locked note', { locked: true }),
+        replies: [],
+        status: 'None',
+      },
+    ];
+    const setupResult = setup(locked);
+    await mount(setupResult, setupResult.onGoTo);
+
+    expect(editButton(0).disabled).toBe(true);
+    expect(deleteButton(0).disabled).toBe(true);
+    await act(async () => {
+      rows()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    });
+    await settle();
+
+    expect(setupResult.rpc.call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+    expect(offerUndo).not.toHaveBeenCalled();
+  });
+
+  it('reads the list again and keeps the editor open when the comment is stale', async () => {
+    const setupResult = setup();
+    await mount(setupResult, setupResult.onGoTo);
+    const listCalls = () =>
+      setupResult.rpc.call.mock.calls.filter(([method]) => method === 'comments.list').length;
+    const before = listCalls();
+    setupResult.rpc.call.mockImplementation(async (method: string) => {
+      if (method === 'actions.run') throw new RpcError('STALE_OBJECT', 'gone');
+      return { threads: THREADS, truncated: false };
+    });
+
+    act(() => editButton(0).click());
+    change(replyText() as HTMLTextAreaElement, 'Too late');
+    await act(async () => postButton().click());
+    await settle();
+
+    expect(offerUndo).not.toHaveBeenCalled();
+    expect(listCalls()).toBeGreaterThan(before);
+    expect(replyText()?.value).toBe('Too late');
+  });
 });
+
+function editButton(index: number): HTMLButtonElement {
+  return threadEditButtons()[index * 2] as HTMLButtonElement;
+}
+
+function deleteButton(index: number): HTMLButtonElement {
+  return threadEditButtons()[index * 2 + 1] as HTMLButtonElement;
+}
+
+function threadEditButtons(): HTMLButtonElement[] {
+  return [...container.querySelectorAll<HTMLButtonElement>('.comments-thread-edit button')];
+}
