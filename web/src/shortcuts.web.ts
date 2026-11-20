@@ -5,11 +5,17 @@
 // shared keys of that command entirely; a command that is not listed keeps the shared keys.
 //
 // Every id must be a command in the registry (web/app/src/commands/catalog.ts), and a test checks
-// it. Go to Page, Next and Previous Document, New Window and Exit are not in the registry yet, so
-// their overrides (Alt+G, Alt+PgDn, dropped) wait until those commands exist.
+// it. New Window and Exit are not overrides: they are dropped commands (DROPPED_IDS in catalog.ts),
+// so they have no key on the web at all.
 export const WEB_SHORTCUT_OVERRIDES: Readonly<
   Record<string, readonly string[]>
 > = {
+  // Desktop Ctrl+Shift+N: the browser opens a new private window first. Alt+G is the page field.
+  "go-to-page": ["Alt+G"],
+  // Desktop Ctrl+Tab: the browser switches its own tabs first. Alt+PgDn is the next document.
+  "next-document": ["Alt+PgDn"],
+  // Desktop Ctrl+Shift+Tab: the browser switches its own tabs first. Alt+PgUp is the previous one.
+  "previous-document": ["Alt+PgUp"],
   // Desktop Ctrl+W and Ctrl+F4: the browser closes its own tab first.
   close: ["Alt+W"],
   // Desktop Ctrl+Shift+T: the browser reopens its last closed tab first.

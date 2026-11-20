@@ -384,6 +384,33 @@ describe('keyboard shortcuts', () => {
     expect(handlers.close).toHaveBeenCalledTimes(1);
   });
 
+  it('runs Go to Page once from Alt+G, and not from a text field', () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    key(document.body, { key: 'g', code: 'KeyG', altKey: true });
+    expect(handlers['go-to-page']).toHaveBeenCalledTimes(1);
+    key(document.querySelector('#field') as HTMLElement, { key: 'g', code: 'KeyG', altKey: true });
+    expect(handlers['go-to-page']).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs Next and Previous Document from Alt+PgDn and Alt+PgUp, and not in a text field', () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    key(document.body, { key: 'PageDown', altKey: true });
+    expect(handlers['next-document']).toHaveBeenCalledTimes(1);
+    key(document.body, { key: 'PageUp', altKey: true });
+    expect(handlers['previous-document']).toHaveBeenCalledTimes(1);
+    key(document.querySelector('#field') as HTMLElement, { key: 'PageDown', altKey: true });
+    expect(handlers['next-document']).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run Next Document with no document open', () => {
+    const handlers = spies();
+    render(NO_DOCUMENT_STATE, handlers);
+    key(document.body, { key: 'PageDown', altKey: true });
+    expect(handlers['next-document']).not.toHaveBeenCalled();
+  });
+
   it('opens the palette from a text field too, and not while it is open', () => {
     render(OPEN_STATE, spies());
     key(document.querySelector('#field') as HTMLElement, CTRL_SHIFT_P);
