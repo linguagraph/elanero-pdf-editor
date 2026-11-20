@@ -12,7 +12,8 @@ export interface ObjectsRpc {
   ): Promise<Methods[M]['result']>;
 }
 
-// A page's list is kept for the 300 most recent asks, as the text layer cache does.
+// A page's list is kept for the 300 most recently used asks: a hit counts as a use, and the least
+// recently used list is evicted first.
 export const MAX_OBJECT_LISTS = 300;
 
 interface Entry {
@@ -35,7 +36,22 @@ export class ObjectCache {
   get(page: number, revision: number): Promise<ContentObjectsResult> {
     const key = `${page}:${revision}`;
     const known = this.entries.get(key);
-    if (known !== undefined) return known.request;
+    if (known !== undefined) {
+      // A hit becomes the most recent entry, so eviction drops the least recently used list.
+      this.entries.delete(key);
+      this.entries.set(key, known);
+      return known.request;
+    }
+
+    // A list for a revision older than one already cached is answered but not kept: the newer
+    // list is the one the page needs.
+    let newerCached = false;
+    for (const other of this.entries.values()) {
+      if (other.page === page && other.revision > revision) newerCached = true;
+    }
+    if (newerCached) {
+      return this.rpc.call('content.objects', { handle: this.handle, page });
+    }
 
     // A newer revision of this page makes every older list of the page stale.
     for (const [otherKey, other] of this.entries) {
@@ -47,7 +63,11 @@ export class ObjectCache {
       .then((reply) => {
         // Only the entry still cached under this key may store its reply: an entry evicted or
         // replaced while pending must not reappear in the synchronous reads.
-        if (this.entries.get(key) === entry) entry.arrived = reply;
+        if (this.entries.get(key) !== entry) return reply;
+        // The engine may answer at a newer revision than the one asked for. Its keys belong to
+        // that revision, so they are not stored under the requested key; the next ask fetches again.
+        if (reply.revision === revision) entry.arrived = reply;
+        else this.entries.delete(key);
         return reply;
       })
       .catch((error: unknown) => {
