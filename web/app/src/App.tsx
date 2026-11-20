@@ -687,7 +687,7 @@ export function App({
           rpc={session.rpc}
           handle={session.handle}
           pageCount={activeTab.pages}
-          currentPage={crop.drawn?.page ?? viewState.page}
+          currentPage={crop.scopePage ?? viewState.page}
           signed={activeTab.signed}
           onChanged={onCropped}
           initialValues={crop.values}

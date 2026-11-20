@@ -96,6 +96,44 @@ describe('useCropSession', () => {
     expect(toolOfTab1).toBe('select');
   });
 
+  it('choosing Hand after Draw on page clears the form, so Crop opens with the defaults', () => {
+    act(() => session.openDialog());
+    act(() => session.setValues(RANGE_VALUES));
+    act(() => session.drawOnPage());
+    act(() => setViewTool(1, 'hand'));
+    expect(toolOfTab1).toBe('hand');
+    act(() => session.openDialog());
+    expect(session.open).toBe(true);
+    expect(session.values).toBeUndefined();
+    expect(session.scopePage).toBeNull();
+  });
+
+  it('a comment or mark tool chosen after Draw on page clears the form too', () => {
+    act(() => session.openDialog());
+    act(() => session.setValues(RANGE_VALUES));
+    act(() => session.drawOnPage());
+    act(() => setViewTool(1, 'select'));
+    expect(session.values).toBeUndefined();
+    expect(session.drawn).toBeNull();
+  });
+
+  it('Esc inside the crop box mode keeps the form and the page of the drawn box', () => {
+    act(() => session.drawOnPage());
+    act(() => session.boxEnded(DRAWN));
+    act(() => session.drawOnPage());
+    act(() => session.boxEnded(null));
+    expect(session.open).toBe(true);
+    expect(session.scopePage).toBe(DRAWN.page);
+    expect(toolOfTab1).toBe('select');
+  });
+
+  it('the scope page is the page of the box drawn, and a close clears it', () => {
+    act(() => session.boxEnded(DRAWN));
+    expect(session.scopePage).toBe(2);
+    act(() => session.close());
+    expect(session.scopePage).toBeNull();
+  });
+
   it('keeps a drawn box until the dialog is closed', () => {
     act(() => session.boxEnded(DRAWN));
     expect(session.drawn).toEqual(DRAWN);
