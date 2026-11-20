@@ -169,7 +169,7 @@ note = "To confirm: whether the wasm build includes Tesseract and Leptonica at a
 
 [[component]]
 name = "Vite (preload helper injected into the build)"
-version = "8.3.5"
+version = "8.3.8"
 lock = "vite"
 license = "MIT"
 url = "https://vite.dev"
