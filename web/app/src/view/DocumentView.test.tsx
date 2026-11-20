@@ -130,7 +130,7 @@ describe('DocumentView with a fake engine', () => {
       page: 0,
       revision: 0,
       rotation: 0,
-      annotations: false,
+      annotations: true,
     });
     expect(first?.params.scale_milli).toBeGreaterThan(0);
     await act(async () => {
