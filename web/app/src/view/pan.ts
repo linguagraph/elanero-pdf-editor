@@ -1,6 +1,6 @@
 // The arithmetic of the Hand tool (W4.10), kept pure so it can be tested without a browser.
-// Scroll space here is CSS pixels. A later change to a scaled scroll space (W1.4 section 7, above
-// 8 million CSS px) must divide the pointer delta by the scroll factor; nothing does that yet.
+// Scroll space here is CSS pixels. Above the scaled-space limit (scrollSpace.ts) one pixel of drag
+// moves the scene by one pixel, which is `ratio` scroll pixels, so the caller passes that ratio.
 
 export interface PanStart {
   readonly scrollLeft: number;
@@ -23,9 +23,10 @@ export function panTo(
   x: number,
   y: number,
   limits: ScrollLimits,
+  ratio = 1,
 ): { left: number; top: number } {
   const left = start.scrollLeft - (x - start.x);
-  const top = start.scrollTop - (y - start.y);
+  const top = start.scrollTop - (y - start.y) * ratio;
   return {
     left: clamp(left, 0, Math.max(0, limits.maxLeft)),
     top: clamp(top, 0, Math.max(0, limits.maxTop)),

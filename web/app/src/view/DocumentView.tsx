@@ -75,6 +75,13 @@ import { CanvasPill } from './CanvasPill';
 import { DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
 import type { ZoomRequest } from './zoomBox';
 import { anchoredScroll, isZoomWheel, takeWheelSteps, wheelDeltaPixels } from './wheel';
+import {
+  isScaledSpace,
+  sceneTopForScroll,
+  scrollPerScenePixel,
+  scrollTopForSceneTop,
+  spacerHeight,
+} from './scrollSpace';
 import './documentView.css';
 
 export { MAX_RENDER_ATTEMPTS } from './renderScheduler';
@@ -162,13 +169,27 @@ function noJobWorker(): ActionJobWorker {
   throw new Error('the job worker is not available');
 }
 
-// The viewport size, or the window's when the element has no layout yet (jsdom, first paint).
-function viewportOf(element: HTMLElement | null): { top: number; height: number; width: number } {
+// The viewport size, or the window's when the element has no layout yet (jsdom, first paint). The
+// top is a scene position (scrollSpace.ts), so it is the layout's coordinate whatever the scroll space.
+function viewportOf(
+  element: HTMLElement | null,
+  contentHeight: number,
+): { top: number; height: number; width: number } {
+  const height = element?.clientHeight || window.innerHeight;
   return {
-    top: element?.scrollTop ?? 0,
-    height: element?.clientHeight || window.innerHeight,
+    top: sceneTopForScroll(element?.scrollTop ?? 0, contentHeight, height),
+    height,
     width: element?.clientWidth || window.innerWidth,
   };
+}
+
+// Sets an element's scroll position from a scene position (the inverse of viewportOf's top).
+function scrollToScene(element: HTMLElement, sceneTop: number, contentHeight: number): void {
+  element.scrollTop = scrollTopForSceneTop(
+    sceneTop,
+    contentHeight,
+    element.clientHeight || window.innerHeight,
+  );
 }
 
 // The fit mode a saved default zoom asks for; Actual size is no fit (the zoom is 100 %).
@@ -239,6 +260,10 @@ export function DocumentView({
   const readingPlace = useRef<ViewAnchor | null>(null);
   // The boxes of the layout on screen, as last committed; a measure reads them, not a stale closure.
   const boxesOnScreen = useRef<readonly PageBox[]>([]);
+  // The full height of the layout on screen (the scene). Above the scroll-space limit the scroll
+  // position maps onto it (scrollSpace.ts); the reads and writes of scrollTop go through that map.
+  const contentHeight = useRef(0);
+  // The pointer drag ratio of the Hand tool needs the layout, so the hook is called after it.
   // The page holding keyboard focus, kept mounted whatever the scroll position (W5.1a risks).
   const [focusedPage, setFocusedPage] = useState<number | null>(null);
   const [scroll, setScroll] = useState({ top: 0, height: 0, width: 0 });
@@ -280,7 +305,6 @@ export function DocumentView({
   useEffect(() => {
     onCommentToolChange?.(commentTool);
   }, [commentTool, onCommentToolChange]);
-  const pan = useHandPan(tool === 'hand');
   // The Hand and crop box tools and the comment or mark tools are not on together: choosing one of
   // the view tools turns them off (the last tool chosen wins, as the desktop has one tool per
   // document). The comment tool is reset while rendering, when the tool prop changes, so no effect
@@ -395,7 +419,10 @@ export function DocumentView({
   const capturePlace = useCallback(() => {
     const element = scrollRef.current;
     if (element === null) return;
-    readingPlace.current = viewAnchor(boxesOnScreen.current, element.scrollTop);
+    readingPlace.current = viewAnchor(
+      boxesOnScreen.current,
+      viewportOf(element, contentHeight.current).top,
+    );
   }, []);
 
   // Changes the page layout and keeps the place: the saved default, the toolbar and the handle all
@@ -426,6 +453,12 @@ export function DocumentView({
           : computeColumn(sizes ?? [], zoom),
     [sizes, zoom, viewLayout, firstAlone, singlePage],
   );
+  // The Hand tool's drag moves the scene one pixel per pixel dragged, so it scrolls by this ratio
+  // above the scaled-space limit (W5.1a S4).
+  const pan = useHandPan(
+    tool === 'hand',
+    scrollPerScenePixel(layout.height, scroll.height || window.innerHeight),
+  );
 
   // Reads the scroll position and the viewport size into state: on scroll, on resize (the window's,
   // and the element's own, which moves when the layout around it does) and once the pages are known.
@@ -434,7 +467,7 @@ export function DocumentView({
   const measure = useCallback(() => {
     // Read before the new size is set: the refit that follows must start from this place.
     capturePlace();
-    const next = viewportOf(scrollRef.current);
+    const next = viewportOf(scrollRef.current, contentHeight.current);
     setScroll((prev) => ({
       top: next.top,
       height: Math.abs(next.height - prev.height) >= 1 ? next.height : prev.height,
@@ -496,10 +529,11 @@ export function DocumentView({
           width: element.clientWidth || window.innerWidth,
         },
       );
-      element.scrollTop = target.top;
+      // The target is a scene position: the scroll position comes from the scaled space's map.
+      scrollToScene(element, target.top, layout.height);
       element.scrollLeft = target.left;
       capturePlace();
-      setScroll(viewportOf(element));
+      setScroll(viewportOf(element, layout.height));
     },
     [layout, zoom, capturePlace],
   );
@@ -516,17 +550,17 @@ export function DocumentView({
         if (element === null || top === null) return;
         readingPlace.current = viewAnchor(scene.boxes, top);
         setSinglePage(index);
-        element.scrollTop = top;
-        setScroll(viewportOf(element));
+        scrollToScene(element, top, scene.height);
+        setScroll(viewportOf(element, scene.height));
         return;
       }
       // Spreads aim at the page's own top like the continuous column (the desktop's go_to_page rule),
       // so one function serves both layouts here.
       const top = scrollTopForPage(layout.boxes, index, zoom);
       if (element === null || top === null) return;
-      element.scrollTop = top;
+      scrollToScene(element, top, layout.height);
       capturePlace();
-      setScroll(viewportOf(element));
+      setScroll(viewportOf(element, layout.height));
     },
     [layout, sizes, zoom, viewLayout, capturePlace],
   );
@@ -551,9 +585,10 @@ export function DocumentView({
       const to = stepZoom(from, step.direction);
       if (to === from) return;
       const rect = element.getBoundingClientRect();
+      // The anchor is kept in scene coordinates: the layout after the zoom maps it back to a scroll position.
       pendingAnchor.current = anchoredScroll({
         scrollLeft: element.scrollLeft,
-        scrollTop: element.scrollTop,
+        scrollTop: viewportOf(element, contentHeight.current).top,
         pointerX: event.clientX - rect.left,
         pointerY: event.clientY - rect.top,
         fromZoom: from,
@@ -572,26 +607,31 @@ export function DocumentView({
   // any other change restores the place the reader had (W5.1a S2).
   useLayoutEffect(() => {
     boxesOnScreen.current = layout.boxes;
+    contentHeight.current = layout.height;
     const element = scrollRef.current;
     if (element === null) return;
     const anchor = pendingAnchor.current;
     if (anchor !== null) {
       pendingAnchor.current = null;
       element.scrollLeft = anchor.left;
-      element.scrollTop = anchor.top;
-      setScroll(viewportOf(element));
+      scrollToScene(element, anchor.top, layout.height);
+      setScroll(viewportOf(element, layout.height));
       return;
     }
     const top =
       readingPlace.current === null ? null : scrollTopForAnchor(layout.boxes, readingPlace.current);
     if (top === null) return;
-    element.scrollTop = top;
-    setScroll(viewportOf(element));
+    scrollToScene(element, top, layout.height);
+    setScroll(viewportOf(element, layout.height));
   }, [layout]);
 
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
+  // Above the scroll-space limit the stage is scrolled by the scene top, so a page's offset in the
+  // stage is its scene top less that; below the limit the stage is the layout and offsets are none.
+  const scaled = isScaledSpace(layout.height);
+  const pageOffset = scaled ? scroll.top : 0;
   // The pages mounted: the window, plus the focused page when it lies outside it, so the page keeps
   // the keyboard focus (and a comment draft or a text span in it) as the reader scrolls on.
   const focusedBox =
@@ -810,121 +850,139 @@ export function DocumentView({
           onPointerCancel={pan.onPointerCancel}
           onLostPointerCapture={pan.onLostPointerCapture}
         >
-          <div className="doc-view-content" style={{ width: layout.width, height: layout.height }}>
-            {mounted.map((box) => {
-              // A page above 4 MP is drawn as the tiles of its visible part; a smaller one as one image.
-              const size = sizes[box.index];
-              const tiled =
-                size === undefined
-                  ? null
-                  : tilesInViewport(box, size, scale, scroll.top, scroll.height);
-              const keys =
-                tiled === null
-                  ? [scheduler.cacheKeyOf('page', box.index, scale)]
-                  : tiled.cells.map((cell) => scheduler.cacheKeyOf('page', box.index, scale, cell));
-              return (
-                <div
-                  key={box.index}
-                  data-page={box.index}
-                  className="doc-page"
-                  role="group"
-                  aria-label={t('view.pageNumber', { page: box.index + 1, total })}
-                  style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
-                >
-                  <div className="doc-page-placeholder" />
-                  {tiled === null ? (
-                    <CachedCanvas
-                      cache={scheduler.cache}
-                      cacheKey={keys[0] ?? ''}
-                      version={tick}
-                      className="doc-page-canvas"
-                    />
-                  ) : (
-                    tiled.cells.map((cell, index) => {
-                      const rect = tileRect(tiled.device, cell);
-                      const percent = (value: number, of: number) => `${(value / of) * 100}%`;
-                      return (
-                        <CachedCanvas
-                          key={`${cell.tileX}:${cell.tileY}`}
-                          cache={scheduler.cache}
-                          cacheKey={keys[index] ?? ''}
-                          version={tick}
-                          className="doc-page-canvas"
-                          style={{
-                            left: percent(rect.x, tiled.device.width),
-                            top: percent(rect.y, tiled.device.height),
-                            width: percent(rect.width, tiled.device.width),
-                            height: percent(rect.height, tiled.device.height),
-                          }}
-                        />
+          <div
+            className="doc-view-content"
+            style={{ width: layout.width, height: spacerHeight(layout.height) }}
+          >
+            {/* The stage holds the pages. Above the limit it sticks to the top of the scroller at the
+                viewport's height, and the pages sit at their scene position less the scene top, so the
+                pages stay in place while the spacer is shorter than the layout (W5.1a S4). */}
+            <div
+              className={scaled ? 'doc-view-stage doc-view-stage--scaled' : 'doc-view-stage'}
+              style={{ height: scaled ? scroll.height : layout.height }}
+            >
+              {mounted.map((box) => {
+                // A page above 4 MP is drawn as the tiles of its visible part; a smaller one as one image.
+                const size = sizes[box.index];
+                const tiled =
+                  size === undefined
+                    ? null
+                    : tilesInViewport(box, size, scale, scroll.top, scroll.height);
+                const keys =
+                  tiled === null
+                    ? [scheduler.cacheKeyOf('page', box.index, scale)]
+                    : tiled.cells.map((cell) =>
+                        scheduler.cacheKeyOf('page', box.index, scale, cell),
                       );
-                    })
-                  )}
-                  <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
-                  {commentTool !== null && sizes !== null ? (
-                    <CommentLayer
-                      tool={commentTool}
+                return (
+                  <div
+                    key={box.index}
+                    data-page={box.index}
+                    className="doc-page"
+                    role="group"
+                    aria-label={t('view.pageNumber', { page: box.index + 1, total })}
+                    style={{
+                      top: box.top - pageOffset,
+                      left: box.left,
+                      width: box.width,
+                      height: box.height,
+                    }}
+                  >
+                    <div className="doc-page-placeholder" />
+                    {tiled === null ? (
+                      <CachedCanvas
+                        cache={scheduler.cache}
+                        cacheKey={keys[0] ?? ''}
+                        version={tick}
+                        className="doc-page-canvas"
+                      />
+                    ) : (
+                      tiled.cells.map((cell, index) => {
+                        const rect = tileRect(tiled.device, cell);
+                        const percent = (value: number, of: number) => `${(value / of) * 100}%`;
+                        return (
+                          <CachedCanvas
+                            key={`${cell.tileX}:${cell.tileY}`}
+                            cache={scheduler.cache}
+                            cacheKey={keys[index] ?? ''}
+                            version={tick}
+                            className="doc-page-canvas"
+                            style={{
+                              left: percent(rect.x, tiled.device.width),
+                              top: percent(rect.y, tiled.device.height),
+                              width: percent(rect.width, tiled.device.width),
+                              height: percent(rect.height, tiled.device.height),
+                            }}
+                          />
+                        );
+                      })
+                    )}
+                    <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
+                    {commentTool !== null && sizes !== null ? (
+                      <CommentLayer
+                        tool={commentTool}
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        onPlace={(rect, text) => place(box.index, rect, text)}
+                      />
+                    ) : null}
+                    <SelectedMarkOutlines
+                      rects={selectedRectsOn(redactionTools.state, box.index)}
                       zoom={zoom}
-                      widthPt={sizes[box.index]?.width ?? 0}
-                      heightPt={sizes[box.index]?.height ?? 0}
-                      onPlace={(rect, text) => place(box.index, rect, text)}
                     />
-                  ) : null}
-                  <SelectedMarkOutlines
-                    rects={selectedRectsOn(redactionTools.state, box.index)}
-                    zoom={zoom}
-                  />
-                  {tool === 'edit' && sizes !== null ? (
-                    <EditLayer
-                      cache={editObjects}
+                    {tool === 'edit' && sizes !== null ? (
+                      <EditLayer
+                        cache={editObjects}
+                        page={box.index}
+                        revision={scheduler.revisionOf(box.index)}
+                        zoom={zoom}
+                        selection={editSelection}
+                        onSelect={setEditSelection}
+                        onCommit={commitChange}
+                      />
+                    ) : null}
+                    {tool === 'cropBox' && sizes !== null ? (
+                      <CropLayer
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        onDraw={(rect) => {
+                          const size = sizes[box.index];
+                          if (size !== undefined)
+                            onCropBoxEnd?.({
+                              page: box.index + 1,
+                              margins: marginsFromBox(rect, size),
+                            });
+                        }}
+                      />
+                    ) : null}
+                    {redactionTools.state.active && sizes !== null ? (
+                      <RedactLayer
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        onPlace={(rect) => void redactionTools.controller.add(box.index, rect)}
+                      />
+                    ) : null}
+                    <PageTextLayer
+                      cache={textLayers}
                       page={box.index}
                       revision={scheduler.revisionOf(box.index)}
                       zoom={zoom}
-                      selection={editSelection}
-                      onSelect={setEditSelection}
-                      onCommit={commitChange}
+                      passive={textLayerPassive({
+                        commentTool,
+                        viewTool: tool,
+                        markToolOn: redactionTools.state.active,
+                      })}
                     />
-                  ) : null}
-                  {tool === 'cropBox' && sizes !== null ? (
-                    <CropLayer
-                      zoom={zoom}
-                      widthPt={sizes[box.index]?.width ?? 0}
-                      heightPt={sizes[box.index]?.height ?? 0}
-                      onDraw={(rect) => {
-                        const size = sizes[box.index];
-                        if (size !== undefined)
-                          onCropBoxEnd?.({
-                            page: box.index + 1,
-                            margins: marginsFromBox(rect, size),
-                          });
-                      }}
-                    />
-                  ) : null}
-                  {redactionTools.state.active && sizes !== null ? (
-                    <RedactLayer
-                      zoom={zoom}
-                      widthPt={sizes[box.index]?.width ?? 0}
-                      heightPt={sizes[box.index]?.height ?? 0}
-                      onPlace={(rect) => void redactionTools.controller.add(box.index, rect)}
-                    />
-                  ) : null}
-                  <PageTextLayer
-                    cache={textLayers}
-                    page={box.index}
-                    revision={scheduler.revisionOf(box.index)}
-                    zoom={zoom}
-                    passive={textLayerPassive({
-                      commentTool,
-                      viewTool: tool,
-                      markToolOn: redactionTools.state.active,
-                    })}
-                  />
-                  {keys.some((key) => scheduler.isFailed(key)) ? (
-                    <span className="doc-page-error">{t('view.renderFailed')}</span>
-                  ) : null}
-                </div>
-              );
-            })}
+                    {keys.some((key) => scheduler.isFailed(key)) ? (
+                      <span className="doc-page-error">{t('view.renderFailed')}</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

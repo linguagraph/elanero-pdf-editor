@@ -19,7 +19,8 @@ export interface HandPan {
   readonly onLostPointerCapture: (event: PointerEvent<HTMLElement>) => void;
 }
 
-export function useHandPan(enabled: boolean): HandPan {
+// `ratio` is the scroll pixels per drag pixel (1, unless the view uses the scaled scroll space).
+export function useHandPan(enabled: boolean, ratio = 1): HandPan {
   const drag = useRef<Drag | null>(null);
   const [panning, setPanning] = useState(false);
 
@@ -61,10 +62,16 @@ export function useHandPan(enabled: boolean): HandPan {
       const current = drag.current;
       if (current === null || current.pointerId !== event.pointerId) return;
       const element = event.currentTarget;
-      const next = panTo(current.start, event.clientX, event.clientY, {
-        maxLeft: element.scrollWidth - element.clientWidth,
-        maxTop: element.scrollHeight - element.clientHeight,
-      });
+      const next = panTo(
+        current.start,
+        event.clientX,
+        event.clientY,
+        {
+          maxLeft: element.scrollWidth - element.clientWidth,
+          maxTop: element.scrollHeight - element.clientHeight,
+        },
+        ratio,
+      );
       element.scrollLeft = next.left;
       element.scrollTop = next.top;
     },
