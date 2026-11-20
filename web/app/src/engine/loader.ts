@@ -39,6 +39,8 @@ export interface CallResult {
   // order its $bin markers name them (W1.2 section 5).
   buffer?: ArrayBuffer;
   buffers?: ArrayBuffer[];
+  // The page's ImageBitmap, when the worker made one (W5.1b S5); see ReplyMessage.bitmap.
+  bitmap?: ImageBitmap;
 }
 
 // A notice the worker sends while a call runs, such as a job's progress (W1.2 section 8). Only the

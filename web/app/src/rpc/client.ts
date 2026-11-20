@@ -14,6 +14,7 @@ import {
   type ErrorCode,
   type MethodName,
   type Methods,
+  type PageImage,
   type RpcEvent,
 } from './generated';
 import { decodeEvents } from './events';
@@ -28,6 +29,14 @@ import {
   newDecodeContext,
   ReplyShapeError,
 } from './shape';
+
+// The render calls answer with a page image (W5.1b S5). When the worker could make an ImageBitmap,
+// the reply's pixels are empty, its format is 'bitmap', and bitmap holds the page drawn.
+export type RenderMethod = 'render.page' | 'render.tile';
+export type RenderReply = PageImage & { bitmap?: ImageBitmap };
+export type CallValue<M extends MethodName> = M extends RenderMethod
+  ? RenderReply
+  : Methods[M]['result'];
 
 // The codes a client can report. Every ErrorCode comes from a reply; TIMEOUT is set by the client
 // itself and never sent by the worker, so it is not in the generated union.
@@ -140,16 +149,19 @@ function encodeValue(value: unknown, buffers: ArrayBuffer[], path: string): unkn
 
 // What a reply says: the change events it carries, and the typed result or the error that ends the
 // call. The events are published whatever the outcome (W1.2 sections 2 and 7).
+type Outcome<M extends MethodName> =
+  { ok: true; value: CallValue<M> } | { ok: false; error: RpcError };
+
 interface Reading<M extends MethodName> {
   events: RpcEvent[];
-  outcome: { ok: true; value: Methods[M]['result'] } | { ok: false; error: RpcError };
+  outcome: Outcome<M>;
 }
 
 function decodeSuccess<M extends MethodName>(
   method: M,
   reply: Record<string, unknown>,
   buffers: ArrayBuffer[],
-): Methods[M]['result'] {
+): CallValue<M> {
   const ctx = newDecodeContext(buffers);
   const value = RESULT_DECODERS[method](field(reply, 'result', 'reply'), ctx, 'result');
   for (let index = 0; index < buffers.length; index++) {
@@ -157,7 +169,39 @@ function decodeSuccess<M extends MethodName>(
       throw new ReplyShapeError(`buffers[${index}]`, 'buffer not referenced by the reply');
     }
   }
-  return value;
+  return value as CallValue<M>;
+}
+
+// Attaches the bitmap a worker sent with the reply, or releases it when the reply cannot use it. A
+// bitmap is valid only with a render reply that says so, and a bitmap reply needs its bitmap.
+function adoptBitmap<M extends MethodName>(
+  method: M,
+  outcome: Outcome<M>,
+  bitmap: ImageBitmap | undefined,
+): Outcome<M> {
+  const isRender = (RENDER_METHODS as readonly string[]).includes(method);
+  const format = outcome.ok ? (outcome.value as { format?: unknown }).format : undefined;
+  if (bitmap === undefined) {
+    if (outcome.ok && isRender && format === 'bitmap') {
+      return {
+        ok: false,
+        error: new RpcError('INTERNAL', `invalid reply to ${method}: no bitmap came with it`),
+      };
+    }
+    return outcome;
+  }
+  if (outcome.ok && isRender && format === 'bitmap') {
+    return { ok: true, value: { ...(outcome.value as PageImage), bitmap } as CallValue<M> };
+  }
+  bitmap.close();
+  if (!outcome.ok) return outcome;
+  return {
+    ok: false,
+    error: new RpcError(
+      'INTERNAL',
+      `invalid reply to ${method}: a bitmap came with a non-bitmap reply`,
+    ),
+  };
 }
 
 function decodeFailure(reply: Record<string, unknown>, buffers: ArrayBuffer[]): RpcError {
@@ -236,6 +280,8 @@ function toRpcError(method: string, error: unknown): RpcError {
   return new RpcError('INTERNAL', `the engine did not answer ${method}: ${messageOf(error)}`);
 }
 
+const RENDER_METHODS: readonly RenderMethod[] = ['render.page', 'render.tile'];
+
 // A listener of change events (W1.2 section 7): called with the events of one reply, in order.
 export type RpcEventListener = (events: readonly RpcEvent[]) => void;
 
@@ -273,7 +319,7 @@ export class RpcClient {
     method: M,
     params: Methods[M]['params'],
     options: CallOptions = {},
-  ): Promise<Methods[M]['result']> {
+  ): Promise<CallValue<M>> {
     const signal = options.signal;
     if (signal?.aborted === true) return Promise.reject(cancelled(method));
 
@@ -289,7 +335,7 @@ export class RpcClient {
     const timeoutMs = options.timeoutMs ?? deadlineMs(method, bytesSent);
     const request = JSON.stringify({ v: PROTOCOL_VERSION, id, method, params: wire });
 
-    return new Promise<Methods[M]['result']>((resolve, reject) => {
+    return new Promise<CallValue<M>>((resolve, reject) => {
       let settled = false;
       const settle = (action: () => void): void => {
         if (settled) return;
@@ -311,11 +357,17 @@ export class RpcClient {
           // still delivers its events, though its result is dropped.
           const reading = readReply(method, id, result);
           this.publish(reading.events);
-          const { outcome } = reading;
+          const outcome = adoptBitmap(method, reading.outcome, result.bitmap);
+          let delivered = false;
           settle(() => {
+            delivered = true;
             if (outcome.ok) resolve(outcome.value);
             else reject(outcome.error);
           });
+          // A bitmap whose call has already timed out or been aborted has no caller left.
+          if (!delivered && outcome.ok) {
+            (outcome.value as { bitmap?: ImageBitmap }).bitmap?.close();
+          }
         },
         (error: unknown) => settle(() => reject(workerFailure(method, error))),
       );
@@ -333,11 +385,11 @@ export class RpcClient {
     let cursor: string | null = null;
     for (;;) {
       if (options.signal?.aborted === true) throw cancelled(method);
-      const slice: Methods[M]['result'] = await this.call(
+      const slice = (await this.call(
         method,
         { ...params, cursor } as Methods[M]['params'],
         options,
-      );
+      )) as Methods[M]['result'];
       yield slice;
       // The reply's shape was checked against the generated type, which has these fields.
       const { cursor: next, done } = slice as unknown as ChunkedSlice;

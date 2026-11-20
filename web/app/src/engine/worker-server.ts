@@ -1,5 +1,5 @@
 import { EngineLoadError } from './errors';
-import { needsFontTools, type LoadEngine, type WorkerRole } from './loader';
+import { needsFontTools, type CallResult, type LoadEngine, type WorkerRole } from './loader';
 import type { DispatchMessage, ErrorMessage, ReplyMessage, Stage } from './protocol';
 
 // The slice of a dedicated worker's global scope that the server uses.
@@ -17,6 +17,57 @@ export interface ServeOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+// The methods whose pixels may travel as an ImageBitmap (W5.1b S5).
+const RENDER_METHODS = new Set(['render.page', 'render.tile']);
+
+function methodOf(request: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(request);
+    return isRecord(parsed) ? parsed.method : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Draws a render reply's RGBA pixels into an ImageBitmap, and rewrites the reply to name it. Returns
+// undefined when the reply should stay an ArrayBuffer: not a render, no pixels (a stale revision),
+// no createImageBitmap in this worker, or the browser refuses the bitmap. The alpha and colour
+// options match the main thread's putImageData path, so the pixels are the same either way.
+async function bitmapReply(
+  request: string,
+  result: CallResult,
+): Promise<{ reply: string; bitmap: ImageBitmap } | undefined> {
+  const { buffer } = result;
+  if (buffer === undefined || result.buffers !== undefined) return undefined;
+  if (!RENDER_METHODS.has(methodOf(request) as string)) return undefined;
+  if (typeof createImageBitmap !== 'function' || typeof ImageData !== 'function') return undefined;
+  try {
+    const envelope = JSON.parse(result.reply) as unknown;
+    if (!isRecord(envelope) || envelope.ok !== true || !isRecord(envelope.result)) return undefined;
+    const page = envelope.result;
+    const { width, height } = page;
+    if (page.format !== 'rgba' || typeof width !== 'number' || typeof height !== 'number') {
+      return undefined;
+    }
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+      return undefined;
+    }
+    if (buffer.byteLength !== width * height * 4) return undefined;
+    if (JSON.stringify(page.pixels) !== '{"$bin":0}') return undefined;
+
+    const image = new ImageData(new Uint8ClampedArray(buffer), width, height);
+    const bitmap = await createImageBitmap(image, {
+      premultiplyAlpha: 'none',
+      colorSpaceConversion: 'none',
+    });
+    page.format = 'bitmap';
+    page.pixels = { $bin: 0 };
+    return { reply: JSON.stringify(envelope), bitmap };
+  } catch {
+    return undefined;
+  }
 }
 
 function describeError(error: unknown): ErrorMessage['error'] {
@@ -44,6 +95,18 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
         scope.postMessage({ kind: 'notice', id: message.id, notice });
       };
       const result = handle.dispatch(message.request, message.buffers ?? [], onNotice);
+      const drawn = await bitmapReply(message.request, result);
+      if (drawn !== undefined) {
+        // The bitmap is transferred; the reply's buffer is empty and only satisfies the $bin marker.
+        const bitmapMessage: ReplyMessage = {
+          id: message.id,
+          reply: drawn.reply,
+          buffer: new ArrayBuffer(0),
+          bitmap: drawn.bitmap,
+        };
+        scope.postMessage(bitmapMessage, [drawn.bitmap]);
+        return;
+      }
       const reply: ReplyMessage = { id: message.id, reply: result.reply };
       if (result.buffers !== undefined) {
         reply.buffers = result.buffers;
