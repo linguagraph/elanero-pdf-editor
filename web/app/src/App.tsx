@@ -66,6 +66,8 @@ import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { setViewTool, useViewTool } from './view/viewTool';
+import { acceptSignedEdit, requestEditTool } from './edit/editTool';
+import { SignedWarningDialog } from './edit/signedWarning';
 import type { CommentToolId } from './comments/tools';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
@@ -200,6 +202,8 @@ export function App({
   const docs = useDocuments(engine);
   // The crop dialog's session (W4.11 S5): the form kept across Draw on page and Esc, and the box
   // drawn on a page, if any. A change of tab clears it and leaves the crop box tool.
+  // The tab whose Edit tool waits for the signed-document warning (W6.7a S4), or null.
+  const [signedEditAsk, setSignedEditAsk] = useState<number | null>(null);
   const crop = useCropSession(
     docs.tabs.activeId,
     docs.tabs.tabs.map((tab) => tab.id),
@@ -554,6 +558,11 @@ export function App({
           redo: () => runHistory('redo'),
           // Crop (W4.11) opens the crop dialog for the open document.
           'crop-pages': () => crop.openDialog(),
+          // Edit Text & Images (W6.7a S4) turns the Edit tool on; a signed document asks once per tab.
+          'edit-text-images': () => {
+            if (activeId === null) return;
+            if (!requestEditTool(activeId, activeTab?.signed ?? false)) setSignedEditAsk(activeId);
+          },
           // Save As (W4.9) asks for a name, then writes a full copy under it.
           'save-as': () => {
             if (activeTab !== undefined) setSaveAsTab(activeTab);
@@ -900,6 +909,14 @@ export function App({
           handle={session.handle}
         />
       ) : null}
+      <SignedWarningDialog
+        isOpen={signedEditAsk !== null}
+        onAccept={() => {
+          if (signedEditAsk !== null) acceptSignedEdit(signedEditAsk);
+          setSignedEditAsk(null);
+        }}
+        onCancel={() => setSignedEditAsk(null)}
+      />
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />
       <div className="app-main">

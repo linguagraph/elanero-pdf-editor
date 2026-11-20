@@ -4,8 +4,9 @@
 // the document view, because the view remounts on a tab switch and after each structure change.
 import { useSyncExternalStore } from 'react';
 
-// cropBox draws a crop box on a page (W4.11 S5); the crop dialog is closed while it is on.
-export type ViewTool = 'select' | 'hand' | 'cropBox';
+// cropBox draws a crop box on a page (W4.11 S5); the crop dialog is closed while it is on. edit
+// outlines and selects the content objects of each page (W6.7a S4).
+export type ViewTool = 'select' | 'hand' | 'cropBox' | 'edit';
 
 const tools = new Map<number, ViewTool>();
 const listeners = new Set<() => void>();

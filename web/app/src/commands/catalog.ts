@@ -149,7 +149,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('go-to-page', 'command.go-to-page.label', 'home.navigate'),
 
   // Edit
-  cmd('edit-text-images', 'command.edit-text-images.label', 'edit.edit'),
+  {
+    ...cmd('edit-text-images', 'command.edit-text-images.label', 'edit.edit'),
+    checked: (state) => state.viewTool === 'edit',
+  },
   cmd('add-text', 'command.add-text.label', 'edit.add'),
   cmd('add-image', 'command.add-image.label', 'edit.add'),
   cmd('add-rectangle', 'command.add-rectangle.label', 'edit.shapes'),

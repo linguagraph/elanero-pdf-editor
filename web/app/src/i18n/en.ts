@@ -158,6 +158,16 @@ export const EN = {
   'command.next-document.label': 'Next Document',
   'command.previous-document.label': 'Previous Document',
   'command.edit-text-images.label': 'Edit Text & Images',
+  'edit.signed.title': 'Edit a signed document?',
+  'edit.signed.body':
+    'This document is signed. Editing its content keeps the signatures in the file, but they will show that the pages changed after signing.',
+  'edit.signed.cancel': 'Cancel',
+  'edit.signed.continue': 'Continue',
+  'edit.reason.rotated': "Rotated or vertical text can't be edited yet.",
+  'edit.reason.type3': "Text in Type3 fonts can't be edited.",
+  'edit.reason.other': "This object can't be edited.",
+  'edit.truncated':
+    'This page has too many objects to list them all. Only the first ones are shown.',
   'command.add-text.label': 'Add Text',
   'command.add-image.label': 'Add Image',
   'command.add-rectangle.label': 'Rectangle',
