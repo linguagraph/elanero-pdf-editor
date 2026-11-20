@@ -1080,6 +1080,78 @@ def comments_flattenable_mixed() -> None:
         pdf.save(path)
 
 
+def comments_threaded() -> None:
+    """Threaded comments for comments.list (W7.1b S1). Page 1: note B above note A, and A has a
+    text reply and a status-only reply (/State Accepted), dated so the text reply is older. Page
+    2: note C. Replies carry /IRT to their parent, as Acrobat writes them (/RT /R)."""
+    import pikepdf
+
+    path = OUT / "comments_threaded.pdf"
+    doc = pymupdf.open()
+    doc.new_page(width=A4.width, height=A4.height).insert_text((72, 300), "Page one.", fontsize=12)
+    doc.new_page(width=A4.width, height=A4.height).insert_text((72, 300), "Page two.", fontsize=12)
+    _save(doc, "comments_threaded.pdf")
+
+    def stamp(value: str) -> pikepdf.String:
+        return pikepdf.String(f"D:{value}Z")
+
+    def note(
+        pdf: pikepdf.Pdf,
+        rect: list[int],
+        name: str,
+        author: str,
+        text: str,
+        date: str,
+        **extra: object,
+    ) -> pikepdf.Object:
+        return pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot,
+                Subtype=pikepdf.Name.Text,
+                Rect=rect,
+                F=4,
+                NM=pikepdf.String(name),
+                T=pikepdf.String(author),
+                Contents=pikepdf.String(text),
+                CreationDate=stamp(date),
+                M=stamp(date),
+                **extra,
+            )
+        )
+
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        a = note(
+            pdf, [72, 672, 92, 692], "note-a", "Ada", "Please check the total", "20260101100000"
+        )
+        b = note(pdf, [72, 742, 92, 762], "note-b", "Cy", "Check the heading", "20260101110000")
+        text_reply = note(
+            pdf,
+            [120, 672, 140, 692],
+            "reply-a1",
+            "Bob",
+            "Fixed it",
+            "20260102090000",
+            IRT=a,
+            RT=pikepdf.Name.R,
+        )
+        status = note(
+            pdf,
+            [168, 672, 188, 692],
+            "reply-a2",
+            "Ada",
+            "",
+            "20260103090000",
+            IRT=a,
+            RT=pikepdf.Name.R,
+            State=pikepdf.String("Accepted"),
+            StateModel=pikepdf.String("Review"),
+        )
+        c = note(pdf, [72, 672, 92, 692], "note-c", "Dee", "On page two", "20260101120000")
+        pdf.pages[0].obj.Annots = pikepdf.Array([a, b, text_reply, status])
+        pdf.pages[1].obj.Annots = pikepdf.Array([c])
+        pdf.save(path)
+
+
 def damaged_pubsec_filter() -> None:
     """A copy of report whose trailer names an /Encrypt dictionary with the Adobe.PubSec
     handler: the rewrite is pikepdf's, the trailer edit is bytes (copy of
@@ -1142,6 +1214,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "comments_literal_hash_nm": comments_literal_hash_nm,
     "undo_signed_catalog": undo_signed_catalog,
     "comments_flattenable_mixed": comments_flattenable_mixed,
+    "comments_threaded": comments_threaded,
     "annotations_form": annotations_form,
     "damaged_pubsec_filter": damaged_pubsec_filter,
 }
