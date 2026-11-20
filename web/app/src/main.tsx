@@ -12,6 +12,7 @@ import { toasts } from './feedback/toasts';
 import { startWithLocale } from './i18n/locale';
 import { t } from './i18n/t';
 import { readPreferences } from './prefs/store';
+import { initAccent } from './theme/accent';
 import { initTheme } from './theme/theme';
 import './theme/tokens.css';
 
@@ -46,6 +47,8 @@ if (shouldRefuse(window)) {
     throw new Error('index.html has no #root element');
   }
   initTheme();
+  // The accent is applied before the first render too, so the default blue never flashes.
+  initAccent();
   // The chosen language's catalogue is loaded and applied before the first render, so English
   // never flashes first. English (and a missing or broken file) loads nothing.
   // A stalled, broken or throwing start-up still mounts the app, in English (see startWithLocale).

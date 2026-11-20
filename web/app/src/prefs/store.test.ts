@@ -26,12 +26,28 @@ const SAVED: Preferences = {
   redactionFill: '#ff8000',
   redactionOverlayText: 'REDACTED',
   redactionTextColor: '#102030',
+  accent: 'teal',
 };
 
 afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
+});
+
+describe('accent preference (W4.5 S4)', () => {
+  it('defaults to Blue, and keeps a known preset', () => {
+    expect(DEFAULT_PREFERENCES.accent).toBe('blue');
+    writePreferences({ ...DEFAULT_PREFERENCES, accent: 'graphite' });
+    expect(readPreferences().accent).toBe('graphite');
+  });
+
+  it('falls back to Blue for an unknown or non-string value', () => {
+    for (const bad of ['magenta', 'Teal', 7, null]) {
+      window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ accent: bad }));
+      expect(readPreferences().accent).toBe('blue');
+    }
+  });
 });
 
 describe('preferences round trip', () => {
@@ -55,6 +71,7 @@ describe('preferences round trip', () => {
       redactionFill: '#ff8000',
       redactionOverlayText: 'REDACTED',
       redactionTextColor: '#102030',
+      accent: 'teal',
     });
   });
 

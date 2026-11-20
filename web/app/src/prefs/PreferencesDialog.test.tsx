@@ -37,6 +37,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   window.localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-accent');
 });
 
 function dialog(): HTMLElement | null {
@@ -148,6 +149,33 @@ describe('PreferencesDialog', () => {
     expect(dialog()).toBeNull();
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+  });
+
+  it('previews the accent at once, puts the saved one back on Cancel', () => {
+    const scope = openFromCommand();
+    act(() => {
+      radio(scope, t('prefs.accent.teal')).click();
+    });
+    expect(document.documentElement.getAttribute('data-accent')).toBe('teal');
+    act(() => {
+      buttonIn(scope, t('prefs.cancel')).click();
+    });
+    expect(document.documentElement.hasAttribute('data-accent')).toBe(false);
+    expect(readPreferences().accent).toBe('blue');
+  });
+
+  it('saves the chosen accent on Apply', () => {
+    const scope = openFromCommand();
+    act(() => {
+      radio(scope, t('prefs.accent.purple')).click();
+    });
+    act(() => {
+      scope
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(document.documentElement.getAttribute('data-accent')).toBe('purple');
+    expect(readPreferences().accent).toBe('purple');
   });
 
   it('changes the theme at once, and saves everything on Apply', () => {

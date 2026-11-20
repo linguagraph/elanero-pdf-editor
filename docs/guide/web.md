@@ -58,7 +58,10 @@ is reloaded until you press it.
 - **Preferences.** Click **Preferences** in the top bar. The dialog has three sections:
   - **General**: the language (English is the only one for now) and the **Author name**, which is
     saved with each comment and redaction mark you add.
-  - **Appearance**: the theme, and **Reduce motion**, which turns off animations.
+  - **Appearance**: the theme, the **Accent colour** (Blue, Teal, Green, Purple, Pink, Red, Orange
+    or Graphite: it colours buttons and highlights; Blue is the default), and **Reduce motion**,
+    which turns off animations. The accent keeps the system's high-contrast colours when Windows
+    high contrast is on.
   - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%) and **Default page layout** (Single
     column, Two pages, or Two pages with page 1 alone), both used when a document is opened.
   - **Redaction**: the **Box colour**, **Text colour** and **Text on the box** used for new redaction

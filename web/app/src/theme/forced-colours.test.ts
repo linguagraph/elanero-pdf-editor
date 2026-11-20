@@ -62,6 +62,14 @@ describe('forced-colours block', () => {
     expect(declarations(block)).toContainEqual(['outline-offset', '2px']);
   });
 
+  it('comes after the accent presets, so an accent never overrides it', () => {
+    expect(css.indexOf('data-accent=')).toBeGreaterThan(-1);
+    expect(css.lastIndexOf('data-accent=')).toBeLessThan(
+      css.indexOf('@media (forced-colors: active)'),
+    );
+    expect(forcedBlock()).not.toContain('data-accent');
+  });
+
   it('never removes an outline or uses a colour literal inside the block', () => {
     const block = forcedBlock();
     expect(block).not.toMatch(/outline:\s*(none|0)\b/);

@@ -102,6 +102,49 @@
   color: var(--color-danger);
 }
 
+/* The accent swatches take their fill from the generated --accent-swatch-<id> variables (no inline
+   style). Forced colours would drop the fill, so the swatch opts out and keeps its colour. */
+.prefs-swatch {
+  display: inline-block;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  forced-color-adjust: none;
+}
+
+.prefs-accent[data-selected] .prefs-swatch {
+  box-shadow:
+    0 0 0 2px var(--color-surface),
+    0 0 0 4px var(--color-text);
+}
+
+.prefs-swatch[data-swatch='blue'] {
+  background: var(--accent-swatch-blue);
+}
+.prefs-swatch[data-swatch='teal'] {
+  background: var(--accent-swatch-teal);
+}
+.prefs-swatch[data-swatch='green'] {
+  background: var(--accent-swatch-green);
+}
+.prefs-swatch[data-swatch='purple'] {
+  background: var(--accent-swatch-purple);
+}
+.prefs-swatch[data-swatch='pink'] {
+  background: var(--accent-swatch-pink);
+}
+.prefs-swatch[data-swatch='red'] {
+  background: var(--accent-swatch-red);
+}
+.prefs-swatch[data-swatch='orange'] {
+  background: var(--accent-swatch-orange);
+}
+.prefs-swatch[data-swatch='graphite'] {
+  background: var(--accent-swatch-graphite);
+}
+
 /* The colour inputs keep the browser's own swatch; the size is the touch target. */
 .prefs-colour {
   width: 44px;
