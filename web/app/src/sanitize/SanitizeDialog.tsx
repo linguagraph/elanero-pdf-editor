@@ -2,7 +2,7 @@
 // an action job. The result lists what was removed, so the user sees the report before closing.
 import { useEffect, useId, useRef, useState } from 'react';
 import { ActionJobCancelled, type ActionJobWorker } from '../actionJob/actionJob';
-import { isEncryptedRefusal } from '../actionJob/errors';
+import { isEncryptedRefusal, isSignedRefusal } from '../actionJob/errors';
 import type { JobProgressStore } from '../feedback/jobRun';
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
@@ -86,7 +86,9 @@ function SanitizeForm({
         // A cancel is the user's own choice. The job bar reports other failures as a toast, so
         // this line only says the sanitize did not finish, or why it was refused.
         if (failure instanceof ActionJobCancelled) return;
-        setError(isEncryptedRefusal(failure) ? t('job.encryptedRefused') : t('sanitize.failed'));
+        if (isEncryptedRefusal(failure)) setError(t('job.encryptedRefused'));
+        else if (isSignedRefusal(failure)) setError(t('sanitize.refused.signed'));
+        else setError(t('sanitize.failed'));
       },
     );
   };

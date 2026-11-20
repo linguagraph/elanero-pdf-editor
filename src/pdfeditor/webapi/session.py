@@ -21,7 +21,9 @@ from pdfeditor.model.outline import OutlineItem, flatten
 from pdfeditor.model.platform import current as platform_current
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.errors import (
+    BUSY,
     FILE_TOO_LARGE,
+    OPEN_FAILED,
     PASSWORD_REQUIRED,
     TOO_MANY_PAGES,
     WRONG_PASSWORD,
@@ -59,6 +61,10 @@ def open_document(params: dto.OpenParams) -> dto.OpenResult:
     try:
         with session.lock:
             pages = session.document.page_count
+        if pages == 0:
+            # A page tree with no pages opens, but nothing can be saved from it: refuse it here.
+            # The failed open below closes the engine document.
+            raise RpcFailure(OPEN_FAILED, "the file has no readable pages", {"pages": 0})
         if pages > limits.MAX_PAGES:
             raise RpcFailure(
                 TOO_MANY_PAGES,
@@ -143,6 +149,32 @@ def unlock_owner(params: dto.UnlockParams) -> dto.UnlockResult:
     return dto.UnlockResult(unlocked=unlocked)
 
 
+def document_fonts(params: dto.HandleParams) -> dto.FontsResult:
+    """The fonts the pages use (W7.6, read-only). Walks every page, so the call has the
+    ``action`` deadline. It is refused while a background task runs, as the W7.6 contract says;
+    the error names the task."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        if session.busy:
+            raise RpcFailure(BUSY, "a task is working on the document", {"task": session.busy})
+        fonts = session.document.fonts()
+    rows = sorted(
+        (
+            dto.FontRow(
+                name=font.name,
+                type=font.type,
+                encoding=font.encoding,
+                embedded=font.embedded,
+                subset=font.subset,
+                pages=tuple(font.pages),
+            )
+            for font in fonts
+        ),
+        key=lambda row: row.name.casefold(),
+    )
+    return dto.FontsResult(fonts=tuple(rows))
+
+
 def document_security(params: dto.HandleParams) -> dto.SecurityResult:
     """The security state (W7.5). Copies the method and the flags only: a password never
     leaves the engine through this call."""
@@ -191,6 +223,12 @@ def _info(session: DocumentSession) -> dto.DocInfo:
         producer=metadata.producer,
         creation_date=metadata.creation_date,
         mod_date=metadata.mod_date,
+        pdf_version=info.pdf_version,
+        is_tagged=info.is_tagged,
+        has_forms=info.has_forms,
+        has_javascript=info.has_javascript,
+        is_repaired=info.is_repaired,
+        has_xmp=info.has_xmp,
     )
 
 

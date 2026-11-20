@@ -71,20 +71,51 @@ yet: do it by hand as described, and don't invent one. The detailed Store steps 
 11. **Store (approval).** `microsoft-store` waits in the `microsoft-store` environment. Read the
     What's New text, then approve it in Actions. Pass: the job uploads and submits the MSIX.
     The local MSIX and App Certification Kit checks are steps 5 and 6 under "Making a release".
-12. **Web deploy.** *Not yet automated (see W9.2).* `docs.yml` publishes only the landing page and
-    the user guide. `scripts/build_site.py` doesn't build the web app yet.
-13. **Cache busting.** *Not yet automated (see W9.2).* Asset names aren't versioned yet.
+12. **Web deploy (automated).** `.github/workflows/web-deploy.yml` builds the guide, the landing
+    page and the web app into one site under `/app/` and deploys it to GitHub Pages. It runs on a
+    push to `main` that changes its paths (`web/**`, `src/pdfeditor/**`, the web build scripts,
+    `pyproject.toml`), on `workflow_dispatch`, and when `docs.yml` calls it for a docs change. The
+    deploy job runs only for `main`. To run it by hand:
+
+    ```sh
+    gh workflow run web-deploy.yml --ref main
+    gh run watch
+    ```
+
+    Pass: the `web-deploy` job is green.
+13. **Cache busting (automated by the build).** No command to run. `web/app/vite.config.ts` (the
+    `elanero-pwa` plugin) hashes every file in `web/app/dist` after the build and writes the result
+    into `dist/sw.js`, the service worker made from `web/app/public/sw.js`. Its cache name is
+    `elanero-<APP_VERSION>-<12 hex digits>`, where the digits are the start of the SHA-256 of the
+    file list, so any changed file gives a new cache. The worker deletes the other `elanero-`
+    caches when it activates. To see the name of a local build, after `npm run build` in
+    `web/app`: `grep -o '"cacheName":"[^"]*"' dist/sw.js`.
 14. **Post-release check.** Pass for each:
     - Download: `gh release download vX.Y.Z --pattern Elanero.exe --dir $env:TEMP\elanero-check`
     - Self-test: `& $env:TEMP\elanero-check\Elanero.exe --self-test --self-test-report $env:TEMP\st.txt`,
       then read the report: it must end with `RESULT: OK`.
-    - Web app: *not yet automated (see W9.2).* Until it's deployed, check the site at
-      https://linguagraph.github.io/elanero-pdf-editor/ (landing page and guide).
+    - Web app: `curl -s -o /dev/null -w "%{http_code}\n" https://linguagraph.github.io/elanero-pdf-editor/app/`
+      prints `200`. The landing page and guide are at https://linguagraph.github.io/elanero-pdf-editor/.
 15. **Rollback.** Never force-push, and never move or delete a pushed tag: tags are the public
     source for the AGPL. To undo a bad change, run `git revert <sha>` on a branch, open a PR, and
     merge it like any other. Ship the fix as a new version and tag, since the Store needs a higher
     version. The Store job can't replace a submission still in certification, so wait for that
-    to finish. Web rollback: *not yet automated (see W9.2)*; until then, ship the fix as a release.
+    to finish.
+
+    Web rollback: `web-deploy.yml` deploys the tip of `main` only. It has no input for an older
+    commit, so you can't redeploy an old commit with it. Instead, find the last good deploy:
+
+    ```sh
+    gh run list --workflow web-deploy.yml --branch main --status success --limit 5 --json headSha,createdAt,url
+    ```
+
+    List the commits after it that touched the web app, then revert them in a PR as above:
+
+    ```sh
+    git log --oneline <headSha>..main -- web src/pdfeditor
+    ```
+
+    Merging the revert to `main` runs `web-deploy.yml` again and puts the earlier app back on Pages.
 
 ## One-time setup
 

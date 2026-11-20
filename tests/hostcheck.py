@@ -511,6 +511,28 @@ def _no_annots_pikepdf(data: bytes, page: int) -> None:
         assert not pdf.pages[page].obj.get(pikepdf.Name.Annots)
 
 
+@host_check("signed_form_pikepdf")
+def _signed_form_pikepdf(data: bytes, page: int, field: str, flags: int) -> None:
+    """/SigFlags is ``flags``, and the page's only annotations are widgets, one named ``field``."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert int(pdf.Root.AcroForm.SigFlags) == flags
+        annots = list(pdf.pages[page].obj.get(pikepdf.Name.Annots, []))
+        assert annots and all(str(a.get("/Subtype")) == "/Widget" for a in annots)
+        assert any(str(a.get("/T")) == field for a in annots)
+
+
+@host_check("widget_count_pikepdf")
+def _widget_count_pikepdf(data: bytes, page: int, count: int) -> None:
+    """The page has exactly ``count`` form widgets (signature and text fields alike)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = list(pdf.pages[page].obj.get(pikepdf.Name.Annots, []))
+        assert sum(str(a.get("/Subtype")) == "/Widget" for a in annots) == count
+
+
 @host_check("annot_keys_pikepdf")
 def _annot_keys_pikepdf(
     data: bytes,
@@ -729,11 +751,36 @@ def _widget_link_names_pikepdf(data: bytes, prefix: str) -> None:
 
 
 @host_check("docinfo_title_pikepdf")
-def _docinfo_title_pikepdf(data: bytes, title: str) -> None:
+def _docinfo_title_pikepdf(data: bytes, title: str, password: str = "") -> None:
     import pikepdf
 
-    with pikepdf.open(io.BytesIO(data)) as pdf:
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
         assert str(pdf.docinfo.get("/Title", "")) == title
+
+
+@host_check("xmp_dc_title_pikepdf")
+def _xmp_dc_title_pikepdf(data: bytes, title: str, password: str = "") -> None:
+    """The XMP packet's dc:title, which must agree with the Info /Title (W7.6)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf, pdf.open_metadata() as meta:
+        assert meta.get("dc:title") == title
+
+
+@host_check("no_xmp_pikepdf")
+def _no_xmp_pikepdf(data: bytes, password: str = "") -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
+        assert "/Metadata" not in pdf.Root
+
+
+@host_check("pdf_version_pikepdf")
+def _pdf_version_pikepdf(data: bytes, version: str, password: str = "") -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
+        assert pdf.pdf_version == version
 
 
 @host_check("font_names_complete_pikepdf")
@@ -944,6 +991,57 @@ def _docinfo_lacks_key_pikepdf(data: bytes, key: str) -> None:
 
     with pikepdf.open(io.BytesIO(data)) as pdf:
         assert key not in pdf.docinfo
+
+
+@host_check("sanitized_catalog_pikepdf")
+def _sanitized_catalog_pikepdf(data: bytes, parts: list[str]) -> None:
+    """Each named part of a sanitize is absent from the file (pikepdf, not MuPDF).
+
+    ``xmp``, ``attachments``, ``javascript``, ``links`` and ``thumbnails`` name what sanitize
+    removes from the catalog and the pages; a sanitize with every option on names all five.
+    """
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        root = pdf.Root
+        pages = list(pdf.pages)
+        annots = [a for p in pages for a in p.get("/Annots", [])]
+        if "xmp" in parts:
+            assert "/Metadata" not in root
+        if "attachments" in parts:
+            # sanitize empties the embedded-files name tree rather than removing the key
+            names = root.get("/Names", {}).get("/EmbeddedFiles", {}).get("/Names", [])
+            assert len(names) == 0
+            assert all(a.get("/Subtype") != "/FileAttachment" for a in annots)
+        if "javascript" in parts:
+            action = root.get("/OpenAction")
+            assert not (
+                isinstance(action, pikepdf.Dictionary) and action.get("/S") == "/JavaScript"
+            )
+            assert "/AA" not in root and "/JavaScript" not in root.get("/Names", {})
+            assert all("/AA" not in p for p in pages)
+        if "links" in parts:
+            assert all(a.get("/Subtype") != "/Link" for a in annots)
+        if "thumbnails" in parts:
+            assert all("/Thumb" not in p for p in pages)
+
+
+@host_check("form_fields_pikepdf")
+def _form_fields_pikepdf(data: bytes, fields: dict[str, str]) -> None:
+    """Each named top-level AcroForm field is there, as a widget too, with the value given
+    ("" when the value was reset: the key is absent or empty)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        values = {str(f.T): str(f.get("/V", "")) for f in pdf.Root.AcroForm.Fields}
+        widgets = {
+            str(a.get("/T", ""))
+            for p in pdf.pages
+            for a in p.get("/Annots", [])
+            if a.get("/Subtype") == "/Widget"
+        }
+    assert values == fields, values
+    assert set(fields) <= widgets, widgets
 
 
 @host_check("outline_pikepdf")

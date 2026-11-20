@@ -15,6 +15,16 @@ export function isEncryptedRefusal(error: unknown): boolean {
   );
 }
 
+// True for the refusal of a sanitize on a signed document: sanitizing rewrites the file and would
+// break the signatures (W7.4 S2). The desktop refuses it with the same reason.
+export function isSignedRefusal(error: unknown): boolean {
+  return (
+    error instanceof RpcError &&
+    error.code === 'REFUSED' &&
+    error.details['reason'] === 'signed_document'
+  );
+}
+
 // Shows the failure as a toast. `fallback` is the sentence for a failure that is not an RPC error.
 export function reportActionError(store: ToastStore, error: unknown, fallback: MessageId): void {
   if (error instanceof RpcError) {

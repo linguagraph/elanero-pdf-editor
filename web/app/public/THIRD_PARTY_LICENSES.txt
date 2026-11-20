@@ -96,7 +96,7 @@ Tesseract OCR and Leptonica (in MuPDF, if the wasm build has OCR)
   Note: To confirm: whether the wasm build includes Tesseract and Leptonica at all. If it does not, delete this entry. Leptonica is offered under BSD-2-Clause, and only the Apache-2.0 text is included here.
 
 Vite (preload helper injected into the build)
-  Version: 8.3.5
+  Version: 8.3.8
   Licence: MIT
   URL: https://vite.dev
   Copyright: Copyright (c) 2019-present, VoidZero Inc. and Vite contributors

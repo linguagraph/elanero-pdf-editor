@@ -270,3 +270,26 @@ describe('FlattenDialog (W7.9)', () => {
     expect(store.getState().visible.map((toast) => toast.text)).not.toContain(t('flatten.done'));
   });
 });
+
+describe('FlattenDialog on a signed document (W7.9)', () => {
+  it('shows the signed note, and the flatten still runs', async () => {
+    const { call, onClose, onChanged } = setup(READY, { signed: true });
+    await settle();
+
+    expect(document.body.textContent).toContain(t('flatten.signedNote'));
+    act(() => buttonNamed(t('flatten.confirm.run')).click());
+    await settle();
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(call).toHaveBeenCalledWith('jobs.apply', expect.objectContaining({ handle: 'h1' }));
+    expect(onChanged).toHaveBeenCalledWith({ revisions: { '0': 5 }, pages: [0] });
+  });
+
+  it('an unsigned document shows no signed note', async () => {
+    setup();
+    await settle();
+
+    expect(document.body.textContent).toContain(t('flatten.confirm.body'));
+    expect(document.body.textContent).not.toContain(t('flatten.signedNote'));
+  });
+});

@@ -154,6 +154,7 @@ def test_a_form_widget_survives_a_flatten(web: None, fixture_pdf: Any, tmp_path:
     record("opens_pikepdf", saved)
     record("page_count_pikepdf", saved, pages=1)
     record("widget_named_pikepdf", saved, page=0, field="Name1", value="Ada")
+    record("widget_count_pikepdf", saved, page=0, count=1)
     record("render_first_page_pdfium", saved)
 
     path = tmp_path / "flattened_form.pdf"
@@ -165,6 +166,54 @@ def test_a_form_widget_survives_a_flatten(web: None, fixture_pdf: Any, tmp_path:
     finally:
         with reopened.lock:
             reopened.document.close()
+
+
+def test_a_signed_document_keeps_its_signature_through_a_flatten(
+    web: None, fixture_pdf: Any
+) -> None:
+    original = fixture_pdf("annotations_signed").read_bytes()
+    handle = open_bytes(original, "annotations_signed.pdf")
+    assert REGISTRY.get(handle).document.info().has_signatures
+    assert comment_count(handle) == (COMMENTS, 1)
+
+    saved, _ = flatten_and_save(handle)
+    assert comment_count(handle) == (0, 0)
+
+    # A save over the original is refused after a flatten: the snapshot spends the one incremental
+    # update a signed file allows. It never turns into a silent rewrite; the copy is the way out.
+    reply, _ = call_raw("save.save_bytes", {"handle": handle, "mode": "in_place"})
+    assert reply["ok"] is False
+    assert reply["error"]["code"] == "SAVE_FAILED"
+
+    # The copy keeps the signature field and /SigFlags; the comments are gone from the annotation
+    # list, but their drawing stays on the page: the square's red outline is still in the render.
+    record("opens_pikepdf", saved)
+    record("signed_form_pikepdf", saved, page=0, field="Sig1", flags=3)
+    record("ink_region_pdfium", saved, page=0, clip=[72.0, 250.0, 200.0, 330.0])
+    record("render_first_page_pdfium", saved)
+
+
+def test_a_hidden_comment_stays_after_a_flatten(
+    web: None, fixture_pdf: Any, tmp_path: Path
+) -> None:
+    handle = open_bytes(
+        fixture_pdf("comments_flattenable_mixed").read_bytes(), "comments_flattenable_mixed.pdf"
+    )
+    assert comment_count(handle) == (COMMENTS - 1, 1)  # the hidden square is not counted
+
+    saved, _ = flatten_and_save(handle)
+    assert comment_count(handle) == (0, 0)
+
+    path = tmp_path / "hidden_flattened.pdf"
+    path.write_bytes(saved)
+    reopened = DocumentSession.open(path)
+    try:
+        with reopened.lock:
+            kinds = [annot.type.value for annot in reopened.document.page(0).annotations()]
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    assert kinds == ["Square"]  # the flattened comments are gone; the hidden square is still there
 
 
 def test_a_document_without_comments_counts_zero(web: None, fixture_pdf: Any) -> None:
