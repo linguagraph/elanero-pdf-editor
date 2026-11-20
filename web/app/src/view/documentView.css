@@ -85,6 +85,19 @@
   margin: 0 auto;
 }
 
+/* The stage holds the pages (W5.1a S4). Below the scroll-space limit it is the whole layout. Above
+   it, the stage sticks to the top of the scroller at the viewport's height and clips what lies
+   outside, so the pages it holds cannot extend the scroll range past the spacer. */
+.doc-view-stage {
+  position: relative;
+}
+
+.doc-view-stage--scaled {
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+}
+
 /* The Hand tool (W4.10): a drag pans the pages, so the pointer shows a hand. The text layer is
    inert while panning, so a drag cannot select text instead. */
 .doc-view--hand .doc-view-scroll {
