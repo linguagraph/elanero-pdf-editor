@@ -402,7 +402,10 @@ export function App({
           // Mark Text (W4.12) marks the browser's selection on the view's pages; nothing is applied.
           'mark-text': () => {
             const view = viewRef.current;
-            if (redaction === null || view === null) return;
+            if (redaction === null || view === null) {
+              toasts.push('info', t('redact.notReady'));
+              return;
+            }
             void markSelectedText({
               controller: redaction,
               selection: window.getSelection(),

@@ -399,6 +399,7 @@ export const EN = {
   'redact.applied': 'Redactions applied.',
   'redact.markFailed': 'The area could not be marked. Try again.',
   'redact.selectTextFirst': 'Select some text on a page first, then press Mark Text.',
+  'redact.notReady': 'The document is not ready yet. Press Mark Text again in a moment.',
   'redact.markedText': {
     one: 'Marked {count} selected area for redaction.',
     other: 'Marked {count} selected areas for redaction.',

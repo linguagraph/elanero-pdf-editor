@@ -157,9 +157,10 @@ is reloaded until you press it.
   **Apply Selected** and **Apply All** burn the marks into the document after you confirm; Apply All
   includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
 - **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you have selected on the pages as
-  redaction marks: one mark per page, all in one undo step. It only marks. Nothing is removed until you
-  apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text selected, the
-  command asks you to select some first.
+  redaction marks: one mark per selected block of text, all in one undo step. It only marks. Nothing is
+  removed until you apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text
+  selected, the command asks you to select some first. A mark keeps the selected text in its note until
+  the mark is applied, and applying the marks removes that text from the file.
 
 ## Going to a page
 
