@@ -12,6 +12,9 @@ name: Web deploy (W9.2)
 # zip from scripts/build_web_wheel.py. The app is deployed only when the staged files are present
 # in dist, so a build without the engine never goes live.
 #
+# docs.yml calls this workflow (workflow_call) for its own deploys, so every Pages deploy ships the
+# same combined site, the app included: Pages replaces the whole site on each deployment.
+#
 # Pages must be set to "GitHub Actions" as its source (Settings > Pages), as for docs.yml.
 
 on:
@@ -26,6 +29,7 @@ on:
       - "pyproject.toml"
       - ".github/workflows/web-deploy.yml"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -36,8 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     # The cold PyMuPDF wasm build (route 3) takes longer than the 30 minutes of the rest of the job.
     timeout-minutes: 120
-    outputs:
-      deploy: ${{ steps.engine.outputs.present }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -223,35 +225,32 @@ jobs:
         working-directory: web/app
         run: node --experimental-strip-types scripts/check-size.ts dist
 
-      - name: Check that the engine assets are staged
-        id: engine
+      # A missing engine fails the run here. It must not skip the deploy quietly, since the deploy
+      # replaces the whole site (the guide and landing page included).
+      - name: Check that the engine assets are staged (the deploy needs them)
         run: |
-          if test -f web/app/dist/engine-assets/pyodide.mjs && test -f web/app/dist/engine-assets/pyodide-lock.json; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::The engine assets are not staged in CI yet (docs/web/plan.md, W9.2), so the app is built and checked but not deployed."
-          fi
+          set -euo pipefail
+          test -f web/app/dist/engine-assets/pyodide.mjs || { echo "::error::engine-assets/pyodide.mjs is missing from dist"; exit 1; }
+          test -f web/app/dist/engine-assets/pyodide-lock.json || { echo "::error::engine-assets/pyodide-lock.json is missing from dist"; exit 1; }
 
       - name: Add the app to the site
-        if: steps.engine.outputs.present == 'true'
         run: |
           mkdir -p site/app
           cp -r web/app/dist/. site/app/
 
       - name: Configure GitHub Pages
-        if: steps.engine.outputs.present == 'true' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
 
       - name: Upload the site
-        if: steps.engine.outputs.present == 'true' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   web-deploy:
     needs: web-site
-    if: needs.web-site.outputs.deploy == 'true' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     # Shares the "pages" group with docs.yml, so two deploys never overlap.
     concurrency:
       group: pages
