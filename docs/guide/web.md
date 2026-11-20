@@ -161,6 +161,12 @@ is reloaded until you press it.
   removed until you apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text
   selected, the command asks you to select some first. A mark keeps the selected text in its note until
   the mark is applied, and applying the marks removes that text from the file.
+- **Mark Pages.** On the **Protect** tab, **Mark Pages** opens a dialog to choose the pages to mark
+  whole: the current page (the default), all pages, or a range such as `1-3, 5`. Each chosen page gets
+  one mark that covers the whole page, all in one undo step. When more than one page is chosen, the
+  dialog says how many it will mark. It only marks: nothing is removed until you apply the marks, so
+  the page stays readable until then. A bad range is refused inside the dialog. The Redactions panel
+  does not open; a message says how many pages were marked.
 
 ## Going to a page
 
@@ -265,7 +271,7 @@ full policy, with what the desktop app stores, is in the
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
-| Redaction: mark areas, Mark Text, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
+| Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Other comments, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |

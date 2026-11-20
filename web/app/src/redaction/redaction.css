@@ -157,3 +157,31 @@
 .redactions-properties {
   padding: 0 8px;
 }
+
+.mark-pages {
+  display: grid;
+  gap: 12px;
+}
+
+.mark-pages-scope {
+  display: grid;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.mark-pages-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark-pages-range {
+  min-width: 10em;
+}
+
+.mark-pages-error {
+  color: var(--color-danger);
+  margin: 0;
+}
