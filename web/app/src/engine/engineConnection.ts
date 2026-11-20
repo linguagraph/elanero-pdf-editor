@@ -235,6 +235,7 @@ export interface PageRpc {
       | 'actions.run'
       | 'actions.undo'
       | 'actions.redo'
+      | 'content.objects'
       | 'jobs.prepare'
       | 'jobs.apply'
       | 'jobs.abort'

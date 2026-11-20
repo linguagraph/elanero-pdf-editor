@@ -1,0 +1,55 @@
+/* The Edit tool's page layer (W6.7a S4). Colours come from the theme tokens. The text layer is inert
+   while the tool is on, so a drag over text selects objects, not characters, as on the desktop. */
+.doc-view--edit .page-text-layer {
+  pointer-events: none;
+  user-select: none;
+}
+
+.edit-layer {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.edit-layer--blocked {
+  cursor: not-allowed;
+}
+
+.edit-outline {
+  position: absolute;
+  border: 1px solid var(--color-border-strong);
+  pointer-events: none;
+}
+
+.edit-outline--off {
+  border-style: dashed;
+}
+
+.edit-outline--selected {
+  border: 2px solid var(--color-accent);
+}
+
+.edit-handle {
+  position: absolute;
+  background: var(--color-on-accent);
+  border: 1px solid var(--color-accent);
+  pointer-events: none;
+}
+
+.edit-band {
+  position: absolute;
+  border: 1px dashed var(--color-focus-ring);
+  background: rgb(0 0 0 / 0.08);
+  pointer-events: none;
+}
+
+.edit-note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-small);
+  background: var(--color-on-accent);
+  color: var(--color-text-muted);
+}

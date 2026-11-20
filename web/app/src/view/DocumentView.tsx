@@ -57,6 +57,8 @@ import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
 import { TextLayerCache } from '../text/textLayerCache';
+import { EditLayer, type EditSelection } from '../edit/EditLayer';
+import { ObjectCache } from '../edit/objectCache';
 import { CachedCanvas } from './pixels';
 import { RenderScheduler } from './renderScheduler';
 import { planPageRenders, tileRect, tilesInViewport } from './tiles';
@@ -257,10 +259,15 @@ export function DocumentView({
   // the view tools turns them off (the last tool chosen wins, as the desktop has one tool per
   // document). The comment tool is reset while rendering, when the tool prop changes, so no effect
   // sets state.
+  // The Edit tool's object lists (W6.7a S4), one cache per document, and the object selection, which
+  // is dropped when the tool is left (its keys mean nothing to another tool).
+  const editObjects = useMemo(() => new ObjectCache(rpc, handle), [rpc, handle]);
+  const [editSelection, setEditSelection] = useState<EditSelection | null>(null);
   const [seenTool, setSeenTool] = useState(tool);
   if (seenTool !== tool) {
     setSeenTool(tool);
     if (tool !== 'select') setCommentTool(null);
+    if (tool !== 'edit') setEditSelection(null);
   }
   useEffect(() => {
     if (tool === 'select') return;
@@ -590,6 +597,7 @@ export function DocumentView({
         'doc-view',
         night ? 'doc-view--night' : '',
         tool === 'hand' ? 'doc-view--hand' : '',
+        tool === 'edit' ? 'doc-view--edit' : '',
         tool === 'cropBox' ? 'doc-view--crop-box' : '',
         pan.panning ? 'doc-view--panning' : '',
       ]
@@ -715,6 +723,16 @@ export function DocumentView({
                     rects={selectedRectsOn(redactionTools.state, box.index)}
                     zoom={zoom}
                   />
+                  {tool === 'edit' && sizes !== null ? (
+                    <EditLayer
+                      cache={editObjects}
+                      page={box.index}
+                      revision={scheduler.revisionOf(box.index)}
+                      zoom={zoom}
+                      selection={editSelection}
+                      onSelect={setEditSelection}
+                    />
+                  ) : null}
                   {tool === 'cropBox' && sizes !== null ? (
                     <CropLayer
                       zoom={zoom}
