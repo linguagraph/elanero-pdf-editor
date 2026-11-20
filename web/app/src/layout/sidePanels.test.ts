@@ -20,6 +20,7 @@ describe('side panel store', () => {
       pages: 'left',
       bookmarks: 'left',
       search: 'left',
+      redactions: 'left',
       organizer: 'right',
     });
   });

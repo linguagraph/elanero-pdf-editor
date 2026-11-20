@@ -50,6 +50,8 @@ import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { RedactionController } from './redaction/controller';
+import { RedactionsPanel } from './redaction/RedactionsPanel';
+import { useRedactionState } from './redaction/useRedaction';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
@@ -250,6 +252,8 @@ export function App({
           }),
     [session, scheduler, jobs],
   );
+  // The rail count of the redactions panel reads the same document marks as the toolbar (W7.4b S4).
+  const redactionState = useRedactionState(redaction);
   // The job worker is warmed once per page load, after the first page of the first document is
   // drawn (W1.1). Later documents do nothing; the dispose cleanup above clears the flag.
   useEffect(() => {
@@ -439,6 +443,14 @@ export function App({
             controlsId={documentShown ? 'app-panel-left' : undefined}
           />
           <RailButton
+            panel="redactions"
+            label={t('redactions.title')}
+            icon={RAIL_ICONS.redactions}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
+            count={redactionState?.marks.length ?? 0}
+          />
+          <RailButton
             panel="search"
             label={t('search.title')}
             icon={RAIL_ICONS.search}
@@ -473,6 +485,16 @@ export function App({
             handle={session.handle}
             tabId={activeId}
             onSelect={goTo}
+            onClose={() => closePanel('left')}
+          />
+        ) : documentShown &&
+          leftPanelOpen === 'redactions' &&
+          activeId !== null &&
+          redaction !== null ? (
+          <RedactionsPanel
+            key={activeId}
+            controller={redaction}
+            onGoTo={goTo}
             onClose={() => closePanel('left')}
           />
         ) : documentShown && leftPanelOpen === 'pages' && session !== null && scheduler !== null ? (

@@ -53,3 +53,80 @@
   margin: 0;
   padding-left: 20px;
 }
+
+/* The Redactions panel (W7.4b S4): a multi-select list of the document's marks. */
+.redactions-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.redactions-status {
+  margin: 0;
+  padding: 8px 0;
+}
+
+.redactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+}
+
+.redactions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.redactions-row[aria-selected='true'] {
+  background: rgb(0 0 0 / 0.08);
+}
+
+.redactions-row:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.redactions-swatch {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+}
+
+.redactions-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.redactions-where {
+  font-size: 0.875em;
+  opacity: 0.8;
+}
+
+.redactions-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.redactions-overlay {
+  font-size: 0.875em;
+  opacity: 0.8;
+}
+
+/* The outline of a mark selected in the Redactions panel, drawn over the page (W7.4b S4). */
+.redact-selected {
+  position: absolute;
+  outline: 2px solid var(--color-focus, #0b57d0);
+  outline-offset: 1px;
+  pointer-events: none;
+}

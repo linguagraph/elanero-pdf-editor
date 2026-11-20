@@ -67,3 +67,21 @@ export function RedactLayer({ zoom, widthPt, heightPt, onPlace }: RedactLayerPro
     </div>
   );
 }
+
+// The outline of the marks selected in the Redactions panel, drawn on their page (W7.4b S4). It
+// shows whether or not the mark tool is on, and takes no pointer events, so it never blocks a drag.
+export function SelectedMarkOutlines({
+  rects,
+  zoom,
+}: {
+  readonly rects: readonly PageRect[];
+  readonly zoom: number;
+}) {
+  return (
+    <>
+      {rects.map((rect, index) => (
+        <div key={index} className="redact-selected" style={cssBox(rect, zoom)} />
+      ))}
+    </>
+  );
+}
