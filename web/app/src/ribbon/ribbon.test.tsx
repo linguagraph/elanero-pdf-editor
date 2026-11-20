@@ -77,6 +77,9 @@ const withDoc: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 const noDoc: CommandState = { ...withDoc, hasDocument: false };
 
@@ -756,6 +759,50 @@ describe('Ribbon help button (W4.3a S4)', () => {
     });
     expect(open).toHaveBeenCalledWith(`${GUIDE_URL}getting-started/`, '_blank', expect.any(String));
     open.mockRestore();
+  });
+});
+
+describe('Ribbon: the View layout and night toggles (W4.3a S6)', () => {
+  const viewState = {
+    page: 1,
+    pageCount: 3,
+    zoom: 1,
+    fit: null,
+    layout: 'continuous' as const,
+    firstAlone: false,
+    night: false,
+  };
+
+  // The View tab's panel is the one shown; the tabs are found by their caption.
+  function openViewTab(): void {
+    const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const view = tabs.find((tab) => tab.textContent === t(TAB_LABELS.view));
+    act(() => {
+      view?.click();
+    });
+  }
+
+  it('shows the page layout the view is in as pressed', () => {
+    const two = { ...withDoc, view: { ...viewState, layout: 'twoPage' as const } };
+    render(<Ribbon registry={REGISTRY} state={two} handlers={{}} />);
+    openViewTab();
+    expect(button('single-page-continuous').getAttribute('aria-pressed')).toBe('false');
+    expect(button('two-up-continuous').getAttribute('aria-pressed')).toBe('true');
+    expect(button('two-up-with-cover-page').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('shows Night Mode as pressed while night reading is on', () => {
+    const night = { ...withDoc, view: { ...viewState, night: true } };
+    render(<Ribbon registry={REGISTRY} state={night} handlers={{}} />);
+    openViewTab();
+    expect(button('night-reading').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('disables Previous Page on the first page with its reason', () => {
+    render(<Ribbon registry={REGISTRY} state={{ ...withDoc, view: viewState }} handlers={{}} />);
+    const el = button('previous-page');
+    expect(el.getAttribute('aria-disabled')).toBe('true');
+    expect(describedText(el)).toContain(t('disabled.firstPage'));
   });
 });
 

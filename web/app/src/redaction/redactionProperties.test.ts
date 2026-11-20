@@ -74,6 +74,9 @@ describe('Redaction Properties command', () => {
     ribbonCompact: false,
     ribbonCollapsed: false,
     viewTool: 'select',
+    canGoBack: false,
+    canGoForward: false,
+    view: null,
   };
 
   it('is enabled with no document open', () => {

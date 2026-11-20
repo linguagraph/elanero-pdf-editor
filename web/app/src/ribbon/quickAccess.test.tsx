@@ -41,6 +41,9 @@ const state: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 function commandsShown(): string[] {

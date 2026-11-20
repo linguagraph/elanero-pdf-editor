@@ -107,6 +107,12 @@ is reloaded until you press it.
 - **Search tools.** The box at the right of the tab row (the search icon alone in a narrow window
   or a compact ribbon) opens the command palette. Type in the box and the palette opens already
   filtered by what you typed; the icon opens the palette empty.
+- **View and navigation.** The View tab's zoom commands (Zoom In and Out, Fit Width, Fit Page and
+  Actual Size) and its page layouts (Single Page Continuous, Two-Up Continuous and Two-Up with
+  Cover Page) work on the open document. The layout you are in shows as pressed, and so does Night
+  Mode. Home's Back and Forward follow the view's history, and Previous and Next Page are greyed out
+  on the first and last page. Organize Pages opens the organizer panel. Single Page and the view
+  rotation are not available yet.
 - **Hand tool.** Choose **Hand** (or press **H**) and a drag with the mouse or a pen moves the pages
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is

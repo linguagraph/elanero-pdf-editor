@@ -50,6 +50,9 @@ const NO_DOCUMENT: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 describe('layout context tiers', () => {
