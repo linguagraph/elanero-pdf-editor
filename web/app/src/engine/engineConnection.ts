@@ -242,6 +242,8 @@ export interface PageRpc {
       | 'comments.flattenable'
       | 'comments.xfdf_preview'
       | 'marks.list'
+      | 'attachments.list'
+      | 'attachments.get'
       | 'redaction.list'
       | 'comments.list'
       | 'system.memory',

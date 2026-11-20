@@ -5,13 +5,15 @@
 import { useSyncExternalStore } from 'react';
 
 export type Side = 'left' | 'right';
-export type PanelKey = 'pages' | 'bookmarks' | 'search' | 'redactions' | 'comments' | 'organizer';
+export type PanelKey =
+  'pages' | 'bookmarks' | 'attachments' | 'search' | 'redactions' | 'comments' | 'organizer';
 
 // Which side each panel docks on. Navigation panels are on the left, as the desktop has them; the
 // page organizer stays on the right until its own placement is decided (W6.1).
 export const PANEL_SIDE: Readonly<Record<PanelKey, Side>> = {
   pages: 'left',
   bookmarks: 'left',
+  attachments: 'left',
   search: 'left',
   redactions: 'left',
   comments: 'left',
