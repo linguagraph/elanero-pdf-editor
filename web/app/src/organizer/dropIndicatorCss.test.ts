@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 // jsdom does not lay out CSS, so the indicator rules are checked as text: the line must only be
 // drawn by the pseudo-element on the side the drop lands on. A rule that matched any [data-drop]
 // would also draw the other pseudo-element at its static position, over the thumbnail.
-const css = readFileSync(join(__dirname, 'organizer.css'), 'utf8');
+const css = readFileSync(join(__dirname, 'organizer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 function selectorsDrawingTheLine(): string[] {
   const found: string[] = [];
