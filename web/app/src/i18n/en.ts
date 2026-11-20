@@ -48,6 +48,7 @@ export const EN = {
   'ribbon.collapseTip': 'Collapse the ribbon to its tabs ({keys})',
   'ribbon.commandTip': '{label} ({keys})',
   'ribbon.help': 'Help',
+  'ribbon.searchTools': 'Search tools',
   'ribbon.helpTip': 'Help ({keys})',
   'quickAccess.label': 'Quick access',
   'ribbon.more': 'More commands',
