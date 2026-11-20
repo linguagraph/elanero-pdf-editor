@@ -34,6 +34,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.fonts import FontRef, FontRefKind
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.objects import Align, TextStyle, family_of
+from pdfeditor.services.font_preview import preview_font_program
 from pdfeditor.services.fonts import cached_catalog, installed_ref_for_font_name
 from pdfeditor.ui.color_picker import pick_color
 from pdfeditor.ui.font_picker import STANDARD_FONTS, FontPicker, remember_font
@@ -59,13 +60,12 @@ def _private_copy(font_data: bytes, family: str) -> bytes:
 
     from fontTools.ttLib import TTFont
 
+    # MuPDF drops the cmap when it subsets on save (the PDF maps codes to glyphs itself): Qt
+    # couldn't map a single character, and would draw a fallback font
+    if preview_font_program(font_data) is None:
+        return b""
     try:
         font = TTFont(io.BytesIO(font_data))
-        if "cmap" not in font:
-            # MuPDF drops the cmap when it subsets on save (the PDF maps codes to glyphs
-            # itself): Qt couldn't map a single character, and would draw a fallback font
-            font.close()
-            return b""
         names = font["name"]
         for record in list(names.names):
             if record.nameID in (1, 3, 4, 6, 16, 17, 21, 22):

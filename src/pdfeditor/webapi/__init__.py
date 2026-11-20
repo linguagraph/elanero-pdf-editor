@@ -69,6 +69,7 @@ METHODS: dict[str, Method] = {
     "comments.flattenable": Method(dto.HandleParams, actions.flattenable),
     "comments.xfdf_preview": Method(dto.XfdfPreviewParams, actions.xfdf_preview),
     "content.objects": Method(dto.PageParams, content.list_objects),
+    "content.preview_font": Method(dto.PreviewFontParams, content.preview_font),
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "redaction.list": Method(dto.HandleParams, actions.list_redactions),
     "comments.list": Method(dto.HandleParams, actions.list_comments),

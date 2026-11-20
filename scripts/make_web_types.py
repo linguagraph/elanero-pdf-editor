@@ -57,6 +57,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "actions.available": "instant",
     "comments.flattenable": "instant",
     "content.objects": "render",
+    "content.preview_font": "render",
     "actions.redo": "edit",
     "actions.run": "action",
     "actions.undo": "edit",

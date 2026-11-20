@@ -236,6 +236,7 @@ export interface PageRpc {
       | 'actions.undo'
       | 'actions.redo'
       | 'content.objects'
+      | 'content.preview_font'
       | 'jobs.prepare'
       | 'jobs.apply'
       | 'jobs.abort'
