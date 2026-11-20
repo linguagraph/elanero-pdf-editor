@@ -563,6 +563,8 @@ export function App({
             if (activeId === null) return;
             if (!requestEditTool(activeId, activeTab?.signed ?? false)) setSignedEditAsk(activeId);
           },
+          // Delete Objects (W6.7a S5) deletes the Edit tool's selection; with none, nothing happens.
+          'delete-selected-objects': () => viewRef.current?.deleteEditSelection(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
           'save-as': () => {
             if (activeTab !== undefined) setSaveAsTab(activeTab);

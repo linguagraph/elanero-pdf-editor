@@ -67,6 +67,13 @@ that sit on top of the page. See [Comments and review](comments.md).
 - Drag a selected object to move it.
 - Press **Delete**, or click **Objects ▸ Delete**, to remove the selected text or images.
 
+In the web version, the same gestures work with **Edit Text & Images** on, and a selected single
+object shows eight handles to resize it. A move or a resize is saved when you release the mouse,
+and a delete when you press **Delete** or **Backspace**. Each one is one undo step on the same
+history as the desktop. A signed document asks once per tab before the first edit, because any
+change to its content invalidates its signatures. Moving or resizing the text of a rotated or
+vertical paragraph is not possible yet, as on the desktop.
+
 Every edit is one undo step. Use **Ctrl+Z** to undo and **Ctrl+Y** or **Ctrl+Shift+Z** to redo.
 
 ## Scanned pages

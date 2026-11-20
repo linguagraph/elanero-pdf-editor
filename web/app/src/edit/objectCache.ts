@@ -84,6 +84,12 @@ export class ObjectCache {
     return request;
   }
 
+  // Forgets every list: an undo or a stale reply means the lists may no longer match the document,
+  // even at a revision the page has already been asked at.
+  clear(): void {
+    this.entries.clear();
+  }
+
   // The objects of a page at a revision if they have arrived, else undefined. It never asks the
   // engine.
   ready(page: number, revision: number): ContentObjectsResult | undefined {
