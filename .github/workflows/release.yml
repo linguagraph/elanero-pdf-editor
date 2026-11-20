@@ -52,11 +52,11 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: elanero-exe
           path: assets
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: elanero-installer
           path: assets
@@ -82,7 +82,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv venv && uv pip install -e ".[build]"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: elanero-folder
           path: dist/Elanero
