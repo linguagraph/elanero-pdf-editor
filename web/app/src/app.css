@@ -1,3 +1,11 @@
+/* The rule react-aria's usePress would inject as an inline <style>, which style-src 'self' blocks.
+   index.html holds a marker element that stops the injection. Same text and anonymous layer. */
+@layer {
+  [data-react-aria-pressable] {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+}
+
 body {
   margin: 0;
   background: var(--color-window);

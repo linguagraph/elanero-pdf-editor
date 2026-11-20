@@ -9,6 +9,10 @@
     />
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="referrer" content="no-referrer" />
+    <!-- react-aria's usePress injects <style id="react-aria-pressable-style"> unless an element with
+         that id exists. style-src 'self' blocks that inline style, so this inert marker stops the
+         injection; the same rule lives in src/app.css. -->
+    <meta id="react-aria-pressable-style" />
     <title>Elanero</title>
   </head>
   <body>
