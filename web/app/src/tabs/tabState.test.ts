@@ -7,6 +7,7 @@ import {
   EMPTY_TABS,
   hasDirtyTab,
   neighbourTabId,
+  renameTab,
   replaceHandle,
   setDirty,
   setPageCount,
@@ -184,5 +185,23 @@ describe('applyDocState (W4.8 S1)', () => {
       busy: false,
     });
     expect(addTab(EMPTY_TABS, pdf('plain.pdf')).tabs[0]?.signed).toBe(false);
+  });
+});
+
+describe('renameTab (W4.9)', () => {
+  it('gives the named tab its new name and leaves the others, their dirty flags and the handles', () => {
+    let state = addTab(EMPTY_TABS, pdf('a.pdf'));
+    state = addTab(state, pdf('b.pdf'));
+    state = setDirty(state, 1, true);
+    const renamed = renameTab(state, 1, 'copy.pdf');
+    expect(renamed.tabs.map((tab) => [tab.name, tab.dirty, tab.handle])).toEqual([
+      ['copy.pdf', true, 'handle-a.pdf'],
+      ['b.pdf', false, 'handle-b.pdf'],
+    ]);
+  });
+
+  it('leaves the state alone for an unknown tab id', () => {
+    const state = addTab(EMPTY_TABS, pdf('a.pdf'));
+    expect(renameTab(state, 99, 'x.pdf')).toEqual(state);
   });
 });

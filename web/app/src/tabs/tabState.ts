@@ -122,6 +122,15 @@ export function applyDocState(state: TabState, handle: string, doc: TabDocState)
   };
 }
 
+// Gives a tab the name of the file it was saved as (W4.9). The tab's name is the source of the
+// download name of its next save, so it follows the Save As choice.
+export function renameTab(state: TabState, id: number, name: string): TabState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, name } : tab)),
+  };
+}
+
 // Stores the page count the engine reported after a change that added or removed pages.
 export function setPageCount(state: TabState, id: number, pages: number): TabState {
   return {
