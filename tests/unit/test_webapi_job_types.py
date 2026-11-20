@@ -225,6 +225,7 @@ READ_ONLY_CASES = [
     ("export", {"format": "png", "pages": [0]}, "files"),
     ("split", {"mode": "pages", "pages_per_file": 1}, "files"),
     ("print_pages", {"pages": [0]}, "files"),
+    ("extract_images", {"name": "a.pdf"}, "files"),
 ]
 
 
@@ -806,3 +807,107 @@ def test_a_comments_export_with_an_unknown_format_is_invalid_args(
     assert err["code"] == INVALID_ARGS
     assert err["details"]["path"] == "args.format"
     assert len(jobs.PREPARED) == 0
+
+
+# -- extract_images (W4.15): the document's images, as stored, read-only -----------------------
+
+
+def images_bytes(fixture_pdf: Any) -> bytes:
+    return bytes(fixture_pdf("images").read_bytes())
+
+
+def test_extract_images_saves_each_image_as_stored(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(images_bytes(fixture_pdf), "images.pdf")
+    args = {"name": "images.pdf"}
+    _, copy = prepare(handle, "extract_images", args)
+    reply, out = run_on_copy("extract_images", args, copy)
+    result = ok(reply)
+    files = files_of(result, out)
+    count = result["value"]["count"]
+    assert result["value"]["too_large"] == 0
+    assert count >= 1
+    assert len(files) >= 1
+    for name, mime, data in files:
+        assert re.fullmatch(r"page\d+-image\d+\.(jpg|png|tiff|bmp|gif)", name) or name.endswith(
+            "-images.zip"
+        ), name
+        assert mime in {
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            "image/bmp",
+            "image/gif",
+            "application/zip",
+        }
+        assert data
+
+
+def test_extract_images_of_several_images_is_one_flat_stored_zip(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(bytes(fixture_pdf("several_images").read_bytes()), "My: Report.pdf")
+    args = {"name": "My: Report.pdf"}
+    _, copy = prepare(handle, "extract_images", args)
+    reply, out = run_on_copy("extract_images", args, copy)
+    result = ok(reply)
+    assert result["value"] == {"count": 3, "too_large": 0}
+    ((name, mime, data),) = files_of(result, out)
+    assert (name, mime) == ("My_ Report-images.zip", "application/zip")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = archive.namelist()
+        assert len(names) == 3
+        assert all("/" not in n and re.fullmatch(r"page\d+-image\d+\.\w+", n) for n in names)
+        assert all(info.compress_type == zipfile.ZIP_STORED for info in archive.infolist())
+
+
+def test_extract_images_of_one_page_takes_only_its_images(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(bytes(fixture_pdf("several_images").read_bytes()), "several.pdf")
+    args = {"name": "several.pdf", "pages": [1]}
+    _, copy = prepare(handle, "extract_images", args)
+    reply, out = run_on_copy("extract_images", args, copy)
+    ((name, mime, data),) = files_of(ok(reply), out)
+    assert (name, mime) == ("page2-image1.png", "image/png")
+    assert Image.open(io.BytesIO(data)).size == (228, 220)
+
+
+def test_extract_images_of_a_page_with_no_images_is_empty(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"name": "text.pdf", "pages": [0]}
+    _, copy = prepare(handle, "extract_images", args)
+    reply, _ = run_on_copy("extract_images", args, copy)
+    result = ok(reply)
+    assert result["files"] == []
+    assert result["value"] == {"count": 0, "too_large": 0}
+
+
+def test_extract_images_pages_must_be_non_empty_and_in_range(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(images_bytes(fixture_pdf), "images.pdf")
+    for pages, path in (([], "args.pages"), ([999], "args.pages")):
+        args = {"name": "images.pdf", "pages": pages}
+        _, copy = prepare(handle, "extract_images", args)
+        err = error(run_on_copy("extract_images", args, copy)[0])
+        assert err["code"] == INVALID_ARGS
+        assert err["details"]["path"] == path
+
+
+def test_an_image_above_the_pixel_ceiling_is_skipped_and_counted(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(images_bytes(fixture_pdf), "images.pdf")
+    args = {"name": "images.pdf"}
+    _, copy = prepare(handle, "extract_images", args)
+    before = ok(run_on_copy("extract_images", args, copy)[0])["value"]["count"]
+    monkeypatch.setattr(limits, "MAX_RENDER_PIXELS", 10)
+    result = ok(run_on_copy("extract_images", args, copy)[0])
+    assert result["files"] == []
+    assert result["value"] == {"count": 0, "too_large": before}
+
+
+def test_extract_images_can_be_cancelled_before_it_starts(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(images_bytes(fixture_pdf), "images.pdf")
+    args = {"name": "images.pdf"}
+    _, copy = prepare(handle, "extract_images", args)
+    token = CancelToken()
+    token.cancel()
+    reply, _ = run_on_copy("extract_images", args, copy, cancel=token)
+    assert error(reply)["code"] == CANCELLED

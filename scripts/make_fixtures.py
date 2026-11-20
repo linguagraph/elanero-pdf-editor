@@ -77,6 +77,17 @@ def images() -> None:
     _save(doc, "images.pdf")
 
 
+def several_images() -> None:
+    """Three different pictures on two pages: Extract Images takes each once, as a ZIP."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_image(pymupdf.Rect(72, 80, 392, 280), stream=_gradient_png(320, 200))
+    page.insert_image(pymupdf.Rect(72, 320, 272, 420), stream=_gradient_png(200, 100))
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_image(pymupdf.Rect(72, 80, 300, 300), stream=_gradient_png(228, 220))
+    _save(doc, "several_images.pdf")
+
+
 def vector_art() -> None:
     doc = pymupdf.open()
     page = doc.new_page(width=A4.width, height=A4.height)
@@ -1095,6 +1106,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "broken_xref": broken_xref,
     "text_multipage": text_multipage,
     "images": images,
+    "several_images": several_images,
     "vector_art": vector_art,
     "annotations": annotations,
     "annotations_unnamed": annotations_unnamed,
