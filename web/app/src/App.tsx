@@ -49,6 +49,7 @@ import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
+import { RedactionController } from './redaction/controller';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
@@ -221,6 +222,20 @@ export function App({
   const scheduler = useMemo(
     () => (session === null ? null : new RenderScheduler(session.rpc, session.handle)),
     [session],
+  );
+  // One redaction controller per open session too (W7.4b): the toolbar and the redactions panel
+  // read the same list of the document's marks.
+  const redaction = useMemo(
+    () =>
+      session === null || scheduler === null
+        ? null
+        : new RedactionController({
+            rpc: session.rpc,
+            handle: session.handle,
+            scheduler,
+            startWorker: jobs.acquire,
+          }),
+    [session, scheduler, jobs],
   );
   // The job worker is warmed once per page load, after the first page of the first document is
   // drawn (W1.1). Later documents do nothing; the dispose cleanup above clears the flag.
@@ -626,6 +641,7 @@ export function App({
             rpc={session.rpc}
             handle={session.handle}
             scheduler={scheduler}
+            redaction={redaction ?? undefined}
             onViewChange={setViewState}
             startWorker={jobs.acquire}
             tool={viewTool}

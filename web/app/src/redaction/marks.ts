@@ -2,6 +2,7 @@
 // points at the zoom (the same mapping as the comment tools, W1.5 section 6); the engine builds the
 // mark. Page points are visible space with the origin top-left, as the engine expects (W1.3).
 import { type PagePoint, type PageRect, pagePointAt, rectBetween } from '../comments/coordinates';
+import type { ColorJson } from '../prefs/colour';
 
 // A drag shorter than this (page points) is a click, not a box.
 export const MIN_MARK_PT = 2;
@@ -54,4 +55,21 @@ export function redactionAreaJson(
 // The job's marks as the apply takes them: each named by its page and name.
 export function markRefsJson(marks: readonly MarkRef[]): { page: number; name: string }[] {
   return marks.map((mark) => ({ page: mark.page, name: mark.name }));
+}
+
+// A change to some of a mark's style (W7.4b). A field left out is not changed; "" clears the
+// overlay text.
+export interface MarkStylePatch {
+  readonly fill?: ColorJson;
+  readonly overlayText?: string;
+  readonly textColor?: ColorJson;
+}
+
+// The patch as redaction.restyle_marks takes it: only the fields the patch sets.
+export function markStylePatchJson(patch: MarkStylePatch): Record<string, unknown> {
+  const json: Record<string, unknown> = {};
+  if (patch.fill !== undefined) json.fill = patch.fill;
+  if (patch.overlayText !== undefined) json.overlay_text = patch.overlayText;
+  if (patch.textColor !== undefined) json.text_color = patch.textColor;
+  return json;
 }
