@@ -177,6 +177,50 @@ export function scrollTopForSpread(
   return null;
 }
 
+// A rectangle on a page, in points (the page's visible space, origin top-left).
+export interface PageRectPt {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+// The scroll position that brings a rectangle on a page into the viewport. A rectangle already in
+// view keeps the scroll it has; otherwise its top-left corner moves to the viewport's top-left,
+// backed off by the page gap so it does not sit on the edge. Both axes are handled, since a page
+// can be wider than the viewport.
+export function scrollForRect(
+  box: PageBox,
+  rect: PageRectPt,
+  zoom: number,
+  scroll: { readonly top: number; readonly left: number },
+  viewport: { readonly height: number; readonly width: number },
+): { top: number; left: number } {
+  const k = zoom * CSS_PX_PER_POINT;
+  const margin = PAGE_GAP_PT * k;
+  return {
+    top: revealAxis(
+      scroll.top,
+      box.top + rect.y0 * k,
+      box.top + rect.y1 * k,
+      viewport.height,
+      margin,
+    ),
+    left: revealAxis(
+      scroll.left,
+      box.left + rect.x0 * k,
+      box.left + rect.x1 * k,
+      viewport.width,
+      margin,
+    ),
+  };
+}
+
+function revealAxis(start: number, from: number, to: number, size: number, margin: number): number {
+  if (from >= start && to <= start + size) return start;
+  return Math.max(0, from - margin);
+}
+
 // Distance from the centre of a page to the centre of the viewport, in CSS pixels.
 export function distanceToCentre(box: PageBox, scrollTop: number, viewportHeight: number): number {
   return Math.abs(box.top + box.height / 2 - (scrollTop + viewportHeight / 2));

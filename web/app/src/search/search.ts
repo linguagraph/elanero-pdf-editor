@@ -2,7 +2,7 @@
 // hit order and the highlight rectangles. Matching itself is the engine's (services/search.py), so
 // the case, whole-word and regex rules are the desktop's.
 import type { PageRpc } from '../engine/engineConnection';
-import type { SearchHitDto, SearchOptionsDto } from '../rpc/generated';
+import type { RectDto, SearchHitDto, SearchOptionsDto } from '../rpc/generated';
 import { CSS_PX_PER_POINT } from '../view/zoom';
 
 // The engine's time budget per slice, in milliseconds (W1.4 section 10: about 100 ms a slice).
@@ -83,6 +83,19 @@ export function hitRects(hit: SearchHitDto, zoom: number, current: boolean): Hit
       current,
     };
   });
+}
+
+// The rectangle that covers every quad of a hit, in points (visible page space, origin top-left).
+// The view scrolls this into sight when the hit is chosen.
+export function hitBounds(hit: SearchHitDto): RectDto {
+  const xs = hit.quads.flatMap((quad) => [quad.ul.x, quad.ur.x, quad.ll.x, quad.lr.x]);
+  const ys = hit.quads.flatMap((quad) => [quad.ul.y, quad.ur.y, quad.ll.y, quad.lr.y]);
+  return {
+    x0: Math.min(...xs),
+    y0: Math.min(...ys),
+    x1: Math.max(...xs),
+    y1: Math.max(...ys),
+  };
 }
 
 // The highlight rectangles of one page, from every hit on it. The selected hit is marked current.
