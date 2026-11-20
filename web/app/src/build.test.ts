@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +59,30 @@ describe('production build', () => {
         expect(new URL(ref, manifestUrl).pathname.startsWith(PRODUCTION_BASE), ref).toBe(true);
       }
       expect(new URL(manifest.scope, manifestUrl).pathname).toBe(PRODUCTION_BASE);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  }, 180_000);
+
+  // axe-core is a dev-only checker (W8.5 S1). Its message text and version property are the markers,
+  // which minifiers keep (the banner is dropped in some builds); the
+  // first assertion proves they are in the installed package, so the scan cannot pass vacuously.
+  const AXE_MARKERS = ['Fix any of the following:', 'axe.version'];
+  it('ships no axe-core (W8.5 S1)', async () => {
+    const axeSource = await readFile(join(appRoot, 'node_modules/axe-core/axe.min.js'), 'utf8');
+    for (const marker of AXE_MARKERS) expect(axeSource).toContain(marker);
+
+    const outDir = await mkdtemp(join(tmpdir(), 'elanero-axe-'));
+    try {
+      await build({ root: appRoot, logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+      const offenders: string[] = [];
+      for (const relative of await readdir(outDir, { recursive: true })) {
+        const absolute = join(outDir, relative);
+        if (!(await stat(absolute)).isFile()) continue;
+        const text = await readFile(absolute, 'utf8');
+        if (AXE_MARKERS.some((marker) => text.includes(marker))) offenders.push(relative);
+      }
+      expect(offenders).toEqual([]);
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
