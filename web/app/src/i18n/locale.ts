@@ -147,24 +147,61 @@ export function validateCatalogue(raw: unknown, lang: string): Validated {
   return { catalogue, problems };
 }
 
-// The catalogue for a language. English, a language with no file, and a file that fails to load
-// all give `{}`, so start-up never waits on a translation that is missing or broken.
+// How long start-up waits for a language file before using English. A stalled fetch must not
+// leave the page blank, so the wait is bounded.
+export const LOCALE_LOAD_TIMEOUT_MS = 3000;
+
+// The catalogue for a language. English, a language with no file, a file that fails to load, and
+// a file that takes longer than the timeout all give `{}`, so start-up never waits on a
+// translation that is missing, broken or stalled.
 export async function loadCatalogue(
   lang: string,
   loaders: LoaderMap = LOCALE_LOADERS,
+  timeoutMs: number = LOCALE_LOAD_TIMEOUT_MS,
 ): Promise<Catalogue> {
   if (lang === 'en') return {};
   const load = loaders[`./locales/${lang}.json`];
   if (load === undefined) return {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[i18n] ${lang} did not load within ${timeoutMs} ms; using English`);
+      resolve(undefined);
+    }, timeoutMs);
+  });
   try {
-    const { catalogue, problems } = validateCatalogue(await load(), lang);
+    const raw = await Promise.race([load(), timedOut]);
+    if (raw === undefined) return {};
+    const { catalogue, problems } = validateCatalogue(raw, lang);
     for (const problem of problems) console.warn(`[i18n] ${problem}`);
     return catalogue;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     console.warn(`[i18n] could not load ${lang}: ${reason}`);
     return {};
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+// Start-up: load the chosen language, apply it, then mount. If anything in that fails, the app
+// still mounts, in English, so the page never stays blank.
+export function startWithLocale(
+  lang: string,
+  mount: () => void,
+  load: (lang: string) => Promise<Catalogue> = (l) => loadCatalogue(l),
+): Promise<void> {
+  return load(lang)
+    .then((catalogue) => {
+      applyLocale(lang, catalogue);
+      mount();
+    })
+    .catch((error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[i18n] start-up failed for ${lang}, using English: ${reason}`);
+      applyLocale('en', {});
+      mount();
+    });
 }
 
 export function isRightToLeft(lang: string): boolean {

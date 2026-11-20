@@ -9,7 +9,7 @@ import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
 import { installLaunchInbox, launchQueueOf } from './pwa/launch';
 import { toasts } from './feedback/toasts';
-import { applyLocale, loadCatalogue } from './i18n/locale';
+import { startWithLocale } from './i18n/locale';
 import { t } from './i18n/t';
 import { readPreferences } from './prefs/store';
 import { initTheme } from './theme/theme';
@@ -48,9 +48,7 @@ if (shouldRefuse(window)) {
   initTheme();
   // The chosen language's catalogue is loaded and applied before the first render, so English
   // never flashes first. English (and a missing or broken file) loads nothing.
+  // A stalled, broken or throwing start-up still mounts the app, in English (see startWithLocale).
   const language = readPreferences().language;
-  void loadCatalogue(language).then((catalogue) => {
-    applyLocale(language, catalogue);
-    mount(root);
-  });
+  void startWithLocale(language, () => mount(root));
 }

@@ -7,8 +7,10 @@ import { EN } from './en';
 import {
   applyLocale,
   isRightToLeft,
+  LOCALE_LOAD_TIMEOUT_MS,
   LOCALE_LOADERS,
   loadCatalogue,
+  startWithLocale,
   validateCatalogue,
   type LoaderMap,
 } from './locale';
@@ -223,5 +225,74 @@ describe('shipped locale files', () => {
   it('lists every shipped locale in LANGUAGE_CHOICES', () => {
     const names = files.map((name) => name.slice(0, -'.json'.length)).sort();
     expect([...LANGUAGE_CHOICES]).toEqual(['en', ...names]);
+  });
+});
+
+describe('loadCatalogue timeout and start-up fallback', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a load that never resolves falls back to {} within the timeout', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const loaders: LoaderMap = { './locales/pl.json': () => new Promise<unknown>(() => {}) };
+    const pending = loadCatalogue('pl', loaders);
+    await vi.advanceTimersByTimeAsync(LOCALE_LOAD_TIMEOUT_MS - 1);
+    expect(warn).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(pending).resolves.toEqual({});
+    expect(warn.mock.calls.join('\n')).toMatch(/pl did not load within 3000 ms/);
+  });
+
+  it('a load that rejects falls back to {}', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const loaders: LoaderMap = {
+      './locales/pl.json': () => Promise.reject(new Error('network down')),
+    };
+    await expect(loadCatalogue('pl', loaders)).resolves.toEqual({});
+    expect(warn.mock.calls.join('\n')).toMatch(/could not load pl: network down/);
+  });
+
+  it('a file that arrives in time is used and its timer is cleared', async () => {
+    vi.useFakeTimers();
+    const loaders: LoaderMap = { './locales/pl.json': () => Promise.resolve(fixture()) };
+    const catalogue = await loadCatalogue('pl', loaders);
+    expect(Object.keys(catalogue).length).toBeGreaterThan(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('the app mounts after a stalled load, with the language but no translations', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const loaders: LoaderMap = { './locales/pl.json': () => new Promise<unknown>(() => {}) };
+    const mount = vi.fn();
+    const done = startWithLocale('pl', mount, (lang) => loadCatalogue(lang, loaders));
+    await vi.advanceTimersByTimeAsync(LOCALE_LOAD_TIMEOUT_MS);
+    await done;
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(getLocale()).toBe('pl');
+  });
+
+  it('the app mounts in English after a rejected load', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const mount = vi.fn();
+    await startWithLocale('pl', mount, () => Promise.reject(new Error('boom')));
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('the app still mounts, in English, when mounting throws the first time', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const mount = vi
+      .fn<() => void>()
+      .mockImplementationOnce(() => {
+        throw new Error('first mount failed');
+      })
+      .mockImplementation(() => undefined);
+    await startWithLocale('pl', mount, () => Promise.resolve({}));
+    expect(mount).toHaveBeenCalledTimes(2);
+    expect(document.documentElement.lang).toBe('en');
+    expect(warn.mock.calls.join('\n')).toMatch(/start-up failed for pl/);
   });
 });
