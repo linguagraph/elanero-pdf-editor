@@ -6,6 +6,7 @@ so everything goes through ``Page.pdf_matrix`` and its inverse.
 
 from __future__ import annotations
 
+import math
 import uuid
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
@@ -44,6 +45,11 @@ _TYPES = {tag: t for t, tag in _TAGS.items()}
 # The largest XFDF text either app imports. Checked before anything is parsed, so a huge file
 # costs one length test. The web mirrors this value in web/app/src/commentsImport (S4b).
 MAX_XFDF_BYTES = 8 * 1024 * 1024
+
+# Largest magnitude a coordinate may have, in points. A page is at most a few thousand points
+# across, so this is generous; it stops values PyMuPDF's point type cannot hold (a 40-digit
+# number overflowed it and raised a TypeError during the write, a fuzz crash).
+MAX_COORDINATE = 1_000_000.0
 
 
 class XfdfTooLarge(ValueError):
@@ -318,13 +324,27 @@ def import_command(text: str, doc: Document) -> MacroCommand:
     return MacroCommand(f"Import {len(commands)} Comments", list(commands))
 
 
+def _coordinate(text: str) -> float:
+    """One numeric coordinate, refused unless it is finite and within ``MAX_COORDINATE``.
+
+    Refusing here, at parse time, means an out-of-range value never reaches the engine. It is a
+    ``ValueError``, which both the service and the actions layer turn into a clean refusal.
+    """
+    value = float(text)
+    if not math.isfinite(value) or abs(value) > MAX_COORDINATE:
+        raise ValueError(
+            f"not XFDF: a coordinate is out of range (finite, at most {MAX_COORDINATE:g} points)"
+        )
+    return value
+
+
 def _pairs(text: str) -> list[Point]:
-    nums = [float(v) for v in text.replace(";", ",").split(",") if v.strip()]
+    nums = [_coordinate(v) for v in text.replace(";", ",").split(",") if v.strip()]
     return [Point(nums[i], nums[i + 1]) for i in range(0, len(nums) - 1, 2)]
 
 
 def _rect_in(text: str, inverse: Matrix) -> Rect:
-    x0, y0, x1, y1 = (float(v) for v in text.split(","))
+    x0, y0, x1, y1 = (_coordinate(v) for v in text.split(","))
     return Rect(x0, y0, x1, y1).normalized().transform(inverse)
 
 

@@ -938,6 +938,7 @@ export function App({
           engine={session.rpc}
           handle={session.handle}
           startWorker={jobs.acquire}
+          signed={activeTab?.signed ?? false}
           onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}

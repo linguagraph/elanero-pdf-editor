@@ -1057,6 +1057,26 @@ def annotations_form() -> None:
     src.close()
 
 
+def annotations_signed() -> None:
+    """The annotations sample with a signature field and /SigFlags 3, so the catalog says it is
+    signed while the comments stay (a flatten of a signed document keeps the signature field and
+    the save incremental; needs annotations.pdf, generated first)."""
+    import pikepdf
+
+    src = pymupdf.open(OUT / "annotations.pdf")
+    widget = pymupdf.Widget()
+    widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+    widget.field_name = "Sig1"
+    widget.rect = pymupdf.Rect(50, 500, 200, 540)
+    src[0].add_widget(widget)
+    path = OUT / "annotations_signed.pdf"
+    src.save(path)
+    src.close()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        pdf.Root.AcroForm.SigFlags = 3
+        pdf.save(path)
+
+
 def comments_flattenable_mixed() -> None:
     """The annotations sample plus a link and a popup on page 1, a hidden comment, and a second
     page that holds only a link (copy of tests/services/test_comments_flattenable.py; needs
@@ -1240,6 +1260,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "comments_flattenable_mixed": comments_flattenable_mixed,
     "comments_threaded": comments_threaded,
     "annotations_form": annotations_form,
+    "annotations_signed": annotations_signed,
     "damaged_pubsec_filter": damaged_pubsec_filter,
 }
 

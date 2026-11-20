@@ -64,6 +64,28 @@ class DocInfo:
     producer: str
     creation_date: str
     mod_date: str
+    # The read-only file facts of W7.6 (S1), from the engine's document info.
+    pdf_version: str  # "1.7"; "" when the engine cannot tell
+    is_tagged: bool
+    has_forms: bool
+    has_javascript: bool
+    is_repaired: bool  # MuPDF had to repair the file when it opened it
+    has_xmp: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontRow:
+    name: str  # base font name without the subset prefix
+    type: str  # Type1, TrueType, Type0, Type3, ...
+    encoding: str
+    embedded: bool
+    subset: bool
+    pages: tuple[int, ...]  # 0-based, ascending
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontsResult:
+    fonts: tuple[FontRow, ...]  # sorted by name, case-insensitive
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

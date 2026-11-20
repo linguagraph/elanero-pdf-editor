@@ -93,6 +93,12 @@ const DOC_INFO = {
   producer: '',
   creation_date: '',
   mod_date: '',
+  pdf_version: '1.7',
+  is_tagged: false,
+  has_forms: false,
+  has_javascript: false,
+  is_repaired: false,
+  has_xmp: false,
 };
 const DOC_STATE = {
   page_count: 2,
@@ -123,6 +129,20 @@ describe('reply validators', () => {
         state: DOC_STATE,
       }),
     ).toMatchObject({ handle: 'h1', pages: 2, warning: null });
+    expect(
+      decodeResult('session.fonts', {
+        fonts: [
+          {
+            name: 'Helvetica',
+            type: 'Type1',
+            encoding: 'WinAnsiEncoding',
+            embedded: false,
+            subset: false,
+            pages: [0, 2],
+          },
+        ],
+      }),
+    ).toMatchObject({ fonts: [{ name: 'Helvetica', pages: [0, 2] }] });
     expect(
       decodeResult('session.pages', {
         pages: [{ width: 612, height: 792, rotation: 0 }],

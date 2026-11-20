@@ -205,6 +205,14 @@ export interface DocInfo {
   producer: string;
   creation_date: string;
   mod_date: string;
+  /** "1.7"; "" when the engine cannot tell */
+  pdf_version: string;
+  is_tagged: boolean;
+  has_forms: boolean;
+  has_javascript: boolean;
+  /** MuPDF had to repair the file when it opened it */
+  is_repaired: boolean;
+  has_xmp: boolean;
 }
 
 export interface DocStateDto {
@@ -251,6 +259,23 @@ export interface FlattenableResult {
   count: number;
   /** the pages those comments are on */
   pages: number;
+}
+
+export interface FontRow {
+  /** base font name without the subset prefix */
+  name: string;
+  /** Type1, TrueType, Type0, Type3, ... */
+  type: string;
+  encoding: string;
+  embedded: boolean;
+  subset: boolean;
+  /** 0-based, ascending */
+  pages: number[];
+}
+
+export interface FontsResult {
+  /** sorted by name, case-insensitive */
+  fonts: FontRow[];
 }
 
 export interface HandleParams {
@@ -730,6 +755,7 @@ export interface Methods {
   'save.save_bytes': { params: SaveParams; result: SaveResult; deadline: 'io' };
   'session.capabilities': { params: HandleParams; result: CapabilitiesResult; deadline: 'instant' };
   'session.close': { params: HandleParams; result: Empty; deadline: 'instant' };
+  'session.fonts': { params: HandleParams; result: FontsResult; deadline: 'action' };
   'session.info': { params: HandleParams; result: DocInfo; deadline: 'instant' };
   'session.open': { params: OpenParams; result: OpenResult; deadline: 'io' };
   'session.outline': { params: HandleParams; result: OutlineResult; deadline: 'instant' };
@@ -766,6 +792,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'save.save_bytes': 'io',
   'session.capabilities': 'instant',
   'session.close': 'instant',
+  'session.fonts': 'action',
   'session.info': 'instant',
   'session.open': 'io',
   'session.outline': 'instant',
@@ -807,6 +834,7 @@ export const RESULT_DECODERS: {
   'save.save_bytes': decodeSaveResult,
   'session.capabilities': decodeCapabilitiesResult,
   'session.close': decodeEmpty,
+  'session.fonts': decodeFontsResult,
   'session.info': decodeDocInfo,
   'session.open': decodeOpenResult,
   'session.outline': decodeOutlineResult,
@@ -1033,7 +1061,7 @@ export function decodeDocInfo(
   path: string,
 ): DocInfo {
   const o = expectObject(value, path);
-  checkKeys(o, ['encrypted', 'has_signatures', 'page_count', 'title', 'author', 'subject', 'keywords', 'creator', 'producer', 'creation_date', 'mod_date'], path);
+  checkKeys(o, ['encrypted', 'has_signatures', 'page_count', 'title', 'author', 'subject', 'keywords', 'creator', 'producer', 'creation_date', 'mod_date', 'pdf_version', 'is_tagged', 'has_forms', 'has_javascript', 'is_repaired', 'has_xmp'], path);
   return {
     encrypted: expectBoolean(field(o, 'encrypted', path), `${path}.encrypted`),
     has_signatures: expectBoolean(field(o, 'has_signatures', path), `${path}.has_signatures`),
@@ -1046,6 +1074,12 @@ export function decodeDocInfo(
     producer: expectString(field(o, 'producer', path), `${path}.producer`),
     creation_date: expectString(field(o, 'creation_date', path), `${path}.creation_date`),
     mod_date: expectString(field(o, 'mod_date', path), `${path}.mod_date`),
+    pdf_version: expectString(field(o, 'pdf_version', path), `${path}.pdf_version`),
+    is_tagged: expectBoolean(field(o, 'is_tagged', path), `${path}.is_tagged`),
+    has_forms: expectBoolean(field(o, 'has_forms', path), `${path}.has_forms`),
+    has_javascript: expectBoolean(field(o, 'has_javascript', path), `${path}.has_javascript`),
+    is_repaired: expectBoolean(field(o, 'is_repaired', path), `${path}.is_repaired`),
+    has_xmp: expectBoolean(field(o, 'has_xmp', path), `${path}.has_xmp`),
   };
 }
 
@@ -1122,6 +1156,35 @@ export function decodeFlattenableResult(
   return {
     count: expectInteger(field(o, 'count', path), `${path}.count`),
     pages: expectInteger(field(o, 'pages', path), `${path}.pages`),
+  };
+}
+
+export function decodeFontRow(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontRow {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'type', 'encoding', 'embedded', 'subset', 'pages'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    type: expectString(field(o, 'type', path), `${path}.type`),
+    encoding: expectString(field(o, 'encoding', path), `${path}.encoding`),
+    embedded: expectBoolean(field(o, 'embedded', path), `${path}.embedded`),
+    subset: expectBoolean(field(o, 'subset', path), `${path}.subset`),
+    pages: expectArray(field(o, 'pages', path), `${path}.pages`).map((item1, index1) => expectInteger(item1, `${`${path}.pages`}[${index1}]`)),
+  };
+}
+
+export function decodeFontsResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontsResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['fonts'], path);
+  return {
+    fonts: expectArray(field(o, 'fonts', path), `${path}.fonts`).map((item1, index1) => decodeFontRow(item1, ctx, `${`${path}.fonts`}[${index1}]`)),
   };
 }
 

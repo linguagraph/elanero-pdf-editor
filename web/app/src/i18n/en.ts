@@ -569,6 +569,8 @@ export const EN = {
   'flatten.close': 'Close',
   'flatten.confirm.body':
     'Every comment is drawn into its page, and comments can no longer be edited as comments. Form fields and signatures are not changed. You can undo this until you save. After you save, the flattening is permanent for that file. If the document is signed, a save over the original is refused, so save a copy instead.',
+  'flatten.signedNote':
+    'This document is signed. Flattening keeps the signature fields, but the signatures will show that the pages changed after signing.',
   'flatten.confirm.run': 'Flatten now',
   'flatten.confirm.cancel': 'Cancel',
   'flatten.done': 'Annotations flattened.',
@@ -626,6 +628,8 @@ export const EN = {
   'sanitize.result.heading': 'Removed:',
   'sanitize.result.none': 'Nothing needed removing.',
   'sanitize.failed': 'The document could not be sanitized. Try again.',
+  'sanitize.refused.signed':
+    'This document is signed. Sanitizing it would invalidate the signatures.',
   'combine.title': 'Combine files',
   'combine.label': 'Combining files',
   'combine.dropHint':
