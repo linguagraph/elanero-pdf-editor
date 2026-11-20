@@ -1,8 +1,9 @@
 // Reading and applying the document properties (W7.6). The current values come from session.info,
 // an existing call. A change is one actions.run of document.set_metadata, and its info toast
-// offers Undo, which calls actions.undo. Nothing here builds the Info block in the engine.
+// offers Undo for that step (the shared helper, W4.4b). Nothing here builds the Info block in the engine.
 import type { PageRpc } from '../engine/engineConnection';
-import { reportRpcError, type ToastStore, toasts, undoAction } from '../feedback/toasts';
+import { offerUndo } from '../feedback/undoToast';
+import { reportRpcError, type ToastStore, toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { DocInfo } from '../rpc/generated';
@@ -62,24 +63,16 @@ export async function applyProperties(
       args: { metadata: metadataArgs(info, changed) },
     });
     if (!reply.executed) return { status: 'unchanged' };
-    store.push(
-      'info',
-      t('properties.updated'),
-      undoAction(() => void undoProperties(deps)),
-    );
+    // The Undo offer is for this step only: the engine refuses it once the document has moved on.
+    offerUndo('info', t('properties.updated'), {
+      rpc: deps.rpc,
+      handle: deps.handle,
+      history: reply.state.history,
+      store,
+    });
     return { status: 'applied' };
   } catch (error) {
     reportFailure(store, error);
     return { status: 'failed' };
-  }
-}
-
-// Reverses the last step, which is the metadata change the toast offered to undo.
-export async function undoProperties(deps: PropertiesDeps): Promise<void> {
-  const store = deps.store ?? toasts;
-  try {
-    await deps.rpc.call('actions.undo', { handle: deps.handle, expect_history: null });
-  } catch (error) {
-    reportFailure(store, error);
   }
 }

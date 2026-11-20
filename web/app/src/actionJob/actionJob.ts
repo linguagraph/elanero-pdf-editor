@@ -54,6 +54,8 @@ export interface ActionJobOutcome {
   readonly changed: ChangedDto | null;
   // The action's own result, as the job reported it (W1.3 ActionResult.value).
   readonly value: unknown;
+  // The document's undo history after the apply (DocStateDto.history), for an Undo offer.
+  readonly history: number;
 }
 
 interface ActionJobReply {
@@ -172,7 +174,12 @@ export async function runActionJob(
     });
     void memoryWarner.check(engine, 'job');
     progress.finish(token, { ok: true });
-    return { label: reply.label, changed: applied.changed, value: reply.value };
+    return {
+      label: reply.label,
+      changed: applied.changed,
+      value: reply.value,
+      history: applied.state.history,
+    };
   } catch (error) {
     if (error instanceof ActionJobCancelled) throw error;
     // Frees the prepared job. Best effort: the engine drops unused jobs on the next prepare.

@@ -74,7 +74,7 @@ function fakeRpc(pageCount: number, moveValue: number[] = [1], locked?: string) 
           executed: true,
           value,
           changed: null,
-          state: {},
+          state: { history: 3 },
         });
       }
       if (method === 'actions.undo') {
@@ -294,7 +294,11 @@ describe('page organizer actions', () => {
 
     act(() => toast?.action?.run());
     await flush();
-    expect(calls.some((call) => call.method === 'actions.undo')).toBe(true);
+    // The Undo names the rotate's history, so a press after a later change is refused.
+    expect(calls).toContainEqual({
+      method: 'actions.undo',
+      params: { handle: 'h', expect_history: 3 },
+    });
   });
 
   it('move down calls pages.move and follows the pages it placed', async () => {
