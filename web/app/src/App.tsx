@@ -368,6 +368,13 @@ export function App({
     firstAlone: false,
     night: false,
   });
+  // The night flag the view last reported (or the one this handler set since). Night Mode flips
+  // this, not the render's copy, so two toggles before a re-render still flip twice.
+  const nightRef = useRef(false);
+  const onViewChange = useCallback((next: DocumentViewState) => {
+    nightRef.current = next.night;
+    setViewState(next);
+  }, []);
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).
   const history = useNavHistory(activeId);
@@ -459,7 +466,11 @@ export function App({
             viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: false }),
           'two-up-with-cover-page': () =>
             viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: true }),
-          'night-reading': () => viewRef.current?.setNight(!viewState.night),
+          'night-reading': () => {
+            const next = !nightRef.current;
+            nightRef.current = next;
+            viewRef.current?.setNight(next);
+          },
           // Organize Pages opens the organizer panel on the right, as its rail button does.
           'organize-pages': () => openPanel('organizer'),
           // Select and Hand (W4.10). Hand pressed again returns to Select, as on the desktop.
@@ -845,7 +856,7 @@ export function App({
             handle={session.handle}
             scheduler={scheduler}
             redaction={redaction ?? undefined}
-            onViewChange={setViewState}
+            onViewChange={onViewChange}
             startWorker={jobs.acquire}
             tool={viewTool}
             onToolChange={(tool) => {

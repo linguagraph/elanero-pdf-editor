@@ -115,13 +115,19 @@ export const CAN_GO_FORWARD: Enabled = (state) => {
 };
 // The view's page and zoom rules (W4.3a S6). A view that has not reported yet has no page or zoom
 // to check against, so the command stays enabled and its handler finds the view when it runs.
+// A view that has reported no pages yet (pageCount 0) cannot tell first from last, so the page
+// commands say "not available yet" rather than "first page" or "last page".
 export const NOT_FIRST_PAGE: Enabled = (state) => {
   if (!state.hasDocument) return 'needsDocument';
-  return state.view === null || state.view.page > 1 ? null : 'firstPage';
+  if (state.view === null) return null;
+  if (state.view.pageCount === 0) return 'notAvailableYet';
+  return state.view.page > 1 ? null : 'firstPage';
 };
 export const NOT_LAST_PAGE: Enabled = (state) => {
   if (!state.hasDocument) return 'needsDocument';
-  return state.view === null || state.view.page < state.view.pageCount ? null : 'lastPage';
+  if (state.view === null) return null;
+  if (state.view.pageCount === 0) return 'notAvailableYet';
+  return state.view.page < state.view.pageCount ? null : 'lastPage';
 };
 export const CAN_ZOOM_IN: Enabled = (state) => {
   if (!state.hasDocument) return 'needsDocument';

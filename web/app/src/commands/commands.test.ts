@@ -340,6 +340,13 @@ describe('the View and Home commands (W4.3a S6)', () => {
     expect(commandDisabledReasonOf('next-page', inView)).toBeNull();
   });
 
+  it('says not available yet, not last or first page, before the view reports its page count', () => {
+    // The view's first state has page 1 and no pages: Next Page must not claim it is the last page.
+    const unknown = { ...inView, view: viewOf({ page: 1, pageCount: 0 }) };
+    expect(commandDisabledReasonOf('next-page', unknown)).toBe('notAvailableYet');
+    expect(commandDisabledReasonOf('previous-page', unknown)).toBe('notAvailableYet');
+  });
+
   it('needs a document for the page commands and the zoom commands', () => {
     for (const id of ['previous-page', 'next-page', 'zoom-in', 'zoom-out']) {
       expect(commandDisabledReasonOf(id, state())).toBe('needsDocument');
