@@ -412,6 +412,34 @@ export const EN = {
   'redactions.delete': 'Delete',
   'redactions.hint': 'Enter opens the page. Delete removes the selected marks.',
 
+  // Crop pages (W4.11): the dialog, its checks, and the result.
+  'crop.title': 'Crop Pages',
+  'crop.description': 'Hides the margins from view and print; the content stays in the file.',
+  'crop.margins': 'Margins',
+  'crop.left': 'Left',
+  'crop.top': 'Top',
+  'crop.right': 'Right',
+  'crop.bottom': 'Bottom',
+  'crop.unit': 'Unit',
+  'crop.unit.pt': 'Points (pt)',
+  'crop.unit.mm': 'Millimetres (mm)',
+  'crop.unit.in': 'Inches (in)',
+  'crop.pages': 'Pages to crop',
+  'crop.pages.all': 'All pages ({count})',
+  'crop.pages.current': 'Current page ({page})',
+  'crop.pages.range': 'Pages',
+  'crop.apply': 'Crop',
+  'crop.cancel': 'Cancel',
+  'crop.signedNote':
+    'This document is signed. Cropping keeps the signature, but it will show that the pages changed after signing.',
+  'crop.error.number': 'Enter each margin as a number, such as 36 or 12.5.',
+  'crop.error.negative': 'A margin cannot be negative.',
+  'crop.error.range': 'Enter pages that exist in this document, such as 1-3, 5.',
+  'crop.error.tooLarge':
+    'The margins would leave less than 1 pt of page {page}. Enter smaller margins.',
+  'crop.done': { one: 'Cropped {count} page', other: 'Cropped {count} pages' },
+  'crop.failed': 'The pages could not be cropped. Try again.',
+
   // Flatten annotations (W7.9): the confirmation, then the result.
   'flatten.title': 'Flatten annotations',
   'flatten.counting': 'Checking the comments...',
@@ -721,6 +749,10 @@ export const EN = {
     'A password-protected file cannot be reduced in the browser, because the result would lose its password. Use the desktop app.',
   'error.REFUSED.documentChanged':
     'The document changed while this was being prepared. Start again.',
+  'error.REFUSED.cropTooLarge':
+    'The margins would leave less than 1 pt of a page. Enter smaller margins.',
+  'error.REFUSED.invalidMargins': 'A margin cannot be negative.',
+  'error.REFUSED.invalidPages': 'One of the chosen pages is not in this document.',
   'error.BUSY': 'Wait for the current task to finish, then try again.',
   'error.NOT_SUPPORTED': 'This is not available in the web version.',
   'error.STALE_OBJECT': 'The page changed since you last looked. Try again.',

@@ -70,6 +70,9 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   encrypted_mutating_job: 'job.encryptedRefused',
   encrypted_reduce: 'error.REFUSED.encryptedReduce',
   'document changed': 'error.REFUSED.documentChanged',
+  crop_too_large: 'error.REFUSED.cropTooLarge',
+  invalid_margins: 'error.REFUSED.invalidMargins',
+  invalid_pages: 'error.REFUSED.invalidPages',
 };
 
 function refusedReason(details: Details): Variant | undefined {
