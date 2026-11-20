@@ -13,6 +13,7 @@ import {
   markStylePatchJson,
   type MarkRef,
   type MarkStylePatch,
+  type RedactionAreaJson,
   redactionAreaJson,
 } from './marks';
 import type { PageRect } from '../comments/coordinates';
@@ -51,25 +52,34 @@ export function redactionStyleJson(
   };
 }
 
-// Adds one mark for a box drawn on a page. One undo step; the reply names the mark it added. The
-// author and the style are read from the preferences now, so a change applies to the next mark.
-export async function addRedactionMark(
+// Adds marks for the given areas: one undo step, and the reply names the marks it added. The author
+// and the style are read from the preferences now, so a change applies to the next mark.
+export async function addRedactionAreas(
   rpc: PageRpc,
   handle: string,
-  page: number,
-  rect: PageRect,
+  areas: readonly RedactionAreaJson[],
 ): Promise<MarksResult> {
   const prefs = readPreferences();
   const reply = await rpc.call('actions.run', {
     handle,
     name: 'redaction.mark',
     args: {
-      areas: [redactionAreaJson(page, rect)],
+      areas,
       author: prefs.authorName,
       style: redactionStyleJson(prefs),
     },
   });
   return { marks: reply.executed ? readMarkRefs(reply.value) : [], changed: reply.changed };
+}
+
+// Adds one mark for a box drawn on a page. One undo step; the reply names the mark it added.
+export function addRedactionMark(
+  rpc: PageRpc,
+  handle: string,
+  page: number,
+  rect: PageRect,
+): Promise<MarksResult> {
+  return addRedactionAreas(rpc, handle, [redactionAreaJson(page, rect)]);
 }
 
 // Deletes the named marks. The step is undoable like any other.

@@ -53,6 +53,7 @@ import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { RedactionController } from './redaction/controller';
+import { markSelectedText } from './redaction/markText';
 import { RedactionsPanel } from './redaction/RedactionsPanel';
 import { RedactionPropertiesDialog } from './redaction/RedactionPropertiesDialog';
 import { useRedactionState } from './redaction/useRedaction';
@@ -398,6 +399,16 @@ export function App({
       ? {
           // Go to Page (W4.3b) focuses the canvas pill's page field.
           'go-to-page': () => viewRef.current?.focusPageField(),
+          // Mark Text (W4.12) marks the browser's selection on the view's pages; nothing is applied.
+          'mark-text': () => {
+            const view = viewRef.current;
+            if (redaction === null || view === null) return;
+            void markSelectedText({
+              controller: redaction,
+              selection: window.getSelection(),
+              lookup: (page) => view.cachedLines(page),
+            });
+          },
           'zoom-in': () => runView('zoom-in'),
           'zoom-out': () => runView('zoom-out'),
           'fit-width': () => runView('fit-width'),

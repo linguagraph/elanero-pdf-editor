@@ -398,6 +398,11 @@ export const EN = {
   'redact.confirm.cancel': 'Cancel',
   'redact.applied': 'Redactions applied.',
   'redact.markFailed': 'The area could not be marked. Try again.',
+  'redact.selectTextFirst': 'Select some text on a page first, then press Mark Text.',
+  'redact.markedText': {
+    one: 'Marked {count} selected area for redaction.',
+    other: 'Marked {count} selected areas for redaction.',
+  },
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
   'redactions.editFailed': 'The redaction could not be changed. Try again.',
   'redactions.stale': 'That redaction is no longer in the document. The list has been updated.',

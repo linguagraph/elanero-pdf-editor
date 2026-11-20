@@ -156,6 +156,10 @@ is reloaded until you press it.
   every selected mark. A locked mark cannot be changed. **Delete** removes the selected marks.
   **Apply Selected** and **Apply All** burn the marks into the document after you confirm; Apply All
   includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
+- **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you have selected on the pages as
+  redaction marks: one mark per page, all in one undo step. It only marks. Nothing is removed until you
+  apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text selected, the
+  command asks you to select some first.
 
 ## Going to a page
 
@@ -260,7 +264,7 @@ full policy, with what the desktop app stores, is in the
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
-| Redaction: mark areas, the Redactions panel, apply | Yes | Yes (Mark areas on the toolbar; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
+| Redaction: mark areas, Mark Text, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Other comments, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
