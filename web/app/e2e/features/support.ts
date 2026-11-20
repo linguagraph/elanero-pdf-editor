@@ -109,3 +109,35 @@ export function recordHostCheck(
   mkdirSync(dirname(MANIFEST), { recursive: true });
   writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2));
 }
+
+// The visible width and height of a page, in CSS pixels, from the box the view sizes for it. A crop
+// changes the visible space, so the box changes with it. The zoom is a fit mode (fit width keeps the
+// width of the column), so a test compares the aspect ratio, which only the page's size can change.
+export async function pageSize(
+  page: Page,
+  pageIndex: number,
+): Promise<{ width: number; height: number }> {
+  return page.evaluate((index) => {
+    const box = document.querySelector<HTMLElement>(`[data-page="${index}"]`);
+    return {
+      width: parseFloat(box?.style.width ?? '0'),
+      height: parseFloat(box?.style.height ?? '0'),
+    };
+  }, pageIndex);
+}
+
+// Crops every page by the same margin (points) through the Organize tab's Crop Pages dialog, then
+// waits for the toast that names the crop (its Undo is the step's undo, W4.11).
+export async function cropAllPages(page: Page, margin: number, pages: number): Promise<void> {
+  await page.locator('.ribbon [role="tab"]', { hasText: 'Organize' }).click();
+  await page.getByRole('button', { name: 'Crop', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Crop Pages' });
+  await expect(dialog).toBeVisible();
+  for (const side of ['Left', 'Top', 'Right', 'Bottom']) {
+    await dialog.getByLabel(side, { exact: true }).fill(String(margin));
+  }
+  await dialog.getByRole('button', { name: 'Crop', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  // A toast from an earlier crop may still show the same text, so the count is checked, not one match.
+  await expect(page.getByText(`Cropped ${pages} pages`, { exact: true })).not.toHaveCount(0);
+}
