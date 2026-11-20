@@ -39,6 +39,13 @@ export const EN = {
 
   // Ribbon and app menu (W1.6 sections 2, 6 and 9). Tabs and groups follow the desktop order.
   'ribbon.label': 'Ribbon',
+  'ribbon.collapse': 'Collapse ribbon',
+  'ribbon.expand': 'Show the ribbon',
+  'ribbon.collapseTip': 'Collapse the ribbon to its tabs ({keys})',
+  'ribbon.commandTip': '{label} ({keys})',
+  'ribbon.group.app.ribbon': 'Ribbon',
+  'command.collapse-ribbon.label': 'Collapse Ribbon',
+  'command.compact-ribbon.label': 'Compact Ribbon',
   'ribbon.tab.home': 'Home',
   'ribbon.tab.edit': 'Edit',
   'ribbon.tab.organize': 'Organize',
@@ -244,6 +251,7 @@ export const EN = {
   'prefs.theme.system': 'Same as system',
   'prefs.theme.light': 'Light',
   'prefs.theme.dark': 'Dark',
+  'prefs.ribbonCompact': 'Compact ribbon',
   'prefs.reduceMotion.label': 'Reduce motion',
   'prefs.reduceMotion.hint': 'Turns off animations where Elanero has them.',
   'prefs.zoom.label': 'Default zoom',

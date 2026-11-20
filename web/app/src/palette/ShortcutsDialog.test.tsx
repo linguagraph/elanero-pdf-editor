@@ -23,6 +23,8 @@ const STATE: CommandState = {
   canUndo: false,
   canRedo: false,
   capabilities: new Set(),
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 
 let host: HTMLDivElement;

@@ -43,6 +43,9 @@ export interface CommandState {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly capabilities: ReadonlySet<Capability>;
+  // The ribbon's own choices (W4.3a S2): the user's, not the form the width forces.
+  readonly ribbonCompact: boolean;
+  readonly ribbonCollapsed: boolean;
 }
 
 // notAvailableYet is not an enabled rule: the caller reports it when a command has no handler.
@@ -84,6 +87,8 @@ export interface CommandDef {
   readonly icon?: IconName;
   // Search aliases (W4.3b D3): the palette also matches words in this message. Never shown.
   readonly keywordsId?: MessageId;
+  // A toggle's state (W1.6 section 9): true when the command's option is on.
+  readonly checked?: (state: CommandState) => boolean;
 }
 
 export interface Registry {

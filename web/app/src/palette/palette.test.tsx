@@ -27,6 +27,8 @@ const OPEN_STATE: CommandState = {
   canUndo: true,
   canRedo: true,
   capabilities: new Set(),
+  ribbonCompact: false,
+  ribbonCollapsed: false,
 };
 
 const NO_DOCUMENT_STATE: CommandState = { ...OPEN_STATE, hasDocument: false, canUndo: false };

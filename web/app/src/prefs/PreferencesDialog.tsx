@@ -211,6 +211,13 @@ function PreferencesForm({
         </RadioGroup>
         <Checkbox
           className="prefs-option"
+          isSelected={draft.ribbonCompact}
+          onChange={(selected) => update('ribbonCompact', selected)}
+        >
+          {t('prefs.ribbonCompact')}
+        </Checkbox>
+        <Checkbox
+          className="prefs-option"
           isSelected={draft.reduceMotion}
           onChange={(selected) => update('reduceMotion', selected)}
         >
