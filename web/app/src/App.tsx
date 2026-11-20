@@ -28,6 +28,8 @@ import { Ribbon } from './ribbon/Ribbon';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
 import { onPreferencesChanged, readPreferences, writePreferences } from './prefs/store';
 import { CombineDialog } from './combine/CombineDialog';
+import { EncryptDialog } from './security/EncryptDialog';
+import { RemoveSecurityDialog } from './security/RemoveSecurityDialog';
 import { PropertiesDialog } from './properties/PropertiesDialog';
 import { CommandPalette } from './palette/CommandPalette';
 import { openCommandPalette } from './palette/openCommandPalette';
@@ -194,6 +196,8 @@ export function App({
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [encryptOpen, setEncryptOpen] = useState(false);
+  const [removeSecurityOpen, setRemoveSecurityOpen] = useState(false);
   // Redaction Properties (W4.14): the style of new marks. It needs no document.
   const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
   // Mark Pages (W4.13): the dialog that marks whole pages. Opens only with a document.
@@ -274,6 +278,8 @@ export function App({
     'reduce-file-size': () => setCompressOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
+    'encrypt-with-password': () => setEncryptOpen(true),
+    'remove-security': () => setRemoveSecurityOpen(true),
     'redaction-properties': () => setRedactionPropsOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
@@ -999,6 +1005,23 @@ export function App({
           onClose={() => setPropertiesOpen(false)}
           rpc={session.rpc}
           handle={session.handle}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <EncryptDialog
+          isOpen={encryptOpen}
+          onClose={() => setEncryptOpen(false)}
+          rpc={session.rpc}
+          handle={session.handle}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <RemoveSecurityDialog
+          isOpen={removeSecurityOpen}
+          onClose={() => setRemoveSecurityOpen(false)}
+          rpc={session.rpc}
+          handle={session.handle}
+          name={activeTab.name}
         />
       ) : null}
       <SignedWarningDialog

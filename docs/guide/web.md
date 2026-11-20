@@ -230,7 +230,7 @@ version yet:
 - opening, viewing, searching and saving PDF files, and the start page with recent files;
 - the ribbon, the command palette and keyboard shortcuts;
 - editing the text of a paragraph, adding text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files (moving, resizing and deleting text and images is available; see the table below);
-- comments other than sticky notes, rectangles and highlights, the Comments panel, stamps and watermarks, password protection, and comparing files;
+- comments other than sticky notes, rectangles and highlights, the Comments panel, stamps and watermarks, and comparing files;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
 - printing, and translation (which will be turned on only when you ask for it);
 - the **Install App** command.
@@ -314,7 +314,8 @@ full policy, with what the desktop app stores, is in the
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
-| Other comments, stamps, watermarks, security | Yes | Coming soon |
+| Other comments, stamps, watermarks | Yes | Coming soon |
+| Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
 | Print | Yes | Coming soon |
