@@ -146,6 +146,14 @@ is reloaded until you press it.
   and Enter goes to the page.
   Entries without a page are greyed out. The panel is read-only for now: you cannot add, rename or
   move bookmarks yet. Each open document keeps its own expanded entries until you close it.
+- **Comments.** The **Comments** button on the left rail lists the document's comments, one entry
+  per thread, with the replies under their comment. Each entry shows its page, type, author, date,
+  status and text. Search the text and authors, or choose a type, author or status to narrow the
+  list; a thread stays whole when only one of its replies matches. Click an entry (or press Enter
+  on it) to go to its page. The list is in page order, top to bottom, and it is read-only for now:
+  you cannot reply, change a status, edit or delete a comment from the panel yet. The panel opens
+  and closes for each open document, and the list is read again after each change, undo, redo and
+  save. A very long list is cut short, and the panel says so.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
   thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
   Shift-click to select a range. Then rotate the selected pages left or right, move them up or

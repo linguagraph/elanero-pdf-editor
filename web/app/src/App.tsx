@@ -69,6 +69,9 @@ import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory'
 import { setViewTool, useViewTool } from './view/viewTool';
 import { acceptSignedEdit, requestEditTool } from './edit/editTool';
 import { SignedWarningDialog } from './edit/signedWarning';
+import { CommentsPanel } from './comments/panel/CommentsPanel';
+import { CommentsController } from './comments/panel/controller';
+import { useCommentsCount } from './comments/panel/useComments';
 import type { CommentToolId } from './comments/tools';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
@@ -326,6 +329,24 @@ export function App({
     null,
   );
   const documentShown = !showStart && activeId !== null && session !== null && scheduler !== null;
+  // The comments list of the open session (W7.1b S3): one read-only controller, shared by the panel
+  // and the rail count. It stays in step with the document while it runs, and reads the list only
+  // while the Comments panel is open.
+  const comments = useMemo(
+    () =>
+      session === null || scheduler === null
+        ? null
+        : new CommentsController({ rpc: session.rpc, handle: session.handle, scheduler }),
+    [session, scheduler],
+  );
+  useEffect(() => (comments === null ? undefined : comments.start()), [comments]);
+  const commentsOpen = documentShown && leftPanelOpen === 'comments';
+  useEffect(() => {
+    if (comments === null) return undefined;
+    comments.setOpen(commentsOpen);
+    return () => comments.setOpen(false);
+  }, [comments, commentsOpen]);
+  const commentsCount = useCommentsCount(comments);
   // The left panels as menu items: they open the same panel the rail button does.
   const menuPanelItems: readonly AppMenuPanelItem[] = [
     {
@@ -380,6 +401,8 @@ export function App({
     reportSaveOutcome(outcome, downloadBytes, toasts, () => {
       setSaveAsTab(tab);
     });
+    // A save renames the synthetic comment names, so the list is read again (controller note).
+    if (outcome.status === 'saved' && tab.handle === session?.handle) comments?.noteChange();
   };
   // Save As (W4.9) writes a full copy under the name the dialog gave. The copy is then the file the
   // tab is named after, so the tab takes the name; a refused or blocked copy leaves the tab as it was.
@@ -475,6 +498,7 @@ export function App({
   // one that changed the structure or the outline remounts the lists, as a crop does.
   const onHistoryStep = (reply: HistoryResult) => {
     scheduler?.noteRevisions(reply.changed?.revisions ?? {});
+    comments?.noteChange();
     if (reply.changed?.changes.some((c) => c.kind === 'structure' || c.kind === 'outline')) {
       setStructureRevision((value) => value + 1);
     }
@@ -636,6 +660,14 @@ export function App({
                 : 0
             }
           />
+          <RailButton
+            panel="comments"
+            label={t('comments.title')}
+            icon={RAIL_ICONS.comments}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
+            count={commentsCount}
+          />
         </>
       }
       leftPanel={
@@ -669,6 +701,16 @@ export function App({
             key={activeId}
             controller={redaction}
             onGoTo={goTo}
+            onClose={() => closePanel('left')}
+          />
+        ) : documentShown &&
+          leftPanelOpen === 'comments' &&
+          activeId !== null &&
+          comments !== null ? (
+          <CommentsPanel
+            key={activeId}
+            controller={comments}
+            onGoTo={(page) => goTo(page)}
             onClose={() => closePanel('left')}
           />
         ) : documentShown && leftPanelOpen === 'pages' && session !== null && scheduler !== null ? (
