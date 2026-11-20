@@ -858,12 +858,17 @@ def _pixel_red_pdfium(data: bytes, page: int, x: int, y: int) -> None:
 
 
 @host_check("crop_box_size_pikepdf")
-def _crop_box_size_pikepdf(data: bytes, width: float, height: float) -> None:
-    """The first page's CropBox is ``width`` x ``height`` (pytest.approx with abs=0.5)."""
+def _crop_box_size_pikepdf(
+    data: bytes, width: float, height: float, page: int = 0, password: str = ""
+) -> None:
+    """Page ``page``'s CropBox is ``width`` x ``height`` (pytest.approx with abs=0.5).
+
+    The box is the stored, unrotated one, so a rotated page's check passes the unrotated size.
+    """
     import pikepdf
 
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        box = [float(v) for v in pdf.pages[0].obj.CropBox]
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
+        box = [float(v) for v in pdf.pages[page].obj.CropBox]
     assert math.isclose(box[2] - box[0], width, rel_tol=1e-6, abs_tol=0.5)
     assert math.isclose(box[3] - box[1], height, rel_tol=1e-6, abs_tol=0.5)
 

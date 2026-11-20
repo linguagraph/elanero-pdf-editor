@@ -5,6 +5,7 @@ Ported from the desktop's ``ui/page_ops.py``: the same Commands, the same undo l
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -287,18 +288,52 @@ def replace(
             source.close()
 
 
+# A crop narrower or shorter than this is refused: a page of under a point is never intended, and
+# MuPDF would normalise an inverted box into a wrong strip (W4.11). Same value on the web.
+_MIN_CROP_SIDE = 1.0
+
+
+def _check_crop_pages(session: DocumentSession, pages: tuple[int, ...]) -> None:
+    with session.lock:
+        count = session.page_count
+    for i in pages:
+        if not 0 <= i < count:
+            raise Refused(f"Page {i + 1} is not in the document.", reason="invalid_pages")
+
+
+def _check_crop_target(page: int, target: Rect) -> None:
+    if target.width < _MIN_CROP_SIDE or target.height < _MIN_CROP_SIDE:
+        raise Refused(
+            f"Cropping page {page + 1} would leave less than {_MIN_CROP_SIDE:g} point.",
+            reason="crop_too_large",
+        )
+
+
 @action("pages.crop_margins", CropMargins, requires=("page_ops",))
 def crop_margins(session: DocumentSession, args: CropMargins) -> ActionResult[None]:
     ensure_idle(session)
+    label = f"Crop {plural(len(args.pages))}"
+    margins = (args.left, args.top, args.right, args.bottom)
+    if any(not math.isfinite(m) or m < 0 for m in margins):
+        raise Refused("Margins cannot be negative.", reason="invalid_margins")
+    _check_crop_pages(session, args.pages)
+    if not args.pages or all(m == 0 for m in margins):
+        return ActionResult(label, None, executed=False)
+
+    # The targets are worked out before the snapshot, so an oversize margin is refused and
+    # changes nothing (no undo step), rather than failing midway through the operation.
+    targets: dict[int, Rect] = {}
+    with session.lock:
+        for i in args.pages:
+            r = session.document.page(i).rect
+            target = Rect(r.x0 + args.left, r.y0 + args.top, r.x1 - args.right, r.y1 - args.bottom)
+            _check_crop_target(i, target)
+            targets[i] = target
 
     def op(doc: Document) -> None:
-        for i in args.pages:
-            r = doc.page(i).rect
-            doc.page(i).set_crop(
-                Rect(r.x0 + args.left, r.y0 + args.top, r.x1 - args.right, r.y1 - args.bottom)
-            )
+        for i, target in targets.items():
+            doc.page(i).set_crop(target)
 
-    label = f"Crop {plural(len(args.pages))}"
     snapshot(session, label, op)
     return ActionResult(label, None)
 
@@ -306,12 +341,22 @@ def crop_margins(session: DocumentSession, args: CropMargins) -> ActionResult[No
 @action("pages.crop_rect", CropRect, requires=("page_ops",))
 def crop_rect(session: DocumentSession, args: CropRect) -> ActionResult[None]:
     ensure_idle(session)
+    label = f"Crop {plural(len(args.pages))}"
+    _check_crop_pages(session, args.pages)
+    if not args.pages:
+        return ActionResult(label, None, executed=False)
+
+    targets: dict[int, Rect] = {}
+    with session.lock:
+        for i in args.pages:
+            target = args.rect.intersection(session.document.page(i).rect)
+            _check_crop_target(i, target)
+            targets[i] = target
 
     def op(doc: Document) -> None:
-        for i in args.pages:
-            doc.page(i).set_crop(args.rect.intersection(doc.page(i).rect))
+        for i, target in targets.items():
+            doc.page(i).set_crop(target)
 
-    label = f"Crop {plural(len(args.pages))}"
     snapshot(session, label, op)
     return ActionResult(label, None)
 
