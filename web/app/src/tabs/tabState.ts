@@ -21,6 +21,9 @@ export interface DocumentTab {
   readonly canRedo: boolean;
   // True while a background task makes the document read-only (the engine's busy field).
   readonly busy: boolean;
+  // True when the document was reopened from its autosave copy after an engine restart (W3.9). Its
+  // signature lineage is gone, so an in-place save of a signed one is refused (W4.8).
+  readonly restored: boolean;
 }
 
 // A document the engine has opened, as the tab needs it.
@@ -56,6 +59,7 @@ export function addTab(state: TabState, opened: OpenedTab): TabState {
     canUndo: false,
     canRedo: false,
     busy: false,
+    restored: false,
   };
   return { tabs: [...state.tabs, tab], activeId: tab.id, nextId: state.nextId + 1 };
 }
@@ -141,6 +145,8 @@ export function replaceHandle(
 ): TabState {
   return {
     ...state,
-    tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, handle, pages, dirty: true } : tab)),
+    tabs: state.tabs.map((tab) =>
+      tab.id === id ? { ...tab, handle, pages, dirty: true, restored: true } : tab,
+    ),
   };
 }

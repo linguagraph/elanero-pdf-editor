@@ -30,6 +30,7 @@ const TABS: DocumentTab[] = [
     canUndo: false,
     canRedo: false,
     busy: false,
+    restored: false,
   },
   {
     id: 2,
@@ -42,6 +43,7 @@ const TABS: DocumentTab[] = [
     canUndo: false,
     canRedo: false,
     busy: false,
+    restored: false,
   },
 ];
 

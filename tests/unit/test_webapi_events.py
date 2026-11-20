@@ -266,6 +266,28 @@ def test_mark_saved_on_a_document_never_saved_through_the_web_is_refused(
     assert REGISTRY.get(handle).is_dirty is True
 
 
+def test_undo_after_a_saved_save_makes_the_document_dirty_again(
+    web: None, fixture_pdf: Any
+) -> None:
+    # A save is a read, so the undo history is the one the edit left. Undo after the saved copy
+    # changes the document again: its state event reports it dirty (W4.8 S1 shows the dot).
+    handle = open_bytes(fixture_pdf)
+    ok(rotate(handle))
+    session = REGISTRY.get(handle)
+    label = session.undo_stack.undo_label
+    save_copy(handle)
+    ok(mark_saved(handle))
+    assert session.is_dirty is False
+    assert session.undo_stack.can_undo is True
+    assert session.undo_stack.undo_label == label
+    reply = undo(handle)
+    assert ok(reply)["done"] is True
+    states = [event["state"] for event in events_of(reply, "state")]
+    assert states[-1]["dirty"] is True
+    assert states[-1]["can_undo"] is False
+    assert session.is_dirty is True
+
+
 def test_read_only_calls_after_a_save_emit_no_saved_event(web: None, fixture_pdf: Any) -> None:
     handle = open_bytes(fixture_pdf)
     ok(rotate(handle))
