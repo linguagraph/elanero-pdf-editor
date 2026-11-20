@@ -50,6 +50,7 @@ dev = [
     "pre-commit>=3.6",
     "pyyaml>=6.0",  # the guide tests read mkdocs.yml and the docs workflow
     "numpy>=1.26",  # pixel comparisons in tests only (the app itself uses Pillow)
+    "pip-audit>=2.7",  # dependency audit, nightly security-audit.yml only; Apache-2.0
 ]
 
 [project.scripts]
