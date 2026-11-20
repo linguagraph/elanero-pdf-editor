@@ -90,11 +90,13 @@ is reloaded until you press it.
   tabs, and shows it again. Press **Ctrl+F1** to do the same. Pressing a tab, or double-clicking
   one, also brings a collapsed ribbon back. **Compact ribbon** in Preferences (Appearance) shows
   icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
-- **Keyboard shortcuts.** Only three are active in the web version so far: **Alt+Left** and
-  **Alt+Right** go back and forward through the pages you have visited, and **Alt+G** moves the
-  cursor to the page box in the status bar. The web version will use
-  the desktop's keys wherever the browser allows, and will list them in
-  [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming soon).
+- **Keyboard shortcuts.** A few web keys work so far: **Alt+Left** and **Alt+Right** go back and
+  forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
+  box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
+  document, wrapping at the ends. Go to Page and the two document keys are also in the command
+  palette. The web version will use the desktop's keys wherever the browser allows, and will list
+  them in [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming
+  soon).
   **Keyboard Shortcuts…** in the app menu and in Preferences shows the list that is available now.
 
 ## Side panels
@@ -190,7 +192,7 @@ full policy, with what the desktop app stores, is in the
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
 | Open, view, search and save PDFs | Yes | Coming soon |
-| Ribbon, command palette and keyboard shortcuts | Yes | Coming soon |
+| Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and some Alt keys work; the full palette and shortcut list are coming soon |
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |

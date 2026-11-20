@@ -29,6 +29,11 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   'import-comments',
 ]);
 
+// Desktop commands the web does not offer (W4.3b): New Window and Exit have no meaning in a browser
+// tab. They stay in the shared table, so the desktop keeps them, but they are not registry
+// commands, so they have no ribbon, menu, palette or shortcut entry. A test checks this.
+export const DROPPED_IDS: ReadonlySet<string> = new Set(['new-window', 'exit']);
+
 export const GROUPS: readonly GroupDef[] = [
   { id: 'home.file', tab: 'home', labelId: 'ribbon.group.home.file' },
   { id: 'home.history', tab: 'home', labelId: 'ribbon.group.home.history' },
@@ -106,6 +111,7 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'open-recent': 'folder-open',
   'export-comments': 'file-output',
   'import-comments': 'file-input',
+  'go-to-page': 'text-cursor-input',
 };
 
 const DECLARED_COMMANDS: readonly CommandDef[] = [
@@ -126,6 +132,8 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('forward', 'command.forward.label', 'home.navigate'),
   cmd('previous-page', 'command.previous-page.label', 'home.navigate'),
   cmd('next-page', 'command.next-page.label', 'home.navigate'),
+  // Alt+G (web override, W4.3b): focuses the status bar's page field.
+  cmd('go-to-page', 'command.go-to-page.label', 'home.navigate'),
 
   // Edit
   cmd('edit-text-images', 'command.edit-text-images.label', 'edit.edit'),
@@ -285,6 +293,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
 
   // App menu only
   cmd('close', 'command.close.label', 'app.file'),
+  // Palette and keys only, not in the menu (W4.3b D7). They wrap, and need a document as the other
+  // document commands do (D6).
+  cmd('next-document', 'command.next-document.label', 'app.file'),
+  cmd('previous-document', 'command.previous-document.label', 'app.file'),
   cmd('open-recent', 'command.open-recent.label', 'app.file', HAS_RECENT),
   cmd('save-as', 'command.save-as.label', 'app.file'),
   cmd('preferences', 'command.preferences.label', 'app.settings', OPEN_ANYTIME),

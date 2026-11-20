@@ -43,6 +43,17 @@ export function addTab(state: TabState, opened: OpenedTab): TabState {
   return { tabs: [...state.tabs, tab], activeId: tab.id, nextId: state.nextId + 1 };
 }
 
+// The tab Next (step 1) or Previous (step -1) Document goes to, wrapping at the ends (W4.3b D6, as
+// the desktop's _cycle_tab). With no tab active, Next takes the first and Previous the last. Null
+// when there are no tabs.
+export function neighbourTabId(state: TabState, step: 1 | -1): number | null {
+  const { tabs, activeId } = state;
+  if (tabs.length === 0) return null;
+  const at = tabs.findIndex((tab) => tab.id === activeId);
+  const base = at < 0 ? (step > 0 ? -1 : tabs.length) : at;
+  return tabs[(base + step + tabs.length) % tabs.length]?.id ?? null;
+}
+
 export function activateTab(state: TabState, id: number): TabState {
   return state.tabs.some((tab) => tab.id === id) ? { ...state, activeId: id } : state;
 }
