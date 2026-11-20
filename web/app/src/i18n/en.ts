@@ -398,6 +398,8 @@ export const EN = {
   'redact.applied': 'Redactions applied.',
   'redact.markFailed': 'The area could not be marked. Try again.',
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
+  'redactions.editFailed': 'The redaction could not be changed. Try again.',
+  'redactions.stale': 'That redaction is no longer in the document. The list has been updated.',
 
   // Flatten annotations (W7.9): the confirmation, then the result.
   'flatten.title': 'Flatten annotations',

@@ -48,6 +48,7 @@ import type { PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import type { ActionJobWorker } from '../actionJob/actionJob';
+import type { RedactionController } from '../redaction/controller';
 import { RedactLayer } from '../redaction/RedactLayer';
 import { RedactionBar } from '../redaction/RedactionBar';
 import { useRedaction } from '../redaction/useRedaction';
@@ -101,6 +102,9 @@ export interface DocumentViewProps {
   readonly searchMarks?: SearchMarks;
   // Starts the job worker for the redaction apply (W7.4). Tests leave it out; applying then fails.
   readonly startWorker?: () => ActionJobWorker;
+  // The document's redaction controller, made by the app per session (W7.4b) so the toolbar and the
+  // redactions panel share it. The view makes its own when absent.
+  readonly redaction?: RedactionController;
   // The view tool (W4.10): Hand pans with a drag. The app keeps it per tab; Select when absent.
   readonly tool?: ViewTool;
   // Called when the view itself asks for another tool: a comment or mark tool chosen here sets it
@@ -145,6 +149,7 @@ export function DocumentView({
   onViewChange,
   searchMarks,
   startWorker,
+  redaction,
   tool = 'select',
   onToolChange,
 }: DocumentViewProps) {
@@ -193,6 +198,7 @@ export function DocumentView({
     handle,
     scheduler,
     startWorker: startWorker ?? noJobWorker,
+    controller: redaction,
   });
   const pan = useHandPan(tool === 'hand');
   // The Hand tool and the comment or mark tools are not on together: choosing Hand turns them off
@@ -536,7 +542,7 @@ export function DocumentView({
             }
           }}
           onClear={() => void redactionTools.controller.clear()}
-          onApply={() => void redactionTools.controller.apply()}
+          onApply={() => void redactionTools.controller.apply(null)}
         />
       </div>
       {sizes === null ? (

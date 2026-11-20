@@ -5,9 +5,16 @@ import { type ActionJobDeps, runActionJob, type ActionJobOutcome } from '../acti
 import type { PageRpc } from '../engine/engineConnection';
 import { hexToColorJson, type ColorJson } from '../prefs/colour';
 import { type Preferences, readPreferences } from '../prefs/store';
-import type { ChangedDto } from '../rpc/generated';
+import type { ChangedDto, RedactionListResult } from '../rpc/generated';
 import { expectArray, expectInteger, expectObject, expectString, field } from '../rpc/shape';
-import { DEFAULT_REDACT_OPTIONS, markRefsJson, type MarkRef, redactionAreaJson } from './marks';
+import {
+  DEFAULT_REDACT_OPTIONS,
+  markRefsJson,
+  markStylePatchJson,
+  type MarkRef,
+  type MarkStylePatch,
+  redactionAreaJson,
+} from './marks';
 import type { PageRect } from '../comments/coordinates';
 
 export interface MarksResult {
@@ -79,15 +86,36 @@ export async function removeRedactionMarks(
   return reply.changed;
 }
 
+// Changes the style of the named marks: one undo step. The reply names the marks it changed.
+export async function restyleRedactionMarks(
+  rpc: PageRpc,
+  handle: string,
+  marks: readonly MarkRef[],
+  patch: MarkStylePatch,
+): Promise<ChangedDto | null> {
+  const reply = await rpc.call('actions.run', {
+    handle,
+    name: 'redaction.restyle_marks',
+    args: { marks: markRefsJson(marks), ...markStylePatchJson(patch) },
+  });
+  return reply.changed;
+}
+
+// The document's marks, as the engine lists them (every mark in the file, not this tab's only).
+export function listRedactionMarks(rpc: PageRpc, handle: string): Promise<RedactionListResult> {
+  return rpc.call('redaction.list', { handle });
+}
+
 // Burns the marks into the document: the text and the image pixels under them are removed, and
 // the engine checks that nothing readable is left (the report). Runs as a mutating action job.
+// Null applies every mark in the document, the ones from the file too (the desktop's Apply All).
 export function applyRedactions(
   deps: ActionJobDeps,
   handle: string,
-  marks: readonly MarkRef[],
+  marks: readonly MarkRef[] | null,
 ): Promise<ActionJobOutcome> {
   return runActionJob(deps, handle, 'redaction.apply', {
-    marks: markRefsJson(marks),
+    marks: marks === null ? null : markRefsJson(marks),
     options: { ...DEFAULT_REDACT_OPTIONS },
   });
 }

@@ -56,6 +56,9 @@ export class RenderScheduler {
   private readonly attempts = new Map<string, number>();
   private readonly failed = new Set<string>();
   private readonly listeners = new Set<() => void>();
+  // Told only when a change moved a revision (noteRevisions), not on every reply: the redaction
+  // list reloads on these, and a render reply must not start one.
+  private readonly revisionListeners = new Set<() => void>();
   private inFlight = 0;
   // Resolves once, when the first page (not a thumbnail) is drawn into the cache. The job worker
   // warm-up waits for it (W3.1 slice 2). It never rejects.
@@ -81,6 +84,14 @@ export class RenderScheduler {
     };
   }
 
+  // Called when noteRevisions moves a page's revision: a change to the document, not a render.
+  subscribeRevisions(listener: () => void): () => void {
+    this.revisionListeners.add(listener);
+    return () => {
+      this.revisionListeners.delete(listener);
+    };
+  }
+
   revisionOf(page: number): number {
     return this.revisions.get(page) ?? 0;
   }
@@ -95,7 +106,9 @@ export class RenderScheduler {
       this.revisions.set(page, revision);
       moved = true;
     }
-    if (moved) this.notify();
+    if (!moved) return;
+    this.notify();
+    for (const listener of [...this.revisionListeners]) listener();
   }
 
   // The cache key a page, a tile of a page or a thumbnail is drawn from, at the revision the

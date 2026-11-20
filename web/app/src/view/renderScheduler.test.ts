@@ -45,6 +45,28 @@ describe('RenderScheduler', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it('tells the revision listeners only when a revision moved (W7.4b)', async () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    const revisions = vi.fn();
+    const stop = scheduler.subscribeRevisions(revisions);
+    // A render reply notifies the render subscribers, but no revision moved: no revision signal.
+    scheduler.plan('page', plan([0]));
+    renders[0]?.resolve(reply(0));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(revisions).not.toHaveBeenCalled();
+
+    scheduler.noteRevisions({ '0': 3 });
+    expect(revisions).toHaveBeenCalledTimes(1);
+    scheduler.noteRevisions({ '0': 3 });
+    expect(revisions).toHaveBeenCalledTimes(1);
+
+    stop();
+    scheduler.noteRevisions({ '0': 4 });
+    expect(revisions).toHaveBeenCalledTimes(1);
+  });
+
   it('sends a waiting page render before the queued thumbnails when a slot opens', async () => {
     const { rpc, renders } = fakeRpc();
     const scheduler = new RenderScheduler(rpc, 'h');
