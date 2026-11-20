@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -92,5 +94,32 @@ describe('PageTextLayer', () => {
     });
     await flush();
     expect(host.querySelectorAll('.page-text-line')).toHaveLength(0);
+  });
+
+  // A gesture tool (the comment tools) draws with a drag over the page. The text layer sits above
+  // the tool's layer, so while a tool is on it must not take the pointer or start a selection.
+  it('marks itself passive while a gesture tool is on, and not otherwise', async () => {
+    const { rpc } = fakeRpc();
+    const cache = new TextLayerCache(rpc, 'doc-1');
+    const render = (passive?: boolean) =>
+      act(async () => {
+        root.render(
+          <PageTextLayer cache={cache} page={0} revision={0} zoom={1} passive={passive} />,
+        );
+      });
+    await render();
+    await flush();
+    const layer = host.querySelector('.page-text-layer');
+    expect(layer?.classList.contains('page-text-layer--passive')).toBe(false);
+    await render(true);
+    expect(layer?.classList.contains('page-text-layer--passive')).toBe(true);
+  });
+
+  it('the passive class turns off pointer events and text selection', () => {
+    // jsdom does not apply the stylesheet, so the rule itself is checked.
+    const css = readFileSync(join(process.cwd(), 'src/text/textLayer.css'), 'utf8');
+    const rule = /\.page-text-layer--passive[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toMatch(/pointer-events:\s*none/);
+    expect(rule).toMatch(/user-select:\s*none/);
   });
 });
