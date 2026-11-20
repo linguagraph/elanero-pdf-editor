@@ -10,14 +10,14 @@ today and marks what is coming soon.
 - **It runs in the browser tab.** Nothing to install on Windows, Mac or iPad: open the web address
   and the editor loads.
 - **It works offline after the first load.** The browser keeps the app's own files and the PDF
-  engine's files, so the editor opens without a connection. Your documents are never kept by the
-  web version (see
+  engine's files, so the editor opens without a connection. Your documents are not uploaded: they
+  stay in the browser, which keeps a private autosave copy of unsaved changes (see
   [Where your data is stored](#where-your-data-is-stored)).
 - **It can be installed as an app.** The browser can add Elanero to your desktop, dock or home
   screen and open it in its own window.
 - **The browser replaces some desktop features.** There is no menu bar and no separate window
-  or Exit command: the browser provides them. The app menu (☰) that will hold the remaining menu
-  commands is coming soon.
+  or Exit command: the browser provides them. The app menu (☰) holds the file, settings and help
+  commands; its **Install App** command is coming soon.
 - **Some features are desktop only.** OCR, digital signatures and PDF/A conversion are not planned
   for the web version yet. See the table at the end of this page.
 
@@ -29,6 +29,9 @@ live when the web version is published. Until then the button does not work yet;
 
 The first visit loads the editor's engine, which takes a little while. Later visits are faster
 because the browser keeps the app's files.
+
+A password-protected PDF asks for its password when it opens. The password is used only to open that
+file: it is not stored, and it is not sent anywhere.
 
 You don't have to wait for the engine. You can open or drop a PDF while Elanero starts: it is listed
 under "Waiting to open" and opens as soon as the engine is ready. To drop a waiting file, press
@@ -130,7 +133,7 @@ is reloaded until you press it.
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
   document, wrapping at the ends. Go to Page and the two document keys are also in the command
   palette. The web version will use the desktop's keys wherever the browser allows, and will list
-  them in [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming
+  them in [Keyboard shortcuts](keyboard-shortcuts.md) once every shortcut works in the web version (coming
   soon).
   **Keyboard Shortcuts…** in the app menu and in Preferences shows the list that is available now.
 
@@ -160,8 +163,8 @@ is reloaded until you press it.
   per thread, with the replies under their comment. Each entry shows its page, type, author, date,
   status and text. Search the text and authors, or choose a type, author or status to narrow the
   list; a thread stays whole when only one of its replies matches. Click an entry (or press Enter
-  on it) to go to its page. The list is in page order, top to bottom, and it is read-only for now:
-  you cannot reply, change a status, edit or delete a comment from the panel yet. The panel opens
+  on it) to go to its page. The list is in page order, top to bottom. Each thread takes a reply and a new status, and Undo
+  reverses either; editing and deleting a comment from the panel are coming soon. The panel opens
   and closes for each open document, and the list is read again after each change, undo, redo and
   save. A very long list is cut short, and the panel says so.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
@@ -224,15 +227,15 @@ is reloaded until you press it.
 
 ## What is not available yet
 
-These features are on the desktop today and are planned for the web version. None works in the web
-version yet:
+These features are on the desktop today and are planned for the web version. Most of them are not
+built in the web version yet:
 
-- opening, viewing, searching and saving PDF files, and the start page with recent files;
-- the ribbon, the command palette and keyboard shortcuts;
-- editing the text of a paragraph, adding text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files (moving, resizing and deleting text and images is available; see the table below);
-- comments other than sticky notes, rectangles and highlights, the Comments panel, stamps and watermarks, password protection, and comparing files;
+- the full set of keyboard shortcuts (the ribbon and the command palette work; see
+  [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
+- editing the words of a paragraph, adding text, images and shapes, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
+- comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and watermarks, and password protection;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
-- printing, and translation (which will be turned on only when you ask for it);
+- translation (which will be turned on only when you ask for it);
 - the **Install App** command.
 
 ## Browser support
@@ -304,20 +307,26 @@ full policy, with what the desktop app stores, is in the
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
 | Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
-| Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and some Alt keys work; the full palette and shortcut list are coming soon |
+| Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and the command palette (Ctrl+Shift+P) work, with some keys; the full shortcut list is coming soon |
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
-| Edit text, insert and extract pages, split, combine, compress | Yes | Coming soon |
+| Edit the words of a paragraph, add text, images or shapes | Yes | Coming soon |
+| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
+| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; each split part is offered as its own download, not a ZIP) |
+| Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
+| Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
 | Crop box drawn on a page | Yes | Yes (Crop dialog, Draw on page: drag a box on a page, Esc cancels; the dialog reopens with its margins on that page) |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
-| Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
+| Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change) |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Other comments, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
-| Print | Yes | Coming soon |
+| Extract images | Yes | Yes (Tools tab, Export group, Extract Images; choose the pages to look at; several images come back as one ZIP) |
+| Extract fonts | Yes | Yes (Tools tab, Export group, Extract Fonts; a font whose licence forbids saving is not saved, and the dialog names it) |
+| Print | Yes | Yes (Home tab, File group, Print, or Ctrl+P; choose the page range and resolution, and whether comments are printed) |
 | Translation (opt-in) | Yes | Coming soon |
 | OCR and batch OCR | Yes | Desktop only (for now) |
 | Digital signatures | Yes | Desktop only (for now) |
