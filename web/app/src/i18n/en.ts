@@ -400,6 +400,17 @@ export const EN = {
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
   'redactions.editFailed': 'The redaction could not be changed. Try again.',
   'redactions.stale': 'That redaction is no longer in the document. The list has been updated.',
+  // Redactions panel (W7.4b S4): the marks of the document, selected, went to, and deleted.
+  'redactions.title': 'Redactions',
+  'redactions.list': 'Redaction marks',
+  'redactions.loading': 'Loading redactions…',
+  'redactions.empty':
+    'This document has no redaction marks. Use Mark areas on the toolbar to add one.',
+  'redactions.page': 'Page {page}',
+  'redactions.area': 'Area',
+  'redactions.overlay': 'Text on the box: {text}',
+  'redactions.delete': 'Delete',
+  'redactions.hint': 'Enter opens the page. Delete removes the selected marks.',
 
   // Flatten annotations (W7.9): the confirmation, then the result.
   'flatten.title': 'Flatten annotations',

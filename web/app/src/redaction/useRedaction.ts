@@ -38,3 +38,25 @@ export function useRedaction(options: UseRedactionOptions): {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   return { controller, state };
 }
+
+// The state of a controller the caller only reads (the rail count, the panel). Null when there is
+// no controller, which is when no document is open.
+const NO_CONTROLLER_STATE: RedactionSnapshot = {
+  active: false,
+  marks: [],
+  selected: [],
+  busy: false,
+  loaded: false,
+};
+const noSubscribe = (): (() => void) => () => {};
+const noState = (): RedactionSnapshot => NO_CONTROLLER_STATE;
+
+export function useRedactionState(
+  controller: RedactionController | null | undefined,
+): RedactionSnapshot | null {
+  const state = useSyncExternalStore(
+    controller ? controller.subscribe : noSubscribe,
+    controller ? controller.getSnapshot : noState,
+  );
+  return controller ? state : null;
+}
