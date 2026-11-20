@@ -30,3 +30,15 @@
 .page-text-layer--passive .page-text-line {
   user-select: none;
 }
+
+/* The model draws the selection (SelectionMarks), so the browser's own selection stays off the spans
+   of a page the model is in charge of. */
+.page-text-layer--model .page-text-line {
+  user-select: none;
+}
+
+.page-selection-mark {
+  position: absolute;
+  background: rgb(0 96 192 / 35%);
+  pointer-events: none;
+}
