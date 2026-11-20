@@ -16,9 +16,12 @@ import xml.etree.ElementTree as ET
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.base import Change
 from pdfeditor.core.session import EventKind, SessionEvent
+from pdfeditor.model.annotations import AnnotationModel
+from pdfeditor.model.color import Color
 from pdfeditor.model.pages import MarkKind
 from pdfeditor.services import stamping
 from pdfeditor.services.comments import flattenable as flattenable_comments
+from pdfeditor.services.redaction import redaction_marks
 from pdfeditor.services.xfdf import XfdfTooLarge, preview_xfdf
 from pdfeditor.webapi import dto
 from pdfeditor.webapi.dto import BufferTable, from_json
@@ -111,6 +114,44 @@ def list_marks(params: dto.HandleParams) -> dto.MarksResult:
         if kind in found
     )
     return dto.MarksResult(items=items)
+
+
+# The most marks one list reply holds (W7.4b section 4.1): a redaction mark is about 200 bytes of
+# JSON, so this keeps the reply well under the limits; ``truncated`` says when marks were left out.
+MAX_REDACTION_MARKS = 5000
+
+
+def _color_dto(color: Color | None) -> dto.ColorDto | None:
+    return None if color is None else dto.ColorDto(color.r, color.g, color.b, color.a)
+
+
+def _redaction_dto(mark: AnnotationModel) -> dto.RedactionMarkDto:
+    rect = mark.rect
+    return dto.RedactionMarkDto(
+        page=mark.page_index,
+        name=mark.name,
+        rect=dto.RectDto(rect.x0, rect.y0, rect.x1, rect.y1),
+        fill=_color_dto(mark.fill),
+        overlay_text=mark.overlay_text,
+        text_color=_color_dto(mark.text_color),
+        contents=mark.contents,
+        author=mark.author,
+        locked=mark.locked,
+    )
+
+
+def list_redactions(params: dto.HandleParams) -> dto.RedactionListResult:
+    """The redaction marks in the document, read-only: the web's Redactions panel and bar read
+    the document's marks, not the ones this tab drew, so an undo or a mark from the file shows.
+    Empty without ``annotations_read``, as ``marks.list`` is without ``page_marks``."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        if not session.engine.capabilities.annotations_read:
+            return dto.RedactionListResult(marks=(), truncated=False)
+        found = redaction_marks(session.document)
+    truncated = len(found) > MAX_REDACTION_MARKS
+    marks = tuple(_redaction_dto(m) for m in found[:MAX_REDACTION_MARKS])
+    return dto.RedactionListResult(marks=marks, truncated=truncated)
 
 
 def undo(params: dto.UndoParams) -> dto.HistoryResult:

@@ -490,6 +490,33 @@ class MarksResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class ColorDto:
+    r: float  # 0..1 per channel
+    g: float
+    b: float
+    a: float
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RedactionMarkDto:
+    page: int  # 0-based
+    name: str  # /NM, or the engine's synthetic name for an unnamed mark (MarkRef.name)
+    rect: RectDto  # visible page points, origin top-left
+    fill: ColorDto | None  # box colour after apply; None = the file has no /IC (drawn black)
+    overlay_text: str  # "" when none
+    text_color: ColorDto | None
+    contents: str  # the marked text for a text mark, "" for an area
+    author: str
+    locked: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RedactionListResult:
+    marks: tuple[RedactionMarkDto, ...]  # document order: page ascending, then annotation order
+    truncated: bool  # True when the document has more marks than the list holds
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class JobPrepareParams:
     handle: str
     job: str  # a job type name (W1.2 section 13), such as "action" or "reduce_size"
