@@ -404,7 +404,27 @@ export const EN = {
     one: 'Marked {count} selected area for redaction.',
     other: 'Marked {count} selected areas for redaction.',
   },
+  'redact.markedPages': {
+    one: 'Marked {count} page for redaction.',
+    other: 'Marked {count} pages for redaction.',
+  },
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
+  // Mark Pages (W4.13): the dialog that marks whole pages.
+  'markPages.title': 'Mark Pages',
+  'markPages.description':
+    'Marks each chosen page whole for redaction. Nothing is removed until you apply the marks.',
+  'markPages.pages': 'Pages to mark',
+  'markPages.pages.current': 'Current page ({page})',
+  'markPages.pages.all': 'All pages ({count})',
+  'markPages.pages.range': 'Pages',
+  'markPages.confirm': {
+    one: 'This marks 1 page for redaction.',
+    other: 'This marks {count} pages for redaction.',
+  },
+  'markPages.apply': 'Mark',
+  'markPages.cancel': 'Cancel',
+  'markPages.error.range': 'Enter pages that exist in this document, such as 1-3, 5.',
+  'markPages.failed': 'The pages could not be read. Close and try again.',
   'redactions.editFailed': 'The redaction could not be changed. Try again.',
   'redactions.stale': 'That redaction is no longer in the document. The list has been updated.',
   // Redactions panel (W7.4b S4): the marks of the document, selected, went to, and deleted.

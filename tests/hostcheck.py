@@ -456,6 +456,18 @@ def _annot_count_pikepdf(data: bytes, page: int, minimum: int) -> None:
         assert len(pdf.pages[page].Annots) >= minimum
 
 
+@host_check("redact_rects_pikepdf")
+def _redact_rects_pikepdf(data: bytes, page: int, count: int, rect: list[float]) -> None:
+    """The page has ``count`` /Redact annotations, each with /Rect ``rect`` (PDF points)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        marks = [a for a in pdf.pages[page].Annots if str(a.get("/Subtype")) == "/Redact"]
+        assert len(marks) == count
+        for mark in marks:
+            _approx([float(v) for v in mark.Rect], rect)
+
+
 @host_check("widget_named_pikepdf")
 def _widget_named_pikepdf(data: bytes, page: int, field: str, value: str) -> None:
     """Exactly one widget on the page is named ``field`` and holds ``value``."""

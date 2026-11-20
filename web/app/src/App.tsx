@@ -54,6 +54,7 @@ import { ExtractImagesDialog } from './extract/ExtractImagesDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { RedactionController } from './redaction/controller';
+import { MarkPagesDialog } from './redaction/MarkPagesDialog';
 import { markSelectedText } from './redaction/markText';
 import { RedactionsPanel } from './redaction/RedactionsPanel';
 import { RedactionPropertiesDialog } from './redaction/RedactionPropertiesDialog';
@@ -174,6 +175,8 @@ export function App({
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   // Redaction Properties (W4.14): the style of new marks. It needs no document.
   const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
+  // Mark Pages (W4.13): the dialog that marks whole pages. Opens only with a document.
+  const [markPagesOpen, setMarkPagesOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
@@ -402,6 +405,14 @@ export function App({
       ? {
           // Go to Page (W4.3b) focuses the canvas pill's page field.
           'go-to-page': () => viewRef.current?.focusPageField(),
+          // Mark Pages (W4.13) opens the dialog that marks whole pages; nothing is applied.
+          'mark-whole-pages': () => {
+            if (redaction === null) {
+              toasts.push('info', t('redact.notReady'));
+              return;
+            }
+            setMarkPagesOpen(true);
+          },
           // Mark Text (W4.12) marks the browser's selection on the view's pages; nothing is applied.
           'mark-text': () => {
             const view = viewRef.current;
@@ -715,6 +726,17 @@ export function App({
           handle={session.handle}
           name={activeTab.name}
           startWorker={jobs.acquire}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined && redaction !== null ? (
+        <MarkPagesDialog
+          isOpen={markPagesOpen}
+          onClose={() => setMarkPagesOpen(false)}
+          controller={redaction}
+          rpc={session.rpc}
+          handle={session.handle}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
         />
       ) : null}
       {documentShown && session !== null && activeTab !== undefined ? (
