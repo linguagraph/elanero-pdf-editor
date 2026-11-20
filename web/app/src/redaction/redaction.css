@@ -130,3 +130,30 @@
   outline-offset: 1px;
   pointer-events: none;
 }
+
+/* The properties editor of the Redactions panel (W7.4b S5). */
+.mark-style {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.mark-style-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.mark-style-mixed {
+  font-size: 0.875em;
+  opacity: 0.8;
+}
+
+.mark-style-overlay {
+  min-height: 44px;
+}
+
+.redactions-properties {
+  padding: 0 8px;
+}

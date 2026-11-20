@@ -48,8 +48,13 @@ function mark(page: number, name: string, overrides: Partial<RedactionMark> = {}
 
 // A controller stand-in with the real subscribe/getSnapshot shape: the panel reads it, and the
 // calls the panel makes are recorded.
-function fakeController(marks: RedactionMark[], selected: MarkRef[] = [], loaded = true) {
-  let snapshot: RedactionSnapshot = { active: false, marks, selected, busy: false, loaded };
+function fakeController(
+  marks: RedactionMark[],
+  selected: MarkRef[] = [],
+  loaded = true,
+  busy = false,
+) {
+  let snapshot: RedactionSnapshot = { active: false, marks, selected, busy, loaded };
   const listeners = new Set<() => void>();
   return {
     subscribe: (listener: () => void) => {
@@ -64,6 +69,8 @@ function fakeController(marks: RedactionMark[], selected: MarkRef[] = [], loaded
       for (const listener of listeners) listener();
     }),
     remove: vi.fn(async () => undefined),
+    restyle: vi.fn(async () => undefined),
+    apply: vi.fn(async () => undefined),
   };
 }
 
@@ -203,7 +210,113 @@ describe('RedactionsPanel', () => {
     key(rows()[0] as HTMLElement, 'ArrowDown');
     expect(controller.select).toHaveBeenLastCalledWith([{ page: 0, name: 'b' }]);
   });
+
+  it('Apply Selected and Apply All confirm first, then apply the selection or all marks', () => {
+    const controller = fakeController([mark(0, 'a'), mark(0, 'b')], [{ page: 0, name: 'b' }]);
+    render(controller);
+    click(buttonNamed(t('redactions.applySelected')));
+    expect(controller.apply).not.toHaveBeenCalled();
+    confirmButton().click();
+    expect(controller.apply).toHaveBeenLastCalledWith([{ page: 0, name: 'b' }]);
+    click(buttonNamed(t('redactions.applyAll')));
+    confirmButton().click();
+    expect(controller.apply).toHaveBeenLastCalledWith(null);
+  });
+
+  it('Apply Selected is disabled with no selection, and nothing applies while busy', () => {
+    render(fakeController([mark(0, 'a')]));
+    expect(buttonNamed(t('redactions.applySelected')).disabled).toBe(true);
+    expect(buttonNamed(t('redactions.applyAll')).disabled).toBe(false);
+    render(fakeController([mark(0, 'a')], [{ page: 0, name: 'a' }], true, true));
+    expect(buttonNamed(t('redactions.applyAll')).disabled).toBe(true);
+    expect(colorInput(0).disabled).toBe(true);
+  });
+
+  it('a colour change restyles the selection with only that field', () => {
+    const controller = fakeController([mark(0, 'a')], [{ page: 0, name: 'a' }]);
+    render(controller);
+    setInputValue(colorInput(0), '#ff0000');
+    expect(controller.restyle).toHaveBeenLastCalledWith([{ page: 0, name: 'a' }], {
+      fill: { r: 1, g: 0, b: 0 },
+    });
+    setInputValue(colorInput(1), '#00ff00');
+    expect(controller.restyle).toHaveBeenLastCalledWith([{ page: 0, name: 'a' }], {
+      textColor: { r: 0, g: 1, b: 0 },
+    });
+  });
+
+  it('the overlay text is committed on blur or Enter, not on each key', () => {
+    const controller = fakeController([mark(0, 'a')], [{ page: 0, name: 'a' }]);
+    render(controller);
+    setInputValue(overlayInput(), 'EXEMPT');
+    expect(controller.restyle).not.toHaveBeenCalled();
+    act(() => {
+      overlayInput().dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+    expect(controller.restyle).toHaveBeenLastCalledWith([{ page: 0, name: 'a' }], {
+      overlayText: 'EXEMPT',
+    });
+    setInputValue(overlayInput(), 'NEXT');
+    key(overlayInput(), 'Enter');
+    expect(controller.restyle).toHaveBeenLastCalledWith([{ page: 0, name: 'a' }], {
+      overlayText: 'NEXT',
+    });
+  });
+
+  it('a mixed selection shows the field as mixed and does not send it unless edited', () => {
+    const controller = fakeController(
+      [mark(0, 'a', { overlayText: 'ONE' }), mark(0, 'b', { overlayText: 'TWO' })],
+      [
+        { page: 0, name: 'a' },
+        { page: 0, name: 'b' },
+      ],
+    );
+    render(controller);
+    expect(overlayInput().placeholder).toBe(t('redactions.mixed'));
+    act(() => {
+      overlayInput().dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+    expect(controller.restyle).not.toHaveBeenCalled();
+  });
+
+  it('locked marks disable the editor', () => {
+    render(fakeController([mark(0, 'a', { locked: true })], [{ page: 0, name: 'a' }]));
+    expect(colorInput(0).disabled).toBe(true);
+    expect(overlayInput().disabled).toBe(true);
+    expect(container.textContent).toContain(t('redactions.locked'));
+  });
 });
+
+// The confirmation dialog is portalled out of the panel's container.
+function confirmButton(): HTMLButtonElement {
+  const found = Array.from(document.body.querySelectorAll('button')).find(
+    (button) => button.textContent === t('redact.confirm.apply'),
+  );
+  if (found === undefined) throw new Error('no confirm button');
+  return found;
+}
+
+function colorInput(index: number): HTMLInputElement {
+  const inputs = container.querySelectorAll<HTMLInputElement>('input[type="color"]');
+  const found = inputs[index];
+  if (found === undefined) throw new Error(`no colour input ${index}`);
+  return found;
+}
+
+function overlayInput(): HTMLInputElement {
+  const found = container.querySelector<HTMLInputElement>('.mark-style-overlay');
+  if (found === null) throw new Error('no overlay input');
+  return found;
+}
+
+// Sets a controlled input's value the way the browser does, then fires the input event React reads.
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  act(() => {
+    setter?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
 
 describe('SelectedMarkOutlines', () => {
   it('outlines each selected box on the page', () => {

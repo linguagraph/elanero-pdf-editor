@@ -411,6 +411,15 @@ export const EN = {
   'redactions.overlay': 'Text on the box: {text}',
   'redactions.delete': 'Delete',
   'redactions.hint': 'Enter opens the page. Delete removes the selected marks.',
+  // Properties of the selection and the apply (W7.4b S5).
+  'redactions.applySelected': 'Apply Selected',
+  'redactions.applyAll': 'Apply All',
+  'redactions.properties': 'Properties',
+  'redactions.fill': 'Fill',
+  'redactions.textColor': 'Text colour',
+  'redactions.overlayText': 'Overlay text',
+  'redactions.mixed': 'Mixed',
+  'redactions.locked': 'A locked mark cannot be changed.',
 
   // Crop pages (W4.11): the dialog, its checks, and the result.
   'crop.title': 'Crop Pages',

@@ -2,11 +2,15 @@
 // A row shows the page, the marked text (or "Area"), the overlay text and a swatch of the box
 // colour. The list is a multi-select listbox: a click picks one row, Ctrl or Space toggles a row,
 // Shift extends from the anchor. Enter or a double-click goes to the mark's page. The selection is
-// outlined in the viewer. Delete removes the selected marks as one undo step (the controller).
+// outlined in the viewer. Delete removes the selected marks as one undo step (the controller). The
+// properties of the selection (fill, text colour, overlay text) are edited in place, and Apply
+// Selected and Apply All burn the marks into the document after a confirmation (W7.4b S5).
 import { type KeyboardEvent, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { t } from '../i18n/t';
 import { Panel } from '../layout/Panel';
+import { ApplyConfirm } from './ApplyConfirm';
 import { isSelectedMark, type RedactionController, type RedactionMark } from './controller';
+import { type MarkStyleField, MarkStyleFields, type MarkStyleValues } from './MarkStyleFields';
 import './redaction.css';
 
 export interface RedactionsPanelProps {
@@ -14,6 +18,33 @@ export interface RedactionsPanelProps {
   // Called with the page index (zero-based) to bring into view.
   readonly onGoTo: (page: number) => void;
   readonly onClose: () => void;
+}
+
+// The value each property shows for the selection: the one value when every mark agrees, else the
+// first mark's value with the field marked mixed (the editor shows it empty).
+function sharedStyle(marks: readonly RedactionMark[]): {
+  values: MarkStyleValues;
+  mixed: Partial<Record<MarkStyleField, boolean>>;
+} {
+  const first = marks[0];
+  if (first === undefined) {
+    return { values: { fill: null, textColor: null, overlayText: '' }, mixed: {} };
+  }
+  const differs = (pick: (mark: RedactionMark) => unknown) =>
+    marks.some((mark) => JSON.stringify(pick(mark)) !== JSON.stringify(pick(first)));
+  const mixed = {
+    fill: differs((mark) => mark.fill),
+    textColor: differs((mark) => mark.textColor),
+    overlayText: differs((mark) => mark.overlayText),
+  };
+  return {
+    values: {
+      fill: first.fill,
+      textColor: first.textColor,
+      overlayText: mixed.overlayText ? '' : first.overlayText,
+    },
+    mixed,
+  };
 }
 
 // The swatch of a box: its fill, or black when the file has none (the engine draws it black).
@@ -31,9 +62,19 @@ export function RedactionsPanel({ controller, onGoTo, onClose }: RedactionsPanel
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   // The row a Shift-click extends the selection from.
   const [anchor, setAnchor] = useState<number | null>(null);
+  // Which apply is waiting for the user's confirmation, if any.
+  const [confirming, setConfirming] = useState<'selected' | 'all' | null>(null);
 
   const { marks, selected, busy, loaded } = state;
-  const selectedCount = marks.filter((mark) => isSelectedMark(selected, mark)).length;
+  const selectedMarks = marks.filter((mark) => isSelectedMark(selected, mark));
+  const selectedCount = selectedMarks.length;
+  const selectedRefs = selectedMarks.map((mark) => ({ page: mark.page, name: mark.name }));
+  const style = sharedStyle(selectedMarks);
+  // A locked mark keeps its style, so the editor is off while the selection holds one.
+  const locked = selectedMarks.some((mark) => mark.locked);
+  // Remounts the editor when the selection or the values change from outside (an undo, a reload),
+  // so its typed overlay text starts from the value the document has.
+  const editorKey = `${selectedRefs.map((ref) => `${ref.page}:${ref.name}`).join('|')}#${JSON.stringify(style)}`;
   const rowIndex = Math.min(
     focusIndex ?? marks.findIndex((m) => isSelectedMark(selected, m)),
     marks.length - 1,
@@ -130,7 +171,29 @@ export function RedactionsPanel({ controller, onGoTo, onClose }: RedactionsPanel
           >
             {t('redactions.delete')}
           </button>
+          <button
+            type="button"
+            onClick={() => setConfirming('selected')}
+            disabled={busy || selectedCount === 0}
+          >
+            {t('redactions.applySelected')}
+          </button>
+          <button type="button" onClick={() => setConfirming('all')} disabled={busy}>
+            {t('redactions.applyAll')}
+          </button>
         </div>
+        {selectedCount === 0 ? null : (
+          <section className="redactions-properties" aria-label={t('redactions.properties')}>
+            <MarkStyleFields
+              key={editorKey}
+              value={style.values}
+              mixed={style.mixed}
+              disabled={busy || locked}
+              onChange={(patch) => void controller.restyle(selectedRefs, patch)}
+            />
+            {locked ? <p className="redactions-status">{t('redactions.locked')}</p> : null}
+          </section>
+        )}
         <div
           ref={listRef}
           role="listbox"
@@ -182,6 +245,16 @@ export function RedactionsPanel({ controller, onGoTo, onClose }: RedactionsPanel
   return (
     <Panel title={t('redactions.title')} onClose={onClose}>
       {body}
+      <ApplyConfirm
+        isOpen={confirming !== null}
+        count={confirming === 'all' ? marks.length : selectedCount}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          const scope = confirming;
+          setConfirming(null);
+          void controller.apply(scope === 'all' ? null : selectedRefs);
+        }}
+      />
     </Panel>
   );
 }

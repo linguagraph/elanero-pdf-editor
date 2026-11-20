@@ -2,9 +2,9 @@
 // marks not yet applied, Clear, and Apply. Apply asks for confirmation first, since the removed
 // content cannot be put back by saving. Nothing here changes the document; the controller does.
 import { useState } from 'react';
-import { t, tp } from '../i18n/t';
-import { Overlay } from '../layout/Overlay';
+import { t } from '../i18n/t';
 import type { RedactionSnapshot } from './controller';
+import { ApplyConfirm } from './ApplyConfirm';
 import './redaction.css';
 
 export interface RedactionBarProps {
@@ -31,30 +31,15 @@ export function RedactionBar({ state, onToggle, onClear, onApply }: RedactionBar
       <button type="button" onClick={() => setConfirming(true)} disabled={!idle}>
         {t('redact.apply')}
       </button>
-      <Overlay
+      <ApplyConfirm
         isOpen={confirming}
-        onClose={() => setConfirming(false)}
-        title={t('redact.confirm.title')}
-        showCloseButton={false}
-      >
-        <div className="redact-confirm">
-          <p>{tp('redact.confirm.body', count)}</p>
-          <div className="redact-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setConfirming(false);
-                onApply();
-              }}
-            >
-              {t('redact.confirm.apply')}
-            </button>
-            <button type="button" onClick={() => setConfirming(false)}>
-              {t('redact.confirm.cancel')}
-            </button>
-          </div>
-        </div>
-      </Overlay>
+        count={count}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          onApply();
+        }}
+      />
     </div>
   );
 }
