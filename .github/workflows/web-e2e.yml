@@ -1,0 +1,132 @@
+name: Web end-to-end (W8.1)
+
+# The W8.1 feature round trips (web/app/e2e/features, their config playwright.features.config.ts)
+# on Chromium, Firefox and WebKit, one job per browser. It runs nightly, after the 03:00 CI nightly
+# has warmed the PyMuPDF wheel cache, and by hand. It is not a required check and does not run on
+# pull requests (W8.1 section 3).
+#
+# The engine wheel comes from the cache web-pytest.yml fills (the same key, so the two share it).
+# On a cache miss this run fails with a message instead of building the wheel: a cold build takes up
+# to two hours (W8.1 section 5). The wheel-building steps stay in web-pytest.yml and web-deploy.yml.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  web-e2e:
+    name: web-e2e (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned versions
+        id: versions
+        run: |
+          v=web/spike/versions.json
+          {
+            echo "pyodide=$(jq -r .pyodide $v)"
+            echo "pymupdf=$(jq -r .pymupdf $v)"
+            echo "node=$(jq -r .node $v)"
+            echo "host_python=$(jq -r .hostPython $v)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+
+      - name: Install the npm packages of the Pyodide pin (web/spike, for the staging)
+        working-directory: web/spike
+        run: npm ci
+
+      # The key is web-pytest.yml's key, built from the same two files, so this restores the
+      # wheel that the nightly run (or a web-pytest run) saved.
+      - name: Restore the PyMuPDF wheel from the cache
+        id: wheel-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: web/spike/dist/wheel-build
+          key: pymupdf-${{ steps.versions.outputs.pymupdf }}-pyodide-${{ steps.versions.outputs.pyodide }}-${{ hashFiles('.github/workflows/web-pytest.yml', 'web/spike/versions.json') }}
+
+      - name: Stop on a cache miss (no cold build here)
+        if: ${{ steps.wheel-cache.outputs.cache-hit != 'true' }}
+        run: |
+          echo "::error::no PyMuPDF wheel in the cache for this key. Run web-pytest.yml (workflow_dispatch) on main first; this job does not build the wheel."
+          exit 1
+
+      - name: Verify the wheel against wheel.sha256
+        run: |
+          set -euo pipefail
+          cd web/spike/dist/wheel-build
+          test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
+          sha256sum -c wheel.sha256
+
+      - name: Set up the host Python (fixtures, the web package and the replay)
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.versions.outputs.host_python }}
+
+      - name: Install the host packages and generate the fixtures
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
+          python scripts/make_fixtures.py
+
+      # Writes dist/web/pdfeditor-web.zip; the staging step below copies it into the app.
+      - name: Build the web package
+        run: python scripts/build_web_wheel.py
+
+      - name: Stage the engine assets (Pyodide, the PyMuPDF wheel, the web zip)
+        run: |
+          set -euo pipefail
+          n=$(ls web/spike/dist/wheel-build/*.whl | wc -l)
+          test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
+          node scripts/stage_engine_assets.mjs --wheel "$(ls web/spike/dist/wheel-build/*.whl)" --zip dist/web/pdfeditor-web.zip
+          test -f web/app/public/engine-assets/pyodide.mjs
+          test -f web/app/public/engine-assets/pyodide-lock.json
+
+      - name: Install the npm packages (exact, from the lockfile)
+        working-directory: web/app
+        run: npm ci
+
+      - name: Install the browser (${{ matrix.browser }}) and its system libraries
+        working-directory: web/app
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      # One browser per job. The features config builds and previews the app itself (port 4175).
+      - name: Run the feature round trips (${{ matrix.browser }})
+        working-directory: web/app
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright test -c playwright.features.config.ts --project=${{ matrix.browser }} --reporter=list,html
+
+      # The host halves of the round trips (W1.7 section 4.2): pikepdf and pypdfium2 replay the bytes
+      # each flow saved. Runs even when the browser run failed, since the manifest is written then too.
+      - name: Replay the recorded host checks (host CPython)
+        if: ${{ always() && hashFiles('web/app/test-results/host-checks.json') != '' }}
+        run: python scripts/web_host_verify.py web/app/test-results/host-checks.json
+
+      - name: Upload the HTML report, traces and manifest
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-e2e-${{ matrix.browser }}
+          if-no-files-found: warn
+          path: |
+            web/app/playwright-report/
+            web/app/test-results/
