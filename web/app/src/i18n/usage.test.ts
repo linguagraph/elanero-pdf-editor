@@ -63,34 +63,9 @@ const ALLOWED_LITERALS: readonly Allowed[] = [];
 const PENDING_MARKS =
   'catalogue text for the marks dialogs (PLAN.md W7.3); marks.list is built, the dialogs are not';
 
-// Keys that no source file names yet. Each one is kept with its reason; a stale entry (the key is
-// gone, or a source file now names it) fails the scan too. Test-only keys go here as well.
-const SECURITY_DIALOGS =
-  'catalogue text for the Encrypt and Remove Security dialogs (W7.5 S4), not yet built';
 const UNUSED_ALLOWED: Readonly<Record<string, string>> = {
-  'security.encrypt.title': SECURITY_DIALOGS,
-  'security.encrypt.note': SECURITY_DIALOGS,
-  'security.encrypt.apply': SECURITY_DIALOGS,
-  'security.method.label': SECURITY_DIALOGS,
-  'security.method.aes-256': SECURITY_DIALOGS,
-  'security.method.aes-128': SECURITY_DIALOGS,
-  'security.open.group': SECURITY_DIALOGS,
-  'security.open.require': SECURITY_DIALOGS,
-  'security.open.password': SECURITY_DIALOGS,
-  'security.open.confirm': SECURITY_DIALOGS,
-  'security.perms.group': SECURITY_DIALOGS,
-  'security.perms.restrict': SECURITY_DIALOGS,
-  'security.perms.password': SECURITY_DIALOGS,
-  'security.perms.confirm': SECURITY_DIALOGS,
-  'security.perms.allowed': SECURITY_DIALOGS,
-  'security.owner.title': SECURITY_DIALOGS,
-  'security.owner.body': SECURITY_DIALOGS,
-  'security.owner.label': SECURITY_DIALOGS,
-  'security.owner.wrong': SECURITY_DIALOGS,
-  'security.owner.unlock': SECURITY_DIALOGS,
-  'security.remove.title': SECURITY_DIALOGS,
-  'security.remove.body': SECURITY_DIALOGS,
-  'security.remove.confirm': SECURITY_DIALOGS,
+  'security.owner.title':
+    'the owner step sits under the dialog title, so no separate title is shown (W7.5 S4)',
   'sample.pages':
     'test-only plural sample: i18n.test.ts and locale.test.ts exercise the plural rules with it',
   'engine.restart.title': 'catalogue text for the engine restart dialog, not yet built',

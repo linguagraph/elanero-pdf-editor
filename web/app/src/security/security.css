@@ -1,0 +1,42 @@
+/* The security dialogs' layout (W7.5 S4). Colours come from the theme tokens only. */
+.security-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(420px, 100%);
+}
+
+.security-note,
+.security-problem {
+  margin: 0;
+}
+
+.security-problem {
+  color: var(--color-danger);
+}
+
+.security-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.security-field input,
+.security-field select {
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.security-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.security-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

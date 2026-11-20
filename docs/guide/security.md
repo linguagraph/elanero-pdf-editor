@@ -98,6 +98,10 @@ password, enter that password. Use it only on files you are allowed to change.
 To check what protection a file has, open **File ▸ Document Properties…**, which also shows the
 security information of the file.
 
+### In the web version
+
+The web version has the same two dialogs, **Encrypt with Password** and **Remove Security**, from the command palette. The change is applied when you save the document, and an Undo is offered after each change. The owner password is asked for only when the file needs it. The passwords you type are not written to the browser's storage.
+
 ## Limits
 
 - Redaction and sanitizing work on the content Elanero can read. Scanned pages need OCR first.
