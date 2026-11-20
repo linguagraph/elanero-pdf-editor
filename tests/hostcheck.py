@@ -1293,3 +1293,19 @@ def _comment_replies_pikepdf(data: bytes, parent: str, replies: list[list[str]])
                 assert str(annot.get("/StateModel", "")).lstrip("/") == "Review"
             found.append([str(annot.get("/Contents", "")), state])
         assert found == replies, found
+
+
+@host_check("comment_contents_pikepdf")
+def _comment_contents_pikepdf(data: bytes, comment: str, contents: str | None) -> None:
+    """The comment named ``comment`` has /Contents ``contents``; None means no comment has that name
+    (it was deleted, and so is its /IRT link to any reply)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for page in pdf.pages for a in page.get("/Annots", [])]
+        targets = [a for a in annots if str(a.get("/NM", "")) == comment]
+        if contents is None:
+            assert targets == [], len(targets)
+            return
+        assert len(targets) == 1, len(targets)
+        assert str(targets[0].get("/Contents", "")) == contents
