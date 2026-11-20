@@ -11,7 +11,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView
 
-from pdfeditor.actions import content
+from pdfeditor.actions import content, edit_geometry
 from pdfeditor.actions.base import ActionError, ActionResult, Busy
 from pdfeditor.actions.content import (
     AddImage,
@@ -21,6 +21,7 @@ from pdfeditor.actions.content import (
     ReplaceText,
     TransformObjects,
 )
+from pdfeditor.actions.edit_geometry import HANDLE_PX, MIN_DRAG
 from pdfeditor.engine.base import EngineError, UnsupportedFeature
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
@@ -39,8 +40,6 @@ from pdfeditor.ui.view.text_editor import InlineTextEditor
 if TYPE_CHECKING:
     from pdfeditor.ui.view.document_view import DocumentView
 
-HANDLE_PX = 6
-MIN_DRAG = 3.0
 DEFAULT_TEXT_STYLE = TextStyle(font="Helvetica", size=12)
 # Reports to the window (status bar / message box); replaced by the window at runtime.
 notify: Callable[[str], None] = lambda message: None  # noqa: E731
@@ -77,18 +76,9 @@ def _used(view: DocumentView, ok: bool) -> None:
         view.tool_used.emit()
 
 
-def _fit(old: Rect, new: Rect) -> Matrix:
-    sx = new.width / old.width if old.width else 1.0
-    sy = new.height / old.height if old.height else 1.0
-    return (
-        Matrix.translate(-old.x0, -old.y0) @ Matrix.scale(sx, sy) @ Matrix.translate(new.x0, new.y0)
-    )
-
-
-def _handles(r: QRectF) -> list[QPointF]:
-    xs = (r.left(), r.center().x(), r.right())
-    ys = (r.top(), r.center().y(), r.bottom())
-    return [QPointF(x, y) for y in ys for x in xs if (x, y) != (xs[1], ys[1])]
+def _scene_rect(r: QRectF) -> Rect:
+    """A scene box as the shared geometry's rectangle (resizing and handles run in scene space)."""
+    return Rect(r.left(), r.top(), r.right(), r.bottom())
 
 
 class EditObjectsTool(Tool):
@@ -122,12 +112,10 @@ class EditObjectsTool(Tool):
         if sum(len(v) for v in by_page.values()) != 1:
             return None
         page, (obj,) = next(iter(by_page.items()))
-        box = view.page_rect_to_scene(page, obj.bbox)
+        box = _scene_rect(view.page_rect_to_scene(page, obj.bbox))
         tol = HANDLE_PX / max(view.transform().m11(), 0.01)
-        for i, h in enumerate(_handles(box)):
-            if abs(h.x() - scene.x()) <= tol and abs(h.y() - scene.y()) <= tol:
-                return page, obj, i
-        return None
+        index = edit_geometry.handle_at(box, Point(scene.x(), scene.y()), tol)
+        return None if index is None else (page, obj, index)
 
     # -- mouse ----------------------------------------------------------------------------
     def press(self, view: DocumentView, event: QMouseEvent) -> bool:
@@ -183,24 +171,15 @@ class EditObjectsTool(Tool):
     def _resize_matrix(
         self, view: DocumentView, page: int, obj: PageObject, handle: int, scene: QPointF
     ) -> Matrix:
-        box = view.page_rect_to_scene(page, obj.bbox)
-        left, top, right, bottom = box.left(), box.top(), box.right(), box.bottom()
-        col, row = [(0, 0), (1, 0), (2, 0), (0, 1), (2, 1), (0, 2), (1, 2), (2, 2)][handle]
-        if col == 0:
-            left = min(scene.x(), right - 4)
-        elif col == 2:
-            right = max(scene.x(), left + 4)
-        if row == 0:
-            top = min(scene.y(), bottom - 4)
-        elif row == 2:
-            bottom = max(scene.y(), top + 4)
+        box = _scene_rect(view.page_rect_to_scene(page, obj.bbox))
+        scene_box = edit_geometry.resize_box(box, handle, Point(scene.x(), scene.y()))
         new = Rect.from_points(
             [
-                view.scene_to_page(page, QPointF(left, top)),
-                view.scene_to_page(page, QPointF(right, bottom)),
+                view.scene_to_page(page, QPointF(scene_box.x0, scene_box.y0)),
+                view.scene_to_page(page, QPointF(scene_box.x1, scene_box.y1)),
             ]
         )
-        return _fit(obj.bbox, new)
+        return edit_geometry.fit_matrix(obj.bbox, new)
 
     def release(self, view: DocumentView, event: QMouseEvent) -> bool:
         view.set_annotation_preview({})
@@ -224,27 +203,18 @@ class EditObjectsTool(Tool):
             page, a = self._marquee
             self._marquee = None
             b = view.scene_to_page(page, view.mapToScene(event.position().toPoint()))
-            if abs(b.x - a.x) > MIN_DRAG or abs(b.y - a.y) > MIN_DRAG:
+            if not edit_geometry.is_click(a, b):
                 box = Rect.from_points([a, b])
-                view.set_object_selection(
-                    [(page, o.key) for o in view.page_objects(page) if o.bbox.intersects(box)]
-                )
+                hits = edit_geometry.objects_in(view.page_objects(page), box)
+                view.set_object_selection([(page, o.key) for o in hits])
             return True
         return False
 
     @staticmethod
     def _reselect(view: DocumentView, page: int, boxes: list[Rect]) -> None:
         """After an edit keys change: select the objects now closest to where they went."""
-        chosen = []
-        for box in boxes:
-            best = min(
-                view.page_objects(page),
-                key=lambda o: abs(o.bbox.x0 - box.x0) + abs(o.bbox.y0 - box.y0),
-                default=None,
-            )
-            if best is not None:
-                chosen.append((page, best.key))
-        view.set_object_selection(chosen)
+        keys = edit_geometry.reselect(view.page_objects(page), boxes)
+        view.set_object_selection([(page, key) for key in keys])
 
     def double_click(self, view: DocumentView, event: QMouseEvent) -> bool:
         scene = view.mapToScene(event.position().toPoint())
