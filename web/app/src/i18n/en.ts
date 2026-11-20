@@ -29,6 +29,7 @@ export const EN = {
   'layout.rightPanel': 'Right panel',
   'layout.rightRail': 'Right panels',
   'layout.statusBar': 'Status bar',
+  'layout.skipToDocument': 'Skip to document',
   // The separator on a side panel's inner edge (W4.2a S4): drag or arrow keys change its width.
   'layout.resizeLeftPanel': 'Resize left panel',
   'layout.resizeRightPanel': 'Resize right panel',
