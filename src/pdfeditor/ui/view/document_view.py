@@ -46,7 +46,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pdfeditor.actions import comments
+from pdfeditor.actions import comments, edit_geometry
+from pdfeditor.actions.edit_geometry import OBJECT_TOL_PX
 from pdfeditor.core.commands import ChangeKind
 from pdfeditor.core.layout import (
     PAGE_GAP,
@@ -1189,9 +1190,8 @@ class DocumentView(QGraphicsView):
         if hit is None:
             return None
         index, point = hit
-        tol = 2 / max(self.transform().m11(), 0.01)
-        under = [o for o in self.page_objects(index) if o.bbox.inflated(tol).contains(point)]
-        return min(under, key=lambda o: o.bbox.width * o.bbox.height, default=None)
+        tol = OBJECT_TOL_PX / max(self.transform().m11(), 0.01)
+        return edit_geometry.object_at(self.page_objects(index), point, tol)
 
     def selected_page_objects(self) -> list[PageObject]:
         out = []
