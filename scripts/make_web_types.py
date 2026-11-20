@@ -56,6 +56,7 @@ DEADLINE_MS: dict[str, int] = {
 DEADLINE_CLASS: dict[str, str] = {
     "actions.available": "instant",
     "comments.flattenable": "instant",
+    "content.objects": "render",
     "actions.redo": "edit",
     "actions.run": "action",
     "actions.undo": "edit",
