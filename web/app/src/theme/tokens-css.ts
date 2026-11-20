@@ -1,11 +1,17 @@
 import {
+  ACCENT_COLOURS,
+  ACCENT_PRESETS,
+  accentSwatch,
   BREAKPOINTS_PX,
   COLOURS,
+  DEFAULT_ACCENT_ID,
   FONT_SIZES_PX,
   LAYOUT_PX,
   RADII_PX,
   SPACE_STEPS,
   SPACE_UNIT_PX,
+  type AccentPresetId,
+  type AccentTokens,
   type ColourToken,
 } from './tokens.ts';
 
@@ -89,6 +95,51 @@ function forcedColoursBlock(): string[] {
   ];
 }
 
+// One accent block per non-default preset (W4.5 S4). The light values are the base; the dark
+// values apply under the system preference (unless the user chose Light) and when the user chose
+// Dark. The dark selectors carry one more attribute than the light one, so they win over it in
+// their scheme. The whole group sits in `@media (forced-colors: none)`: the forced-colours block
+// must keep the system colours, and these selectors would outrank it.
+function accentDeclarations(tokens: AccentTokens, indent: string): string[] {
+  return [
+    `${indent}--color-accent: ${tokens.accent};`,
+    `${indent}--color-on-accent: ${tokens.onAccent};`,
+    `${indent}--color-accent-text: ${tokens.accentText};`,
+    `${indent}--color-focus-ring: ${tokens.focusRing};`,
+  ];
+}
+
+function accentBlocks(): string[] {
+  const body = '  ';
+  const inner = '    ';
+  const lines = ['@media (forced-colors: none) {'];
+  for (const id of ACCENT_PRESETS) {
+    if (id === DEFAULT_ACCENT_ID) continue;
+    const colours = ACCENT_COLOURS[id as AccentPresetId];
+    lines.push(
+      `${body}:root[data-accent='${id}'] {`,
+      ...accentDeclarations(colours.light, `${body}  `),
+      `${body}}`,
+      `${body}@media (prefers-color-scheme: dark) {`,
+      `${inner}:root:not([data-theme='light'])[data-accent='${id}'] {`,
+      ...accentDeclarations(colours.dark, `${inner}  `),
+      `${inner}}`,
+      `${body}}`,
+      `${body}:root[data-theme='dark'][data-accent='${id}'] {`,
+      ...accentDeclarations(colours.dark, `${body}  `),
+      `${body}}`,
+    );
+  }
+  lines.push('}', '');
+  return lines;
+}
+
+// The light fill of each preset as a variable, so the Preferences swatches take their colour from
+// the stylesheet (no inline style, which the CSP forbids).
+function swatchDeclarations(indent: string): string[] {
+  return ACCENT_PRESETS.map((id) => `${indent}--accent-swatch-${id}: ${accentSwatch(id)};`);
+}
+
 // Light is the base. Dark applies (a) when the system prefers it and the user has not chosen
 // Light, and (b) when the user chose Dark. A user who chose Light stays light either way.
 export function renderTokensCss(): string {
@@ -99,6 +150,7 @@ export function renderTokensCss(): string {
     ':root {',
     `${body}color-scheme: light;`,
     ...colourDeclarations('light', body),
+    ...swatchDeclarations(body),
     ...metricDeclarations(body),
     '}',
     '',
@@ -114,6 +166,7 @@ export function renderTokensCss(): string {
     ...colourDeclarations('dark', body),
     '}',
     '',
+    ...accentBlocks(),
     ...forcedColoursBlock(),
   ];
   return lines.join('\n');

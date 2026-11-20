@@ -3,6 +3,7 @@
 // at the storage boundary, so no caller can store one by mistake. Every access is wrapped in
 // try/catch, because localStorage can be missing or throw (private windows, blocked site data).
 // Then the store answers with the defaults and remembers nothing for this page view.
+import { ACCENT_PRESETS, DEFAULT_ACCENT_ID, type AccentId } from '../theme/tokens';
 import { readStoredTheme, setTheme, type ThemeChoice } from '../theme/theme';
 
 export const LANGUAGE_CHOICES = ['en'] as const;
@@ -42,6 +43,8 @@ export interface Preferences {
   readonly redactionFill: string;
   readonly redactionOverlayText: string;
   readonly redactionTextColor: string;
+  // The accent colour preset (W4.5 S4); Blue is the default and the web's own dark blue.
+  readonly accent: AccentId;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -57,6 +60,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   redactionFill: REDACTION_FILL_DEFAULT,
   redactionOverlayText: '',
   redactionTextColor: REDACTION_TEXT_COLOR_DEFAULT,
+  accent: DEFAULT_ACCENT_ID,
 };
 
 // The non-theme preferences are one JSON object. The theme keeps its own key (theme.ts), because
@@ -185,6 +189,7 @@ export function readPreferences(): Preferences {
       record.redactionTextColor,
       DEFAULT_PREFERENCES.redactionTextColor,
     ),
+    accent: pickChoice(record.accent, ACCENT_PRESETS, DEFAULT_PREFERENCES.accent),
   };
 }
 
@@ -215,6 +220,7 @@ export function writePreferences(prefs: Preferences): boolean {
       prefs.redactionTextColor,
       DEFAULT_PREFERENCES.redactionTextColor,
     ),
+    accent: pickChoice(prefs.accent, ACCENT_PRESETS, DEFAULT_PREFERENCES.accent),
   };
   setTheme(prefs.theme);
   const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));

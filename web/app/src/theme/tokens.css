@@ -18,6 +18,14 @@
   --color-success: #0f7b0f;
   --color-warning: #8a5100;
   --color-brand: #0067c0;
+  --accent-swatch-blue: #0067c0;
+  --accent-swatch-teal: #038387;
+  --accent-swatch-green: #107c10;
+  --accent-swatch-purple: #8764b8;
+  --accent-swatch-pink: #c30052;
+  --accent-swatch-red: #c42b1c;
+  --accent-swatch-orange: #ca5010;
+  --accent-swatch-graphite: #5d6b7a;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -81,6 +89,149 @@
   --color-success: #6ccb5f;
   --color-warning: #fce100;
   --color-brand: #4cc2ff;
+}
+
+@media (forced-colors: none) {
+  :root[data-accent='teal'] {
+    --color-accent: #038387;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #037c80;
+    --color-focus-ring: #037c80;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='teal'] {
+      --color-accent: #038387;
+      --color-on-accent: #000000;
+      --color-accent-text: #4ca7aa;
+      --color-focus-ring: #4ca7aa;
+    }
+  }
+  :root[data-theme='dark'][data-accent='teal'] {
+    --color-accent: #038387;
+    --color-on-accent: #000000;
+    --color-accent-text: #4ca7aa;
+    --color-focus-ring: #4ca7aa;
+  }
+  :root[data-accent='green'] {
+    --color-accent: #107c10;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #107c10;
+    --color-focus-ring: #107c10;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='green'] {
+      --color-accent: #238623;
+      --color-on-accent: #000000;
+      --color-accent-text: #64aa64;
+      --color-focus-ring: #64aa64;
+    }
+  }
+  :root[data-theme='dark'][data-accent='green'] {
+    --color-accent: #238623;
+    --color-on-accent: #000000;
+    --color-accent-text: #64aa64;
+    --color-focus-ring: #64aa64;
+  }
+  :root[data-accent='purple'] {
+    --color-accent: #8764b8;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #805faf;
+    --color-focus-ring: #805faf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='purple'] {
+      --color-accent: #8764b8;
+      --color-on-accent: #000000;
+      --color-accent-text: #a78ecb;
+      --color-focus-ring: #a78ecb;
+    }
+  }
+  :root[data-theme='dark'][data-accent='purple'] {
+    --color-accent: #8764b8;
+    --color-on-accent: #000000;
+    --color-accent-text: #a78ecb;
+    --color-focus-ring: #a78ecb;
+  }
+  :root[data-accent='pink'] {
+    --color-accent: #c30052;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #c30052;
+    --color-focus-ring: #c30052;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='pink'] {
+      --color-accent: #d03878;
+      --color-on-accent: #000000;
+      --color-accent-text: #e07aa5;
+      --color-focus-ring: #e07aa5;
+    }
+  }
+  :root[data-theme='dark'][data-accent='pink'] {
+    --color-accent: #d03878;
+    --color-on-accent: #000000;
+    --color-accent-text: #e07aa5;
+    --color-focus-ring: #e07aa5;
+  }
+  :root[data-accent='red'] {
+    --color-accent: #c42b1c;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #c42b1c;
+    --color-focus-ring: #c42b1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='red'] {
+      --color-accent: #cc473a;
+      --color-on-accent: #000000;
+      --color-accent-text: #dc8077;
+      --color-focus-ring: #dc8077;
+    }
+  }
+  :root[data-theme='dark'][data-accent='red'] {
+    --color-accent: #cc473a;
+    --color-on-accent: #000000;
+    --color-accent-text: #dc8077;
+    --color-focus-ring: #dc8077;
+  }
+  :root[data-accent='orange'] {
+    --color-accent: #ca5010;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #be4b0f;
+    --color-focus-ring: #be4b0f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='orange'] {
+      --color-accent: #ca5010;
+      --color-on-accent: #000000;
+      --color-accent-text: #da8458;
+      --color-focus-ring: #da8458;
+    }
+  }
+  :root[data-theme='dark'][data-accent='orange'] {
+    --color-accent: #ca5010;
+    --color-on-accent: #000000;
+    --color-accent-text: #da8458;
+    --color-focus-ring: #da8458;
+  }
+  :root[data-accent='graphite'] {
+    --color-accent: #5d6b7a;
+    --color-on-accent: #ffffff;
+    --color-accent-text: #5d6b7a;
+    --color-focus-ring: #5d6b7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light'])[data-accent='graphite'] {
+      --color-accent: #6a7785;
+      --color-on-accent: #000000;
+      --color-accent-text: #929ca6;
+      --color-focus-ring: #929ca6;
+    }
+  }
+  :root[data-theme='dark'][data-accent='graphite'] {
+    --color-accent: #6a7785;
+    --color-on-accent: #000000;
+    --color-accent-text: #929ca6;
+    --color-focus-ring: #929ca6;
+  }
 }
 
 @media (forced-colors: active) {

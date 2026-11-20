@@ -104,3 +104,66 @@ export const LAYOUT_PX = {
   rightPanelWidth: 260,
   minPanelWidth: 160,
 } as const;
+
+// Accent presets (W4.5 S4), in the desktop's ACCENT_PRESETS order. Blue is the default and keeps
+// the values in COLOURS (the web's dark blue, not the desktop's, per W4.5 D1), so it has no block
+// in the generated CSS. The other seven come from the desktop's build_colors (the drift test in
+// tests/unit/test_web_accent_tokens.py checks them), with focusRing equal to accentText as today.
+export const ACCENT_PRESETS = [
+  'blue',
+  'teal',
+  'green',
+  'purple',
+  'pink',
+  'red',
+  'orange',
+  'graphite',
+] as const;
+export type AccentId = (typeof ACCENT_PRESETS)[number];
+export const DEFAULT_ACCENT_ID = 'blue' as const;
+
+export type AccentPresetId = Exclude<AccentId, typeof DEFAULT_ACCENT_ID>;
+
+export interface AccentTokens {
+  readonly accent: string;
+  readonly onAccent: string;
+  readonly accentText: string;
+  readonly focusRing: string;
+}
+
+export const ACCENT_COLOURS: Record<AccentPresetId, Record<'light' | 'dark', AccentTokens>> = {
+  teal: {
+    light: { accent: '#038387', onAccent: '#ffffff', accentText: '#037c80', focusRing: '#037c80' },
+    dark: { accent: '#038387', onAccent: '#000000', accentText: '#4ca7aa', focusRing: '#4ca7aa' },
+  },
+  green: {
+    light: { accent: '#107c10', onAccent: '#ffffff', accentText: '#107c10', focusRing: '#107c10' },
+    dark: { accent: '#238623', onAccent: '#000000', accentText: '#64aa64', focusRing: '#64aa64' },
+  },
+  purple: {
+    light: { accent: '#8764b8', onAccent: '#ffffff', accentText: '#805faf', focusRing: '#805faf' },
+    dark: { accent: '#8764b8', onAccent: '#000000', accentText: '#a78ecb', focusRing: '#a78ecb' },
+  },
+  pink: {
+    light: { accent: '#c30052', onAccent: '#ffffff', accentText: '#c30052', focusRing: '#c30052' },
+    dark: { accent: '#d03878', onAccent: '#000000', accentText: '#e07aa5', focusRing: '#e07aa5' },
+  },
+  red: {
+    light: { accent: '#c42b1c', onAccent: '#ffffff', accentText: '#c42b1c', focusRing: '#c42b1c' },
+    dark: { accent: '#cc473a', onAccent: '#000000', accentText: '#dc8077', focusRing: '#dc8077' },
+  },
+  orange: {
+    light: { accent: '#ca5010', onAccent: '#ffffff', accentText: '#be4b0f', focusRing: '#be4b0f' },
+    dark: { accent: '#ca5010', onAccent: '#000000', accentText: '#da8458', focusRing: '#da8458' },
+  },
+  graphite: {
+    light: { accent: '#5d6b7a', onAccent: '#ffffff', accentText: '#5d6b7a', focusRing: '#5d6b7a' },
+    dark: { accent: '#6a7785', onAccent: '#000000', accentText: '#929ca6', focusRing: '#929ca6' },
+  },
+};
+
+// The light fill of each preset (Blue's is COLOURS.light.accent), for the swatches in Preferences.
+export function accentSwatch(id: AccentId): string {
+  if (id === DEFAULT_ACCENT_ID) return COLOURS.light.accent;
+  return ACCENT_COLOURS[id].light.accent;
+}
