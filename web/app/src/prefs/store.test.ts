@@ -124,16 +124,16 @@ describe('default page layout preference (W4.5 S2)', () => {
     expect(readPreferences().pageLayout).toBe('continuous');
   });
 
-  it('offers only the layouts that exist (single-page waits for W5.1a)', () => {
-    expect(PAGE_LAYOUT_CHOICES).toEqual(['continuous', 'twoPage', 'twoPageCover']);
+  it('offers the four page layouts, the single page among them (W5.1a S3)', () => {
+    expect(PAGE_LAYOUT_CHOICES).toEqual(['continuous', 'single', 'twoPage', 'twoPageCover']);
   });
 
   it('keeps a valid stored choice and falls back for anything else', () => {
-    for (const value of ['twoPage', 'twoPageCover']) {
+    for (const value of ['single', 'twoPage', 'twoPageCover']) {
       window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ pageLayout: value }));
       expect(readPreferences().pageLayout).toBe(value);
     }
-    for (const value of ['single', 'TwoPage', 42, null]) {
+    for (const value of ['spread', 'TwoPage', 42, null]) {
       window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ pageLayout: value }));
       expect(readPreferences().pageLayout).toBe('continuous');
     }
@@ -142,7 +142,9 @@ describe('default page layout preference (W4.5 S2)', () => {
   it('writes a valid choice and cleans an invalid one to the default', () => {
     writePreferences({ ...SAVED, pageLayout: 'twoPageCover' });
     expect(readPreferences().pageLayout).toBe('twoPageCover');
-    writePreferences({ ...SAVED, pageLayout: 'single' as Preferences['pageLayout'] });
+    writePreferences({ ...SAVED, pageLayout: 'single' });
+    expect(readPreferences().pageLayout).toBe('single');
+    writePreferences({ ...SAVED, pageLayout: 'spread' as Preferences['pageLayout'] });
     expect(readPreferences().pageLayout).toBe('continuous');
   });
 });

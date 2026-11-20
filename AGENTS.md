@@ -56,15 +56,22 @@ side is `pdfeditor.webapi`, packed by `scripts/web_package.py`. Run the npm comm
   `node scripts/stage_engine_assets.mjs --wheel <pymupdf-wasm.whl> --zip dist/web/pdfeditor-web.zip`
   (or set `PYMUPDF_WHEEL` and `WEB_ZIP`), after `npm ci` in `web/spike`.
 - Feature round trips on three browsers (W8.1): `npm run e2e:features` in `web/app`, after the same staging.
+  The `web-e2e` workflow runs them nightly and on demand; it reads the PyMuPDF wheel from the cache that a
+  `web-pytest` run on main fills, and does not build one. `web-a11y` (axe, three browsers) runs on demand
+  only. Neither is a required check.
 - Pyodide run (CI's `web-pytest` job, from the repo root): `npm ci` in `web/spike`,
   `python scripts/make_fixtures.py`, `python scripts/build_web_wheel.py`, then
   `PYMUPDF_WHEEL=<web/spike/dist/wheel-build/*.whl> WEB_ZIP=dist/web/pdfeditor-web.zip node web/test/pyodide/run_tests.mjs`,
   then `python scripts/web_host_verify.py web/test/pyodide/out/host-checks.json` and `python scripts/check_web_skips.py`.
-- Web rules: no inline script or style, since the policy in `web/app/src/csp.ts` allows only
-  `'self'` (`index.html` carries the same policy; `csp.test.ts` fails on drift).
+  CI builds the wheel by PyMuPDF's Pyodide route (`wheelRoute` and the pins in `web/spike/versions.json`)
+  into `web/spike/dist/wheel-build`, and checks it against `wheel.sha256` there.
+- Web rules: no inline script or style. The policy in `web/app/src/csp.ts` allows scripts and styles
+  only from `'self'` (scripts also get `'wasm-unsafe-eval'` for the engine); `index.html` carries the
+  same policy, and `csp.test.ts` fails on drift.
 - Every user-facing string goes through `t()` (`web/app/src/i18n/t.ts`), with its key in `web/app/src/i18n/en.ts`.
 - Generated files are regenerated, never hand-edited: `web/app/src/rpc/generated.ts` by
   `python scripts/make_web_types.py` (`--check` for drift), `web/app/src/theme/tokens.css` by `npm run tokens`,
+  `web/app/src/theme/icons.generated.ts` by `npm run icons` (from the SVGs in `src/pdfeditor/data/icons/`; `icons:check` for drift),
   `web/app/public/THIRD_PARTY_LICENSES.txt` by `uv run python scripts/make_web_licences.py` (`--check` for
   drift; `--verify-installed` after `npm ci` in `web/app` checks each copyright line against node_modules).
 - A new runtime npm package or engine component (anything the browser ships) needs an entry in

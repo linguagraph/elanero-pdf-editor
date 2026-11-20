@@ -236,6 +236,7 @@ describe('PreferencesDialog', () => {
     const scope = openFromCommand();
     expect([...layoutSelect(scope).options].map((o) => o.value)).toEqual([
       'continuous',
+      'single',
       'twoPage',
       'twoPageCover',
     ]);

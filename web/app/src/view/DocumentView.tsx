@@ -38,6 +38,7 @@ import {
   scrollTopForAnchor,
   type PageRectPt,
   type ViewAnchor,
+  singlePageScene,
   type ViewLayout,
   viewAnchor,
   visibleRange,
@@ -178,8 +179,9 @@ function fitForChoice(choice: ZoomChoice): FitMode | null {
 }
 
 // The saved default page layout as the view's two settings. Two pages with the first page alone is
-// the cover layout (W4.5 S2); the single-page layout (W5.1a) is not offered yet.
+// the cover layout (W4.5 S2); the single-page layout shows one page at a time (W5.1a S3).
 function layoutForChoice(choice: PageLayoutChoice): { layout: ViewLayout; firstAlone: boolean } {
+  if (choice === 'single') return { layout: 'single', firstAlone: false };
   if (choice === 'twoPage') return { layout: 'twoPage', firstAlone: false };
   if (choice === 'twoPageCover') return { layout: 'twoPage', firstAlone: true };
   return { layout: 'continuous', firstAlone: false };
@@ -217,6 +219,9 @@ export function DocumentView({
     () => layoutForChoice(startLayout).layout,
   );
   const [firstAlone, setFirstAlone] = useState(() => layoutForChoice(startLayout).firstAlone);
+  // The page the single-page layout shows. It is not the scroll: that layout's scroll stays in the
+  // page, so only a jump, a step or a change of layout moves it.
+  const [singlePage, setSinglePage] = useState(0);
   // Night reading is a saved preference: read once here, written when the toggle changes.
   const [night, setNight] = useState(() => readPreferences().nightReading);
   // The zoom as the latest wheel event left it, so a burst of events builds on each other.
@@ -398,6 +403,7 @@ export function DocumentView({
   const changeLayout = useCallback(
     (next: { readonly layout: ViewLayout; readonly firstAlone: boolean }) => {
       capturePlace();
+      if (next.layout === 'single') setSinglePage(readingPlace.current?.page ?? 0);
       setViewLayout(next.layout);
       setFirstAlone(next.firstAlone);
     },
@@ -413,10 +419,12 @@ export function DocumentView({
 
   const layout = useMemo(
     () =>
-      viewLayout === 'twoPage'
-        ? computeSpreads(sizes ?? [], zoom, firstAlone)
-        : computeColumn(sizes ?? [], zoom),
-    [sizes, zoom, viewLayout, firstAlone],
+      viewLayout === 'single'
+        ? singlePageScene(sizes ?? [], zoom, singlePage)
+        : viewLayout === 'twoPage'
+          ? computeSpreads(sizes ?? [], zoom, firstAlone)
+          : computeColumn(sizes ?? [], zoom),
+    [sizes, zoom, viewLayout, firstAlone, singlePage],
   );
 
   // Reads the scroll position and the viewport size into state: on scroll, on resize (the window's,
@@ -476,7 +484,7 @@ export function DocumentView({
   const revealRect = useCallback(
     (index: number, rect: PageRectPt) => {
       const element = scrollRef.current;
-      const box = layout.boxes[index];
+      const box = layout.boxes.find((candidate) => candidate.index === index);
       if (element === null || box === undefined) return;
       const target = scrollForRect(
         box,
@@ -500,13 +508,27 @@ export function DocumentView({
   const scrollToPage = useCallback(
     (index: number) => {
       const element = scrollRef.current;
+      if (viewLayout === 'single') {
+        // One page is shown, so the jump changes the page and lands at that page's top. The place is
+        // set to where it lands, so the restore after the new page is laid out agrees with it.
+        const scene = singlePageScene(sizes ?? [], zoom, index);
+        const top = scrollTopForPage(scene.boxes, 0, zoom);
+        if (element === null || top === null) return;
+        readingPlace.current = viewAnchor(scene.boxes, top);
+        setSinglePage(index);
+        element.scrollTop = top;
+        setScroll(viewportOf(element));
+        return;
+      }
+      // Spreads aim at the page's own top like the continuous column (the desktop's go_to_page rule),
+      // so one function serves both layouts here.
       const top = scrollTopForPage(layout.boxes, index, zoom);
       if (element === null || top === null) return;
       element.scrollTop = top;
       capturePlace();
       setScroll(viewportOf(element));
     },
-    [layout, zoom, capturePlace],
+    [layout, sizes, zoom, viewLayout, capturePlace],
   );
 
   useEffect(() => {
@@ -572,15 +594,21 @@ export function DocumentView({
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
   // The pages mounted: the window, plus the focused page when it lies outside it, so the page keeps
   // the keyboard focus (and a comment draft or a text span in it) as the reader scrolls on.
-  const focusedBox = focusedPage === null ? undefined : layout.boxes[focusedPage];
+  const focusedBox =
+    focusedPage === null ? undefined : layout.boxes.find((box) => box.index === focusedPage);
   const mounted = [...layout.boxes.slice(range.first, range.end)];
   if (focusedBox !== undefined && (focusedBox.index < range.first || focusedBox.index >= range.end))
     mounted.push(focusedBox);
-  const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
+  // The single-page layout shows one page, so the page at the viewport is that page wherever the
+  // reader scrolls within it; the other layouts take the page the viewport's third falls in.
+  const currentPage =
+    (viewLayout === 'single'
+      ? singlePage
+      : currentPageIndex(layout.boxes, scroll.top, scroll.height)) + 1;
   useEffect(() => {
     topPage.current = currentPage - 1;
   }, [currentPage]);
-  const pageCount = layout.boxes.length;
+  const pageCount = sizes?.length ?? 0;
   useEffect(() => {
     onViewChange?.({
       page: currentPage,
@@ -615,7 +643,7 @@ export function DocumentView({
     // The plan depends on what is on screen and the scale; the scheduler is stable state.
   }, [sizes, layout, range.first, range.end, scroll.top, scroll.height, scale, scheduler, tick]);
 
-  const total = layout.boxes.length;
+  const total = pageCount;
 
   // The canvas pill's and the handle's zoom request: a fit mode or a manual zoom. Only setters are
   // used, so the callback is stable.
@@ -722,6 +750,13 @@ export function DocumentView({
             onClick={() => changeLayout({ layout: 'continuous', firstAlone })}
           >
             {t('view.layoutSingle')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={viewLayout === 'single'}
+            onClick={() => changeLayout({ layout: 'single', firstAlone })}
+          >
+            {t('view.layoutPage')}
           </button>
           <button
             type="button"

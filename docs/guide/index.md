@@ -35,6 +35,8 @@ are on the [Elanero website](https://linguagraph.github.io/elanero-pdf-editor/).
 
 - [Preferences](preferences.md): options, themes, the interface language and file association.
 - [Keyboard shortcuts](keyboard-shortcuts.md): every command and its default shortcut.
+- [Web version accessibility](web-accessibility.md): keyboard use, screen readers, high-contrast
+  colours, reduced motion and touch targets in the web version.
 - [Troubleshooting](troubleshooting.md): recovery copies, logs, known limits and bug reports.
 - [Privacy](privacy.md): what Elanero stores and when it uses the internet.
 

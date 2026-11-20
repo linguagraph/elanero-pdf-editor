@@ -50,7 +50,13 @@ export const DocumentStatusBar = forwardRef<DocumentStatusBarHandle, DocumentSta
             {t('view.zoomPercent', { percent: Math.round(zoom * 100) })}
           </span>
           <span className="doc-status-mode">
-            {t(layout === 'twoPage' ? 'view.layoutTwoPage' : 'view.layoutSingle')}
+            {t(
+              layout === 'twoPage'
+                ? 'view.layoutTwoPage'
+                : layout === 'single'
+                  ? 'view.layoutPage'
+                  : 'view.layoutSingle',
+            )}
           </span>
         </div>
       </div>

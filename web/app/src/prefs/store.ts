@@ -15,7 +15,7 @@ export type ZoomChoice = (typeof ZOOM_CHOICES)[number];
 
 // The default page layout (W4.5 S2). The single-page layout is W5.1a and is not offered until it
 // exists, so it is not a choice here.
-export const PAGE_LAYOUT_CHOICES = ['continuous', 'twoPage', 'twoPageCover'] as const;
+export const PAGE_LAYOUT_CHOICES = ['continuous', 'single', 'twoPage', 'twoPageCover'] as const;
 export type PageLayoutChoice = (typeof PAGE_LAYOUT_CHOICES)[number];
 
 export const AUTHOR_NAME_MAX_LENGTH = 64;
