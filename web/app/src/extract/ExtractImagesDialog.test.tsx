@@ -255,6 +255,70 @@ describe('ExtractImagesDialog', () => {
     expect(progress.getState().job).toBeUndefined();
   });
 
+  it('closing the dialog while prepare is in flight stops the run before it begins', async () => {
+    // prepare returns only when the test lets it, so the dialog closes before any job is on the bar.
+    let finishPrepare: (value: unknown) => void = () => undefined;
+    const call = vi.fn((method: string): Promise<unknown> => {
+      if (method === 'jobs.prepare') {
+        return new Promise<unknown>((resolve) => {
+          finishPrepare = (value) => resolve(value);
+        });
+      }
+      return Promise.resolve({ applied: false, changed: null, state: null });
+    });
+    const engine = { call } as unknown as FileJobEngine;
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const beginSpy = vi.spyOn(progress, 'begin');
+    const worker = fakeWorker(imagesReply(['page1-image1.png'], 1, 0));
+    const startWorker = vi.fn(() => worker);
+    render({ engine, progress, startWorker });
+
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+    render({ engine, progress, startWorker, isOpen: false });
+    await flush();
+
+    finishPrepare({
+      token: 'j1',
+      label: 'extract_images',
+      mutating: false,
+      document: BYTES.slice(0),
+      state: null,
+    });
+    await flush();
+
+    expect(beginSpy).not.toHaveBeenCalled();
+    expect(startWorker).not.toHaveBeenCalled();
+    expect(worker.call).not.toHaveBeenCalled();
+    expect(progress.getState().job).toBeUndefined();
+    expect(call).toHaveBeenCalledWith('jobs.abort', { handle: 'doc-1', token: 'j1' });
+  });
+
+  it('closing the dialog does not cancel a job on the bar that this dialog did not start', async () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+
+    // The dialog's run finishes, then another feature starts a job before the form unmounts.
+    act(() => findButton(t('extract.submit')).click());
+    await flush();
+    const otherClient = { call: vi.fn(() => Promise.resolve({})) };
+    expect(
+      progress.begin({
+        handle: 'doc-1',
+        token: 'ocr-9',
+        label: 'OCR',
+        client: otherClient,
+      }),
+    ).toBe(true);
+
+    render({ engine, progress, isOpen: false });
+    await flush();
+
+    expect(otherClient.call).not.toHaveBeenCalled();
+    expect(progress.getState().job?.token).toBe('ocr-9');
+  });
+
   it('a failed job shows the failure message', async () => {
     const { engine } = fakeEngine();
     const progress = createJobProgressStore({ toasts: createToastStore() });

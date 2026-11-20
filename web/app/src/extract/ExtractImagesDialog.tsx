@@ -7,7 +7,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'rea
 import { Label, Radio, RadioGroup } from 'react-aria-components';
 import { downloadLinks, type ResultFile, revokeLinks } from '../files/downloads';
 import { FileJobCancelled, type FileJobEngine, type JobWorker } from '../files/fileJob';
-import { jobProgress, type JobProgressStore } from '../feedback/jobRun';
+import type { JobProgressStore } from '../feedback/jobRun';
 import type { MessageId } from '../i18n/en';
 import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
@@ -84,7 +84,9 @@ function ExtractImagesForm({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const mounted = useRef(true);
-  const runningRef = useRef(false);
+  // The abort token of this form's run. Aborting it stops the run whether its job is still being
+  // prepared or already on the bar, and touches no other job.
+  const runAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -93,17 +95,12 @@ function ExtractImagesForm({
     };
   }, []);
 
-  useEffect(() => {
-    runningRef.current = running;
-  }, [running]);
-
   // The form unmounts when the dialog closes (Escape, a tap outside or the parent). A run still
-  // going is cancelled the way the job bar's Cancel cancels it, since its result has nowhere to go.
+  // going is cancelled, since its result has nowhere to go. A finished run has no listener left, so
+  // this never reaches a job another feature started after it.
   useEffect(() => {
-    return () => {
-      if (runningRef.current) void (progress ?? jobProgress).cancel();
-    };
-  }, [progress]);
+    return () => runAbort.current?.abort();
+  }, []);
 
   const links = useMemo(() => downloadLinks(result?.files ?? []), [result]);
   useEffect(() => {
@@ -121,7 +118,10 @@ function ExtractImagesForm({
     setError(null);
     setResult(null);
     setRunning(true);
-    runExtractImages({ engine, startWorker, progress }, handle, checked.choice, name).then(
+    const abort = new AbortController();
+    runAbort.current = abort;
+    const deps = { engine, startWorker, progress, signal: abort.signal };
+    runExtractImages(deps, handle, checked.choice, name).then(
       (output) => {
         if (!mounted.current) return;
         setRunning(false);

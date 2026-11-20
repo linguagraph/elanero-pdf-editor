@@ -51,8 +51,9 @@ export interface JobProgressStore {
   // Hides the bar and reports the outcome. A token that is not the running job's is ignored.
   finish(token: string, outcome: JobOutcome): void;
   // Calls jobs.abort. The bar hides when the abort succeeds; a failed abort keeps the bar and
-  // shows an error toast.
-  cancel(): Promise<void>;
+  // shows an error toast. With a token, it cancels only that job: a bar that holds another job
+  // (or none) is left alone.
+  cancel(token?: string): Promise<void>;
 }
 
 export interface JobProgressOptions {
@@ -104,9 +105,10 @@ export function createJobProgressStore(options: JobProgressOptions = {}): JobPro
         reportRpcError(toastStore, asRpcError(outcome.error));
       }
     },
-    async cancel() {
+    async cancel(token) {
       const job = state.job;
       if (job === undefined) return;
+      if (token !== undefined && job.token !== token) return;
       if (job.terminate !== undefined) {
         job.terminate();
         if (state.job?.token === job.token) update({ job: undefined });
