@@ -628,6 +628,7 @@ export const EN = {
   'sanitize.confirm.back': 'Back',
   'sanitize.result.heading': 'Removed:',
   'sanitize.result.none': 'Nothing needed removing.',
+  'sanitize.result.saveHint': 'Save the document to write the cleaned file.',
   'sanitize.failed': 'The document could not be sanitized. Try again.',
   'sanitize.refused.signed':
     'This document is signed. Sanitizing it would invalidate the signatures.',

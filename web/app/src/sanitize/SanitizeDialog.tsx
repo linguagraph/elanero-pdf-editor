@@ -106,6 +106,7 @@ function SanitizeForm({
             ))}
           </ul>
         ) : null}
+        <p>{t('sanitize.result.saveHint')}</p>
         <div className="redact-actions">
           <button type="button" onClick={onClose}>
             {t('sanitize.close')}
