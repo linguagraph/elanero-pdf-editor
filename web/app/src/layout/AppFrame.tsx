@@ -3,7 +3,7 @@ import { t } from '../i18n/t';
 import { layoutForWidth } from './breakpoints';
 import { LayoutProvider } from './LayoutContext';
 import type { Side } from './sidePanels';
-import { focusRegion, useFocusRegions } from './useFocusRegions';
+import { focusDocument, useFocusRegions } from './useFocusRegions';
 import { useDismissablePanels } from './useDismissablePanels';
 import { useViewportWidth } from './useViewportWidth';
 import './layout.css';
@@ -52,7 +52,7 @@ export function AppFrame({
   // The skip link moves the keyboard past the header, the rails and the panels to the document.
   const skipToDocument = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    focusRegion('page');
+    focusDocument();
   };
 
   const frame = (

@@ -5,6 +5,10 @@ import { nextRegion, REGION_ORDER, regionOf, type RegionName } from './focusRegi
 const FOCUSABLE =
   'button, [href], input, select, textarea, [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
+// Dialogs and modal backdrops are portaled outside every region. While one is open, F6 leaves the
+// keyboard alone so the dialog keeps its own focus trap (W1.6 section 5).
+const MODAL = '[role="dialog"], [aria-modal="true"], .overlay-backdrop';
+
 // A region is the set of containers marked data-region with its name (the rail and the panel of a
 // side share "left"). The page area is a container with tabindex -1, so it is a stop even with no
 // control inside it.
@@ -19,7 +23,20 @@ function reachable(element: HTMLElement): boolean {
   for (let node: HTMLElement | null = element; node; node = node.parentElement) {
     if (window.getComputedStyle(node).display === 'none') return false;
   }
+  // Visibility is inherited, so the element's own computed value covers its ancestors too, and a
+  // descendant that sets visibility: visible is shown, as the browser shows it.
+  if (window.getComputedStyle(element).visibility === 'hidden') return false;
   return true;
+}
+
+// The page area as a stop of its own: a container with tabindex -1 that is shown.
+function pageAreaOf(containers: readonly HTMLElement[]): HTMLElement | null {
+  // Read the attribute: a plain div reports tabIndex -1 too, which is not a stop of its own.
+  return (
+    containers.find(
+      (container) => container.getAttribute('tabindex') === '-1' && reachable(container),
+    ) ?? null
+  );
 }
 
 function focusablesIn(containers: readonly HTMLElement[]): HTMLElement[] {
@@ -37,13 +54,19 @@ function entryOf(name: RegionName, remembered: HTMLElement | undefined): HTMLEle
   }
   const first = focusablesIn(containers)[0];
   if (first) return first;
-  // Read the attribute: a plain div reports tabIndex -1 too, which is not a stop of its own.
-  return containers.find((container) => container.getAttribute('tabindex') === '-1') ?? null;
+  return pageAreaOf(containers);
 }
 
-// Moves focus to a region's entry point. The skip link uses it to reach the page area.
-export function focusRegion(name: RegionName): boolean {
-  const target = entryOf(name, undefined);
+// Moves focus to the document for the skip link: the canvas scroller when the page shows one, else
+// the page area itself. The page area's first control (a view toolbar button) is not the document,
+// so it is not used here.
+export function focusDocument(): boolean {
+  const pages = containersOf('page');
+  const scrollers: HTMLElement[] = [];
+  for (const page of pages) {
+    scrollers.push(...Array.from(page.querySelectorAll<HTMLElement>('.doc-view-scroll')));
+  }
+  const target = scrollers.find(reachable) ?? pageAreaOf(pages);
   if (!target) return false;
   target.focus();
   return true;
@@ -55,14 +78,15 @@ function presentRegions(): RegionName[] {
 }
 
 // Window-level F6 / Shift+F6, in the capture phase so it wins over the page's own handlers. It
-// cycles even from inside a text field (desktop behaviour) and always prevents the default, since
-// browsers may use F6 for the address bar.
+// cycles even from inside a text field (desktop behaviour) and prevents the default, since browsers
+// may use F6 for the address bar. With a dialog open it does nothing at all, default included.
 export function useFocusRegions(): void {
   const remembered = useRef(new Map<RegionName, HTMLElement>());
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'F6' || event.ctrlKey || event.altKey || event.metaKey) return;
+      if (document.querySelector(MODAL) !== null) return;
       event.preventDefault();
       const active = document.activeElement as HTMLElement | null;
       const here = regionOf(active?.closest<HTMLElement>('[data-region]')?.dataset.region);

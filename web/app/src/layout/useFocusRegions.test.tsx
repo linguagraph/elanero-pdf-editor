@@ -139,6 +139,34 @@ describe('F6 and Shift+F6', () => {
     expect(press('F6')).toBe(true);
   });
 
+  it('does not move focus out of an open dialog', () => {
+    render(<Shell />);
+    // A dialog is portaled outside the regions, as react-aria does.
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.innerHTML = '<button type="button">Dialog action</button>';
+    document.body.append(dialog);
+    try {
+      focusButton('Dialog action');
+      expect(press('F6')).toBe(false);
+      expect(active()).toBe('Dialog action');
+      expect(press('F6', { shift: true })).toBe(false);
+      expect(active()).toBe('Dialog action');
+    } finally {
+      dialog.remove();
+    }
+  });
+
+  it('skips a region that is visibility hidden', () => {
+    render(<Shell />);
+    const status = document.querySelector<HTMLElement>('.app-frame-status');
+    if (status) status.style.visibility = 'hidden';
+    focusButton('Organize');
+    press('F6');
+    expect(active()).toBe('Undo');
+  });
+
   it('ignores other keys', () => {
     render(<Shell />);
     focusButton('Open');
@@ -157,7 +185,25 @@ describe('Skip to document', () => {
     act(() => {
       skip?.click();
     });
-    expect(active()).toBe('First');
+    // No canvas here, so the page area itself takes focus, not its first control.
+    expect(document.activeElement?.id).toBe('app-page-area');
+  });
+
+  it('moves focus to the canvas scroller, not to a toolbar control above it', () => {
+    render(
+      <AppFrame header={<button type="button">Open</button>}>
+        <div role="toolbar">
+          <button type="button">Zoom</button>
+        </div>
+        <div className="doc-view-scroll" tabIndex={0}>
+          <button type="button">Page</button>
+        </div>
+      </AppFrame>,
+    );
+    act(() => {
+      document.querySelector<HTMLAnchorElement>('.app-skip-link')?.click();
+    });
+    expect(document.activeElement?.classList.contains('doc-view-scroll')).toBe(true);
   });
 
   it('falls back to the page area when it holds no control', () => {
