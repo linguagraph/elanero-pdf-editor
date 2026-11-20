@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { t } from '../i18n/t';
 import { layoutForWidth } from './breakpoints';
 import { LayoutProvider } from './LayoutContext';
+import type { Side } from './sidePanels';
+import { useDismissablePanels } from './useDismissablePanels';
 import { useViewportWidth } from './useViewportWidth';
 import './layout.css';
 
@@ -16,6 +18,8 @@ export interface AppFrameProps {
   statusBar?: ReactNode;
   // The start page replaces the rails too (W1.6 section 1), so they are hidden while it shows.
   readonly railsHidden?: boolean;
+  // Escape or a tap outside closes a floating (drawer or overlay) panel through this (S3).
+  readonly onDismissPanel?: (side: Side) => void;
 }
 
 // The app's region frame, in the desktop order (W1.6 section 1). The regions are always in the
@@ -30,13 +34,22 @@ export function AppFrame({
   rightRail,
   statusBar,
   railsHidden = false,
+  onDismissPanel,
 }: AppFrameProps) {
   const regions = layoutForWidth(useViewportWidth());
   const hasLeftPanel = leftPanel !== undefined && leftPanel !== null && leftPanel !== false;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null && rightPanel !== false;
+  const frameRef = useRef<HTMLDivElement>(null);
+  useDismissablePanels({
+    frame: frameRef,
+    shown: { left: hasLeftPanel, right: hasRightPanel },
+    floating: { left: regions.leftPanel === 'drawer', right: regions.rightPanel === 'overlay' },
+    onDismiss: onDismissPanel,
+  });
 
   const frame = (
     <div
+      ref={frameRef}
       className="app-frame"
       data-tier={regions.tier}
       data-ribbon={regions.ribbon}
