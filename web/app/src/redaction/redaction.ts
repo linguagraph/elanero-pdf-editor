@@ -3,6 +3,8 @@
 // actions layer does (W1.3), and the job applies what the engine returns.
 import { type ActionJobDeps, runActionJob, type ActionJobOutcome } from '../actionJob/actionJob';
 import type { PageRpc } from '../engine/engineConnection';
+import { hexToColorJson, type ColorJson } from '../prefs/colour';
+import { type Preferences, readPreferences } from '../prefs/store';
 import type { ChangedDto } from '../rpc/generated';
 import { expectArray, expectInteger, expectObject, expectString, field } from '../rpc/shape';
 import { DEFAULT_REDACT_OPTIONS, markRefsJson, type MarkRef, redactionAreaJson } from './marks';
@@ -24,17 +26,41 @@ export function readMarkRefs(value: unknown): MarkRef[] {
   });
 }
 
-// Adds one mark for a box drawn on a page. One undo step; the reply names the mark it added.
+// The mark style the engine takes (MarkStyle in services/redaction.py). The colours are {r,g,b} in
+// 0..1; alpha is left to the engine's default of 1.
+export interface RedactionStyleJson {
+  readonly fill: ColorJson;
+  readonly overlay_text: string;
+  readonly text_color: ColorJson;
+}
+
+export function redactionStyleJson(
+  prefs: Pick<Preferences, 'redactionFill' | 'redactionOverlayText' | 'redactionTextColor'>,
+): RedactionStyleJson {
+  return {
+    fill: hexToColorJson(prefs.redactionFill),
+    overlay_text: prefs.redactionOverlayText,
+    text_color: hexToColorJson(prefs.redactionTextColor),
+  };
+}
+
+// Adds one mark for a box drawn on a page. One undo step; the reply names the mark it added. The
+// author and the style are read from the preferences now, so a change applies to the next mark.
 export async function addRedactionMark(
   rpc: PageRpc,
   handle: string,
   page: number,
   rect: PageRect,
 ): Promise<MarksResult> {
+  const prefs = readPreferences();
   const reply = await rpc.call('actions.run', {
     handle,
     name: 'redaction.mark',
-    args: { areas: [redactionAreaJson(page, rect)] },
+    args: {
+      areas: [redactionAreaJson(page, rect)],
+      author: prefs.authorName,
+      style: redactionStyleJson(prefs),
+    },
   });
   return { marks: reply.executed ? readMarkRefs(reply.value) : [], changed: reply.changed };
 }

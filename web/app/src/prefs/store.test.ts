@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { THEME_STORAGE_KEY } from '../theme/theme';
 import {
+  cleanHexColour,
+  cleanOverlayText,
   DEFAULT_PREFERENCES,
   isSecretKey,
   PAGE_LAYOUT_CHOICES,
@@ -21,6 +23,9 @@ const SAVED: Preferences = {
   pageLayout: 'twoPage',
   ribbonCompact: true,
   ribbonCollapsed: true,
+  redactionFill: '#ff8000',
+  redactionOverlayText: 'REDACTED',
+  redactionTextColor: '#102030',
 };
 
 afterEach(() => {
@@ -47,6 +52,9 @@ describe('preferences round trip', () => {
       pageLayout: 'twoPage',
       ribbonCompact: true,
       ribbonCollapsed: true,
+      redactionFill: '#ff8000',
+      redactionOverlayText: 'REDACTED',
+      redactionTextColor: '#102030',
     });
   });
 
@@ -119,6 +127,51 @@ describe('default page layout preference (W4.5 S2)', () => {
     expect(readPreferences().pageLayout).toBe('twoPageCover');
     writePreferences({ ...SAVED, pageLayout: 'single' as Preferences['pageLayout'] });
     expect(readPreferences().pageLayout).toBe('continuous');
+  });
+});
+
+describe('redaction mark style preferences (W4.5 S3)', () => {
+  it('defaults to the desktop MarkStyle: black box, white text, no overlay text', () => {
+    expect(readPreferences()).toMatchObject({
+      redactionFill: '#000000',
+      redactionOverlayText: '',
+      redactionTextColor: '#ffffff',
+    });
+  });
+
+  it('folds the case of a colour and keeps a valid one', () => {
+    expect(cleanHexColour('#ABCDEF', '#000000')).toBe('#abcdef');
+    expect(cleanHexColour('#00ff80', '#000000')).toBe('#00ff80');
+  });
+
+  it.each(['#abc', 'red', '#12345g', '#1234567', 42, null, ''])(
+    'falls back to the default for %j',
+    (value) => {
+      expect(cleanHexColour(value, '#ffffff')).toBe('#ffffff');
+    },
+  );
+
+  it('trims the overlay text, caps it at 64 characters and drops control characters', () => {
+    expect(cleanOverlayText('  CONFIDENTIAL  ')).toBe('CONFIDENTIAL');
+    expect(cleanOverlayText(`a\u0000b\u0007c\u007fd\te`)).toBe('abcde');
+    expect(cleanOverlayText('x'.repeat(100))).toHaveLength(64);
+    expect(cleanOverlayText(7)).toBe('');
+  });
+
+  it('cleans a stored or written style on the way in and out', () => {
+    window.localStorage.setItem(
+      PREFS_STORAGE_KEY,
+      JSON.stringify({ redactionFill: 'blue', redactionTextColor: '#FFFFFF' }),
+    );
+    expect(readPreferences()).toMatchObject({
+      redactionFill: '#000000',
+      redactionTextColor: '#ffffff',
+    });
+    writePreferences({ ...SAVED, redactionFill: '#ABCDEF', redactionOverlayText: ' hi ' });
+    expect(readPreferences()).toMatchObject({
+      redactionFill: '#abcdef',
+      redactionOverlayText: 'hi',
+    });
   });
 });
 
