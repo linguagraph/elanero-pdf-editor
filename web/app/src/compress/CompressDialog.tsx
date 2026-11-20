@@ -13,11 +13,14 @@ import { Overlay } from '../layout/Overlay';
 import {
   COMPRESS_PRESETS,
   type CompressPreset,
+  type CompressSettings,
   isSmaller,
+  optionsAreValid,
   presetSettings,
   runCompress,
   savedPercent,
 } from './compressJob';
+import { CompressOptions } from './CompressOptions';
 import './compress.css';
 
 export interface CompressDialogProps {
@@ -43,6 +46,13 @@ const PRESET_HINTS: Readonly<Record<CompressPreset, MessageId>> = {
   print: 'compress.hint.print',
   lossless: 'compress.hint.lossless',
 };
+
+// The radio's value for the settings the user edits by hand (the desktop's "Custom" entry).
+const CUSTOM = 'custom';
+
+function hintFor(settings: CompressSettings): MessageId {
+  return settings.preset === CUSTOM ? 'compress.hint.custom' : PRESET_HINTS[settings.preset];
+}
 
 // The outcome of a finished compress, as the dialog shows it.
 interface Outcome {
@@ -98,7 +108,7 @@ function CompressForm({
   const ids = useId();
   const store = progress ?? jobProgress;
   const runningJob = useJobProgress(store).job;
-  const [preset, setPreset] = useState<CompressPreset>('ebook');
+  const [settings, setSettings] = useState<CompressSettings>(() => presetSettings('ebook'));
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const mounted = useRef(true);
@@ -120,12 +130,12 @@ function CompressForm({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (running) return;
+    if (running || !optionsAreValid(settings.options)) return;
     setError(null);
     setOutcome(null);
     setRunning(true);
     // The audit is off until the result shows it (the next slice): the job does what it did before.
-    runCompress({ engine, startWorker, progress: store }, handle, presetSettings(preset), {
+    runCompress({ engine, startWorker, progress: store }, handle, settings, {
       audit: false,
     }).then(
       (result) => {
@@ -151,8 +161,14 @@ function CompressForm({
 
       <RadioGroup
         className="compress-group"
-        value={preset}
-        onChange={(value) => setPreset(value as CompressPreset)}
+        value={settings.preset}
+        onChange={(value) =>
+          setSettings(
+            value === CUSTOM
+              ? { ...settings, preset: CUSTOM }
+              : presetSettings(value as CompressPreset),
+          )
+        }
         isDisabled={running}
       >
         <Label className="compress-label">{t('compress.preset.label')}</Label>
@@ -161,8 +177,17 @@ function CompressForm({
             {t(PRESET_LABELS[id])}
           </Radio>
         ))}
+        <Radio value={CUSTOM} className="compress-option">
+          {t('compress.preset.custom')}
+        </Radio>
       </RadioGroup>
-      <p className="compress-hint">{t(PRESET_HINTS[preset])}</p>
+      <p className="compress-hint">{t(hintFor(settings))}</p>
+
+      <CompressOptions
+        options={settings.options}
+        disabled={running}
+        onChange={(options) => setSettings({ preset: CUSTOM, options })}
+      />
 
       {error !== null ? (
         <p className="compress-error" role="alert">
@@ -171,7 +196,11 @@ function CompressForm({
       ) : null}
 
       <div className="compress-actions">
-        <button type="submit" className="compress-submit" disabled={running}>
+        <button
+          type="submit"
+          className="compress-submit"
+          disabled={running || !optionsAreValid(settings.options)}
+        >
           {t('compress.submit')}
         </button>
         {running ? (

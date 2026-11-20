@@ -356,3 +356,157 @@ describe('formatSize', () => {
     expect(formatSize(5 * 1024 ** 3)).toBe(t('compress.size.gb', { value: '5.0' }));
   });
 });
+
+describe('CompressDialog custom settings', () => {
+  // The field whose label reads `text` (each field is a wrapping label, so its text is the label).
+  function field(text: string): HTMLInputElement {
+    const label = [...document.body.querySelectorAll('label')].find(
+      (candidate) => candidate.textContent === text,
+    );
+    const input = label?.querySelector('input');
+    if (input === null || input === undefined) throw new Error(`no field ${text}`);
+    return input;
+  }
+
+  // Types into a number field the way a user does: the value, then the input event React reads.
+  function type(text: string, value: string) {
+    const input = field(text);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  function toggle(text: string) {
+    act(() => field(text).click());
+  }
+
+  function radioChecked(label: string): boolean {
+    return [...document.body.querySelectorAll('input[type="radio"]')].some(
+      (candidate) =>
+        (candidate as HTMLInputElement).checked &&
+        candidate.closest('label')?.textContent === label,
+    );
+  }
+
+  function prepareArgs(call: ReturnType<typeof vi.fn>): unknown {
+    const prepare = call.mock.calls.find((entry) => entry[0] === 'jobs.prepare') as
+      [string, { args: unknown }] | undefined;
+    return prepare?.[1].args;
+  }
+
+  it('a preset fills the fields and is sent by its key', async () => {
+    const { call, engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, startWorker: () => job.worker });
+
+    choose(t('compress.preset.print'));
+    expect(field(t('compress.field.dpi')).value).toBe('300');
+    expect(field(t('compress.field.quality')).value).toBe('85');
+
+    submit();
+    await flush();
+    expect(prepareArgs(call)).toEqual({ preset: 'print', audit: false });
+  });
+
+  it('editing a field makes the settings Custom and sends the values as options', async () => {
+    const { call, engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, startWorker: () => job.worker });
+
+    choose(t('compress.preset.ebook'));
+    type(t('compress.field.quality'), '40');
+    expect(radioChecked(t('compress.preset.custom'))).toBe(true);
+    expect(radioChecked(t('compress.preset.ebook'))).toBe(false);
+    toggle(t('compress.field.grayscale'));
+
+    submit();
+    await flush();
+    expect(prepareArgs(call)).toEqual({
+      preset: 'custom',
+      audit: false,
+      options: {
+        image_dpi: 150,
+        jpeg_quality: 40,
+        grayscale: true,
+        subset_fonts: true,
+        remove_thumbnails: true,
+        remove_metadata: false,
+        object_streams: true,
+      },
+    });
+  });
+
+  it('Keep image resolution disables the dpi field and sends null', async () => {
+    const { call, engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, startWorker: () => job.worker });
+
+    toggle(t('compress.field.keep'));
+    expect(field(t('compress.field.dpi')).disabled).toBe(true);
+
+    submit();
+    await flush();
+    expect(prepareArgs(call)).toMatchObject({ preset: 'custom', options: { image_dpi: null } });
+  });
+
+  it('an out-of-range dpi shows the message through t() and blocks Compress', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+
+    type(t('compress.field.dpi'), '5000');
+    expect(document.body.textContent).toContain(t('compress.error.dpi', { min: 36, max: 1200 }));
+    expect(findButton(t('compress.submit')).disabled).toBe(true);
+
+    const form = document.body.querySelector('form.compress');
+    act(() => {
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(call.mock.calls.some((entry) => entry[0] === 'jobs.prepare')).toBe(false);
+  });
+
+  it('an empty or out-of-range quality shows its message and blocks Compress', () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+
+    type(t('compress.field.quality'), '');
+    expect(document.body.textContent).toContain(t('compress.error.quality', { min: 10, max: 100 }));
+    expect(findButton(t('compress.submit')).disabled).toBe(true);
+
+    type(t('compress.field.quality'), '101');
+    expect(findButton(t('compress.submit')).disabled).toBe(true);
+
+    type(t('compress.field.quality'), '60');
+    expect(document.body.textContent).not.toContain(
+      t('compress.error.quality', { min: 10, max: 100 }),
+    );
+    expect(findButton(t('compress.submit')).disabled).toBe(false);
+  });
+
+  it('switches between a preset and Custom, and the fields are disabled while running', async () => {
+    const { engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, startWorker: () => job.worker });
+
+    choose(t('compress.preset.custom'));
+    expect(radioChecked(t('compress.preset.custom'))).toBe(true);
+    expect(document.body.textContent).toContain(t('compress.hint.custom'));
+
+    choose(t('compress.preset.screen'));
+    expect(field(t('compress.field.dpi')).value).toBe('72');
+    expect(radioChecked(t('compress.preset.custom'))).toBe(false);
+
+    submit();
+    await flush();
+    expect(field(t('compress.field.dpi')).disabled).toBe(true);
+    expect(field(t('compress.field.quality')).disabled).toBe(true);
+  });
+});
