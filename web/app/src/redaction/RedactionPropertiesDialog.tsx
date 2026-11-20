@@ -38,10 +38,16 @@ export function RedactionPropertiesDialog({ isOpen, onClose }: RedactionProperti
 // text, and Apply is an explicit click, so no implicit submit can drop an uncommitted edit.
 function PropertiesForm({ onDone }: { readonly onDone: () => void }) {
   const [draft, setDraft] = useState<MarkStyleDraft>(() => draftFromPreferences(readPreferences()));
+  const [saveFailed, setSaveFailed] = useState(false);
 
   const apply = () => {
-    // The other preferences are read again, so only the three style keys change.
-    writePreferences({ ...readPreferences(), ...preferencesFromDraft(draft) });
+    // The other preferences are read again, so only the three style keys change. A refused write
+    // (the browser's storage is full or blocked) keeps the dialog open, so the edit is not lost.
+    const saved = writePreferences({ ...readPreferences(), ...preferencesFromDraft(draft) });
+    if (!saved) {
+      setSaveFailed(true);
+      return;
+    }
     onDone();
   };
 
@@ -54,6 +60,11 @@ function PropertiesForm({ onDone }: { readonly onDone: () => void }) {
         onChange={(patch) => setDraft((previous) => applyStylePatch(previous, patch))}
       />
       <span className="prefs-hint">{t('prefs.redaction.overlayHint')}</span>
+      {saveFailed ? (
+        <span className="prefs-error" role="alert">
+          {t('prefs.redaction.saveFailed')}
+        </span>
+      ) : null}
       <div className="overlay-actions">
         <button type="button" className="overlay-close" onClick={onDone}>
           {t('prefs.cancel')}

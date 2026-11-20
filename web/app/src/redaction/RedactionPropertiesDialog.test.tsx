@@ -109,6 +109,23 @@ describe('RedactionPropertiesDialog', () => {
     expect(overlayInput().maxLength).toBe(64);
   });
 
+  it('stores at most 64 characters of overlay text typed before Apply', () => {
+    const onClose = open();
+    const input = overlayInput();
+    act(() => {
+      input.focus();
+    });
+    type(input, 'x'.repeat(100));
+    // A mouse press moves focus to Apply before the click, which blurs and commits the text. jsdom's
+    // click() and focus() do not blur the field, so the press is modelled by blurring it first.
+    commitOverlay(input);
+    act(() => {
+      button(t('prefs.apply')).click();
+    });
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(stored().redactionOverlayText).toHaveLength(64);
+  });
+
   it('Apply writes the three style keys and keeps the other preferences', () => {
     window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ authorName: 'Ann' }));
     const onClose = open();
@@ -138,15 +155,26 @@ describe('RedactionPropertiesDialog', () => {
     expect(window.localStorage.getItem(PREFS_STORAGE_KEY)).toBeNull();
   });
 
-  it('closes and keeps the defaults when the browser refuses to store', () => {
+  it('stays open and keeps the stored values when the browser refuses to store', () => {
+    window.localStorage.setItem(
+      PREFS_STORAGE_KEY,
+      JSON.stringify({ redactionOverlayText: 'KEEP' }),
+    );
+    const before = window.localStorage.getItem(PREFS_STORAGE_KEY);
+    const onClose = open();
+    type(overlayInput(), 'CHANGED');
+    commitOverlay(overlayInput());
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota');
     });
-    const onClose = open();
     act(() => {
       button(t('prefs.apply')).click();
     });
-    expect(onClose).toHaveBeenCalledOnce();
-    expect(readPreferences().redactionFill).toBe('#000000');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(PREFS_STORAGE_KEY)).toBe(before);
+    expect(readPreferences().redactionOverlayText).toBe('KEEP');
+    expect(dialog().querySelector('[role="alert"]')?.textContent).toBe(
+      t('prefs.redaction.saveFailed'),
+    );
   });
 });
