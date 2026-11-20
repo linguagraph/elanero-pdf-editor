@@ -144,14 +144,18 @@ is reloaded until you press it.
 
 - **Thumbnails.** The **Thumbnails** button on the right rail opens a panel with a small preview of
   every page. Click a preview to go to that page. The panel opens and closes for each open
-  document separately, and it is not remembered after a reload. Attachments and layers are not
-  available yet.
+  document separately, and it is not remembered after a reload. Layers are not available yet.
 - **Bookmarks.** The **Bookmarks** button on the right rail opens the document's outline as a tree.
   Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
   With the keyboard, Up and Down move through the entries, Right and Left open and close them,
   and Enter goes to the page.
   Entries without a page are greyed out. The panel is read-only for now: you cannot add, rename or
   move bookmarks yet. Each open document keeps its own expanded entries until you close it.
+- **Attachments.** The **Attachments** button on the left rail lists the files embedded in the
+  document, with the size of each. Click a file to see its name, size and description, then press
+  **Save** to download it to your computer. The file is saved as it is; the browser never opens or
+  runs it. If the document has no attachments, the panel says so. The panel is read-only for now:
+  you cannot add or remove attachments yet.
 - **Search.** The **Search** button on the left rail opens a panel that finds text in the open
   document. Type in the box and press Enter (or **Search**). The search starts at the page you are
   on and wraps round to the first page. Each match is listed with its page and the text around it,

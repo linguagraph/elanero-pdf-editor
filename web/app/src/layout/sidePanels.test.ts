@@ -19,6 +19,7 @@ describe('side panel store', () => {
     expect(PANEL_SIDE).toEqual({
       pages: 'left',
       bookmarks: 'left',
+      attachments: 'left',
       search: 'left',
       redactions: 'left',
       comments: 'left',

@@ -829,6 +829,26 @@ export const EN = {
   'thumbnails.loading': 'Loading thumbnails…',
   'thumbnails.loadFailed': 'The thumbnails could not be read. Try opening the file again.',
 
+  // Attachments side panel (W5.2, W7.9 S2): read-only list of the embedded files. Adding and
+  // removing them is not built yet. The bytes are saved, never opened.
+  'attachments.title': 'Attachments',
+  'attachments.list': 'Embedded files',
+  'attachments.details': 'Attachment details',
+  'attachments.empty': 'This document has no attachments.',
+  'attachments.loading': 'Loading attachments…',
+  'attachments.loadFailed': 'The attachments could not be read. Try opening the file again.',
+  'attachments.unnamed': 'Unnamed file',
+  'attachments.field.name': 'Name',
+  'attachments.field.size': 'Size',
+  'attachments.field.description': 'Description',
+  'attachments.noDescription': 'No description',
+  'attachments.save': 'Save',
+  'attachments.saveFailed': 'The attachment could not be saved.',
+  'attachments.size.bytes': '{count} B',
+  'attachments.size.kb': '{value} KB',
+  'attachments.size.mb': '{value} MB',
+  'attachments.size.gb': '{value} GB',
+
   // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
   'bookmarks.title': 'Bookmarks',
   'bookmarks.list': 'Document bookmarks',

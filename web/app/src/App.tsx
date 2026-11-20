@@ -80,6 +80,7 @@ import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
 import { BookmarksPanel } from './bookmarks/BookmarksPanel';
+import { AttachmentsPanel } from './attachments/AttachmentsPanel';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { OrganizerPanel } from './organizer/OrganizerPanel';
 import { type FindRequest, SearchPanel } from './search/SearchPanel';
@@ -391,6 +392,14 @@ export function App({
       },
     },
     {
+      id: 'attachments',
+      label: t('attachments.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('attachments');
+      },
+    },
+    {
       id: 'search',
       label: t('search.title'),
       disabled: !documentShown,
@@ -670,6 +679,13 @@ export function App({
             controlsId={documentShown ? 'app-panel-left' : undefined}
           />
           <RailButton
+            panel="attachments"
+            label={t('attachments.title')}
+            icon={RAIL_ICONS.attachments}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
+          />
+          <RailButton
             panel="redactions"
             label={t('redactions.title')}
             icon={RAIL_ICONS.redactions}
@@ -723,6 +739,16 @@ export function App({
             handle={session.handle}
             tabId={activeId}
             onSelect={goTo}
+            onClose={() => closePanel('left')}
+          />
+        ) : documentShown &&
+          leftPanelOpen === 'attachments' &&
+          activeId !== null &&
+          session !== null ? (
+          <AttachmentsPanel
+            key={activeId}
+            rpc={session.rpc}
+            handle={session.handle}
             onClose={() => closePanel('left')}
           />
         ) : documentShown &&
