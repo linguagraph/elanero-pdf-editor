@@ -626,6 +626,8 @@ export const EN = {
   'sanitize.result.heading': 'Removed:',
   'sanitize.result.none': 'Nothing needed removing.',
   'sanitize.failed': 'The document could not be sanitized. Try again.',
+  'sanitize.refused.signed':
+    'This document is signed. Sanitizing it would invalidate the signatures.',
   'combine.title': 'Combine files',
   'combine.label': 'Combining files',
   'combine.dropHint':
