@@ -14,6 +14,7 @@ import {
   COMPRESS_PRESETS,
   type CompressPreset,
   isSmaller,
+  presetSettings,
   runCompress,
   savedPercent,
 } from './compressJob';
@@ -123,7 +124,10 @@ function CompressForm({
     setError(null);
     setOutcome(null);
     setRunning(true);
-    runCompress({ engine, startWorker, progress: store }, handle, preset).then(
+    // The audit is off until the result shows it (the next slice): the job does what it did before.
+    runCompress({ engine, startWorker, progress: store }, handle, presetSettings(preset), {
+      audit: false,
+    }).then(
       (result) => {
         if (!mounted.current) return;
         setRunning(false);
