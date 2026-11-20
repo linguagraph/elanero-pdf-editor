@@ -3,6 +3,7 @@
 // holds no user-facing English. An unknown code gets the generic message and no details.
 import type { FailedStage } from '../engine/protocol';
 import type { MessageId } from '../i18n/en';
+import { formatMegabytes, formatNumber } from '../i18n/format';
 import type { Params } from '../i18n/t';
 import type { RpcError, RpcErrorCode } from './client';
 
@@ -31,27 +32,57 @@ export interface ErrorContext {
   signedInPlaceSave?: boolean;
 }
 
+type Details = Readonly<Record<string, unknown>>;
+
+// A variant chosen from the reply's details: the message with its parameters.
+interface Variant {
+  messageId: MessageId;
+  params: Params;
+}
+
 interface Entry {
   messageId: MessageId;
   action: RecommendedAction;
   silent?: boolean;
-  // Reads the numbers the message shows from the reply's details. Returns undefined when they
-  // are missing, and the entry's plain message is used.
-  limit?: (details: Readonly<Record<string, unknown>>) => string | undefined;
+  // Picks a variant from the details (a limit, or a REFUSED reason). Undefined means the details
+  // don't say enough, and the plain message is used.
+  fromDetails?: (details: Details) => Variant | undefined;
 }
 
-const MEBIBYTE = 1024 * 1024;
-
-// details.max_bytes (W1.2 section 4) as a size, e.g. "50 MB" or "2.5 MB".
-function fileLimit(details: Readonly<Record<string, unknown>>): string | undefined {
+// details.max_bytes (W1.2 section 4), formatted for the locale, e.g. "50 MB".
+function fileLimit(details: Details): Variant | undefined {
   const maxBytes = details['max_bytes'];
   if (typeof maxBytes !== 'number' || !Number.isFinite(maxBytes) || maxBytes <= 0) return undefined;
-  return `${Math.round((maxBytes / MEBIBYTE) * 10) / 10} MB`;
+  return { messageId: 'error.FILE_TOO_LARGE.limit', params: { limit: formatMegabytes(maxBytes) } };
+}
+
+// details.max_pages (webapi/session.py) as a count, e.g. "5,000".
+function pageLimit(details: Details): Variant | undefined {
+  const maxPages = details['max_pages'];
+  if (typeof maxPages !== 'number' || !Number.isFinite(maxPages) || maxPages <= 0) return undefined;
+  return { messageId: 'error.TOO_MANY_PAGES.limit', params: { limit: formatNumber(maxPages) } };
+}
+
+// The known reasons of a REFUSED reply (details.reason, set in webapi/jobs.py and save.py). An
+// unknown reason, including any free text, keeps the plain message: the reason text is never shown.
+export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
+  encrypted_source: 'error.REFUSED.encryptedSource',
+  encrypted_mutating_job: 'job.encryptedRefused',
+  encrypted_reduce: 'error.REFUSED.encryptedReduce',
+  'document changed': 'error.REFUSED.documentChanged',
+};
+
+function refusedReason(details: Details): Variant | undefined {
+  const reason = details['reason'];
+  if (typeof reason !== 'string' || !Object.prototype.hasOwnProperty.call(REFUSED_REASON, reason)) {
+    return undefined;
+  }
+  return { messageId: REFUSED_REASON[reason] as MessageId, params: {} };
 }
 
 // One entry per code. The Record type makes a new code in the generated union a compile error
 // here, and the tests check each entry against the catalogue.
-const TABLE: Record<RpcErrorCode, Entry> = {
+export const TABLE: Record<RpcErrorCode, Entry> = {
   INVALID_REQUEST: { messageId: 'error.INVALID_REQUEST', action: 'reload page' },
   INVALID_ARGS: { messageId: 'error.INVALID_ARGS', action: 'reload page' },
   INVALID_FONT: { messageId: 'error.INVALID_FONT', action: 'dismiss' },
@@ -62,15 +93,23 @@ const TABLE: Record<RpcErrorCode, Entry> = {
   WRONG_PASSWORD: { messageId: 'error.WRONG_PASSWORD', action: 'ask for password' },
   OPEN_FAILED: { messageId: 'error.OPEN_FAILED', action: 'dismiss' },
   SAVE_FAILED: { messageId: 'error.SAVE_FAILED', action: 'retry' },
-  REFUSED: { messageId: 'error.REFUSED', action: 'dismiss' },
+  REFUSED: { messageId: 'error.REFUSED', action: 'dismiss', fromDetails: refusedReason },
   BUSY: { messageId: 'error.BUSY', action: 'wait' },
   NOT_SUPPORTED: { messageId: 'error.NOT_SUPPORTED', action: 'dismiss' },
   STALE_OBJECT: { messageId: 'error.STALE_OBJECT', action: 'retry' },
   STALE_CURSOR: { messageId: 'error.STALE_CURSOR', action: 'retry' },
   STALE_JOB: { messageId: 'error.STALE_JOB', action: 'dismiss' },
   CANCELLED: { messageId: 'error.CANCELLED', action: 'dismiss', silent: true },
-  FILE_TOO_LARGE: { messageId: 'error.FILE_TOO_LARGE', action: 'dismiss', limit: fileLimit },
-  TOO_MANY_PAGES: { messageId: 'error.TOO_MANY_PAGES', action: 'dismiss' },
+  FILE_TOO_LARGE: {
+    messageId: 'error.FILE_TOO_LARGE',
+    action: 'dismiss',
+    fromDetails: fileLimit,
+  },
+  TOO_MANY_PAGES: {
+    messageId: 'error.TOO_MANY_PAGES',
+    action: 'dismiss',
+    fromDetails: pageLimit,
+  },
   RENDER_TOO_LARGE: { messageId: 'error.RENDER_TOO_LARGE', action: 'dismiss' },
   IMAGE_TOO_LARGE: { messageId: 'error.IMAGE_TOO_LARGE', action: 'dismiss' },
   OUT_OF_MEMORY: { messageId: 'error.OUT_OF_MEMORY', action: 'restart engine' },
@@ -102,19 +141,16 @@ export function mapRpcError(error: RpcError, context: ErrorContext = {}): ErrorP
 
   const known = Object.prototype.hasOwnProperty.call(TABLE, error.code);
   const entry: Entry = known ? TABLE[error.code as RpcErrorCode] : GENERIC;
-  const limit = entry.limit?.(error.details);
-  if (limit !== undefined) {
-    return {
-      messageId: entry.messageId,
-      params: { limit },
-      action: entry.action,
-      silent: false,
-    };
+  const variant = entry.fromDetails?.(error.details);
+  if (variant !== undefined) {
+    return { ...variant, action: entry.action, silent: false };
   }
-  // A size error whose limit is unknown uses the plain sentence (no {limit} placeholder).
-  const messageId: MessageId =
-    entry.limit !== undefined ? 'error.FILE_TOO_LARGE.noLimit' : entry.messageId;
-  return { messageId, params: {}, action: entry.action, silent: entry.silent === true };
+  return {
+    messageId: entry.messageId,
+    params: {},
+    action: entry.action,
+    silent: entry.silent === true,
+  };
 }
 
 // The catalogue key of each load stage's failure message (W3.1).

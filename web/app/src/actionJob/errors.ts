@@ -1,6 +1,6 @@
-// What an action job's failure shows (W7.4). The refusal for an encrypted document has its own
-// message, since the web cannot write an encrypted result back (W1.2 section 13); every other
-// failure goes through the RPC error mapping. A cancel is the user's own choice and shows nothing.
+// What an action job's failure shows (W7.4). An RPC failure, including the refusal for an
+// encrypted document (W1.2 section 13), goes through the RPC error mapping, which reads the reason.
+// A cancel is the user's own choice and shows nothing.
 import { reportRpcError, type ToastStore } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
@@ -17,10 +17,6 @@ export function isEncryptedRefusal(error: unknown): boolean {
 
 // Shows the failure as a toast. `fallback` is the sentence for a failure that is not an RPC error.
 export function reportActionError(store: ToastStore, error: unknown, fallback: MessageId): void {
-  if (isEncryptedRefusal(error)) {
-    store.push('error', t('job.encryptedRefused'));
-    return;
-  }
   if (error instanceof RpcError) {
     reportRpcError(store, error);
     return;

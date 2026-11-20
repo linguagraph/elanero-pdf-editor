@@ -641,15 +641,26 @@ export const EN = {
   'error.SAVE_FAILED.signed':
     'The document could not be saved in place, and a signed document must not be rewritten. Save it as a new file instead; the signatures stay in the original.',
   'error.REFUSED': 'This action cannot be done on this document.',
+  // The variants the mapping picks from the refusal's reason (`REFUSED_REASON` in errors.ts).
+  // An encrypted document for a changing job reuses `job.encryptedRefused` above.
+  'error.REFUSED.encryptedSource':
+    'One of the files is encrypted, so the browser cannot combine or compare it. Use the desktop app for it.',
+  'error.REFUSED.encryptedReduce':
+    'A password-protected file cannot be reduced in the browser, because the result would lose its password. Use the desktop app.',
+  'error.REFUSED.documentChanged':
+    'The document changed while this was being prepared. Start again.',
   'error.BUSY': 'Wait for the current task to finish, then try again.',
   'error.NOT_SUPPORTED': 'This is not available in the web version.',
   'error.STALE_OBJECT': 'The page changed since you last looked. Try again.',
   'error.STALE_CURSOR': 'The operation stopped because the document changed. Start it again.',
   'error.STALE_JOB': 'The engine restarted, so this result was dropped. Run the task again.',
   'error.CANCELLED': 'The operation was cancelled.',
-  'error.FILE_TOO_LARGE': 'This file is larger than the web version can open (limit {limit}).',
-  'error.FILE_TOO_LARGE.noLimit': 'This file is larger than the web version can open.',
+  'error.FILE_TOO_LARGE': 'This file is larger than the web version can open.',
+  'error.FILE_TOO_LARGE.limit':
+    'This file is larger than the web version can open (limit {limit}).',
   'error.TOO_MANY_PAGES': 'This document has more pages than the web version can handle.',
+  'error.TOO_MANY_PAGES.limit':
+    'This document has more than {limit} pages, which is more than the web version can handle.',
   'error.RENDER_TOO_LARGE': 'This page is too large to show at this zoom. Zoom out and try again.',
   'error.INVALID_FONT': 'This font file could not be read. Choose a different font file.',
   'error.FONT_NOT_EMBEDDABLE':
