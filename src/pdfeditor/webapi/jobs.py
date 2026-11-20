@@ -49,7 +49,13 @@ from pdfeditor.services.comments import comment_threads, page_labels, summary_cs
 from pdfeditor.services.compare import CompareOptions
 from pdfeditor.services.compare import compare as compare_documents
 from pdfeditor.services.export import TextFormat, export_document
-from pdfeditor.services.export.images import ImageFormat, PageImageOptions, export_pages
+from pdfeditor.services.export.images import (
+    ImageFormat,
+    PageImageOptions,
+    export_pages,
+    extract_images,
+    oversized_images,
+)
 from pdfeditor.services.optimize import PRESETS, ReduceOptions, preset, reduce_size
 from pdfeditor.services.optimize import audit as space_audit
 from pdfeditor.services.xfdf import export_xfdf
@@ -318,6 +324,9 @@ _MIME = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".xfdf": "application/vnd.adobe.xfdf",
     ".csv": "text/csv",
@@ -350,16 +359,30 @@ def _collect(folder: Path) -> tuple[dto.FileDto, ...]:
     )
 
 
-def _as_archive(files: tuple[dto.FileDto, ...]) -> tuple[dto.FileDto, ...]:
+def _as_archive(
+    files: tuple[dto.FileDto, ...],
+    name: str = "export.zip",
+    compression: int = zipfile.ZIP_DEFLATED,
+) -> tuple[dto.FileDto, ...]:
     """Several files come back as one ZIP, since a reply carries one buffer to the page (the engine
     channel's limit). One file is returned as it is."""
     if len(files) < 2:
         return files
     buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(buffer, "w", compression) as archive:
         for item in files:
             archive.writestr(item.name, item.data)
-    return (dto.FileDto(name="export.zip", mime="application/zip", data=buffer.getvalue()),)
+    return (dto.FileDto(name=name, mime="application/zip", data=buffer.getvalue()),)
+
+
+def _stem(name: str) -> str:
+    """The file-name stem of a document's display name, safe for any target system."""
+    # A stem of "." or ".." (or "...") would make a hidden or relative-looking file name, so the
+    # leading dots go first. safe_name never returns "" (it falls back to "part"), so an empty
+    # stem is caught before it.
+    raw_stem = Path(name).stem.strip().lstrip(".").strip()
+    stem = safe_name(raw_stem).lstrip(".").strip() if raw_stem else ""
+    return stem or "document"
 
 
 def _check_pages(pages: Sequence[int], count: int, path: str) -> None:
@@ -579,9 +602,7 @@ def _run_comments_export(
     # The desktop Comments panel's three exports, written from the job's copy: nothing here
     # changes the document, so there is no undo step.
     owner = _session(session)
-    # safe_name never returns "" (it falls back to "part"), so an empty stem is caught first.
-    raw_stem = Path(args.name).stem.strip()
-    stem = safe_name(raw_stem) if raw_stem else "document"
+    stem = _stem(args.name)
     ctx.token.check()
     with owner.lock:
         doc = owner.document
@@ -635,6 +656,45 @@ def _run_print(session: DocumentSession | None, args: dto.PrintArgs, ctx: JobCon
     return JobOutput(files=tuple(files))
 
 
+def _convert_extract_images(data: object, buffers: BufferTable) -> dto.ExtractImagesArgs:
+    args: dto.ExtractImagesArgs = from_json(dto.ExtractImagesArgs, data, buffers, "args")
+    return args
+
+
+def _run_extract_images(
+    session: DocumentSession | None, args: dto.ExtractImagesArgs, ctx: JobContext
+) -> JobOutput:
+    # The images of the document, or of the chosen pages, saved as they are stored (the desktop's
+    # Extract Images). Read-only, so the copy is never changed and there is no undo step. The web
+    # build skips images above the pixel ceiling: they are counted, not saved.
+    owner = _session(session)
+    stem = _stem(args.name)
+    ctx.token.check()
+    with owner.lock, tempfile.TemporaryDirectory() as folder:
+        doc = owner.document
+        # None is every page, which keeps the images no page shows (as the desktop does).
+        pages = None if args.pages is None else _pages_arg(args.pages, doc.page_count, "args.pages")
+        ceiling = limits.MAX_RENDER_PIXELS
+        too_large = oversized_images(doc, pages, ceiling)
+        written = extract_images(
+            doc,
+            Path(folder),
+            pages,
+            token=ctx.token,
+            progress=ctx.progress,
+            max_pixels=ceiling,
+        )
+        files = _as_archive(
+            _collect(Path(folder)),
+            name=f"{stem}-images.zip",
+            compression=zipfile.ZIP_STORED,  # the formats are compressed already
+        )
+    return JobOutput(
+        files=files,
+        value=dto.ExtractImagesValue(count=len(written), too_large=too_large),
+    )
+
+
 JOB_TYPES: dict[str, JobType] = {
     "action": JobType("action", True, _convert_action, _run_action),
     "reduce_size": JobType("reduce_size", False, _convert_reduce, _run_reduce),
@@ -644,6 +704,9 @@ JOB_TYPES: dict[str, JobType] = {
     "merge": JobType("merge", False, _convert_merge, _run_merge, takes_document=False),
     "compare": JobType("compare", False, _convert_compare, _run_compare),
     "print_pages": JobType("print_pages", False, _convert_print, _run_print),
+    "extract_images": JobType(
+        "extract_images", False, _convert_extract_images, _run_extract_images
+    ),
     "comments_export": JobType(
         "comments_export", False, _convert_comments_export, _run_comments_export
     ),

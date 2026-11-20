@@ -710,6 +710,18 @@ class PrintArgs:
     annotations: bool = True  # include the comments
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExtractImagesArgs:
+    name: str  # the document's display name: the ZIP's stem
+    pages: tuple[int, ...] | None = None  # 0-based: the images shown on these; None: every page
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ExtractImagesValue:
+    count: int  # the images saved
+    too_large: int  # the images skipped for being above the pixel ceiling
+
+
 class BufferTable:
     """The buffers of one message. Each ``$bin`` marker takes one buffer, once."""
 

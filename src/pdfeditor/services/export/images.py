@@ -13,6 +13,7 @@ from PIL import Image
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
 from pdfeditor.engine.base import ColorMode, Document, RenderRequest
 from pdfeditor.model.geometry import Matrix
+from pdfeditor.model.metadata import ImageInfo
 from pdfeditor.model.platform import current
 
 
@@ -120,6 +121,24 @@ def _unique(folder: Path, name: str) -> Path:
     return path
 
 
+def _selected_images(doc: Document, pages: Sequence[int] | None, min_size: int) -> list[ImageInfo]:
+    wanted = set(pages) if pages is not None else None
+    return [
+        i
+        for i in doc.images()
+        if (wanted is None or wanted.intersection(i.pages))
+        and i.width >= min_size
+        and i.height >= min_size
+    ]
+
+
+def oversized_images(
+    doc: Document, pages: Sequence[int] | None, max_pixels: int, min_size: int = 16
+) -> int:
+    """How many of the images ``extract_images`` would take are above ``max_pixels``."""
+    return sum(1 for i in _selected_images(doc, pages, min_size) if i.width * i.height > max_pixels)
+
+
 def extract_images(
     doc: Document,
     folder: Path,
@@ -127,16 +146,18 @@ def extract_images(
     min_size: int = 16,
     token: CancelToken | None = None,
     progress: ProgressFn = no_progress,
+    max_pixels: int | None = None,
 ) -> list[Path]:
-    """Save each distinct image (shown on ``pages``, default all) in its own format."""
+    """Save each distinct image (shown on ``pages``, default all) in its own format.
+
+    ``max_pixels`` skips larger images. The web build sets it, since decoding a huge image in wasm
+    memory can exhaust the heap; the desktop passes None and takes them all.
+    """
     folder.mkdir(parents=True, exist_ok=True)
-    wanted = set(pages) if pages is not None else None
     infos = [
         i
-        for i in doc.images()
-        if (wanted is None or wanted.intersection(i.pages))
-        and i.width >= min_size
-        and i.height >= min_size
+        for i in _selected_images(doc, pages, min_size)
+        if max_pixels is None or i.width * i.height <= max_pixels
     ]
     written: list[Path] = []
     for n, info in enumerate(infos):
