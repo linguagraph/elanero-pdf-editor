@@ -9,19 +9,13 @@ import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
 import { installLaunchInbox, launchQueueOf } from './pwa/launch';
 import { toasts } from './feedback/toasts';
+import { applyLocale, loadCatalogue } from './i18n/locale';
 import { t } from './i18n/t';
+import { readPreferences } from './prefs/store';
 import { initTheme } from './theme/theme';
 import './theme/tokens.css';
 
-// The frame check runs before anything renders, so a framed copy never shows the app.
-if (shouldRefuse(window)) {
-  document.body.textContent = FRAME_REFUSAL_MESSAGE;
-} else {
-  const root = document.getElementById('root');
-  if (!root) {
-    throw new Error('index.html has no #root element');
-  }
-  initTheme();
+function mount(root: HTMLElement): void {
   // One engine connection per tab. App starts it after the first paint (W3.1).
   const engine = createEngineConnection({ boot: engineBootOptions() });
   // One job worker pool per tab (W3.1 slice 2): it starts no worker until App warms it.
@@ -41,4 +35,22 @@ if (shouldRefuse(window)) {
   if (import.meta.env.PROD) {
     void registerAppServiceWorker();
   }
+}
+
+// The frame check runs before anything renders, so a framed copy never shows the app.
+if (shouldRefuse(window)) {
+  document.body.textContent = FRAME_REFUSAL_MESSAGE;
+} else {
+  const root = document.getElementById('root');
+  if (!root) {
+    throw new Error('index.html has no #root element');
+  }
+  initTheme();
+  // The chosen language's catalogue is loaded and applied before the first render, so English
+  // never flashes first. English (and a missing or broken file) loads nothing.
+  const language = readPreferences().language;
+  void loadCatalogue(language).then((catalogue) => {
+    applyLocale(language, catalogue);
+    mount(root);
+  });
 }
