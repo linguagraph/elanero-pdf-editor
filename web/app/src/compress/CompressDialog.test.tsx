@@ -33,7 +33,7 @@ function reduceReply(before: number, after: number): CallResult {
       require_full_save: false,
       document: null,
       files: [{ name: 'reduced.pdf', mime: 'application/pdf', data: { $bin: 0 } }],
-      value: { before, after, notes: [] },
+      value: { before, after, notes: [], audit_before: null, audit_after: null },
       name: '',
     },
     events: [],

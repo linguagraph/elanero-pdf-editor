@@ -3,31 +3,106 @@
 // the document stays as it is. Its one file is reduced.pdf; the dialog decides whether to offer it.
 import type { ResultFile } from '../files/downloads';
 import { type FileJobDeps, runFileJobOutput } from '../files/fileJob';
-import { expectInteger, expectObject, field } from '../rpc/shape';
+import { REDUCE_PRESETS, SPACE_CATEGORY_KEYS, type SpaceCategoryKey } from '../rpc/generated';
+import { expectArray, expectInteger, expectObject, expectOneOf, field, orNull } from '../rpc/shape';
 
 // The presets, by the keys the reduce_size job takes (ReduceSizeArgs in webapi/dto.py). The order is
 // the dialog's order: the smallest file first.
 export const COMPRESS_PRESETS = ['screen', 'ebook', 'print', 'lossless'] as const;
 export type CompressPreset = (typeof COMPRESS_PRESETS)[number];
 
+// The desktop dialog's fields (ReduceOptionsDto): the custom preset sends them, and a named preset
+// is seeded from them (REDUCE_PRESETS, generated from services.optimize.PRESETS).
+export interface ReduceOptions {
+  readonly image_dpi: number | null; // null keeps the image resolution
+  readonly jpeg_quality: number;
+  readonly grayscale: boolean;
+  readonly subset_fonts: boolean;
+  readonly remove_thumbnails: boolean;
+  readonly remove_metadata: boolean;
+  readonly object_streams: boolean;
+}
+
+// What the dialog is set to: a named preset (its options are the preset's seed) or a custom one.
+export interface CompressSettings {
+  readonly preset: CompressPreset | 'custom';
+  readonly options: ReduceOptions;
+}
+
+// The space audit (SpaceAuditTable reads it): the stored bytes of the whole document and of each
+// category, by the stable key for t(). The engine's English name is not read.
+export interface SpaceAudit {
+  readonly total: number;
+  readonly categories: readonly { readonly key: SpaceCategoryKey; readonly size: number }[];
+}
+
 export type CompressDeps = FileJobDeps;
 
-// The outcome: the sizes in bytes, and the copy the job wrote. The copy is present even when it is
-// not smaller; the dialog offers it only when it is.
+// The outcome: the sizes in bytes, the copy the job wrote, and the audits (null unless asked for).
+// The copy is present even when it is not smaller; the dialog offers it only when it is.
 export interface CompressResult {
   readonly before: number;
   readonly after: number;
   readonly file: ResultFile | undefined;
+  readonly auditBefore: SpaceAudit | null;
+  readonly auditAfter: SpaceAudit | null;
 }
 
-// Runs one compress with a preset. Resolves with the sizes and the copy; rejects with an RpcError,
-// or FileJobCancelled (the file job's cancel).
+// The settings a named preset starts from. A copy, so a field edit never changes the preset table.
+export function presetSettings(preset: CompressPreset): CompressSettings {
+  return { preset, options: { ...REDUCE_PRESETS[preset] } };
+}
+
+// Whether two settings give the same job: the dialog flips to Custom when the fields stop matching.
+export function sameSettings(a: CompressSettings, b: CompressSettings): boolean {
+  return (
+    a.preset === b.preset &&
+    a.options.image_dpi === b.options.image_dpi &&
+    a.options.jpeg_quality === b.options.jpeg_quality &&
+    a.options.grayscale === b.options.grayscale &&
+    a.options.subset_fonts === b.options.subset_fonts &&
+    a.options.remove_thumbnails === b.options.remove_thumbnails &&
+    a.options.remove_metadata === b.options.remove_metadata &&
+    a.options.object_streams === b.options.object_streams
+  );
+}
+
+// The reduce_size arguments. A named preset sends only its key (the job refuses options with one);
+// a custom preset sends the options with the key "custom".
+export function reduceArgs(settings: CompressSettings, audit: boolean): Record<string, unknown> {
+  if (settings.preset !== 'custom') return { preset: settings.preset, audit };
+  return { preset: 'custom', options: { ...settings.options }, audit };
+}
+
+// Reads a SpaceAudit reply (SpaceAuditTable's source); null passes through (no audit asked for).
+// Only the key and the size are read: the engine's English name is for the desktop and the logs.
+export function readAudit(value: unknown, path: string): SpaceAudit | null {
+  return orNull(value, path, (raw, rawPath) => {
+    const audit = expectObject(raw, rawPath);
+    const categories = expectArray(field(audit, 'categories', rawPath), `${rawPath}.categories`);
+    return {
+      total: expectInteger(field(audit, 'total', rawPath), `${rawPath}.total`),
+      categories: categories.map((item, index) => {
+        const path = `${rawPath}.categories[${index}]`;
+        const category = expectObject(item, path);
+        return {
+          key: expectOneOf(field(category, 'key', path), SPACE_CATEGORY_KEYS, `${path}.key`),
+          size: expectInteger(field(category, 'size', path), `${path}.size`),
+        };
+      }),
+    };
+  });
+}
+
+// Runs one compress with the settings. Resolves with the sizes, the copy and the audits; rejects
+// with an RpcError, or FileJobCancelled (the file job's cancel).
 export async function runCompress(
   deps: CompressDeps,
   handle: string,
-  preset: CompressPreset,
+  settings: CompressSettings,
+  { audit }: { readonly audit: boolean },
 ): Promise<CompressResult> {
-  const output = await runFileJobOutput(deps, handle, 'reduce_size', { preset });
+  const output = await runFileJobOutput(deps, handle, 'reduce_size', reduceArgs(settings, audit));
   // The job's value is ReduceSizeValue: before, after and the notes. The notes are the engine's own
   // English text, so the dialog does not show them; it says what it knows through t() instead.
   const value = expectObject(output.value, 'result.value');
@@ -35,6 +110,11 @@ export async function runCompress(
     before: expectInteger(field(value, 'before', 'result.value'), 'result.value.before'),
     after: expectInteger(field(value, 'after', 'result.value'), 'result.value.after'),
     file: output.files[0],
+    auditBefore: readAudit(
+      field(value, 'audit_before', 'result.value'),
+      'result.value.audit_before',
+    ),
+    auditAfter: readAudit(field(value, 'audit_after', 'result.value'), 'result.value.audit_after'),
   };
 }
 
