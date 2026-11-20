@@ -125,8 +125,14 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   ),
   cmd('undo', 'command.undo.label', 'home.history', CAN_UNDO),
   cmd('redo', 'command.redo.label', 'home.history', CAN_REDO),
-  cmd('select-tool', 'command.select-tool.label', 'home.tools'),
-  cmd('hand-tool', 'command.hand-tool.label', 'home.tools'),
+  {
+    ...cmd('select-tool', 'command.select-tool.label', 'home.tools'),
+    checked: (state) => state.viewTool === 'select',
+  },
+  {
+    ...cmd('hand-tool', 'command.hand-tool.label', 'home.tools'),
+    checked: (state) => state.viewTool === 'hand',
+  },
   aliased(cmd('find', 'command.find.label', 'home.search'), 'command.find.keywords'),
   cmd('back', 'command.back.label', 'home.navigate'),
   cmd('forward', 'command.forward.label', 'home.navigate'),

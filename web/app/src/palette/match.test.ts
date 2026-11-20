@@ -13,6 +13,7 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     capabilities: new Set(),
     ribbonCompact: false,
     ribbonCollapsed: false,
+    viewTool: 'select',
     ...overrides,
   };
 }

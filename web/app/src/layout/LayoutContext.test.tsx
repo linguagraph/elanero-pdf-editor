@@ -49,6 +49,7 @@ const NO_DOCUMENT: CommandState = {
   capabilities: new Set(),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 
 describe('layout context tiers', () => {

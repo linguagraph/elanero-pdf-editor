@@ -25,6 +25,7 @@ const STATE: CommandState = {
   capabilities: new Set(),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 
 let host: HTMLDivElement;

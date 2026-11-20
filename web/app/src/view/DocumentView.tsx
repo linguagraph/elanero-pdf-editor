@@ -40,6 +40,8 @@ import {
 import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
 import { PageTextLayer } from '../text/PageTextLayer';
+import { useHandPan } from './useHandPan';
+import type { ViewTool } from './viewTool';
 import { CommentLayer } from '../comments/CommentLayer';
 import { CommentToolbar } from '../comments/CommentToolbar';
 import type { PageRect } from '../comments/coordinates';
@@ -99,6 +101,11 @@ export interface DocumentViewProps {
   readonly searchMarks?: SearchMarks;
   // Starts the job worker for the redaction apply (W7.4). Tests leave it out; applying then fails.
   readonly startWorker?: () => ActionJobWorker;
+  // The view tool (W4.10): Hand pans with a drag. The app keeps it per tab; Select when absent.
+  readonly tool?: ViewTool;
+  // Called when the view itself asks for another tool: a comment or mark tool chosen here sets it
+  // back to Select, so the two never read as on together.
+  readonly onToolChange?: (tool: ViewTool) => void;
 }
 
 // The job worker is missing: the apply reports its failure, as any other failed job does.
@@ -138,6 +145,8 @@ export function DocumentView({
   onViewChange,
   searchMarks,
   startWorker,
+  tool = 'select',
+  onToolChange,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   // The page labels, from the same session.pages reply as the sizes (W5.3).
@@ -185,6 +194,19 @@ export function DocumentView({
     scheduler,
     startWorker: startWorker ?? noJobWorker,
   });
+  const pan = useHandPan(tool === 'hand');
+  // The Hand tool and the comment or mark tools are not on together: choosing Hand turns them off
+  // (the last tool chosen wins, as the desktop has one tool per document). The comment tool is
+  // reset while rendering, when the tool prop changes, so no effect sets state.
+  const [seenTool, setSeenTool] = useState(tool);
+  if (seenTool !== tool) {
+    setSeenTool(tool);
+    if (tool === 'hand') setCommentTool(null);
+  }
+  useEffect(() => {
+    if (tool !== 'hand') return;
+    redactionTools.controller.setActive(false);
+  }, [tool, redactionTools.controller]);
   // The text layers of this document, one per page and revision (W5.4).
   const textLayers = useMemo(() => new TextLayerCache(rpc, handle), [rpc, handle]);
 
@@ -457,7 +479,14 @@ export function DocumentView({
 
   return (
     <section
-      className={night ? 'doc-view doc-view--night' : 'doc-view'}
+      className={[
+        'doc-view',
+        night ? 'doc-view--night' : '',
+        tool === 'hand' ? 'doc-view--hand' : '',
+        pan.panning ? 'doc-view--panning' : '',
+      ]
+        .filter((name) => name !== '')
+        .join(' ')}
       aria-label={t('view.label')}
     >
       <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.label')}>
@@ -490,9 +519,10 @@ export function DocumentView({
         </button>
         <CommentToolbar
           tool={commentTool}
-          onChoose={(tool) => {
+          onChoose={(chosen) => {
             redactionTools.controller.setActive(false);
-            setCommentTool(tool);
+            setCommentTool(chosen);
+            if (chosen !== null) onToolChange?.('select');
           }}
         />
         <RedactionBar
@@ -500,7 +530,10 @@ export function DocumentView({
           onToggle={() => {
             const on = !redactionTools.state.active;
             redactionTools.controller.setActive(on);
-            if (on) setCommentTool(null);
+            if (on) {
+              setCommentTool(null);
+              onToolChange?.('select');
+            }
           }}
           onClear={() => void redactionTools.controller.clear()}
           onApply={() => void redactionTools.controller.apply()}
@@ -517,6 +550,11 @@ export function DocumentView({
           tabIndex={0}
           aria-label={t('view.pages')}
           onScroll={measure}
+          onPointerDown={pan.onPointerDown}
+          onPointerMove={pan.onPointerMove}
+          onPointerUp={pan.onPointerUp}
+          onPointerCancel={pan.onPointerCancel}
+          onLostPointerCapture={pan.onLostPointerCapture}
         >
           <div className="doc-view-content" style={{ width: layout.width, height: layout.height }}>
             {layout.boxes.slice(range.first, range.end).map((box) => {

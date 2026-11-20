@@ -98,8 +98,13 @@ is reloaded until you press it.
 - **Quick access and help.** Above the ribbon, next to the menu button, the quick-access buttons
   are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
   button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
-  a link to the source code. Close in the app menu closes the open document. The Select, Hand, Undo,
-  Redo and Save buttons are greyed out for now, and they work once their commands are added.
+  a link to the source code. Close in the app menu closes the open document. Select and Hand switch
+  the tool of the open tab (see Hand tool below). The Undo, Redo and Save buttons are greyed out for
+  now, and they work once their commands are added.
+- **Hand tool.** Choose **Hand** (or press **H**) and a drag with the mouse or a pen moves the pages
+  under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
+  (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is
+  not kept when you reload the page.
 - **Keyboard shortcuts.** A few web keys work so far: **Alt+Left** and **Alt+Right** go back and
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open

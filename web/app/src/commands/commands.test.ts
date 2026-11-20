@@ -24,6 +24,7 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     capabilities: new Set(),
     ribbonCompact: false,
     ribbonCollapsed: false,
+    viewTool: 'select',
     ...overrides,
   };
 }
@@ -269,3 +270,37 @@ describe('ribbon and menu layouts', () => {
     expect(sections.flat().length).toBe(MENU.flat().length);
   });
 });
+
+describe('the Select and Hand tools (W4.10)', () => {
+  it('shows Select as pressed by default and Hand as not pressed', () => {
+    const select = REGISTRY.get('select-tool');
+    const hand = REGISTRY.get('hand-tool');
+    expect(select?.checked?.(withDoc)).toBe(true);
+    expect(hand?.checked?.(withDoc)).toBe(false);
+  });
+
+  it('shows Hand as pressed while the view tool is Hand', () => {
+    const handOn = state({ hasDocument: true, capabilities: ALL_CAPABILITIES, viewTool: 'hand' });
+    expect(REGISTRY.get('hand-tool')?.checked?.(handOn)).toBe(true);
+    expect(REGISTRY.get('select-tool')?.checked?.(handOn)).toBe(false);
+  });
+
+  it('enables both only with a document open', () => {
+    expect(commandDisabledReasonOf('select-tool', withDoc)).toBeNull();
+    expect(commandDisabledReasonOf('hand-tool', withDoc)).toBeNull();
+    expect(commandDisabledReasonOf('hand-tool', state())).toBe('needsDocument');
+  });
+
+  it('runs the handler through the registry, and not without one', () => {
+    const hand = vi.fn();
+    expect(runCommand(REGISTRY, 'hand-tool', withDoc, { 'hand-tool': hand })).toBe(true);
+    expect(hand).toHaveBeenCalledTimes(1);
+    expect(runCommand(REGISTRY, 'hand-tool', state(), { 'hand-tool': hand })).toBe(false);
+    expect(hand).toHaveBeenCalledTimes(1);
+  });
+});
+
+function commandDisabledReasonOf(id: string, current: CommandState): string | null {
+  const def = REGISTRY.get(id);
+  return def === undefined ? 'missing' : def.enabled(current);
+}

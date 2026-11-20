@@ -29,6 +29,7 @@ const OPEN_STATE: CommandState = {
   capabilities: new Set(),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 
 const NO_DOCUMENT_STATE: CommandState = { ...OPEN_STATE, hasDocument: false, canUndo: false };

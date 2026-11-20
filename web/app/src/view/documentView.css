@@ -68,6 +68,21 @@
   margin: 0 auto;
 }
 
+/* The Hand tool (W4.10): a drag pans the pages, so the pointer shows a hand. The text layer is
+   inert while panning, so a drag cannot select text instead. */
+.doc-view--hand .doc-view-scroll {
+  cursor: grab;
+}
+
+.doc-view--panning .doc-view-scroll {
+  cursor: grabbing;
+}
+
+.doc-view--hand .page-text-layer {
+  pointer-events: none;
+  user-select: none;
+}
+
 .doc-view-status {
   padding: var(--space-4);
   color: var(--color-text-muted);

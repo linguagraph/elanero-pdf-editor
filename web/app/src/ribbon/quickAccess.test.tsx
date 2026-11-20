@@ -40,6 +40,7 @@ const state: CommandState = {
   capabilities: new Set(),
   ribbonCompact: false,
   ribbonCollapsed: false,
+  viewTool: 'select',
 };
 
 function commandsShown(): string[] {
@@ -98,5 +99,28 @@ describe('QuickAccess', () => {
       button?.click();
     });
     expect(redo).not.toHaveBeenCalled();
+  });
+});
+
+describe('QuickAccess: the Select and Hand toggles (W4.10)', () => {
+  it('shows aria-pressed on the Select and Hand buttons from the view tool', () => {
+    setWidth(1280);
+    render(
+      <QuickAccess registry={REGISTRY} state={{ ...state, viewTool: 'hand' }} handlers={{}} />,
+    );
+    const pressed = (id: string) =>
+      host.querySelector(`[data-command="${id}"]`)?.getAttribute('aria-pressed');
+    expect(pressed('select-tool')).toBe('false');
+    expect(pressed('hand-tool')).toBe('true');
+  });
+
+  it('runs a press once', () => {
+    setWidth(1280);
+    const hand = vi.fn();
+    render(<QuickAccess registry={REGISTRY} state={state} handlers={{ 'hand-tool': hand }} />);
+    act(() => {
+      host.querySelector<HTMLElement>('[data-command="hand-tool"]')?.click();
+    });
+    expect(hand).toHaveBeenCalledTimes(1);
   });
 });
