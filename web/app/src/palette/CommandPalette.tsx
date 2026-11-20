@@ -1,4 +1,10 @@
-import { useEffect, useId, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import {
   commandForEvent,
   displayKeys,
@@ -23,6 +29,11 @@ import './palette.css';
 
 // The registry command that opens the keyboard shortcuts list inside the palette.
 export const KEYBOARD_SHORTCUTS_ID = 'keyboard-shortcuts';
+
+// Commands that move focus (Go to Page focuses the page field). They run only after the palette has
+// closed: while its focus scope is mounted, the scope pulls focus back, and on unmount it restores
+// focus to the invoker, which would undo the move.
+const FOCUS_AFTER_CLOSE_IDS: ReadonlySet<string> = new Set(['go-to-page']);
 
 const IS_MAC = typeof navigator !== 'undefined' && isMacPlatform(navigator.platform);
 
@@ -53,6 +64,18 @@ function isTextEntry(target: EventTarget | null): boolean {
 export function CommandPalette({ registry, state, handlers }: CommandPaletteProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<View>('commands');
+  const pendingRun = useRef<CommandDef | null>(null);
+
+  // Runs a focus-moving command once the palette's Overlay has unmounted and restored focus. The
+  // frame is requested in this effect, which runs after that restore has been scheduled.
+  useEffect(() => {
+    if (isOpen || pendingRun.current === null) return;
+    const def = pendingRun.current;
+    pendingRun.current = null;
+    requestAnimationFrame(() => {
+      if (runCommand(registry, def.id, state, handlers)) recordRecentCommand(def.id);
+    });
+  }, [isOpen, registry, state, handlers]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -81,6 +104,10 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
     }
     if (commandDisabledReason(def, state, handlers) !== null) return;
     setIsOpen(false);
+    if (FOCUS_AFTER_CLOSE_IDS.has(def.id)) {
+      pendingRun.current = def;
+      return;
+    }
     // Only a run from the palette counts as recent (W4.3b D2), and only once it has happened.
     if (runCommand(registry, def.id, state, handlers)) recordRecentCommand(def.id);
   }

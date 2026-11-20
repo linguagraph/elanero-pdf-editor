@@ -1,8 +1,12 @@
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n/t';
-import { DocumentStatusBar, type DocumentStatusBarProps } from './DocumentStatusBar';
+import {
+  DocumentStatusBar,
+  type DocumentStatusBarHandle,
+  type DocumentStatusBarProps,
+} from './DocumentStatusBar';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -141,10 +145,25 @@ describe('back and forward', () => {
     expect(onBack).not.toHaveBeenCalled();
   });
 
-  it('focuses the page field with Alt+G', () => {
-    render(props());
-    keydown({ key: 'g', altKey: true });
+  it('focuses and selects the page field through focusPageField', () => {
+    const ref = createRef<DocumentStatusBarHandle>();
+    act(() => {
+      root.render(<DocumentStatusBar {...props()} ref={ref} />);
+    });
+    act(() => ref.current?.focusPageField());
     expect(document.activeElement).toBe(field());
+    expect(field().selectionStart).toBe(0);
+    expect(field().selectionEnd).toBe(field().value.length);
+  });
+
+  it('leaves Alt+G to the command registry, so the bar does not handle it a second time', () => {
+    const ref = createRef<DocumentStatusBarHandle>();
+    act(() => {
+      root.render(<DocumentStatusBar {...props()} ref={ref} />);
+    });
+    const event = keydown({ key: 'g', altKey: true });
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.activeElement).not.toBe(field());
   });
 });
 

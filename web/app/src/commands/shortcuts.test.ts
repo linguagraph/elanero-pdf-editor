@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WEB_SHORTCUT_OVERRIDES } from '../../../src/shortcuts.web';
 import shortcutTable from '../../../src/generated/shortcuts.json';
-import { REGISTRY } from './catalog';
+import { DROPPED_IDS, MENU, REGISTRY } from './catalog';
 import { isSharedId, sharedKeys, type CommandState } from './registry';
 import {
   commandForEvent,
@@ -43,6 +43,44 @@ describe('the override table', () => {
     expect(sharedKeys('close')).toEqual(['Ctrl+W', 'Ctrl+F4']);
     expect(effectiveKeys('crop-pages')).toEqual([]);
     expect(effectiveKeys('undo')).toEqual(sharedKeys('undo'));
+  });
+});
+
+describe('the S3 overrides and the dropped commands', () => {
+  it('binds Go to Page, Next and Previous Document to the web keys', () => {
+    expect(effectiveKeys('go-to-page')).toEqual(['Alt+G']);
+    expect(effectiveKeys('next-document')).toEqual(['Alt+PgDn']);
+    expect(effectiveKeys('previous-document')).toEqual(['Alt+PgUp']);
+  });
+
+  it('matches Alt+G, Alt+PgDn and Alt+PgUp to their commands on the web', () => {
+    expect(
+      commandForEvent(event({ key: 'g', code: 'KeyG', altKey: true }), REGISTRY, STATE, false),
+    ).toBe('go-to-page');
+    expect(commandForEvent(event({ key: 'PageDown', altKey: true }), REGISTRY, STATE, false)).toBe(
+      'next-document',
+    );
+    expect(commandForEvent(event({ key: 'PageUp', altKey: true }), REGISTRY, STATE, false)).toBe(
+      'previous-document',
+    );
+  });
+
+  it('keeps New Window and Exit out of the registry, the menu and the overrides', () => {
+    expect([...DROPPED_IDS].sort()).toEqual(['exit', 'new-window']);
+    for (const id of DROPPED_IDS) {
+      expect(REGISTRY.get(id), id).toBeUndefined();
+      expect(MENU.flat(), id).not.toContain(id);
+      expect(Object.keys(WEB_SHORTCUT_OVERRIDES), id).not.toContain(id);
+      expect(isSharedId(id), id).toBe(true);
+    }
+    expect(commandForEvent(event({ key: 'n', ctrlKey: true }), REGISTRY, STATE, false)).toBe(
+      undefined,
+    );
+  });
+
+  it('keeps the dropped commands out of the Keyboard Shortcuts list', () => {
+    const listed = REGISTRY.commands.map((def) => def.id);
+    for (const id of DROPPED_IDS) expect(listed).not.toContain(id);
   });
 });
 
