@@ -15,6 +15,8 @@ export const MAX_TEXT_LAYERS = 300;
 
 export class TextLayerCache {
   private readonly entries = new Map<string, Promise<TextLine[]>>();
+  // The lines of the entries that have arrived, for the synchronous reads a selection makes.
+  private readonly arrived = new Map<string, TextLine[]>();
 
   constructor(
     private readonly rpc: TextRpc,
@@ -28,7 +30,11 @@ export class TextLayerCache {
     if (known !== undefined) return known;
     const pending = this.rpc
       .call('text.layer', { handle: this.handle, page })
-      .then((layer) => decodeTextLayer(layer))
+      .then((layer) => {
+        const lines = decodeTextLayer(layer);
+        this.arrived.set(key, lines);
+        return lines;
+      })
       .catch((error: unknown) => {
         this.entries.delete(key);
         throw error;
@@ -36,8 +42,16 @@ export class TextLayerCache {
     this.entries.set(key, pending);
     if (this.entries.size > MAX_TEXT_LAYERS) {
       const oldest = this.entries.keys().next().value;
-      if (oldest !== undefined) this.entries.delete(oldest);
+      if (oldest !== undefined) {
+        this.entries.delete(oldest);
+        this.arrived.delete(oldest);
+      }
     }
     return pending;
+  }
+
+  // The lines of a page at a revision if they have arrived, else undefined. It never asks the engine.
+  ready(page: number, revision: number): TextLine[] | undefined {
+    return this.arrived.get(`${page}:${revision}`);
   }
 }

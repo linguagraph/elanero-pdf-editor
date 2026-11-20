@@ -15,6 +15,40 @@ export interface TextLine {
   readonly y0: number;
   readonly x1: number;
   readonly y1: number;
+  // The code-point index of the line's first char in the layer's text (the engine's indexes), so a
+  // selection's offsets and the lines' chars share one numbering.
+  readonly start: number;
+  // Float32 x 4 per char (x0, y0, x1, y1): a view on the layer's boxes, zeros for a char without one.
+  readonly chars: Float32Array;
+}
+
+// A box in page points, visible page space, origin top-left.
+export interface AreaRect {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+export interface AreaPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+// The four corners of one line's box, as the redaction marks take them (quadPoints order).
+export interface AreaQuad {
+  readonly ul: AreaPoint;
+  readonly ur: AreaPoint;
+  readonly ll: AreaPoint;
+  readonly lr: AreaPoint;
+}
+
+// The part of a page a selection covers: the union rect, one quad per line, and the selected text.
+export interface PageArea {
+  readonly page: number;
+  readonly rect: AreaRect;
+  readonly quads: readonly AreaQuad[];
+  readonly text: string;
 }
 
 // Where a line goes in the page element, in CSS pixels from its top-left corner.
@@ -29,6 +63,9 @@ export interface PlacedLine {
 interface LineInProgress {
   number: number;
   text: string;
+  start: number;
+  first: number;
+  last: number;
   x0: number;
   y0: number;
   x1: number;
@@ -56,10 +93,22 @@ export function decodeTextLayer(
     }
     const number = numbers[index] ?? 0;
     if (current === null || current.number !== number) {
-      current = { number, text: '', x0: 0, y0: 0, x1: 0, y1: 0, boxed: false };
+      current = {
+        number,
+        text: '',
+        start: index,
+        first: index,
+        last: index,
+        x0: 0,
+        y0: 0,
+        x1: 0,
+        y1: 0,
+        boxed: false,
+      };
       finished.push(current);
     }
     current.text += ch;
+    current.last = index;
     const x0 = boxes[index * 4] ?? 0;
     const y0 = boxes[index * 4 + 1] ?? 0;
     const x1 = boxes[index * 4 + 2] ?? 0;
@@ -80,7 +129,16 @@ export function decodeTextLayer(
   }
   return finished
     .filter((line) => line.boxed && line.text.trim() !== '')
-    .map(({ text, x0, y0, x1, y1 }) => ({ text, x0, y0, x1, y1 }));
+    .map((line) => ({
+      text: line.text,
+      x0: line.x0,
+      y0: line.y0,
+      x1: line.x1,
+      y1: line.y1,
+      start: line.start,
+      // A line's chars are contiguous in the layer, so its boxes are one subarray (no copy).
+      chars: boxes.subarray(line.first * 4, (line.last + 1) * 4),
+    }));
 }
 
 // The lines at a zoom: points times zoom times 96/72, as the page box is laid out (layout.ts).
@@ -93,4 +151,59 @@ export function placeLines(lines: readonly TextLine[], zoom: number): PlacedLine
     width: (line.x1 - line.x0) * k,
     height: (line.y1 - line.y0) * k,
   }));
+}
+
+// The area a selection covers on one page: the code points [startCp, endCp) of the layer's text,
+// clipped to each line. A line's part is the union of its selected char boxes (zeros skipped); the
+// page's rect is the union of the line parts, with one quad per line. Null when nothing selected
+// has a box. The boxes are visible page space already, so nothing is converted here.
+export function selectionAreas(
+  lines: readonly TextLine[],
+  page: number,
+  startCp: number,
+  endCp: number,
+): PageArea | null {
+  const quads: AreaQuad[] = [];
+  const texts: string[] = [];
+  let rect: AreaRect | null = null;
+  for (const line of lines) {
+    const count = line.chars.length / 4;
+    const from = Math.max(startCp, line.start);
+    const to = Math.min(endCp, line.start + count);
+    if (from >= to) continue;
+    let box: AreaRect | null = null;
+    for (let cp = from; cp < to; cp += 1) {
+      const i = (cp - line.start) * 4;
+      const x0 = line.chars[i] ?? 0;
+      const y0 = line.chars[i + 1] ?? 0;
+      const x1 = line.chars[i + 2] ?? 0;
+      const y1 = line.chars[i + 3] ?? 0;
+      if (x0 === 0 && y0 === 0 && x1 === 0 && y1 === 0) continue;
+      box = box === null ? { x0, y0, x1, y1 } : unionRect(box, { x0, y0, x1, y1 });
+    }
+    if (box === null) continue;
+    quads.push({
+      ul: { x: box.x0, y: box.y0 },
+      ur: { x: box.x1, y: box.y0 },
+      ll: { x: box.x0, y: box.y1 },
+      lr: { x: box.x1, y: box.y1 },
+    });
+    rect = rect === null ? box : unionRect(rect, box);
+    texts.push(
+      Array.from(line.text)
+        .slice(from - line.start, to - line.start)
+        .join(''),
+    );
+  }
+  if (rect === null) return null;
+  return { page, rect, quads, text: texts.join('\n') };
+}
+
+function unionRect(a: AreaRect, b: AreaRect): AreaRect {
+  return {
+    x0: Math.min(a.x0, b.x0),
+    y0: Math.min(a.y0, b.y0),
+    x1: Math.max(a.x1, b.x1),
+    y1: Math.max(a.y1, b.y1),
+  };
 }

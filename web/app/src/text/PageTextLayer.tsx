@@ -39,6 +39,7 @@ export function PageTextLayer({ cache, page, revision, zoom }: PageTextLayerProp
         <div
           // The lines of one page never reorder: the key is the line's position.
           key={index}
+          data-line={index}
           className="page-text-line"
           style={{
             left: line.left,
