@@ -34,7 +34,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.fonts import FontRef, FontRefKind
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.objects import Align, TextStyle, family_of
-from pdfeditor.services.font_preview import preview_font_program
+from pdfeditor.services.font_preview import private_copy
 from pdfeditor.services.fonts import cached_catalog, installed_ref_for_font_name
 from pdfeditor.ui.color_picker import pick_color
 from pdfeditor.ui.font_picker import STANDARD_FONTS, FontPicker, remember_font
@@ -49,40 +49,6 @@ _STANDARD_NAMES = {name for _label, name in STANDARD_FONTS}
 _loaded_fonts: dict[str, str] = {}  # sha1 of font program -> Qt family name
 
 
-def _private_copy(font_data: bytes, family: str) -> bytes:
-    """``font_data`` renamed to ``family``.
-
-    An embedded program keeps its family name ("Arial"). Registered under that name it would
-    replace the installed font of the same name everywhere in the app, often with only the
-    few glyphs the PDF used, so other text would show with the wrong metrics or no glyphs.
-    """
-    import io
-
-    from fontTools.ttLib import TTFont
-
-    # MuPDF drops the cmap when it subsets on save (the PDF maps codes to glyphs itself): Qt
-    # couldn't map a single character, and would draw a fallback font
-    if preview_font_program(font_data) is None:
-        return b""
-    try:
-        font = TTFont(io.BytesIO(font_data))
-        names = font["name"]
-        for record in list(names.names):
-            if record.nameID in (1, 3, 4, 6, 16, 17, 21, 22):
-                names.removeNames(nameID=record.nameID)
-        names.setName(family, 1, 3, 1, 0x409)
-        names.setName("Regular", 2, 3, 1, 0x409)
-        names.setName(family, 3, 3, 1, 0x409)
-        names.setName(family, 4, 3, 1, 0x409)
-        names.setName(family.replace(" ", ""), 6, 3, 1, 0x409)
-        out = io.BytesIO()
-        font.save(out)
-        font.close()
-        return out.getvalue()
-    except Exception:
-        return b""  # a program fontTools can't rewrite is not registered at all
-
-
 def preview_family(font_data: bytes | None) -> str | None:
     """Register an embedded font program with Qt, under a private family name, so the
     editor shows the page's real font without hiding the installed font of that name."""
@@ -91,7 +57,7 @@ def preview_family(font_data: bytes | None) -> str | None:
     digest = hashlib.sha1(font_data).hexdigest()
     if digest not in _loaded_fonts:
         family = f"PDF Font {digest[:12]}"
-        data = _private_copy(font_data, family)
+        data = private_copy(font_data, family)
         font_id = QFontDatabase.addApplicationFontFromData(data) if data else -1
         families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
         _loaded_fonts[digest] = families[0] if families else ""

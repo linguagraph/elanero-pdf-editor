@@ -89,6 +89,31 @@ class FontsResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class AttachmentParams:
+    handle: str
+    name: str  # the attachment's name, as attachments.list gives it
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AttachmentEntry:
+    name: str  # the key in the document's name tree; passed back to attachments.get
+    filename: str  # the file name the attachment declares (untrusted text)
+    size: int  # bytes, as the listing reports them; 0 when the file does not say
+    description: str  # untrusted text; "" when there is none
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AttachmentsResult:
+    entries: tuple[AttachmentEntry, ...]  # in the document's order
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AttachmentData:
+    filename: str  # the declared file name (untrusted text; the front end cleans it for a download)
+    data: bytes  # the whole attachment; a $bin buffer
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class OpenResult:
     handle: str  # opaque; every later call on the document names it
     info: DocInfo

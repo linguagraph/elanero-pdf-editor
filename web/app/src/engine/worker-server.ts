@@ -1,5 +1,5 @@
 import { EngineLoadError } from './errors';
-import type { LoadEngine, WorkerRole } from './loader';
+import { needsFontTools, type LoadEngine, type WorkerRole } from './loader';
 import type { DispatchMessage, ErrorMessage, ReplyMessage, Stage } from './protocol';
 
 // The slice of a dedicated worker's global scope that the server uses.
@@ -37,6 +37,8 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
     try {
       if (engine === undefined) throw new Error('the engine has not been started');
       const handle = await engine;
+      // A text edit runs after fontTools is in place (W6.8a), so the first one waits for the install.
+      if (needsFontTools(message.request)) await handle.ensureFontTools?.();
       // A notice of this call (a job's progress) goes out before the reply, with the call's id.
       const onNotice = (notice: Record<string, unknown>): void => {
         scope.postMessage({ kind: 'notice', id: message.id, notice });

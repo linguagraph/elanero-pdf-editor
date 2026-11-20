@@ -601,6 +601,15 @@ def _attachment_bytes_pikepdf(data: bytes, expected: str) -> None:
         assert annot.FS.EF.F.read_bytes() == expected.encode()
 
 
+@host_check("embedded_file_name_pikepdf")
+def _embedded_file_name_pikepdf(data: bytes, attachment: str) -> None:
+    """The catalog's name tree lists the embedded file ``attachment``: it survived a save."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert str(pdf.Root.Names.EmbeddedFiles.Names[0]) == attachment
+
+
 @host_check("comments_unnamed_pikepdf")
 def _comments_unnamed_pikepdf(data: bytes) -> None:
     import pikepdf
@@ -1407,6 +1416,28 @@ def _comment_replies_pikepdf(data: bytes, parent: str, replies: list[list[str]])
                 assert str(annot.get("/StateModel", "")).lstrip("/") == "Review"
             found.append([str(annot.get("/Contents", "")), state])
         assert found == replies, found
+
+
+@host_check("irt_states_pikepdf")
+def _irt_states_pikepdf(data: bytes, states: list[str]) -> None:
+    """Every annotation that replies to another (/IRT), in file order, as its review state: "" for
+    a text reply, or the status name for a status (/StateModel Review). The parent's name is made by
+    the engine, so the check does not name it (comment_replies_pikepdf needs it)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for page in pdf.pages for a in page.get("/Annots", [])]
+        found: list[str] = []
+        for annot in annots:
+            if "/IRT" not in annot:
+                continue
+            state = str(annot.get("/State", "None")).lstrip("/")
+            if state == "None":
+                state = ""
+            else:
+                assert str(annot.get("/StateModel", "")).lstrip("/") == "Review"
+            found.append(state)
+        assert found == states, found
 
 
 @host_check("comment_contents_pikepdf")

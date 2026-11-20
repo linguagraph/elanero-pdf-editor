@@ -14,7 +14,7 @@ describe('fit width', () => {
 
   it('makes two spreads as wide as the viewport, with three gaps', () => {
     const zoom = fitWidthZoom(LETTER.width, 1000, 2);
-    expect(computeSpreads([LETTER], zoom, false).width).toBeCloseTo(1000, 6);
+    expect(computeSpreads([LETTER, LETTER], zoom, false).width).toBeCloseTo(1000, 6);
   });
 
   it('is the viewport over the page and its two gaps, in CSS pixels', () => {
@@ -57,7 +57,7 @@ describe('fit page', () => {
 
   it('fits the page in a two-page spread by the spread width', () => {
     const zoom = fitPageZoom(LETTER.width, LETTER.height, 1000, 5000, 2);
-    expect(computeSpreads([LETTER], zoom, false).width).toBeCloseTo(1000, 6);
+    expect(computeSpreads([LETTER, LETTER], zoom, false).width).toBeCloseTo(1000, 6);
   });
 
   it('clamps to the zoom limits', () => {

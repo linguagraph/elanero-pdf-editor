@@ -40,7 +40,9 @@ EXPECTED_RUNTIME = {
     "always": ["Pillow"],
     "optional": {
         "fonttools": "needed only by font loading and services/export; the engine's open path "
-        "does not need it",
+        "does not need it. The text editor's font check (services/font_preview.py) and the text "
+        "edits need it too: the browser stages its wheel and installs it on the first text edit "
+        "(web/app/src/engine/loader.ts, W6.8a)",
     },
 }
 

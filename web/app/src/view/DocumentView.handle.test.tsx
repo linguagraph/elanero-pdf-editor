@@ -129,9 +129,9 @@ describe('DocumentView.stepPage', () => {
     act(() => handle.current?.stepPage(1));
     expect(scroller.scrollTop).toBeCloseTo(scrollTopForPage(boxes, 1, 1) ?? -1);
     act(() => handle.current?.stepPage(-1));
-    expect(scroller.scrollTop).toBeCloseTo(0);
+    expect(scroller.scrollTop).toBeCloseTo(scrollTopForPage(boxes, 0, 1) ?? -1);
     act(() => handle.current?.stepPage(-1));
-    expect(scroller.scrollTop).toBeCloseTo(0);
+    expect(scroller.scrollTop).toBeCloseTo(scrollTopForPage(boxes, 0, 1) ?? -1);
   });
 });
 

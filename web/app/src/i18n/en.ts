@@ -314,6 +314,7 @@ export const EN = {
   'prefs.layout.label': 'Default page layout',
   'prefs.layout.hint': 'Used when a document is opened.',
   'prefs.layout.continuous': 'Single column',
+  'prefs.layout.single': 'Single page',
   'prefs.layout.twoPage': 'Two pages',
   'prefs.layout.twoPageCover': 'Two pages, first page alone',
   'prefs.section.shortcuts': 'Shortcuts',
@@ -627,6 +628,7 @@ export const EN = {
   'sanitize.confirm.back': 'Back',
   'sanitize.result.heading': 'Removed:',
   'sanitize.result.none': 'Nothing needed removing.',
+  'sanitize.result.saveHint': 'Save the document to write the cleaned file.',
   'sanitize.failed': 'The document could not be sanitized. Try again.',
   'sanitize.refused.signed':
     'This document is signed. Sanitizing it would invalidate the signatures.',
@@ -740,6 +742,7 @@ export const EN = {
   'view.renderFailed': 'This page could not be drawn.',
   'view.layoutLabel': 'Page layout',
   'view.layoutSingle': 'Single column',
+  'view.layoutPage': 'Single page',
   'view.layoutTwoPage': 'Two pages',
   'view.coverAlone': 'Page 1 alone',
   'view.night': 'Night reading',

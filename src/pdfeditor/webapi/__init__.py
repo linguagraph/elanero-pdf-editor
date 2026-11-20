@@ -16,7 +16,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.webapi import actions, content, dto, jobs, memory, render, save, session, text
+from pdfeditor.webapi import (
+    actions,
+    attachments,
+    content,
+    dto,
+    jobs,
+    memory,
+    render,
+    save,
+    session,
+    text,
+)
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 from pdfeditor.webapi.events import CallRecorder, call_events, event, state_of
@@ -70,6 +81,8 @@ METHODS: dict[str, Method] = {
     "comments.xfdf_preview": Method(dto.XfdfPreviewParams, actions.xfdf_preview),
     "content.objects": Method(dto.PageParams, content.list_objects),
     "content.preview_font": Method(dto.PreviewFontParams, content.preview_font),
+    "attachments.list": Method(dto.HandleParams, attachments.list_attachments),
+    "attachments.get": Method(dto.AttachmentParams, attachments.get_attachment),
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "redaction.list": Method(dto.HandleParams, actions.list_redactions),
     "comments.list": Method(dto.HandleParams, actions.list_comments),

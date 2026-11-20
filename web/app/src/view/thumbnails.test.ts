@@ -88,13 +88,14 @@ describe('scrollTopForPage', () => {
     1,
   );
 
-  it('puts the page top a page gap below the top of the viewport', () => {
+  it('puts the page top half a page gap below the top of the viewport (desktop go_to_page)', () => {
     const top = scrollTopForPage(layout.boxes, 1, 1);
-    expect(top).toBeCloseTo((layout.boxes[1]?.top ?? 0) - 12 * (96 / 72));
+    expect(top).toBeCloseTo((layout.boxes[1]?.top ?? 0) - 6 * (96 / 72));
   });
 
-  it('clamps at zero for the first page and returns null for an unknown page', () => {
-    expect(scrollTopForPage(layout.boxes, 0, 1)).toBe(0);
+  it('aims half a gap above the first page, and returns null for an unknown page', () => {
+    // The first page starts one full gap down, so half a gap above it is still on screen.
+    expect(scrollTopForPage(layout.boxes, 0, 1)).toBeCloseTo(6 * (96 / 72));
     expect(scrollTopForPage(layout.boxes, 5, 1)).toBeNull();
   });
 });

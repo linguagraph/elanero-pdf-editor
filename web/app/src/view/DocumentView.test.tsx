@@ -5,7 +5,7 @@ import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
 import { DocumentView, type DocumentViewHandle } from './DocumentView';
-import { computeColumn, computeSpreads, scrollTopForPage, scrollTopForSpread } from './layout';
+import { computeColumn, computeSpreads, scrollTopForPage } from './layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -489,7 +489,7 @@ describe('DocumentView layouts and night reading', () => {
       1,
       false,
     );
-    expect(scroller.scrollTop).toBeCloseTo(scrollTopForSpread(spreads.boxes, 4, 1, false) ?? -1);
+    expect(scroller.scrollTop).toBeCloseTo(scrollTopForPage(spreads.boxes, 4, 1) ?? -1);
     expect(pages.at(-1)?.page).toBe(5);
   });
 

@@ -91,7 +91,7 @@ describe('computeSpreads', () => {
   it('has no size for no pages, and scales the width with zoom', () => {
     expect(computeSpreads([], 1, false)).toEqual({
       boxes: [],
-      width: 3 * PAGE_GAP_PT * K,
+      width: 0,
       height: 0,
     });
     const layout = computeSpreads(sizes, 2, false);

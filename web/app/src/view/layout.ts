@@ -3,8 +3,9 @@
 // single column, and two-page spreads (the desktop's two-up modes, core/layout.py compute_layout).
 import { CSS_PX_PER_POINT, clampZoom, DEFAULT_ZOOM } from './zoom';
 
-// The page layouts the reader can choose (the toolbar and the status bar show them).
-export type ViewLayout = 'continuous' | 'twoPage';
+// The page layouts the reader can choose (the toolbar and the status bar show them). `single` shows
+// one page at a time (core/layout.py SINGLE).
+export type ViewLayout = 'continuous' | 'twoPage' | 'single';
 
 // The gap between pages and around the column, in points (core/layout.py PAGE_GAP).
 export const PAGE_GAP_PT = 12;
@@ -43,10 +44,12 @@ export function computeColumn(sizes: readonly PageSizePt[], zoom: number): Colum
     boxes.push({ index, top, left: gap + (widest - width) / 2, width, height });
     top += height + gap;
   });
+  // An empty document has no extent (core/layout.py layout_bounds of no rects is 0 x 0).
+  if (sizes.length === 0) return { boxes, width: 0, height: 0 };
   return {
     boxes,
     width: widest + 2 * gap,
-    height: sizes.length === 0 ? 0 : top,
+    height: top,
   };
 }
 
@@ -98,6 +101,25 @@ export function pairSpreads(count: number, firstAlone: boolean): (number | null)
   return spreads;
 }
 
+// The single-page layout (W5.1a S3, core/layout.py SINGLE): the pages stack as in the continuous
+// column, but the view shows only page `index`. Its scene is that page alone, one page gap from the
+// top and the left, so the content is the page plus a gap on each side. The box keeps the page's
+// index, so the anchors and the page count still name the document's pages.
+export function singlePageScene(
+  sizes: readonly PageSizePt[],
+  zoom: number,
+  index: number,
+): ColumnLayout {
+  const box = computeColumn(sizes, zoom).boxes[index];
+  if (box === undefined) return { boxes: [], width: 0, height: 0 };
+  const gap = PAGE_GAP_PT * zoom * CSS_PX_PER_POINT;
+  return {
+    boxes: [{ ...box, top: gap, left: gap }],
+    width: box.width + 2 * gap,
+    height: box.height + 2 * gap,
+  };
+}
+
 // Two-page spreads: each row is as tall as its tallest page, a page is centred vertically in its
 // row, the left page hugs the spine and the right page starts one gap after it. Columns are as wide
 // as the widest page, so every spread has the same width.
@@ -129,10 +151,14 @@ export function computeSpreads(
     top += rowHeight + gap;
   }
   boxes.sort((a, b) => a.index - b.index);
+  // The extent is the pages present, not two full columns: a lone page in two-up is one page wide
+  // (core/layout.py layout_bounds takes the union of the rects and adds one gap on the right).
+  if (boxes.length === 0) return { boxes, width: 0, height: 0 };
+  const right = Math.max(...boxes.map((box) => box.left + box.width));
   return {
     boxes,
-    width: 3 * gap + 2 * colWidth,
-    height: sizes.length === 0 ? 0 : top,
+    width: right + gap,
+    height: top,
   };
 }
 
@@ -141,8 +167,9 @@ export function isInViewport(box: PageBox, scrollTop: number, viewportHeight: nu
   return box.top < scrollTop + viewportHeight && box.top + box.height > scrollTop;
 }
 
-// The scroll position that puts a page's top edge at the top of the viewport, with the page gap
-// above it, so the gap shows as it does between two pages. Null for a page index out of range.
+// The scroll position that puts a page's top edge near the top of the viewport, with half a page
+// gap above it (core/layout.py go_to_page aims PAGE_GAP / 2 above the page). Spreads use the same
+// rule on the page's own top, not the top of its row. Null for a page index out of range.
 export function scrollTopForPage(
   boxes: readonly PageBox[],
   index: number,
@@ -150,31 +177,7 @@ export function scrollTopForPage(
 ): number | null {
   const box = boxes[index];
   if (box === undefined) return null;
-  return Math.max(0, box.top - PAGE_GAP_PT * zoom * CSS_PX_PER_POINT);
-}
-
-// The scroll position that puts the top of a page's spread at the top of the viewport, for the
-// two-page layout: the top of the row holding the page, the one its tallest page starts at. Null
-// for a page index out of range.
-export function scrollTopForSpread(
-  boxes: readonly PageBox[],
-  index: number,
-  zoom: number,
-  firstAlone: boolean,
-): number | null {
-  if (boxes[index] === undefined) return null;
-  for (const row of pairSpreads(boxes.length, firstAlone)) {
-    if (!row.includes(index)) continue;
-    const rowTop = Math.min(
-      ...row.flatMap((member) => {
-        const box =
-          member === null ? undefined : boxes.find((candidate) => candidate.index === member);
-        return box === undefined ? [] : [box.top];
-      }),
-    );
-    return Math.max(0, rowTop - PAGE_GAP_PT * zoom * CSS_PX_PER_POINT);
-  }
-  return null;
+  return Math.max(0, box.top - (PAGE_GAP_PT / 2) * zoom * CSS_PX_PER_POINT);
 }
 
 // A rectangle on a page, in points (the page's visible space, origin top-left).
@@ -226,24 +229,24 @@ export function distanceToCentre(box: PageBox, scrollTop: number, viewportHeight
   return Math.abs(box.top + box.height / 2 - (scrollTop + viewportHeight / 2));
 }
 
-// The page the user is reading: the one whose centre is nearest the centre of the viewport. Only
-// the pages in the mounted range are compared, which always holds the nearest one. Returns a
-// zero-based index, clamped to the document (0 for an empty one).
+// The page the user is reading (core/layout.py page_at, as _update_current_page): the page that
+// holds the point a third of the way down the viewport. A point in a gap takes the page whose
+// nearer edge is closest, and the first page wins a tie. Zero-based; 0 for an empty document.
 export function currentPageIndex(
   boxes: readonly PageBox[],
   scrollTop: number,
   viewportHeight: number,
 ): number {
   if (boxes.length === 0) return 0;
-  const { first, end } = visibleRange(boxes, scrollTop, viewportHeight);
-  let best = Math.min(first, boxes.length - 1);
+  const y = scrollTop + viewportHeight / 3;
+  let best = 0;
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (let index = first; index < end; index += 1) {
-    const box = boxes[index];
-    if (box === undefined) continue;
-    const distance = distanceToCentre(box, scrollTop, viewportHeight);
+  for (const box of boxes) {
+    const bottom = box.top + box.height;
+    if (box.top <= y && y <= bottom) return box.index;
+    const distance = Math.min(Math.abs(box.top - y), Math.abs(bottom - y));
     if (distance < bestDistance) {
-      best = index;
+      best = box.index;
       bestDistance = distance;
     }
   }
@@ -313,7 +316,7 @@ export function viewAnchor(boxes: readonly PageBox[], scrollTop: number): ViewAn
 // The scroll position an anchor names in a layout: the same fraction down the same page. Null for a
 // page index out of range.
 export function scrollTopForAnchor(boxes: readonly PageBox[], anchor: ViewAnchor): number | null {
-  const box = boxes[anchor.page];
+  const box = boxes.find((candidate) => candidate.index === anchor.page);
   if (box === undefined) return null;
   return Math.max(0, box.top + anchor.yFraction * box.height);
 }

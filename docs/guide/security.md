@@ -55,7 +55,8 @@ travel with a file. Choose the categories to remove:
 - Content on hidden layers
 - Hidden (invisible) text and text outside the visible page area
 
-Sanitizing changes the file, so save a copy first, with **Save As…**.
+Sanitizing changes the file, so save a copy first, with **Save As…**. A signed document can't be
+sanitized: the change would invalidate its signatures, so the command refuses and the file stays as it was.
 
 ### In the web version
 
@@ -65,8 +66,9 @@ including any already in the file, and **Apply redactions** asks you to confirm 
 **Redactions** panel on the left rail lists the marks, lets you change each one's fill, text colour and
 overlay text, and has **Apply Selected** and **Apply All**, which also ask you to confirm. **Sanitize document** opens a dialog with the same categories as above, which
 you confirm before anything is removed. Both show their progress and can be cancelled, and Undo works
-until you close the document. A document with a password cannot be redacted or sanitized in the
-browser: open it in the desktop app.
+until you close the document. When the run finishes, the dialog lists what was removed and says to save
+the document to write the cleaned file. A signed document is refused, as on the desktop, and a document
+with a password cannot be redacted or sanitized in the browser: open it in the desktop app.
 
 **Properties** (on the **Redact** group) sets the box colour, the text colour and the text on the box
 for the marks you make from now on. The overlay text is limited to 64 characters. Properties works
