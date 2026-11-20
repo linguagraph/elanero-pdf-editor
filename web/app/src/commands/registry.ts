@@ -75,7 +75,7 @@ export interface ViewCommandState {
   readonly pageCount: number;
   readonly zoom: number;
   readonly fit: 'width' | 'page' | null;
-  readonly layout: 'continuous' | 'twoPage';
+  readonly layout: 'continuous' | 'twoPage' | 'single';
   readonly firstAlone: boolean;
   readonly night: boolean;
 }
