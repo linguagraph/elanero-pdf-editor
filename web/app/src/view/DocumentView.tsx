@@ -53,6 +53,7 @@ import { RedactLayer, SelectedMarkOutlines } from '../redaction/RedactLayer';
 import { RedactionBar } from '../redaction/RedactionBar';
 import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
+import type { TextLine } from '../text/textLayer';
 import { TextLayerCache } from '../text/textLayerCache';
 import { CachedCanvas } from './pixels';
 import { RenderScheduler } from './renderScheduler';
@@ -78,6 +79,8 @@ export interface DocumentViewHandle {
   stepPage(direction: -1 | 1): void;
   // Focuses the canvas pill's page field and selects its text (the status bar's Go to Page, W4.3b).
   focusPageField(): void;
+  // The text lines of a page as they are shown, or undefined until they arrive (W4.12: the selection maps them).
+  cachedLines(page: number): readonly TextLine[] | undefined;
 }
 
 // What the view reports to its host for the status bar: the page at the middle of the viewport
@@ -462,8 +465,9 @@ export function DocumentView({
         pageFieldRef.current?.focus();
         pageFieldRef.current?.select();
       },
+      cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
     }),
-    [scrollToPage, zoom, applyZoom, stepPage],
+    [scrollToPage, zoom, applyZoom, stepPage, textLayers, scheduler],
   );
 
   if (loadFailed) {
@@ -578,6 +582,7 @@ export function DocumentView({
               return (
                 <div
                   key={box.index}
+                  data-page={box.index}
                   className="doc-page"
                   role="group"
                   aria-label={t('view.pageNumber', { page: box.index + 1, total })}

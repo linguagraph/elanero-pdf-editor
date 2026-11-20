@@ -50,6 +50,25 @@ describe('TextLayerCache', () => {
     expect(call).toHaveBeenCalledTimes(2);
   });
 
+  it('does not keep a pending entry that was evicted before it arrived', async () => {
+    let release!: (reply: Methods['text.layer']['result']) => void;
+    const held = new Promise<Methods['text.layer']['result']>((resolve) => {
+      release = resolve;
+    });
+    const call = vi.fn((_method: string, params: unknown) => {
+      const { page } = params as { page: number };
+      return page === 0 ? held : Promise.resolve(layerReply(`page ${page}`));
+    });
+    const cache = new TextLayerCache({ call } as unknown as TextRpc, 'doc-1');
+    const pending = cache.get(0, 0);
+    // The cap is 300: these asks push page 0 (still pending) out of the cache.
+    for (let page = 1; page <= MAX_TEXT_LAYERS; page += 1) await cache.get(page, 0);
+    release(layerReply('late'));
+    await pending;
+    expect(cache.ready(0, 0)).toBeUndefined();
+    expect(cache.ready(1, 0)).toBeDefined();
+  });
+
   it('keeps at most the cap of layers, dropping the oldest', async () => {
     const { rpc, call } = fakeRpc();
     const cache = new TextLayerCache(rpc, 'doc-1');
