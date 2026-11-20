@@ -219,7 +219,46 @@ describe('PreferencesDialog', () => {
     });
     expect(readPreferences().pageLayout).toBe('twoPageCover');
   });
+
+  it('saves the redaction style on Apply, and nothing on Cancel (W4.5 S3)', () => {
+    const scope = openFromCommand();
+    const fill = scope.querySelector<HTMLInputElement>('input[type="color"]');
+    expect(fill?.value).toBe('#000000');
+    typeInto(fill as HTMLInputElement, '#ff8000');
+    typeInto(overlayInput(scope), 'REDACTED');
+    act(() => {
+      buttonIn(scope, t('prefs.cancel')).click();
+    });
+    expect(window.localStorage.getItem(PREFS_STORAGE_KEY)).toBeNull();
+
+    const reopened = openFromCommand();
+    typeInto(
+      reopened.querySelector<HTMLInputElement>('input[type="color"]') as HTMLInputElement,
+      '#ff8000',
+    );
+    typeInto(overlayInput(reopened), 'REDACTED');
+    act(() => {
+      reopened
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(readPreferences()).toMatchObject({
+      redactionFill: '#ff8000',
+      redactionOverlayText: 'REDACTED',
+      redactionTextColor: '#ffffff',
+    });
+  });
 });
+
+// The overlay text field, found by its label: its input is a sibling of the label in the field.
+function overlayInput(scope: HTMLElement): HTMLInputElement {
+  const label = [...scope.querySelectorAll('label')].find(
+    (l) => l.textContent === t('prefs.redaction.overlayText'),
+  );
+  const input = label?.parentElement?.querySelector<HTMLInputElement>('input');
+  if (input === undefined || input === null) throw new Error('no overlay text input');
+  return input;
+}
 
 describe('Keyboard Shortcuts from Preferences and the app menu (W4.5 S2)', () => {
   it('opens above Preferences, keeps the unsaved draft, and Escape closes only the top one', () => {

@@ -590,6 +590,18 @@ def _redact_annot_pikepdf(
         assert close([float(t) for t in tokens[i - 3 : i]], text), tokens
 
 
+@host_check("annot_author_pikepdf")
+def _annot_author_pikepdf(data: bytes, page: int, mark: str, author: str) -> None:
+    """The annotation named ``mark`` on ``page`` has the author ``author`` (its /T title)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = pdf.pages[page].obj.get("/Annots", [])
+        found = [a for a in annots if str(a.get("/NM", "")) == mark]
+        assert len(found) == 1, f"{len(found)} annotations named {mark}"
+        assert str(found[0].get("/T", "")) == author, found[0].get("/T")
+
+
 @host_check("quad_points_pikepdf")
 def _quad_points_pikepdf(data: bytes, subtype: str, corners: list[list[float]]) -> None:
     """The saved /QuadPoints hold ``corners`` (visible space) in PDF space, origin bottom-left."""

@@ -267,6 +267,13 @@ export const EN = {
   'prefs.section.shortcuts': 'Shortcuts',
   'prefs.shortcuts.hint': 'Lists every keyboard shortcut in Elanero.',
   'prefs.shortcuts.open': 'Keyboard Shortcuts…',
+  'prefs.section.redaction': 'Redaction',
+  'prefs.redaction.hint': 'The style of new redaction boxes. Boxes already drawn keep their style.',
+  'prefs.redaction.fill': 'Box colour',
+  'prefs.redaction.textColor': 'Text colour',
+  'prefs.redaction.overlayText': 'Text on the box',
+  'prefs.redaction.overlayHint':
+    'Shown on the box once the redactions are applied. Empty for none.',
 
   // Engine load stages (W3.1) and the load failure dialog.
   'loading.stage.pyodide': 'Loading the Python runtime',

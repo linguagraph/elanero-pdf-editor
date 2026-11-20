@@ -19,6 +19,12 @@ export type PageLayoutChoice = (typeof PAGE_LAYOUT_CHOICES)[number];
 
 export const AUTHOR_NAME_MAX_LENGTH = 64;
 
+// The redaction mark style (W4.5 S3): the desktop's MarkStyle defaults (black box, white text, no
+// overlay text). Each new mark takes the style at the time it is made; marks already made keep it.
+export const OVERLAY_TEXT_MAX_LENGTH = 64;
+export const REDACTION_FILL_DEFAULT = '#000000';
+export const REDACTION_TEXT_COLOR_DEFAULT = '#ffffff';
+
 export interface Preferences {
   readonly theme: ThemeChoice;
   readonly language: LanguageChoice;
@@ -32,6 +38,10 @@ export interface Preferences {
   // row only. They apply on top of the width's form, and survive a restart.
   readonly ribbonCompact: boolean;
   readonly ribbonCollapsed: boolean;
+  // The redaction mark style (W4.5 S3): #rrggbb colours and the text drawn over a mark.
+  readonly redactionFill: string;
+  readonly redactionOverlayText: string;
+  readonly redactionTextColor: string;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -44,6 +54,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   pageLayout: 'continuous',
   ribbonCompact: false,
   ribbonCollapsed: false,
+  redactionFill: REDACTION_FILL_DEFAULT,
+  redactionOverlayText: '',
+  redactionTextColor: REDACTION_TEXT_COLOR_DEFAULT,
 };
 
 // The non-theme preferences are one JSON object. The theme keeps its own key (theme.ts), because
@@ -121,6 +134,27 @@ export function cleanAuthorName(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, AUTHOR_NAME_MAX_LENGTH) : '';
 }
 
+// A #rrggbb colour in lower case; anything else (a short form, a name, a stray character) gives the
+// fallback. The colour input always sends this form, so the check is a guard, not a parser.
+export function cleanHexColour(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const folded = value.toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(folded) ? folded : fallback;
+}
+
+// The text drawn over a redaction mark: control characters are dropped, the ends trimmed, and the
+// result cut to the limit. A non-string gives the empty text (no overlay).
+export function cleanOverlayText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const printable = Array.from(value)
+    .filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return code > 0x1f && code !== 0x7f;
+    })
+    .join('');
+  return printable.trim().slice(0, OVERLAY_TEXT_MAX_LENGTH);
+}
+
 export function readPreferences(): Preferences {
   const record = readRecord();
   return {
@@ -145,6 +179,12 @@ export function readPreferences(): Preferences {
       typeof record.ribbonCollapsed === 'boolean'
         ? record.ribbonCollapsed
         : DEFAULT_PREFERENCES.ribbonCollapsed,
+    redactionFill: cleanHexColour(record.redactionFill, DEFAULT_PREFERENCES.redactionFill),
+    redactionOverlayText: cleanOverlayText(record.redactionOverlayText),
+    redactionTextColor: cleanHexColour(
+      record.redactionTextColor,
+      DEFAULT_PREFERENCES.redactionTextColor,
+    ),
   };
 }
 
@@ -160,6 +200,12 @@ export function writePreferences(prefs: Preferences): boolean {
     pageLayout: pickChoice(prefs.pageLayout, PAGE_LAYOUT_CHOICES, DEFAULT_PREFERENCES.pageLayout),
     ribbonCompact: prefs.ribbonCompact,
     ribbonCollapsed: prefs.ribbonCollapsed,
+    redactionFill: cleanHexColour(prefs.redactionFill, DEFAULT_PREFERENCES.redactionFill),
+    redactionOverlayText: cleanOverlayText(prefs.redactionOverlayText),
+    redactionTextColor: cleanHexColour(
+      prefs.redactionTextColor,
+      DEFAULT_PREFERENCES.redactionTextColor,
+    ),
   };
   setTheme(prefs.theme);
   const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));

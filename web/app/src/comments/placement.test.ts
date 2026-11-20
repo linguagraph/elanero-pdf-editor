@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
+import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { type PlacementDeps, placeComment, undoComment } from './placement';
 
 const rect = { x0: 72, y0: 72, x1: 144, y1: 144 };
@@ -46,8 +47,20 @@ describe('placing a comment', () => {
     expect(call).toHaveBeenCalledWith('actions.run', {
       handle: 'h1',
       name: 'annotations.create',
-      args: { tool: 'rectangle', page: 0, rect, text: '' },
+      args: { tool: 'rectangle', page: 0, rect, text: '', author: '' },
     });
+  });
+
+  it('sends the author name saved in the preferences (W4.5 S3)', async () => {
+    const { call, deps } = setup();
+    window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ authorName: 'Ada' }));
+    await placeComment(deps, 'note', 0, rect, 'Hi');
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h1',
+      name: 'annotations.create',
+      args: { tool: 'note', page: 0, rect, text: 'Hi', author: 'Ada' },
+    });
+    window.localStorage.clear();
   });
 
   it('redraws the changed page and shows an info toast with Undo', async () => {

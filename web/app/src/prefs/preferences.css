@@ -101,3 +101,14 @@
 .prefs-error {
   color: var(--color-danger);
 }
+
+/* The colour inputs keep the browser's own swatch; the size is the touch target. */
+.prefs-colour {
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: none;
+  cursor: pointer;
+}
