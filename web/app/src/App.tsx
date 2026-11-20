@@ -29,6 +29,7 @@ import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
+import { neighbourTabId } from './tabs/tabState';
 import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
@@ -164,8 +165,16 @@ export function App({
       engine.dispose();
     };
   }, [engine]);
+  // Next and Previous Document (W4.3b D6): step through the tabs in order and wrap, as the
+  // desktop does. With no tab active, Next starts at the first and Previous at the last.
+  const cycleDocument = (step: 1 | -1): void => {
+    const id = neighbourTabId(docs.tabs, step);
+    if (id !== null) docs.selectTab(id);
+  };
   const baseHandlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
+    'next-document': () => cycleDocument(1),
+    'previous-document': () => cycleDocument(-1),
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
     'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
     'keyboard-shortcuts': () => setShortcutsOpen(true),
@@ -263,6 +272,8 @@ export function App({
     ...baseHandlers,
     ...(documentShown
       ? {
+          // Go to Page (W4.3b) focuses the canvas pill's page field.
+          'go-to-page': () => viewRef.current?.focusPageField(),
           'zoom-in': () => runView('zoom-in'),
           'zoom-out': () => runView('zoom-out'),
           'fit-width': () => runView('fit-width'),
