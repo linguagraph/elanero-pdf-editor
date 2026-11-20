@@ -106,6 +106,7 @@ export const EN = {
   'disabled.nothingToRedo': 'There is nothing to redo.',
   'disabled.noRecentFiles': 'No recent files yet.',
   'disabled.noRedactionMarks': 'There are no marks to apply.',
+  'disabled.contentEditOff': 'This document cannot be edited in this version.',
   'disabled.redactionBusy': 'Redactions are being applied. Wait for them to finish.',
   'disabled.cannotGoBack': 'There is no earlier view to go back to.',
   'disabled.cannotGoForward': 'There is no later view to go forward to.',

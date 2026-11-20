@@ -72,6 +72,17 @@ function releaseBudget(budget: { current: number }, entry: QueuedOpen): void {
   if (entry.prefetched !== undefined) budget.current -= entry.file.size;
 }
 
+// Whether the engine can change the document's content (its content_edit capability, W6.7a). A
+// failed read counts as no: the Edit tool's commands then say so, and the document still opens.
+async function contentEditOf(client: EngineClient, handle: string): Promise<boolean> {
+  try {
+    const capabilities = await client.call('session.capabilities', { handle });
+    return capabilities.engine.content_edit === true;
+  } catch {
+    return false;
+  }
+}
+
 export interface Documents {
   readonly tabs: TabState;
   readonly recent: readonly RecentFile[];
@@ -216,7 +227,10 @@ export function useDocuments(engine: EngineConnection): Documents {
       // The tab id is the one addTab gives the new tab. Its session lets the document view mount.
       const id = tabsRef.current.nextId;
       const { encrypted, has_signatures: signed } = outcome.result.info;
-      commitTabs((state) => addTab(state, { name: file.name, handle, pages, encrypted, signed }));
+      const contentEdit = await contentEditOf(client, handle);
+      commitTabs((state) =>
+        addTab(state, { name: file.name, handle, pages, encrypted, signed, contentEdit }),
+      );
       setTabSession(id, { rpc: client, handle });
       void memoryWarner.check(client, 'open');
       setRecent(addRecentFile(file.name));

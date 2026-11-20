@@ -55,6 +55,9 @@ export interface CommandState {
   readonly commentTool: CommentToolId | null;
   // The redaction mark tool is on (W7.4); false when no document is open.
   readonly redacting: boolean;
+  // The open document's engine has the content_edit capability (W6.7a): false when it lacks it, and
+  // false when no document is open. The Edit tool's commands read it.
+  readonly contentEdit: boolean;
   // There are marks to apply and no apply is running (W7.4). False when no document is open.
   readonly canApplyRedactions: boolean;
   // An apply is running (W7.4). Optional, so a state without it reads as not busy.
@@ -84,6 +87,7 @@ export type DisabledReason =
   | 'nothingToRedo'
   | 'noRecentFiles'
   | 'noRedactionMarks'
+  | 'contentEditOff'
   | 'redactionBusy'
   | 'cannotGoBack'
   | 'cannotGoForward'
@@ -99,6 +103,7 @@ export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>>
   nothingToRedo: 'disabled.nothingToRedo',
   noRecentFiles: 'disabled.noRecentFiles',
   noRedactionMarks: 'disabled.noRedactionMarks',
+  contentEditOff: 'disabled.contentEditOff',
   redactionBusy: 'disabled.redactionBusy',
   cannotGoBack: 'disabled.cannotGoBack',
   cannotGoForward: 'disabled.cannotGoForward',
@@ -126,6 +131,12 @@ export const CAN_UNDO: Enabled = (state) =>
   NEEDS_DOCUMENT(state) ?? (state.canUndo ? null : 'nothingToUndo');
 export const CAN_REDO: Enabled = (state) =>
   NEEDS_DOCUMENT(state) ?? (state.canRedo ? null : 'nothingToRedo');
+// The Edit tool's commands (W6.7a) need a document whose engine can change its content. Without the
+// engine's content_edit flag the command says so, rather than failing with a toast after the press.
+export const CAN_EDIT_CONTENT: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.contentEdit ? null : 'contentEditOff';
+};
 export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');
 // Back and Forward need an open document, then an entry in the history that way (W5.3).
 export const CAN_GO_BACK: Enabled = (state) => {

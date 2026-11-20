@@ -6,6 +6,7 @@ import type { MessageId } from '../i18n/en';
 import type { IconName } from '../theme/icons.generated';
 import {
   ALWAYS,
+  CAN_EDIT_CONTENT,
   CAN_GO_BACK,
   CAN_GO_FORWARD,
   CAN_REDO,
@@ -160,7 +161,7 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
 
   // Edit
   {
-    ...cmd('edit-text-images', 'command.edit-text-images.label', 'edit.edit'),
+    ...cmd('edit-text-images', 'command.edit-text-images.label', 'edit.edit', CAN_EDIT_CONTENT),
     checked: (state) => state.viewTool === 'edit',
   },
   cmd('add-text', 'command.add-text.label', 'edit.add'),
@@ -170,7 +171,12 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('add-line', 'command.add-line.label', 'edit.shapes'),
   cmd('replace-image', 'command.replace-image.label', 'edit.objects'),
   cmd('extract-image', 'command.extract-image.label', 'edit.objects'),
-  cmd('delete-selected-objects', 'command.delete-selected-objects.label', 'edit.objects'),
+  cmd(
+    'delete-selected-objects',
+    'command.delete-selected-objects.label',
+    'edit.objects',
+    CAN_EDIT_CONTENT,
+  ),
 
   // Organize
   cmd('organize-pages', 'command.organize-pages.label', 'organize.organize'),

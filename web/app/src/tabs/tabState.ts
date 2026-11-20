@@ -16,6 +16,9 @@ export interface DocumentTab {
   // True when the document carries signatures (its open result says so). Its in-place saves are
   // incremental, so they are refused once the lineage is broken (W4.8).
   readonly signed: boolean;
+  // True when the engine can change the document's content (its content_edit capability, W6.7a).
+  // The Edit tool's commands are off without it.
+  readonly contentEdit: boolean;
   // The engine's undo and redo state, from its state events (W4.8 S1).
   readonly canUndo: boolean;
   readonly canRedo: boolean;
@@ -33,6 +36,7 @@ export interface OpenedTab {
   readonly pages: number;
   readonly encrypted?: boolean;
   readonly signed?: boolean;
+  readonly contentEdit?: boolean;
 }
 
 // The fields of the engine's document state that the tab shows (its state events, W4.8 S1).
@@ -56,6 +60,7 @@ export function addTab(state: TabState, opened: OpenedTab): TabState {
     pages: opened.pages,
     encrypted: opened.encrypted === true,
     signed: opened.signed === true,
+    contentEdit: opened.contentEdit === true,
     canUndo: false,
     canRedo: false,
     busy: false,
