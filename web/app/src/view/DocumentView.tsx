@@ -41,6 +41,7 @@ import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
 import { selectPageText as selectPageTextLayer } from '../text/copy';
 import { PageTextLayer } from '../text/PageTextLayer';
+import { textLayerPassive } from '../text/textLayerPassive';
 import { useHandPan } from './useHandPan';
 import type { ViewTool } from './viewTool';
 import { CropLayer } from '../crop/CropLayer';
@@ -814,7 +815,11 @@ export function DocumentView({
                     page={box.index}
                     revision={scheduler.revisionOf(box.index)}
                     zoom={zoom}
-                    passive={commentTool !== null}
+                    passive={textLayerPassive({
+                      commentTool,
+                      viewTool: tool,
+                      markToolOn: redactionTools.state.active,
+                    })}
                   />
                   {keys.some((key) => scheduler.isFailed(key)) ? (
                     <span className="doc-page-error">{t('view.renderFailed')}</span>
