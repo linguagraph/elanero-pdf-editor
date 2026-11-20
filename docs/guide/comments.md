@@ -48,6 +48,9 @@ The **Manage** group:
   moved or edited. Use it when the review is finished and you want the marks to stay as they are.
   In the web version, Flatten asks you to confirm first. You can undo it until you save the file;
   after that, the flattening is permanent for that file.
+  Form fields and signatures are never flattened. A signed document can be flattened, but its
+  signatures will show that the pages changed after signing. After a flatten, a save over the
+  original is refused, so save a copy instead; the copy keeps the signature fields.
 - **Export Comments** saves the comments as XFDF (for another PDF editor), as a CSV summary, or as a
   PDF summary. The file is downloaded and the document is not changed. In the web version, the PDF
   summary is not available in every browser; the app tells you when it is not.
