@@ -63,9 +63,16 @@ export async function runAxe(context: Element = document.body): Promise<AxeRepor
   const blocking: string[] = [];
   const advisory: string[] = [];
   for (const rule of results.violations) {
-    const out = lines(rule);
-    if (BLOCKING.includes(rule.impact ?? 'minor')) blocking.push(...out);
-    else advisory.push(...out);
+    const impact = rule.impact ?? 'minor';
+    if (BLOCKING.includes(impact)) {
+      blocking.push(...lines(rule));
+    } else {
+      // One short line per node: rule, impact and the first target. The full HTML is only needed
+      // for a blocking failure, so the console report stays readable.
+      for (const node of rule.nodes) {
+        advisory.push(`[${impact}] ${rule.id}: ${String(node.target[0] ?? '(no target)')}`);
+      }
+    }
   }
   return { blocking, advisory };
 }

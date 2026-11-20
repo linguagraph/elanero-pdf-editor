@@ -81,7 +81,9 @@ async function expectAccessible(context?: Element): Promise<void> {
   if (context === undefined) {
     expect(document.querySelector('[role="dialog"]'), 'an open dialog').not.toBeNull();
   }
-  const { blocking } = await runAxe(context);
+  // Moderate and minor findings are advisories: printed for the run's report, never failing it.
+  const { blocking, advisory } = await runAxe(context);
+  for (const line of advisory) console.info(`axe advisory ${line}`);
   expect(blocking).toEqual([]);
 }
 
@@ -117,6 +119,8 @@ describe('component axe checks (W8.5 S1)', () => {
       act(() => {
         tab.click();
       });
+      // react-aria sets aria-selected on the tab it shows, so a click must move it here.
+      expect(tab.getAttribute('aria-selected')).toBe('true');
       await expectAccessible(host);
     }
   });
