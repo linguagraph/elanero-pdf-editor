@@ -27,6 +27,8 @@ from pdfeditor.model.redaction import SanitizeOptions
 OWNER_NEEDED = "The permissions password is needed to change this document's security."
 # Changing encryption needs a full rewrite, which would break the signatures (Acrobat refuses too).
 SIGNED_REFUSED = "This document is signed. Changing its security would invalidate the signatures."
+# A sanitize rewrites the whole file, so on a signed document it would break the signatures too.
+SANITIZE_SIGNED_REFUSED = "This document is signed. Sanitizing it would invalidate the signatures."
 NO_SECURITY_MESSAGE = "This document has no security."
 
 # Stable reason codes (W7.5): the web words each one itself, so these never change meaning. The
@@ -65,10 +67,10 @@ class SanitizeDocument:
 # -- actions -------------------------------------------------------------------------------
 
 
-def _refuse_if_signed(session: DocumentSession) -> None:
+def _refuse_if_signed(session: DocumentSession, message: str = SIGNED_REFUSED) -> None:
     """Caller holds ``session.lock``."""
     if session.document.info().has_signatures:
-        raise Refused(SIGNED_REFUSED, reason=SIGNED)
+        raise Refused(message, reason=SIGNED)
 
 
 def _check_settings(settings: SecuritySettings) -> None:
@@ -143,6 +145,9 @@ def remove_security(session: DocumentSession, args: RemoveSecurity) -> ActionRes
 def sanitize(session: DocumentSession, args: SanitizeDocument) -> ActionResult[tuple[str, ...]]:
     """Remove hidden or sensitive data; the value lists what was removed, for the report."""
     ensure_idle(session)
+    # Refused before the snapshot, so a refused sanitize leaves no undo step and no changed file.
+    with session.lock:
+        _refuse_if_signed(session, SANITIZE_SIGNED_REFUSED)
     removed = snapshot(session, "Sanitize Document", lambda doc: doc.sanitize(args.options))
     session.require_full_save = True
     return ActionResult("Sanitize Document", tuple(removed))
