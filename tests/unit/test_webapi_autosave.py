@@ -206,7 +206,9 @@ def test_a_document_above_the_autosave_cap_is_skipped(
     # W3.9 decision D5: no copy is kept above FILE_WARN_BYTES, although a save may be larger.
     handle = open_data(fixture_pdf("images").read_bytes())
     _, saved = autosave(handle)
-    monkeypatch.setattr(limits, "FILE_WARN_BYTES", len(saved) - 1)
+    # The cap is set well below the save size: a later save can differ from this one by a few
+    # bytes (the trailer ID varies, notably under Pyodide), so "one byte under" is not reliable.
+    monkeypatch.setattr(limits, "FILE_WARN_BYTES", max(1, len(saved) // 2))
     result = ok(call("save.autosave_bytes", {"handle": handle}))
     assert result["skipped"] == "too_large"
     assert result["size"] == 0

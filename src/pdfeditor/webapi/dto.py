@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum, IntFlag
 from typing import Any, NoReturn, Union, get_args, get_origin
 
+from pdfeditor.model.annotations import AnnotationType, ReviewState
 from pdfeditor.model.metadata import EncryptionMethod, Permissions
 from pdfeditor.model.objects import Align, ObjectType
 from pdfeditor.model.pages import MarkKind
@@ -515,6 +516,37 @@ class RedactionMarkDto:
 class RedactionListResult:
     marks: tuple[RedactionMarkDto, ...]  # document order: page ascending, then annotation order
     truncated: bool  # True when the document has more marks than the list holds
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommentDto:
+    """One comment or reply (W7.1b S1). ``name`` is the /NM or the engine's synthetic name, which
+    the annotation actions take as ``AnnotRef.name``. Dates are ISO 8601 strings, or null."""
+
+    page: int  # 0-based
+    name: str
+    type: AnnotationType
+    author: str
+    contents: str
+    subject: str
+    created: str | None
+    modified: str | None
+    state: ReviewState
+    locked: bool
+    rect: RectDto  # visible page points, origin top-left
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommentThreadDto:
+    comment: CommentDto
+    replies: tuple[CommentDto, ...]  # oldest first
+    status: ReviewState  # the latest state set on the comment or a reply
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommentListResult:
+    threads: tuple[CommentThreadDto, ...]  # page, then y, then x (comment_threads order)
+    truncated: bool  # True when some threads were left out at the entry cap
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
