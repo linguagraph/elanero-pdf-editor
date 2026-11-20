@@ -377,3 +377,9 @@
     min-height: 44px;
   }
 }
+
+.app-menu-heading {
+  padding: var(--space-1) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
