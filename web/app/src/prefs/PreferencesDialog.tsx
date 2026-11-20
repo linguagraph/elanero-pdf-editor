@@ -71,6 +71,7 @@ const ACCENT_LABELS: Readonly<Record<AccentId, MessageId>> = {
 
 const PAGE_LAYOUT_LABELS: Readonly<Record<PageLayoutChoice, MessageId>> = {
   continuous: 'prefs.layout.continuous',
+  single: 'prefs.layout.single',
   twoPage: 'prefs.layout.twoPage',
   twoPageCover: 'prefs.layout.twoPageCover',
 };

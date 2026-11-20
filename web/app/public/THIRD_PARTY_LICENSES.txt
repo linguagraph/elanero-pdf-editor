@@ -101,6 +101,13 @@ Vite (preload helper injected into the build)
   URL: https://vite.dev
   Copyright: Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
 
+fontTools (Pyodide wheel, loaded on the first text edit)
+  Version: 4.62.1
+  Licence: MIT
+  URL: https://github.com/fonttools/fonttools
+  Copyright: Copyright (c) 2017 Just van Rossum
+  Note: To confirm: the 4.62.1 licence text and copyright line against the Pyodide wheel, which is not in this repository. The line is from the installed fontTools 4.66.1 licence file (MIT).
+
 gumbo-parser (in MuPDF)
   Version: To confirm
   Licence: Apache-2.0
@@ -1610,7 +1617,7 @@ TO DO
 Please send bug reports, offers of help, etc. to jpeg-info@jpegclub.org.
 
 --- MIT ---
-Used by: Emscripten runtime (in Pyodide), HarfBuzz (in MuPDF), Little CMS 2 (in MuPDF), Vite (preload helper injected into the build), aria-hidden, client-only, clsx, react, react-dom, scheduler, use-sync-external-store
+Used by: Emscripten runtime (in Pyodide), HarfBuzz (in MuPDF), Little CMS 2 (in MuPDF), Vite (preload helper injected into the build), aria-hidden, client-only, clsx, fontTools (Pyodide wheel, loaded on the first text edit), react, react-dom, scheduler, use-sync-external-store
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

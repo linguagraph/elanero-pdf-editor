@@ -18,6 +18,7 @@ from typing import Any
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.webapi import (
     actions,
+    attachments,
     content,
     dto,
     jobs,
@@ -80,6 +81,8 @@ METHODS: dict[str, Method] = {
     "comments.flattenable": Method(dto.HandleParams, actions.flattenable),
     "comments.xfdf_preview": Method(dto.XfdfPreviewParams, actions.xfdf_preview),
     "content.objects": Method(dto.PageParams, content.list_objects),
+    "attachments.list": Method(dto.HandleParams, attachments.list_attachments),
+    "attachments.get": Method(dto.AttachmentParams, attachments.get_attachment),
     "layers.list": Method(dto.HandleParams, layers.list_layers),
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "redaction.list": Method(dto.HandleParams, actions.list_redactions),

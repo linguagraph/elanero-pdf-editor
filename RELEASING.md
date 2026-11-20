@@ -50,6 +50,33 @@ yet: do it by hand as described, and don't invent one. The detailed Store steps 
 
    `npm run build` writes `web/app/dist`. The first `npx playwright test` needs
    `npx playwright install chromium`.
+
+   **Accessibility (W8.5).** The component axe checks, the contrast checks and the motion checks
+   run in `npm run test` above. The keyboard walkthrough runs in the nightly `web-e2e` workflow,
+   which is not part of this step. Before a release, also do these three checks:
+
+   - **Axe on the browser screens, on demand.** Run `gh workflow run web-a11y.yml --ref main`,
+     then `gh run watch`. Pass: the `web-a11y` job is green, with no serious or critical
+     violation in any browser. It is not a required check, so a failure doesn't block the merge;
+     fix it or record why it can wait, and note the run URL in the release PR.
+   - **Nightly keyboard walkthrough.** Pass: the latest `web-e2e` run on `main` is green:
+     `gh run list --workflow web-e2e.yml --branch main --limit 3`.
+   - **Manual screen-reader pass.** Use NVDA with Firefox on Windows, and VoiceOver with Safari on
+     a Mac or iPad, on the start page, a document, and one dialog. Pass for each item:
+     - The skip link is the first Tab stop, and Enter moves the focus to the document.
+     - F6 and Shift+F6 cycle the regions, and the focus never lands on BODY.
+     - The ribbon is announced as tabs, and its toggle buttons announce whether they are on.
+     - The rails and the document tabs have names. The canvas is announced as "Document", and
+       each page as "Page N of M". A scanned page with no text gives only its page number; that
+       is expected, so note it rather than fail.
+     - A dialog takes the focus when it opens, Esc closes it, and the focus returns to its opener.
+     - With Windows high contrast on, the document view, the selected ribbon tab and one dialog
+       keep visible borders and focus outlines.
+     - With Windows animations turned off, the toasts show no animation.
+     - On a touch screen, the ribbon buttons and tabs are at least 44 px.
+
+     Note the results in the release PR. A failure found here is a bug to fix or record, as in
+     step 7.
 5. **Desktop exe and self-test.** Run `uv run python scripts/build_exe.py --test`. Pass: it
    prints `built ... (N MB)` with N at most 150, and the self-test report ends with
    `RESULT: OK`. Note N in the release PR.

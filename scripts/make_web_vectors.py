@@ -1,8 +1,13 @@
-"""Write the web's shared text vectors (W5.4 S1) from the desktop's text model.
+"""Write the web's shared vectors from the desktop's Python code.
 
-The browser ports ``services.text`` (PageTextIndex queries, TextSelection) and ``services.search``
-matching to TypeScript; this script runs the Python code over fixed text layers and records the
-answers in ``web/test/vectors/text.json``. Each layer is the worker's ``text.layer`` shape, cut to
+Text (W5.4 S1): the browser ports ``services.text`` (PageTextIndex queries, TextSelection) and
+``services.search`` matching to TypeScript; this script runs the Python code over fixed text layers
+and records the answers in ``web/test/vectors/text.json``.
+
+Layout (W5.1a S1): ``core/layout.py`` (compute_layout, layout_bounds, page_at) answers for fixed
+page sizes, zooms and scroll positions, recorded in ``web/test/vectors/layout.json``. The mounting
+window has no desktop counterpart, so its reference is written out in
+``_window_reference``. Each layer is the worker's ``text.layer`` shape, cut to
 its first lines and rounded to 3 decimals before the index is built, so the JSON holds exactly the
 numbers the Python side answered with. Floats are compared on the web to 1e-6; the rest exactly.
 
@@ -18,6 +23,14 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
+from pdfeditor.core.layout import (
+    PAGE_GAP,
+    LayoutMode,
+    compute_layout,
+    layout_bounds,
+    page_at,
+    rotated_size,
+)
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Point, Rect
@@ -35,6 +48,7 @@ from pdfeditor.services.text import (
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "generated"
 OUTPUT = ROOT / "web" / "test" / "vectors" / "text.json"
+LAYOUT_OUTPUT = ROOT / "web" / "test" / "vectors" / "layout.json"
 HIT_TOLERANCE = 4.0
 # (layer name, fixture, page index, lines kept): the first lines keep the file small.
 PAGE_LAYERS = [
@@ -300,6 +314,163 @@ def _word_cases() -> list[dict[str, Any]]:
     ]
 
 
+# Visible-space page sizes in points (after /Rotate): letter, landscape, a small page and A4.
+LAYOUT_SETS: dict[str, list[tuple[float, float]]] = {
+    "mixed": [(612.0, 792.0), (792.0, 612.0), (300.0, 400.0), (612.0, 792.0), (595.0, 842.0)],
+    "landscape": [(792.0, 612.0), (842.0, 595.0), (792.0, 612.0), (792.0, 612.0)],
+    "single_page": [(612.0, 792.0)],
+    "empty": [],
+}
+# Unrotated sizes with a /Rotate of 90: the view receives the rotated sizes (session.pages).
+PRE_ROTATED_SET = ("pre_rotated_90", [(612.0, 792.0), (792.0, 612.0), (300.0, 400.0)], 90)
+LAYOUT_MODES = {
+    "continuous": LayoutMode.CONTINUOUS,
+    "single": LayoutMode.SINGLE,
+    "two_up": LayoutMode.TWO_UP,
+    "two_up_cover": LayoutMode.TWO_UP_COVER,
+}
+LAYOUT_ZOOMS = [0.5, 1.0, 2.25]
+VIEWPORTS_PX = [300.0, 800.0]
+SCROLL_FRACTIONS = [0.0, 0.37, 0.999]
+CSS_PX_PER_PT = 96 / 72
+
+
+def _window_reference(
+    boxes_px: list[tuple[float, float]], scroll: float, vh: float
+) -> dict[str, int]:
+    """The mounting window written out: pages that touch [scroll - vh, scroll + 2 vh].
+
+    One viewport above and below the view, as W1.4 section 7 asks. Pages are in reading order, so
+    the range runs from the first page that touches the window to the last one.
+    """
+    lo, hi = scroll - vh, scroll + 2 * vh
+    hits = [i for i, (top, height) in enumerate(boxes_px) if top + height >= lo and top <= hi]
+    if not hits:
+        return {"first": 0, "end": 0}
+    return {"first": hits[0], "end": hits[-1] + 1}
+
+
+def _layout_cases() -> list[dict[str, Any]]:
+    sets = [(name, sizes, 0) for name, sizes in LAYOUT_SETS.items()] + [PRE_ROTATED_SET]
+    cases: list[dict[str, Any]] = []
+    for set_name, raw, rotation in sets:
+        visible = [rotated_size(w, h, rotation) for w, h in raw]
+        shown = [list(s) for s in visible]
+        for mode_name, mode in LAYOUT_MODES.items():
+            # The desktop answer for the unrotated sizes with /Rotate must equal the answer for the
+            # rotated sizes the web receives, or the view would rotate twice.
+            rects = compute_layout(raw, mode, rotation)
+            assert rects == compute_layout(visible, mode), (set_name, mode_name)
+            bounds = layout_bounds(rects)
+            for zoom in LAYOUT_ZOOMS:
+                cases.append(
+                    {
+                        "fn": "layout",
+                        "set": set_name,
+                        "mode": mode_name,
+                        "zoom": zoom,
+                        "sizes": shown,
+                        "expect": {
+                            "boxes": [_rect(r) for r in rects],
+                            "width": bounds.x1,
+                            "height": bounds.y1,
+                        },
+                    }
+                )
+            for index, rect in enumerate(rects):
+                # The placeholder is the page's own size, whatever the spread centres it on.
+                cases.append(
+                    {
+                        "fn": "placeholder",
+                        "set": set_name,
+                        "mode": mode_name,
+                        "zoom": 1.0,
+                        "index": index,
+                        "sizes": shown,
+                        "expect": list(visible[index]),
+                    }
+                )
+                # go_to_page's target: half a page gap above the page's top edge, not below 0.
+                cases.append(
+                    {
+                        "fn": "scroll_top_for_page",
+                        "set": set_name,
+                        "mode": mode_name,
+                        "zoom": 1.0,
+                        "index": index,
+                        "sizes": shown,
+                        "expect_pt": max(0.0, rect.y0 - PAGE_GAP / 2),
+                    }
+                )
+            if not rects:
+                continue
+            boxes_px = [(r.y0 * CSS_PX_PER_PT, r.height * CSS_PX_PER_PT) for r in rects]
+            total_pt = bounds.y1
+            for vh_px in VIEWPORTS_PX:
+                vh_pt = vh_px / CSS_PX_PER_PT
+                for frac in SCROLL_FRACTIONS:
+                    scroll_pt = round(frac * max(0.0, total_pt - vh_pt), 3)
+                    scroll_px = scroll_pt * CSS_PX_PER_PT
+                    base = {
+                        "set": set_name,
+                        "mode": mode_name,
+                        "zoom": 1.0,
+                        "sizes": shown,
+                        "scroll": scroll_px,
+                        "viewport": vh_px,
+                    }
+                    cases.append(
+                        {
+                            "fn": "window",
+                            **base,
+                            "expect": _window_reference(boxes_px, scroll_px, vh_px),
+                        }
+                    )
+                    cases.append(
+                        {
+                            "fn": "current_page",
+                            **base,
+                            # _update_current_page: the page at a third of the way down the view.
+                            "expect": page_at(rects, scroll_pt + vh_pt / 3),
+                        }
+                    )
+    return cases
+
+
+def _layout_doc() -> dict[str, Any]:
+    return {
+        "_about": (
+            "Generated by scripts/make_web_vectors.py from pdfeditor.core.layout. Do not edit by "
+            "hand. Sizes and boxes are visible-space points; CSS px = points * zoom * 96/72."
+        ),
+        "generator": "scripts/make_web_vectors.py",
+        "format": 1,
+        "constants": {"PAGE_GAP_PT": PAGE_GAP, "CSS_PX_PER_PT": CSS_PX_PER_PT},
+        "notes": [
+            "window: no desktop counterpart; the reference is _window_reference.",
+            "current_page: the desktop rule (page at a third of the view), not the centre.",
+            "scroll_top_for_page: the desktop go_to_page target, half a gap above the page.",
+        ],
+        "cases": _layout_cases(),
+    }
+
+
+def _layout_render() -> str:
+    doc = _layout_doc()
+    lines = ["{"]
+    keys = list(doc)
+    for n, key in enumerate(keys):
+        value = doc[key]
+        if key == "cases":
+            body = "[\n" + ",\n".join(_compact(v) for v in value) + "\n]"
+        else:
+            body = _compact(value)
+        comma = "," if n < len(keys) - 1 else ""
+        lines.append(f"{_compact(key)}: {body}{comma}")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def build() -> dict[str, Any]:
     indexes = _layers()
     cases: list[dict[str, Any]] = []
@@ -346,17 +517,19 @@ def render() -> str:
 
 
 def main(argv: list[str]) -> int:
-    text = render()
+    outputs = [(OUTPUT, render()), (LAYOUT_OUTPUT, _layout_render())]
     if "--check" in argv:
-        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
-        if current != text:
-            print(f"{OUTPUT} is out of date: run scripts/make_web_vectors.py", file=sys.stderr)
+        stale = [p for p, text in outputs if not p.exists() or p.read_text("utf-8") != text]
+        for path in stale:
+            print(f"{path} is out of date: run scripts/make_web_vectors.py", file=sys.stderr)
+        if stale:
             return 1
-        print("web text vectors are up to date")
+        print("web vectors are up to date")
         return 0
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(text, encoding="utf-8", newline="\n")
-    print(f"wrote {OUTPUT}")
+    for path, text in outputs:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+        print(f"wrote {path}")
     return 0
 
 

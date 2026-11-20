@@ -55,6 +55,8 @@ DEADLINE_MS: dict[str, int] = {
 # "instant": they touch no page content.
 DEADLINE_CLASS: dict[str, str] = {
     "actions.available": "instant",
+    "attachments.get": "io",  # one file, up to MAX_JOB_BYTES, crosses the worker boundary once
+    "attachments.list": "instant",
     "comments.flattenable": "instant",
     "content.objects": "render",
     "actions.redo": "edit",

@@ -31,7 +31,9 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TARGET = path.join(REPO, "web", "app", "public", "engine-assets");
 // The app's own runtime needs: Pillow (imported at module level by the engine). See
 // scripts/build_web_wheel.py EXPECTED_RUNTIME.
-const APP_PACKAGE_ROOTS = ["pillow"];
+// fonttools is staged, not loaded at start-up: the loader reads its wheel before the network lock
+// and installs it on the first text edit (web/app/src/engine/loader.ts FONTTOOLS_WHEEL_FILE).
+const APP_PACKAGE_ROOTS = ["pillow", "fonttools"];
 // The Pyodide files loadPyodide reads from its indexURL (the npm package's own copies).
 const CORE_FILES = [
   "pyodide.mjs",
