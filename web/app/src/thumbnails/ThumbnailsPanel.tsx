@@ -8,6 +8,7 @@ import { t } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import { isInViewport, distanceToCentre } from '../view/layout';
 import { CachedCanvas } from '../view/pixels';
+import { useDevicePixelRatio } from '../view/useDevicePixelRatio';
 import { type PlannedRender, type RenderScheduler } from '../view/renderScheduler';
 import {
   thumbnailBoxes,
@@ -76,7 +77,7 @@ function ThumbnailList({
     return () => window.removeEventListener('resize', measure);
   }, [sizes]);
 
-  const devicePixelRatio = window.devicePixelRatio || 1;
+  const devicePixelRatio = useDevicePixelRatio();
   const range = thumbnailWindow(boxes, scroll.top, scroll.height);
 
   useEffect(() => {

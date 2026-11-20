@@ -70,6 +70,7 @@ import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { CachedCanvas } from './pixels';
+import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
 import { planPageRenders, tileRect, tilesInViewport } from './tiles';
 import { CanvasPill } from './CanvasPill';
@@ -702,7 +703,7 @@ export function DocumentView({
     setScroll(viewportOf(element, layout.height));
   }, [layout]);
 
-  const devicePixelRatio = window.devicePixelRatio || 1;
+  const devicePixelRatio = useDevicePixelRatio();
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
   // Above the scroll-space limit the stage is scrolled by the scene top, so a page's offset in the
