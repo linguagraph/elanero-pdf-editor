@@ -814,6 +814,7 @@ export function DocumentView({
                     page={box.index}
                     revision={scheduler.revisionOf(box.index)}
                     zoom={zoom}
+                    passive={commentTool !== null}
                   />
                   {keys.some((key) => scheduler.isFailed(key)) ? (
                     <span className="doc-page-error">{t('view.renderFailed')}</span>

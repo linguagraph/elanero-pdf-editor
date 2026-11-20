@@ -19,3 +19,14 @@
 .page-text-line::selection {
   background: rgb(0 96 192 / 35%);
 }
+
+/* A gesture tool draws with a drag over the page, and this layer is above the tool's layer. While
+   the tool is on, the pointer goes through and no drag selects text. */
+.page-text-layer--passive {
+  pointer-events: none;
+  user-select: none;
+}
+
+.page-text-layer--passive .page-text-line {
+  user-select: none;
+}

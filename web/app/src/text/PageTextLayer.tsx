@@ -12,9 +12,18 @@ export interface PageTextLayerProps {
   // The page revision the layer is asked for; a new revision asks the engine again.
   readonly revision: number;
   readonly zoom: number;
+  // True while a gesture tool (a comment tool) is on: the layer then lets the pointer through to
+  // the tool's layer beneath it and starts no text selection from a drag.
+  readonly passive?: boolean;
 }
 
-export function PageTextLayer({ cache, page, revision, zoom }: PageTextLayerProps) {
+export function PageTextLayer({
+  cache,
+  page,
+  revision,
+  zoom,
+  passive = false,
+}: PageTextLayerProps) {
   const [lines, setLines] = useState<readonly TextLine[]>([]);
 
   useEffect(() => {
@@ -34,7 +43,7 @@ export function PageTextLayer({ cache, page, revision, zoom }: PageTextLayerProp
 
   const placed = useMemo(() => placeLines(lines, zoom), [lines, zoom]);
   return (
-    <div className="page-text-layer">
+    <div className={passive ? 'page-text-layer page-text-layer--passive' : 'page-text-layer'}>
       {placed.map((line, index) => (
         <div
           // The lines of one page never reorder: the key is the line's position.
