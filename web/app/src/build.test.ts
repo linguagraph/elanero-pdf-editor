@@ -64,6 +64,56 @@ describe('production build', () => {
     }
   }, 180_000);
 
+  // W8.6 S2 (W1.1 §10 E): the strict CSP (script-src and style-src 'self') blocks inline script and
+  // style, so the output must carry none. index.html is checked strictly. The bundle is checked for
+  // literal markup that would create them at runtime: React creates script elements with an empty
+  // `<script><\/script>` literal, which is the one allowed form.
+  it('ships no inline script, style or event-handler attribute (W8.6 S2)', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'elanero-inline-'));
+    try {
+      await build({ root: appRoot, logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+      const htmlRules: [string, RegExp][] = [
+        ['inline <script>', /<script(?![^>]*\ssrc=)[^>]*>/gi],
+        ['<style> element', /<style[\s>]/gi],
+        ['on* event attribute', /\son[a-z]+\s*=/gi],
+        ['style attribute', /\sstyle\s*=/gi],
+      ];
+      const jsRules: [string, RegExp][] = [
+        // Real markup has content right after the opening tag. React's warning text such as
+        // "<style> outside the main document" has a space there, so it is not matched.
+        ['inline <script> literal', /<script(?![^>]*\ssrc=)(\s[^>]*)?>(?=[^\s<])/gi],
+        ['<style> literal', /<style(\s[^>]*)?>(?=[^\s<])/gi],
+        ['style attribute literal', /[\s"'`]style\s*=\s*["'`\\]/gi],
+      ];
+      const offenders: string[] = [];
+      const scanned: string[] = [];
+      for (const relative of await readdir(outDir, { recursive: true })) {
+        const rules = relative.endsWith('.html')
+          ? htmlRules
+          : relative.endsWith('.js')
+            ? jsRules
+            : null;
+        if (rules === null) continue;
+        // Comments are inert, so index.html's comment about react-aria's <style> is not an offender.
+        const raw = await readFile(join(outDir, relative), 'utf8');
+        const text = relative.endsWith('.html') ? raw.replace(/<!--[\s\S]*?-->/g, '') : raw;
+        scanned.push(relative);
+        for (const [label, pattern] of rules) {
+          for (const match of text.matchAll(pattern)) {
+            const at = match.index ?? 0;
+            offenders.push(`${relative}: ${label}: ${text.slice(at, at + 60)}`);
+          }
+        }
+      }
+      // The scan must have seen the real output, or it passes vacuously.
+      expect(scanned).toContain('index.html');
+      expect(scanned.some((name) => name.endsWith('.js'))).toBe(true);
+      expect(offenders).toEqual([]);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  }, 180_000);
+
   // axe-core is a dev-only checker (W8.5 S1). Its message text and version property are the markers,
   // which minifiers keep (the banner is dropped in some builds); the
   // first assertion proves they are in the installed package, so the scan cannot pass vacuously.
