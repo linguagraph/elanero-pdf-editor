@@ -265,6 +265,22 @@ class RectDto:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class LinkDto:
+    rect: RectDto  # points, visible page space, origin top-left (as Page.links() reports)
+    kind: str  # "goto", "uri" or "unsupported" (file names and launch targets never leave Python)
+    page: int | None  # goto only: the 0-based target; null when the destination is missing
+    top: float | None  # goto only: the target's y on that page, when the link gives one
+    uri: str  # uri only: the raw string from the file; untrusted, shown as text only
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class LinksResult:
+    revision: int  # the page revision the list was read from
+    links: tuple[LinkDto, ...]
+    truncated: bool  # true when the page has more links than the call returns
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class TextLayerResult:
     revision: int  # the page revision the layer was built from
     text: str  # LINE_SEP between lines, so offsets map 1:1 to the char boxes

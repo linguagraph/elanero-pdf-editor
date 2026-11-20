@@ -383,8 +383,12 @@ def test_robust_render_tile_and_text_layer_arguments_grid(web: None, fixture_pdf
     try:
         for page in (*PAGE_CHOICES, pages - 1, pages):
             _page_call("text.layer", {"handle": handle, "page": page}, f"text.layer page={page!r}")
+            _page_call(
+                "session.links", {"handle": handle, "page": page}, f"session.links page={page!r}"
+            )
         for bad in _grid_handles(handle):
             _page_call("text.layer", {"handle": bad, "page": 0}, "text.layer bad handle")
+            _page_call("session.links", {"handle": bad, "page": 0}, "session.links bad handle")
         for tile_x in (-1, 0, 1, 2**31, 2**53 - 1, 1.5):
             for tile_y in (-1, 0, 2**31):
                 params = {

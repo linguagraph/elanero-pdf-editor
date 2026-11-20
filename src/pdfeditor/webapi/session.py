@@ -12,17 +12,19 @@ Page revisions are not in ``session.pages`` yet; they come with the render and s
 from __future__ import annotations
 
 import dataclasses
+import math
 
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Page, PasswordRequired
 from pdfeditor.model.metadata import EncryptionMethod
-from pdfeditor.model.outline import OutlineItem, flatten
+from pdfeditor.model.outline import Link, LinkKind, OutlineItem, flatten
 from pdfeditor.model.platform import current as platform_current
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.errors import (
     BUSY,
     FILE_TOO_LARGE,
+    INVALID_ARGS,
     OPEN_FAILED,
     PASSWORD_REQUIRED,
     TOO_MANY_PAGES,
@@ -140,6 +142,56 @@ def _page_or_none(item: OutlineItem, page_count: int) -> int | None:
         return None
     index = item.dest.page_index
     return index if 0 <= index < page_count else None
+
+
+# The web's limits on one page's links (W5.3): a page with more keeps its first ones and says so.
+MAX_LINKS_PER_PAGE = 500
+MAX_URI_CHARS = 2048
+
+
+def page_links(params: dto.PageParams) -> dto.LinksResult:
+    """The links of one page, read-only (W5.3 S1). Nothing here changes the document: no command,
+    no event, no revision bump, so the page's revision and the save bytes stay the same."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        count = session.document.page_count
+        if not 0 <= params.page < count:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "params.page: the page is out of range",
+                {"path": "params.page", "pages": count},
+            )
+        page = session.document.page(params.page)
+        revision = page.revision
+        links = page.links()
+    entries, truncated = link_entries(links, count)
+    return dto.LinksResult(revision=revision, links=entries, truncated=truncated)
+
+
+def link_entries(links: list[Link], page_count: int) -> tuple[tuple[dto.LinkDto, ...], bool]:
+    """The web's view of a page's links. Degenerate rects are dropped; a GOTO whose target is
+    missing or out of range has no page; anything that is not a GOTO or a URI is unsupported,
+    and its file or launch target is not sent."""
+    converted = (_link_entry(link, page_count) for link in links)
+    kept = [entry for entry in converted if entry is not None]
+    return tuple(kept[:MAX_LINKS_PER_PAGE]), len(kept) > MAX_LINKS_PER_PAGE
+
+
+def _link_entry(link: Link, page_count: int) -> dto.LinkDto | None:
+    rect = link.rect
+    if rect.is_empty or not all(math.isfinite(v) for v in (rect.x0, rect.y0, rect.x1, rect.y1)):
+        return None
+    box = dto.RectDto(rect.x0, rect.y0, rect.x1, rect.y1)
+    if link.kind is LinkKind.GOTO:
+        dest = link.dest
+        target = dest.page_index if dest is not None and 0 <= dest.page_index < page_count else None
+        top = dest.point.y if dest is not None and dest.point is not None else None
+        if top is not None and not math.isfinite(top):
+            top = None
+        return dto.LinkDto(rect=box, kind="goto", page=target, top=top, uri="")
+    if link.kind is LinkKind.URI and len(link.uri) <= MAX_URI_CHARS:
+        return dto.LinkDto(rect=box, kind="uri", page=None, top=None, uri=link.uri)
+    return dto.LinkDto(rect=box, kind="unsupported", page=None, top=None, uri="")
 
 
 def unlock_owner(params: dto.UnlockParams) -> dto.UnlockResult:

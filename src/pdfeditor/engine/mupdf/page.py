@@ -200,7 +200,6 @@ class MuPage:
         return [self._vquad(q, m) for q in quads]
 
     def links(self) -> list[Link]:
-        m = self._vis_matrix()
         out: list[Link] = []
         for ln in self.fz.get_links():
             kind = _LINK_KINDS.get(ln.get("kind", 0), LinkKind.OTHER)
@@ -216,7 +215,9 @@ class MuPage:
                 )
             out.append(
                 Link(
-                    rect=self._vrect(ln["from"], m),
+                    # The "from" rect is already in visible space (the same as the text layer's
+                    # boxes); converting it again turned a rect on a rotated page into garbage.
+                    rect=cv.rect(ln["from"]),
                     kind=kind,
                     dest=dest,
                     uri=ln.get("uri", "") or "",

@@ -396,6 +396,27 @@ export interface LayersResult {
   layers: LayerEntry[];
 }
 
+export interface LinkDto {
+  /** points, visible page space, origin top-left (as Page.links() reports) */
+  rect: RectDto;
+  /** "goto", "uri" or "unsupported" (file names and launch targets never leave Python) */
+  kind: string;
+  /** goto only: the 0-based target; null when the destination is missing */
+  page: number | null;
+  /** goto only: the target's y on that page, when the link gives one */
+  top: number | null;
+  /** uri only: the raw string from the file; untrusted, shown as text only */
+  uri: string;
+}
+
+export interface LinksResult {
+  /** the page revision the list was read from */
+  revision: number;
+  links: LinkDto[];
+  /** true when the page has more links than the call returns */
+  truncated: boolean;
+}
+
 /**
  * ``save.mark_saved`` (W1.2 section 12): ``saved`` is True when this call cleared the dirty
  * flag, and False when the document was already clean (a no-op, with no ``saved`` event).
@@ -827,6 +848,7 @@ export interface Methods {
   'session.close': { params: HandleParams; result: Empty; deadline: 'instant' };
   'session.fonts': { params: HandleParams; result: FontsResult; deadline: 'action' };
   'session.info': { params: HandleParams; result: DocInfo; deadline: 'instant' };
+  'session.links': { params: PageParams; result: LinksResult; deadline: 'render' };
   'session.open': { params: OpenParams; result: OpenResult; deadline: 'io' };
   'session.outline': { params: HandleParams; result: OutlineResult; deadline: 'instant' };
   'session.pages': { params: HandleParams; result: PagesResult; deadline: 'instant' };
@@ -868,6 +890,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.close': 'instant',
   'session.fonts': 'action',
   'session.info': 'instant',
+  'session.links': 'render',
   'session.open': 'io',
   'session.outline': 'instant',
   'session.pages': 'instant',
@@ -914,6 +937,7 @@ export const RESULT_DECODERS: {
   'session.close': decodeEmpty,
   'session.fonts': decodeFontsResult,
   'session.info': decodeDocInfo,
+  'session.links': decodeLinksResult,
   'session.open': decodeOpenResult,
   'session.outline': decodeOutlineResult,
   'session.pages': decodePagesResult,
@@ -1470,6 +1494,36 @@ export function decodeLayersResult(
   checkKeys(o, ['layers'], path);
   return {
     layers: expectArray(field(o, 'layers', path), `${path}.layers`).map((item1, index1) => decodeLayerEntry(item1, ctx, `${`${path}.layers`}[${index1}]`)),
+  };
+}
+
+export function decodeLinkDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LinkDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['rect', 'kind', 'page', 'top', 'uri'], path);
+  return {
+    rect: decodeRectDto(field(o, 'rect', path), ctx, `${path}.rect`),
+    kind: expectString(field(o, 'kind', path), `${path}.kind`),
+    page: orNull(field(o, 'page', path), `${path}.page`, (v1, p1) => expectInteger(v1, p1)),
+    top: orNull(field(o, 'top', path), `${path}.top`, (v1, p1) => expectNumber(v1, p1)),
+    uri: expectString(field(o, 'uri', path), `${path}.uri`),
+  };
+}
+
+export function decodeLinksResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LinksResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['revision', 'links', 'truncated'], path);
+  return {
+    revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
+    links: expectArray(field(o, 'links', path), `${path}.links`).map((item1, index1) => decodeLinkDto(item1, ctx, `${`${path}.links`}[${index1}]`)),
+    truncated: expectBoolean(field(o, 'truncated', path), `${path}.truncated`),
   };
 }
 
