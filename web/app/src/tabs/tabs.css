@@ -1,9 +1,45 @@
-/* The document tab strip (W4.2b). Tabs scroll sideways rather than wrap, so the strip stays one
-   row at phone width. */
+/* The document tab strip (W4.2b), in the top bar (W1.6 section 1). Tabs take the free middle of the
+   bar and scroll sideways rather than wrap, so the strip stays one row at every width. */
 .doc-tabs {
+  flex: 1 1 0;
+  align-self: stretch;
+  min-width: 0;
   overflow-x: auto;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-window);
+}
+
+/* The drop-down list that replaces the strip below 1024 px (W1.6 section 8). */
+.doc-tabs-menu {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 20rem;
+}
+
+.doc-tabs-menu-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.doc-tabs-menu-button .doc-tab-name {
+  flex: 1 1 auto;
+}
+
+.doc-tabs-menu-caret {
+  flex: 0 0 auto;
+}
+
+.doc-tabs-menu-button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .doc-tabs-list {
