@@ -1,0 +1,20 @@
+# Dependabot version updates (W8.6 S7). Weekly, one pull request per ecosystem and directory.
+# Alerts for known advisories come from the nightly security-audit.yml run, not from here.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web/app
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /web/spike
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
