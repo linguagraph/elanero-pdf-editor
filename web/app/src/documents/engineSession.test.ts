@@ -19,8 +19,30 @@ import {
 import { restartSession } from './engineSession';
 
 const TABS: DocumentTab[] = [
-  { id: 1, name: 'a.pdf', dirty: true, handle: 'h1', pages: 2, encrypted: false },
-  { id: 2, name: 'b.pdf', dirty: false, handle: 'h2', pages: 3, encrypted: false },
+  {
+    id: 1,
+    name: 'a.pdf',
+    dirty: true,
+    handle: 'h1',
+    pages: 2,
+    encrypted: false,
+    signed: false,
+    canUndo: false,
+    canRedo: false,
+    busy: false,
+  },
+  {
+    id: 2,
+    name: 'b.pdf',
+    dirty: false,
+    handle: 'h2',
+    pages: 3,
+    encrypted: false,
+    signed: false,
+    canUndo: false,
+    canRedo: false,
+    busy: false,
+  },
 ];
 
 // A store that holds a copy for tab 1 only: the other document has none.
@@ -188,7 +210,14 @@ describe('the tabs after a restart (W3.9 S3)', () => {
     await notResponding.restart();
 
     expect(state.tabs).toEqual([
-      { id: 1, name: 'a.pdf', dirty: true, handle: 'h-new', pages: 2, encrypted: false },
+      expect.objectContaining({
+        id: 1,
+        name: 'a.pdf',
+        dirty: true,
+        handle: 'h-new',
+        pages: 2,
+        encrypted: false,
+      }),
     ]);
     expect(state.activeId).toBe(1);
   });

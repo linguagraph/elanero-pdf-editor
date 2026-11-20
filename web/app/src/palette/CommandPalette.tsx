@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -23,6 +24,11 @@ import { type CommandHandlers, commandDisabledReason, runCommand } from '../comm
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import { rankCommands } from './match';
+import {
+  OPEN_COMMAND_PALETTE_EVENT,
+  type PaletteSeed,
+  type PaletteView,
+} from './openCommandPalette';
 import { readRecentCommands, recordRecentCommand } from './recentCommands';
 import { ShortcutList } from './ShortcutList';
 import './palette.css';
@@ -43,8 +49,6 @@ export interface CommandPaletteProps {
   handlers: CommandHandlers;
 }
 
-type View = 'commands' | 'shortcuts';
-
 // Keys typed into a field are text, not shortcuts (the palette's own keys are handled apart).
 function isTextEntry(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -63,8 +67,29 @@ function isTextEntry(target: EventTarget | null): boolean {
 // on Escape and returns focus to the element that had it before the palette opened.
 export function CommandPalette({ registry, state, handlers }: CommandPaletteProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [view, setView] = useState<View>('commands');
+  const [view, setView] = useState<PaletteView>('commands');
+  // The query the commands list starts with (a seeded opening, such as the Search tools box).
+  const [seedQuery, setSeedQuery] = useState('');
   const pendingRun = useRef<CommandDef | null>(null);
+
+  // Opens the palette with the seed. An open palette keeps its own state.
+  const open = useCallback(
+    (seed: PaletteSeed = {}): void => {
+      if (isOpen) return;
+      setView(seed.view ?? 'commands');
+      setSeedQuery(seed.query ?? '');
+      setIsOpen(true);
+    },
+    [isOpen],
+  );
+
+  useEffect(() => {
+    function onOpen(event: Event): void {
+      open((event as CustomEvent<PaletteSeed>).detail);
+    }
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
+  }, [open]);
 
   // Runs a focus-moving command once the palette's Overlay has unmounted and restored focus. The
   // frame is requested in this effect, which runs after that restore has been scheduled.
@@ -84,10 +109,7 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
       if (id === undefined) return;
       if (id === PALETTE_SHORTCUT_ID) {
         event.preventDefault();
-        if (!isOpen) {
-          setView('commands');
-          setIsOpen(true);
-        }
+        open();
         return;
       }
       if (isOpen || isTextEntry(event.target)) return;
@@ -95,7 +117,7 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [registry, state, handlers, isOpen]);
+  }, [registry, state, handlers, isOpen, open]);
 
   function run(def: CommandDef): void {
     if (def.id === KEYBOARD_SHORTCUTS_ID) {
@@ -120,7 +142,13 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
       showCloseButton={false}
     >
       {view === 'commands' ? (
-        <CommandList registry={registry} state={state} handlers={handlers} onRun={run} />
+        <CommandList
+          registry={registry}
+          state={state}
+          handlers={handlers}
+          initialQuery={seedQuery}
+          onRun={run}
+        />
       ) : (
         <ShortcutList registry={registry} state={state} onBack={() => setView('commands')} />
       )}
@@ -132,6 +160,7 @@ interface CommandListProps {
   registry: Registry;
   state: CommandState;
   handlers: CommandHandlers;
+  initialQuery: string;
   onRun: (def: CommandDef) => void;
 }
 
@@ -144,8 +173,8 @@ function locationLabel(registry: Registry, def: CommandDef): string {
 // The search box and the list. The input keeps focus and drives the list through
 // aria-activedescendant (the combobox pattern), so the arrow keys move the highlight, not the focus.
 // The list is read once per opening (the Overlay unmounts it when closed), so a run shows next time.
-function CommandList({ registry, state, handlers, onRun }: CommandListProps) {
-  const [query, setQuery] = useState('');
+function CommandList({ registry, state, handlers, initialQuery, onRun }: CommandListProps) {
+  const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
   const [recent] = useState(() => readRecentCommands());
   const listId = useId();

@@ -35,6 +35,7 @@ import { useViewportWidth } from '../layout/useViewportWidth';
 import { Icon } from '../theme/Icon';
 import { type RibbonForm, ribbonForm } from './form';
 import { HelpButton } from './HelpButton';
+import { SearchTools } from './SearchTools';
 import { useGroupOverflow } from './useGroupOverflow';
 import './ribbon.css';
 
@@ -49,6 +50,9 @@ const IS_MAC = isMacPlatform(navigator.platform);
 const DOUBLE_CLICK_MS = 500;
 // How long the pointer rests on a command before its tooltip shows (compact form).
 const TOOLTIP_DELAY_MS = 400;
+// Below this width the Search tools box is an icon (desktop SEARCH_BOX_MIN_WIDTH). The window's
+// width stands in for the tab row's, which the ribbon does not measure.
+const SEARCH_BOX_MIN_WIDTH = 1000;
 
 // The ribbon's form (W1.6 section 8, W4.3a S2): the window's width sets it, and the user's own
 // compact and collapse choices apply on top (ribbon/form.ts holds the table). A tier-collapsed
@@ -62,7 +66,7 @@ export function Ribbon(props: RibbonProps) {
   return form.collapsedBy === 'tier' ? (
     <CollapsedRibbon {...props} />
   ) : (
-    <FullRibbon {...props} form={form} />
+    <FullRibbon {...props} form={form} wideSearch={width >= SEARCH_BOX_MIN_WIDTH} />
   );
 }
 
@@ -73,13 +77,15 @@ function isTabTarget(target: EventTarget | null): boolean {
 
 interface FullRibbonProps extends RibbonProps {
   form: RibbonForm;
+  // Whether the window is wide enough for the Search tools box (otherwise it is an icon).
+  wideSearch: boolean;
 }
 
 // The full and compact ribbon, and the user-collapsed tab row: the desktop's tabs in order, with
 // the groups each tab shows. Tabs and the commands are react-aria widgets, so arrow keys move
 // between tabs and between commands, and Tab leaves the ribbon. A disabled command stays in the
 // ribbon with aria-disabled and the reason as its description; running it does nothing.
-function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
+function FullRibbon({ registry, state, handlers, form, wideSearch }: FullRibbonProps) {
   const tabs = ribbonLayout(registry, state);
   const [selected, setSelected] = useState<TabId>('home');
   // Show the first tab when the selected one has no groups in this state (for example, Tools
@@ -151,6 +157,7 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
             </Tab>
           ))}
         </TabList>
+        <SearchTools iconOnly={!wideSearch || compact || userCollapsed} />
         <HelpButton tab={current} />
         <CollapseChevron expanded={!userCollapsed} onPress={toggleRibbon} />
       </div>
@@ -241,6 +248,7 @@ function CollapsedRibbon({ registry, state, handlers }: RibbonProps) {
           </DialogTrigger>
         ))}
       </div>
+      <SearchTools iconOnly />
       <HelpButton />
     </div>
   );

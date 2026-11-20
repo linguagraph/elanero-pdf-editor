@@ -58,7 +58,10 @@ is reloaded until you press it.
 - **Preferences.** Click **Preferences** in the top bar. The dialog has three sections:
   - **General**: the language (English is the only one for now) and the **Author name**, which is
     saved with each comment and redaction mark you add.
-  - **Appearance**: the theme, and **Reduce motion**, which turns off animations.
+  - **Appearance**: the theme, the **Accent colour** (Blue, Teal, Green, Purple, Pink, Red, Orange
+    or Graphite: it colours buttons and highlights; Blue is the default), and **Reduce motion**,
+    which turns off animations. The accent keeps the system's high-contrast colours when Windows
+    high contrast is on.
   - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%) and **Default page layout** (Single
     column, Two pages, or Two pages with page 1 alone), both used when a document is opened.
   - **Redaction**: the **Box colour**, **Text colour** and **Text on the box** used for new redaction
@@ -101,6 +104,9 @@ is reloaded until you press it.
   a link to the source code. Close in the app menu closes the open document. Select and Hand switch
   the tool of the open tab (see Hand tool below). The Undo, Redo and Save buttons are greyed out for
   now, and they work once their commands are added.
+- **Search tools.** The box at the right of the tab row (the search icon alone in a narrow window
+  or a compact ribbon) opens the command palette. Type in the box and the palette opens already
+  filtered by what you typed; the icon opens the palette empty.
 - **Hand tool.** Choose **Hand** (or press **H**) and a drag with the mouse or a pen moves the pages
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is

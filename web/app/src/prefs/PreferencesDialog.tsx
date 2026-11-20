@@ -4,6 +4,8 @@ import { t } from '../i18n/t';
 import type { MessageId } from '../i18n/en';
 import { Overlay } from '../layout/Overlay';
 import { clearLocalData, type ClearAction } from '../storage/clearLocalData';
+import { ACCENT_CHOICES, applyAccent, isAccentChoice } from '../theme/accent';
+import type { AccentId } from '../theme/tokens';
 import {
   applyTheme,
   isThemeChoice,
@@ -56,6 +58,17 @@ const LANGUAGE_LABELS: Readonly<Record<LanguageChoice, MessageId>> = {
   en: 'prefs.language.english',
 };
 
+const ACCENT_LABELS: Readonly<Record<AccentId, MessageId>> = {
+  blue: 'prefs.accent.blue',
+  teal: 'prefs.accent.teal',
+  green: 'prefs.accent.green',
+  purple: 'prefs.accent.purple',
+  pink: 'prefs.accent.pink',
+  red: 'prefs.accent.red',
+  orange: 'prefs.accent.orange',
+  graphite: 'prefs.accent.graphite',
+};
+
 const PAGE_LAYOUT_LABELS: Readonly<Record<PageLayoutChoice, MessageId>> = {
   continuous: 'prefs.layout.continuous',
   twoPage: 'prefs.layout.twoPage',
@@ -75,6 +88,7 @@ export function PreferencesDialog({
 }: PreferencesDialogProps) {
   const cancel = () => {
     applyTheme(readStoredTheme());
+    applyAccent(readPreferences().accent);
     onClose();
   };
   return (
@@ -129,6 +143,12 @@ function PreferencesForm({
   const chooseTheme = (theme: ThemeChoice) => {
     applyTheme(theme);
     update('theme', theme);
+  };
+
+  // The accent previews at once, like the theme; Cancel puts back the saved one.
+  const chooseAccent = (accent: AccentId) => {
+    applyAccent(accent);
+    update('accent', accent);
   };
 
   // The reload is the reset: the theme, accent, recent list and every in-memory copy start from the
@@ -209,6 +229,21 @@ function PreferencesForm({
           {THEME_CHOICES.map((choice) => (
             <Radio key={choice} value={choice} className="prefs-option">
               {t(THEME_LABELS[choice])}
+            </Radio>
+          ))}
+        </RadioGroup>
+        <RadioGroup
+          className="prefs-group"
+          value={draft.accent}
+          onChange={(value) => {
+            if (isAccentChoice(value)) chooseAccent(value);
+          }}
+        >
+          <Label className="prefs-label">{t('prefs.accent.label')}</Label>
+          {ACCENT_CHOICES.map((choice) => (
+            <Radio key={choice} value={choice} className="prefs-option prefs-accent">
+              <span className="prefs-swatch" data-swatch={choice} aria-hidden="true" />
+              {t(ACCENT_LABELS[choice])}
             </Radio>
           ))}
         </RadioGroup>

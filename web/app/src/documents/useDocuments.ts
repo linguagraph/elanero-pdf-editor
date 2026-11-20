@@ -21,6 +21,7 @@ import { browserTabId } from '../storage/tabId';
 import {
   activateTab,
   addTab,
+  applyDocState,
   closeTab as closeTabState,
   EMPTY_TABS,
   hasDirtyTab,
@@ -157,6 +158,19 @@ export function useDocuments(engine: EngineConnection): Documents {
     return () => notResponding.setSession(undefined);
   }, [engine, autosaver, autosaveStore, tabs, commitTabs]);
 
+  // The engine's state events keep each tab's dirty flag, undo state and busy flag in step with the
+  // document (W4.8 S1). A state for a handle no tab holds is ignored by applyDocState.
+  useEffect(
+    () =>
+      engine.onEvents((events) => {
+        for (const event of events) {
+          if (event.kind !== 'state') continue;
+          commitTabs((state) => applyDocState(state, event.handle, event.state));
+        }
+      }),
+    [engine, commitTabs],
+  );
+
   // Warn before the page closes while a document has unsaved changes.
   useEffect(() => (dirty ? guardUnload(window) : undefined), [dirty]);
 
@@ -198,8 +212,8 @@ export function useDocuments(engine: EngineConnection): Documents {
       if (warning !== null) toasts.push('info', t('open.largeFile', { name: file.name }));
       // The tab id is the one addTab gives the new tab. Its session lets the document view mount.
       const id = tabsRef.current.nextId;
-      const encrypted = outcome.result.info.encrypted;
-      commitTabs((state) => addTab(state, { name: file.name, handle, pages, encrypted }));
+      const { encrypted, has_signatures: signed } = outcome.result.info;
+      commitTabs((state) => addTab(state, { name: file.name, handle, pages, encrypted, signed }));
       setTabSession(id, { rpc: client, handle });
       void memoryWarner.check(client, 'open');
       setRecent(addRecentFile(file.name));
