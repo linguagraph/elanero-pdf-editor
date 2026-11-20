@@ -36,9 +36,16 @@ export interface ToastQueue {
 
 export const VISIBLE_TOASTS = 3;
 export const AUTO_DISMISS_MS = 5000;
+// A toast with an action stays longer, so the user has time to decide to press it (desktop parity).
+export const ACTION_EXTRA_MS = 3000;
 
 export function timesOut(kind: ToastKind): boolean {
   return kind !== 'error';
+}
+
+// How long a timed toast stays: an info or success toast 5 s, one with an action 8 s.
+export function toastDuration(toast: Toast): number {
+  return AUTO_DISMISS_MS + (toast.action === undefined ? 0 : ACTION_EXTRA_MS);
 }
 
 export const EMPTY_QUEUE: ToastQueue = { visible: [], queued: [] };
