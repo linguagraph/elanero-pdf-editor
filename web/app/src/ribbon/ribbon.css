@@ -75,7 +75,9 @@
 }
 
 .ribbon-more {
-  /* The overflow measurement assumes this width (useGroupOverflow.ts MORE_BUTTON_FALLBACK_PX). */
+  /* The overflow measurement assumes this width: MORE_BUTTON_PX = 40 in useGroupOverflow.ts, a fixed
+     estimate of 2.5rem at the 16 px root, not measured. A different root font size makes the
+     count slightly off. */
   width: 2.5rem;
   min-height: 28px;
   flex: none;

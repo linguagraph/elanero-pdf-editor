@@ -70,6 +70,14 @@ for (const width of [1024, 1280]) {
         await expect(page.locator('[role="dialog"]')).toHaveCount(0);
       }
       expect([...rowIds, ...menuIds]).toEqual(expected[name]);
+
+      // Organize overflows at 1280 px (measured: 4 of 5 groups in the row, 1 in the menu), so the
+      // check cannot pass by moving nothing. Home never overflows in the measured widths.
+      if (name === 'Organize' && width === 1280) {
+        expect(rowIds.length).toBeLessThan((expected[name] ?? []).length);
+        await expect(more).toBeVisible();
+        expect(menuIds.length).toBeGreaterThan(0);
+      }
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
