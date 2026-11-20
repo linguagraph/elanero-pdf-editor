@@ -217,7 +217,7 @@ version yet:
 
 - opening, viewing, searching and saving PDF files, and the start page with recent files;
 - the ribbon, the command palette and keyboard shortcuts;
-- editing text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files;
+- editing the text of a paragraph, adding text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files (moving, resizing and deleting text and images is available; see the table below);
 - comments other than sticky notes, rectangles and highlights, the Comments panel, stamps and watermarks, password protection, and comparing files;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
 - printing, and translation (which will be turned on only when you ask for it);
@@ -293,7 +293,8 @@ full policy, with what the desktop app stores, is in the
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
 | Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and some Alt keys work; the full palette and shortcut list are coming soon |
-| Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
+| Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
+| Edit text, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
 | Crop box drawn on a page | Yes | Yes (Crop dialog, Draw on page: drag a box on a page, Esc cancels; the dialog reopens with its margins on that page) |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |

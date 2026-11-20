@@ -42,6 +42,7 @@ function fakeView(): DocumentViewHandle {
     zoom: vi.fn(),
     stepPage: vi.fn(),
     focusPageField: vi.fn(),
+    deleteEditSelection: vi.fn(),
     setLayout: vi.fn(),
     setNight: vi.fn(),
     cachedLines: vi.fn(() => undefined),

@@ -168,6 +168,11 @@ export const EN = {
   'edit.reason.other': "This object can't be edited.",
   'edit.truncated':
     'This page has too many objects to list them all. Only the first ones are shown.',
+  'edit.moved': 'Objects moved.',
+  'edit.resized': 'Object resized.',
+  'edit.deleted': 'Objects deleted.',
+  'edit.stale': 'The page changed, so the selection was cleared. Select the objects again.',
+  'edit.failed': 'The edit could not be made.',
   'command.add-text.label': 'Add Text',
   'command.add-image.label': 'Add Image',
   'command.add-rectangle.label': 'Rectangle',

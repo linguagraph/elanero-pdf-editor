@@ -305,6 +305,25 @@ def _text_contains_pdfium_no_cr(data: bytes, page: int, text: str) -> None:
         pd.close()
 
 
+def _darkest(rgb: Any, clip: list[float]) -> int:
+    """The lowest channel value anywhere in the clip (255 is white)."""
+    x0, y0, x1, y1 = clip
+    part = rgb.crop((int(x0), int(y0), int(x1), int(y1)))
+    return int(min(low for low, _high in part.getextrema()))
+
+
+@host_check("blank_region_pdfium")
+def _blank_region_pdfium(data: bytes, page: int, clip: list[float]) -> None:
+    """Nothing but white in the clip: the object that stood there has moved away."""
+    assert _darkest(_pdfium_rgb(data, page), clip) >= 245
+
+
+@host_check("ink_region_pdfium")
+def _ink_region_pdfium(data: bytes, page: int, clip: list[float]) -> None:
+    """Some dark ink in the clip: the object is drawn there."""
+    assert _darkest(_pdfium_rgb(data, page), clip) < 200
+
+
 @host_check("text_lacks_pdfium")
 def _text_lacks_pdfium(data: bytes, page: int, text: str) -> None:
     import pypdfium2 as pdfium

@@ -1,13 +1,16 @@
 // The Edit tool's gesture layer over one page (W6.7a S4). It outlines every content object the engine
 // lists for the page, selects them by click, Ctrl+click and rubber band, and shows the eight handles
-// of a single selected object. A drag previews a move or a resize; the edit itself is committed in S5.
-// The gestures port the desktop's EditObjectsTool, with the geometry from hitTest.ts and selection.ts.
+// of a single selected object. A drag previews a move or a resize, and its release commits it (the
+// engine call is in commit.ts, through the parent's onCommit). The gestures port the desktop's
+// EditObjectsTool, with the geometry from hitTest.ts and selection.ts.
 import { type PointerEvent, useEffect, useState } from 'react';
 import { cssBox, cssToPoints, type PageRect, rectBetween } from '../comments/coordinates';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import type { ContentObjectsResult, PageObjectDto, RectDto } from '../rpc/generated';
+import type { EditChange } from './commit';
 import {
+  fitMatrix,
   HANDLE_PX,
   handleAt,
   handlePoints,
@@ -42,6 +45,8 @@ export interface EditLayerProps {
   readonly zoom: number;
   readonly selection: EditSelection | null;
   readonly onSelect: (selection: EditSelection) => void;
+  // A drag that ends past the click threshold: the parent makes the edit.
+  readonly onCommit: (change: EditChange) => void;
 }
 
 // A press on the page. `onClick` is the selection a click (a press without a drag) leaves. A move
@@ -85,7 +90,15 @@ function translate(box: RectDto, dx: number, dy: number): RectDto {
   return { x0: box.x0 + dx, y0: box.y0 + dy, x1: box.x1 + dx, y1: box.y1 + dy };
 }
 
-export function EditLayer({ cache, page, revision, zoom, selection, onSelect }: EditLayerProps) {
+export function EditLayer({
+  cache,
+  page,
+  revision,
+  zoom,
+  selection,
+  onSelect,
+  onCommit,
+}: EditLayerProps) {
   const [reply, setReply] = useState<ContentObjectsResult | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -187,6 +200,7 @@ export function EditLayer({ cache, page, revision, zoom, selection, onSelect }: 
   };
 
   // Ends the press on release, or when the pointer leaves the page (the gesture then stops there).
+  // A move or a resize that was dragged is committed; a click only changes the selection.
   const finish = (event: PointerEvent<HTMLDivElement>) => {
     if (gesture === null) return;
     const p = pointOf(event);
@@ -194,10 +208,36 @@ export function EditLayer({ cache, page, revision, zoom, selection, onSelect }: 
     if (gesture.kind === 'band') {
       if (click) select(gesture.onClick);
       else select(rubberSelection(keys, objects, rectBetween(gesture.start, p), gesture.additive));
-    } else if (gesture.kind === 'move' && click && gesture.onClick !== null) {
-      select(gesture.onClick);
+    } else if (gesture.kind === 'move') {
+      if (click) {
+        if (gesture.onClick !== null) select(gesture.onClick);
+      } else {
+        const dx = p.x - gesture.start.x;
+        const dy = p.y - gesture.start.y;
+        const moved = objects.filter((o) => gesture.moving.includes(o.key));
+        onCommit({
+          kind: 'move',
+          page,
+          revision,
+          objects: moved,
+          matrix: [1, 0, 0, 1, dx, dy],
+          boxes: moved.map((o) => translate(o.bbox, dx, dy)),
+        });
+      }
+    } else if (!click) {
+      const target = objects.find((o) => o.key === gesture.key);
+      if (target !== undefined) {
+        const box = resizeBox(gesture.box, gesture.handle, p);
+        onCommit({
+          kind: 'resize',
+          page,
+          revision,
+          objects: [target],
+          matrix: fitMatrix(target.bbox, box),
+          boxes: [box],
+        });
+      }
     }
-    // A move or a resize is previewed only; its commit is W6.7a S5.
     setGesture(null);
   };
 

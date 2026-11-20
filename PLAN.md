@@ -602,7 +602,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W6.4** R5 Compress dialog _(partial: the four presets, Compress through the reduce_size job with progress and Cancel, the result with both sizes and the download, and the "not smaller" message with no download are built and tested with a fake job worker (Vitest); pending: custom options (the reduce_size job takes only a preset), and the space audit before and after (the audit job exists but is not wired to the dialog); the end-to-end run in the app is not yet checked)_
 - [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi and the browser print path are built and tested; the job worker answers `job.run` (#265) and a reply carries a buffer list, so multi-page output can cross; print_pages sends no partial notices, so the pages come in the final result; pending: a print run end to end in the app)_
 - [ ] **W6.6** R4 Translate
-- [ ] **W6.7a** R1a select, move and delete page objects
+- [ ] **W6.7a** R1a select, move and delete page objects _(partial: web S1 to S5 done: the `content.objects` call, the shared geometry, the web object model and hit test, the Edit layer with previews, and the move, resize and delete commits through `content.transform` and `content.delete` with Undo, stale handling and reselection, tested with Python round trips (pikepdf and pypdfium2) and Vitest; pending: the Playwright run (move, delete, undo, save and reopen), the `content_edit` capability check that disables the commands, and the desktop's `tests/ui` edit-tool run)_
 - [ ] **W6.7b** R1a add shapes; add, replace and export images
 - [ ] **W6.8a** R1b in-place paragraph editor and add text
 - [ ] **W6.8b** R1b font picker

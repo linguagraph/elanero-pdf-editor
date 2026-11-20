@@ -58,6 +58,7 @@ import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
 import { TextLayerCache } from '../text/textLayerCache';
+import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { CachedCanvas } from './pixels';
@@ -84,6 +85,9 @@ export interface DocumentViewHandle {
   stepPage(direction: -1 | 1): void;
   // Focuses the canvas pill's page field and selects its text (the status bar's Go to Page, W4.3b).
   focusPageField(): void;
+  // Deletes the objects the Edit tool has selected (the Delete command and key, W6.7a S5). Nothing
+  // happens with no selection.
+  deleteEditSelection(): void;
   // Sets the page layout (single column or two-page spreads, the cover alone or not), keeping the
   // page at the top in view (the ribbon's View commands, W4.3a S6).
   setLayout(choice: { readonly layout: ViewLayout; readonly firstAlone: boolean }): void;
@@ -272,6 +276,43 @@ export function DocumentView({
     if (tool !== 'select') setCommentTool(null);
     if (tool !== 'edit') setEditSelection(null);
   }
+  // A gesture the layer ended with a drag is committed here; the engine makes the change and the
+  // selection it leaves is set by commitEdit (W6.7a S5).
+  const commitChange = useCallback(
+    (change: EditChange) =>
+      void commitEdit({ rpc, handle, cache: editObjects, scheduler }, change, setEditSelection),
+    [rpc, handle, editObjects, scheduler],
+  );
+  // The selected objects of the page are deleted as one undo step. The keys are read from the list
+  // the layer shows, so nothing is asked of the engine first; with no selection, nothing is sent.
+  const deleteEditSelection = useCallback(() => {
+    const sel = editSelection;
+    if (sel === null || sel.keys.length === 0) return;
+    if (sel.revision !== scheduler.revisionOf(sel.page)) return;
+    const list = editObjects.ready(sel.page, sel.revision);
+    if (list === undefined) return;
+    const objects = list.objects.filter((o) => sel.keys.includes(o.key));
+    commitChange({ kind: 'delete', page: sel.page, revision: sel.revision, objects });
+  }, [editSelection, editObjects, scheduler, commitChange]);
+  // Delete and Backspace delete the Edit tool's selection, unless a field or a dialog has the key.
+  useEffect(() => {
+    if (tool !== 'edit') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (document.querySelector('.overlay-backdrop')) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, [contenteditable]')
+      )
+        return;
+      event.preventDefault();
+      deleteEditSelection();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [tool, deleteEditSelection]);
   useEffect(() => {
     if (tool === 'select') return;
     redactionTools.controller.setActive(false);
@@ -553,6 +594,7 @@ export function DocumentView({
         pageFieldRef.current?.focus();
         pageFieldRef.current?.select();
       },
+      deleteEditSelection,
       setLayout: (choice) => {
         // A real change keeps the page at the top in view, as a changed default layout does.
         if (choice.layout !== viewLayout || choice.firstAlone !== firstAlone) {
@@ -579,6 +621,7 @@ export function DocumentView({
       stepPage,
       textLayers,
       scheduler,
+      deleteEditSelection,
       chooseCommentTool,
       chooseRedacting,
       viewLayout,
@@ -740,6 +783,7 @@ export function DocumentView({
                       zoom={zoom}
                       selection={editSelection}
                       onSelect={setEditSelection}
+                      onCommit={commitChange}
                     />
                   ) : null}
                   {tool === 'cropBox' && sizes !== null ? (

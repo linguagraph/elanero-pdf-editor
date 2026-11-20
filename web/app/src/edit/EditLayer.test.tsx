@@ -2,6 +2,7 @@ import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContentObjectsResult, PageObjectDto, RectDto } from '../rpc/generated';
+import type { EditChange } from './commit';
 import { EditLayer, type EditSelection } from './EditLayer';
 import { ObjectCache, type ObjectsRpc } from './objectCache';
 
@@ -63,11 +64,13 @@ function Harness({
   zoom,
   initial,
   onSelect,
+  onCommit,
 }: {
   cache: ObjectCache;
   zoom: number;
   initial: EditSelection | null;
   onSelect: (next: EditSelection) => void;
+  onCommit: (change: EditChange) => void;
 }) {
   const [selection, setSelection] = useState<EditSelection | null>(initial);
   return (
@@ -81,6 +84,7 @@ function Harness({
         onSelect(next);
         setSelection(next);
       }}
+      onCommit={onCommit}
     />
   );
 }
@@ -94,8 +98,13 @@ async function mount(
     revision?: number;
     truncated?: boolean;
   } = {},
-): Promise<{ layer: HTMLElement; onSelect: ReturnType<typeof vi.fn> }> {
+): Promise<{
+  layer: HTMLElement;
+  onSelect: ReturnType<typeof vi.fn>;
+  onCommit: ReturnType<typeof vi.fn>;
+}> {
   const onSelect = vi.fn(options.onSelect ?? (() => undefined));
+  const onCommit = vi.fn();
   const cache = fakeCache(objects, 3, options.truncated);
   const initial: EditSelection | null =
     options.selected === undefined
@@ -103,7 +112,13 @@ async function mount(
       : { page: 0, revision: options.revision ?? 3, keys: options.selected };
   await act(async () => {
     root.render(
-      <Harness cache={cache} zoom={options.zoom ?? 1} initial={initial} onSelect={onSelect} />,
+      <Harness
+        cache={cache}
+        zoom={options.zoom ?? 1}
+        initial={initial}
+        onSelect={onSelect}
+        onCommit={onCommit}
+      />,
     );
   });
   await act(async () => {
@@ -113,7 +128,7 @@ async function mount(
   if (layer === null) throw new Error('no edit layer');
   // jsdom has no layout: the layer covers the page box at the origin.
   layer.getBoundingClientRect = () => new DOMRect(0, 0, 2000, 2000);
-  return { layer, onSelect };
+  return { layer, onSelect, onCommit };
 }
 
 function pointer(
@@ -191,34 +206,50 @@ describe('EditLayer', () => {
     });
   });
 
-  it('previews a move of the selection while dragged, and does not commit it', async () => {
-    const { layer, onSelect } = await mount([TEXT, IMAGE], { selected: ['text:0'] });
+  it('previews a move of the selection while dragged, and commits it on release', async () => {
+    const { layer, onSelect, onCommit } = await mount([TEXT, IMAGE], { selected: ['text:0'] });
     // Press on the text, then drag 60 css px right: 45 pt.
     pointer(layer, 'pointerdown', css(90, 1), css(90, 1));
     pointer(layer, 'pointermove', css(90, 1) + 60, css(90, 1));
     expect(px(outline('text:0'), 'left')).toBeCloseTo(css(72 + 45, 1));
     pointer(layer, 'pointerup', css(90, 1) + 60, css(90, 1));
     expect(onSelect).not.toHaveBeenCalled();
-    expect(px(outline('text:0'), 'left')).toBeCloseTo(css(72, 1));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'move',
+      page: 0,
+      revision: 3,
+      objects: [{ key: 'text:0' }],
+      matrix: [1, 0, 0, 1, 45, 0],
+      boxes: [{ x0: 117, y0: 72, x1: 189, y1: 108 }],
+    });
   });
 
-  it('previews a resize from a handle', async () => {
-    const { layer } = await mount([TEXT], { selected: ['text:0'] });
+  it('previews a resize from a handle, and commits it on release', async () => {
+    const { layer, onCommit } = await mount([TEXT], { selected: ['text:0'] });
     // Handle 7 is the bottom-right corner, at (144, 108) pt. Drag 24 css px right: 18 pt.
     pointer(layer, 'pointerdown', css(144, 1), css(108, 1));
     pointer(layer, 'pointermove', css(144, 1) + 24, css(108, 1));
     expect(px(outline('text:0'), 'width')).toBeCloseTo(css(90, 1));
     pointer(layer, 'pointerup', css(144, 1) + 24, css(108, 1));
     expect(px(outline('text:0'), 'width')).toBeCloseTo(css(72, 1));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const change = onCommit.mock.calls[0]?.[0] as { kind: string; matrix: number[] };
+    expect(change.kind).toBe('resize');
+    expect(change.matrix[0]).toBeCloseTo(1.25);
+    expect(change.matrix[4]).toBeCloseTo(-18);
   });
 
-  it('treats a drag under half a point as a click', async () => {
-    const { layer, onSelect } = await mount([TEXT, IMAGE], { selected: ['text:0', 'image:0'] });
+  it('treats a drag under half a point as a click, and commits nothing', async () => {
+    const { layer, onSelect, onCommit } = await mount([TEXT, IMAGE], {
+      selected: ['text:0', 'image:0'],
+    });
     // Press on the text inside a two-object selection: a click collapses it to the text alone.
     pointer(layer, 'pointerdown', css(90, 1), css(90, 1));
     pointer(layer, 'pointermove', css(90, 1) + 0.3, css(90, 1));
     pointer(layer, 'pointerup', css(90, 1) + 0.3, css(90, 1));
     expect(onSelect).toHaveBeenCalledWith({ page: 0, revision: 3, keys: ['text:0'] });
+    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it('shows the not-allowed cursor and the reason on a non-editable object', async () => {
