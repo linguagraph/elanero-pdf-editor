@@ -171,12 +171,12 @@ describe('DocumentView with the Hand tool (W4.10)', () => {
     expect(element.scrollTop).toBe(0);
   });
 
-  it('does not pan with the Select tool', async () => {
+  it('pans with the Select tool on a press off the text, as the desktop does (W5.4 S3)', async () => {
     await mount('select');
     const element = scroller();
+    // The test pages have no text layer, so the press is off the text and pans.
     drag(element);
-    expect(element.scrollLeft).toBe(0);
-    expect(element.scrollTop).toBe(0);
+    expect(element.scrollLeft).toBeGreaterThan(0);
   });
 
   it('hands the view to Select when a comment tool is chosen', async () => {

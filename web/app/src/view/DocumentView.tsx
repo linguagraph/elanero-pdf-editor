@@ -48,6 +48,7 @@ import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
 import { selectPageText as selectPageTextLayer } from '../text/copy';
 import { PageTextLayer } from '../text/PageTextLayer';
+import { useTextSelection } from '../text/useTextSelection';
 import { textLayerPassive } from '../text/textLayerPassive';
 import { useHandPan } from './useHandPan';
 import type { ViewTool } from './viewTool';
@@ -477,8 +478,24 @@ export function DocumentView({
   );
   // The Hand tool's drag moves the scene one pixel per pixel dragged, so it scrolls by this ratio
   // above the scaled-space limit (W5.1a S4).
+  // The Select tool: a press on text selects it (W5.4 S3) and a press off text pans, as on the
+  // desktop. An armed gesture tool takes the drag instead (textLayerPassive), so neither happens.
+  const selecting =
+    tool === 'select' &&
+    !textLayerPassive({
+      commentTool,
+      viewTool: tool,
+      markToolOn: redactionTools.state.active,
+    });
+  const textSelection = useTextSelection({
+    lookup: textLayers,
+    revisionOf: (page) => scheduler.revisionOf(page),
+    zoom,
+    scroll: scrollRef,
+    enabled: selecting,
+  });
   const pan = useHandPan(
-    tool === 'hand',
+    tool === 'hand' || selecting,
     scrollPerScenePixel(layout.height, scroll.height || window.innerHeight),
   );
 
@@ -922,7 +939,9 @@ export function DocumentView({
                 : null;
             setFocusedPage(page === null ? null : Number(page.dataset.page));
           }}
-          onPointerDown={pan.onPointerDown}
+          onPointerDown={(event) => {
+            if (!textSelection.startPress(event)) pan.onPointerDown(event);
+          }}
           onPointerMove={pan.onPointerMove}
           onPointerUp={pan.onPointerUp}
           onPointerCancel={pan.onPointerCancel}
@@ -1053,6 +1072,7 @@ export function DocumentView({
                         viewTool: tool,
                         markToolOn: redactionTools.state.active,
                       })}
+                      selection={tool === 'select' ? textSelection.selection : undefined}
                     />
                     {keys.some((key) => scheduler.isFailed(key)) ? (
                       <span className="doc-page-error">{t('view.renderFailed')}</span>
