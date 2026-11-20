@@ -168,6 +168,14 @@ copyright = ["Copyright (c) Tesseract contributors", "Copyright (c) Leptonica co
 note = "To confirm: whether the wasm build includes Tesseract and Leptonica at all. If it does not, delete this entry. Leptonica is offered under BSD-2-Clause, and only the Apache-2.0 text is included here."
 
 [[component]]
+name = "fontTools (Pyodide wheel, loaded on the first text edit)"
+version = "4.62.1"
+license = "MIT"
+url = "https://github.com/fonttools/fonttools"
+copyright = ["Copyright (c) 2017 Just van Rossum"]
+note = "To confirm: the 4.62.1 licence text and copyright line against the Pyodide wheel, which is not in this repository. The line is from the installed fontTools 4.66.1 licence file (MIT)."
+
+[[component]]
 name = "Vite (preload helper injected into the build)"
 version = "8.3.8"
 lock = "vite"
