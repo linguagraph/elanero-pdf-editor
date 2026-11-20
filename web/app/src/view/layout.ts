@@ -3,8 +3,9 @@
 // single column, and two-page spreads (the desktop's two-up modes, core/layout.py compute_layout).
 import { CSS_PX_PER_POINT, clampZoom, DEFAULT_ZOOM } from './zoom';
 
-// The page layouts the reader can choose (the toolbar and the status bar show them).
-export type ViewLayout = 'continuous' | 'twoPage';
+// The page layouts the reader can choose (the toolbar and the status bar show them). `single` shows
+// one page at a time (core/layout.py SINGLE).
+export type ViewLayout = 'continuous' | 'twoPage' | 'single';
 
 // The gap between pages and around the column, in points (core/layout.py PAGE_GAP).
 export const PAGE_GAP_PT = 12;
@@ -96,6 +97,25 @@ export function pairSpreads(count: number, firstAlone: boolean): (number | null)
     spreads.push([slots[i] ?? null, slots[i + 1] ?? null]);
   }
   return spreads;
+}
+
+// The single-page layout (W5.1a S3, core/layout.py SINGLE): the pages stack as in the continuous
+// column, but the view shows only page `index`. Its scene is that page alone, one page gap from the
+// top and the left, so the content is the page plus a gap on each side. The box keeps the page's
+// index, so the anchors and the page count still name the document's pages.
+export function singlePageScene(
+  sizes: readonly PageSizePt[],
+  zoom: number,
+  index: number,
+): ColumnLayout {
+  const box = computeColumn(sizes, zoom).boxes[index];
+  if (box === undefined) return { boxes: [], width: 0, height: 0 };
+  const gap = PAGE_GAP_PT * zoom * CSS_PX_PER_POINT;
+  return {
+    boxes: [{ ...box, top: gap, left: gap }],
+    width: box.width + 2 * gap,
+    height: box.height + 2 * gap,
+  };
 }
 
 // Two-page spreads: each row is as tall as its tallest page, a page is centred vertically in its
@@ -313,7 +333,7 @@ export function viewAnchor(boxes: readonly PageBox[], scrollTop: number): ViewAn
 // The scroll position an anchor names in a layout: the same fraction down the same page. Null for a
 // page index out of range.
 export function scrollTopForAnchor(boxes: readonly PageBox[], anchor: ViewAnchor): number | null {
-  const box = boxes[anchor.page];
+  const box = boxes.find((candidate) => candidate.index === anchor.page);
   if (box === undefined) return null;
   return Math.max(0, box.top + anchor.yFraction * box.height);
 }

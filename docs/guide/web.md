@@ -66,7 +66,8 @@ is reloaded until you press it.
     which turns off animations. The accent keeps the system's high-contrast colours when Windows
     high contrast is on.
   - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%) and **Default page layout** (Single
-    column, Two pages, or Two pages with page 1 alone), both used when a document is opened.
+    column, Single page, Two pages, or Two pages with page 1 alone), both used when a document is
+    opened.
   - **Redaction**: the **Box colour**, **Text colour** and **Text on the box** used for new redaction
     marks (black, white and empty by default). Marks you have already drawn keep their style.
   - **Shortcuts**: **Keyboard Shortcuts…** lists every keyboard shortcut. It opens on top of
@@ -117,8 +118,10 @@ is reloaded until you press it.
   Actual Size) and its page layouts (Single Page Continuous, Two-Up Continuous and Two-Up with
   Cover Page) work on the open document. The layout you are in shows as pressed, and so does Night
   Mode. Home's Back and Forward follow the view's history, and Previous and Next Page are greyed out
-  on the first and last page. Organize Pages opens the organizer panel. Single Page and the view
-  rotation are not available yet.
+  on the first and last page. Organize Pages opens the organizer panel. The document's layout
+  buttons also offer **Single page**, which shows one page at a time: Previous and Next Page, the
+  page field and Home and End move between pages, and the page you were on stays the page when you
+  change layout. The view rotation is not available yet.
 - **Hand tool.** Choose **Hand** (or press **H**) and a drag with the mouse or a pen moves the pages
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is
