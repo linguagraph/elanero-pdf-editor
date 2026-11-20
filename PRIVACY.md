@@ -17,10 +17,24 @@ site, and your documents are not uploaded to any server.
 - **Your documents** are held in the memory of the browser tab while they are open. While a document
   has unsaved changes, the app keeps an autosave copy of it in the browser's private storage (the
   origin private file system, which other websites cannot read). The copy is deleted when the
-  document is closed, when it has no unsaved changes, and when you leave the page. Password-protected
-  documents are never copied. The copy stays on your device and is never uploaded.
-- **Your colour theme** (system, light or dark) is stored in the browser's `localStorage` under the
-  key `elanero.theme`. It holds only that one word and no document content.
+  document is closed in Elanero, and when it is saved and has no unsaved changes. Closing or
+  reloading the browser tab does not delete it, so the copy survives a reload or a crash. The copy
+  stays on your device and is never uploaded.
+- **Password-protected documents.** When you open one, Elanero asks for its password in a dialog.
+  The password is kept only in the memory of the app's engine while that document is open, so the
+  app can reopen it to save. It is never written to browser storage, never put in an autosave copy,
+  and never sent anywhere. A password-protected document is never autosaved.
+- **Preferences and recent items** are stored in the browser's `localStorage`, under keys that start
+  with `elanero.`:
+  - `elanero.theme`: your colour theme (system, light or dark), one word.
+  - `elanero.prefs`: your other preferences, such as zoom, accent colour and language. It never holds
+    a password, token or key.
+  - `elanero.recentFiles`: the names and opening times of up to ten recent files. No file bytes and
+    no file paths.
+  - `elanero.recentCommands`: the ids of the commands you ran from the command palette.
+  - `elanero.layout.panelWidths`: the widths of the side panels.
+
+  A notice you dismiss is remembered for the browser tab only, in `sessionStorage`.
 - **The app itself** is kept in the browser's offline cache (the service worker's cache), so it can
   open without a connection. Documents are never put in this cache.
 
@@ -46,13 +60,18 @@ site, and your documents are not uploaded to any server.
 - It has no analytics, no advertising and no crash reporting.
 - It has no accounts and no sign-in, and it sets no cookies.
 - It does not upload your documents, or any part of them, anywhere.
-- Background (job) workers have their network access removed before they run.
+- Once the engine has started, its worker and the background (job) workers have their network
+  access removed (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` and `importScripts`), so PDF
+  processing code cannot reach the network.
 
 **How to clear your data**
 
-Clear the site's data in your browser's settings (site data for the Elanero web address). That
-removes the theme setting, the offline copy of the app and any autosave copies. Closing the tab
-discards open documents and their autosave copies. The app has no separate "clear data" button yet.
+- Preferences has a **Clear all local data** button (Privacy). It removes the `elanero.` settings and
+  recent items listed above, and the app's private storage folders for fonts and secrets. It is
+  disabled while a document is open in the tab. It does not remove autosave copies.
+- To remove autosave copies, including any left by a browser tab you closed with a document still
+  open, clear the site's data for the Elanero web address in your browser's settings. Closing the
+  browser tab does not remove them by itself.
 
 ## Desktop app (Windows)
 
@@ -117,7 +136,17 @@ is at <https://github.com/linguagraph/elanero-pdf-editor>.
 <!--
 How the web version section was checked (repository paths):
 
-- Theme key `elanero.theme` is the only `localStorage` use: web/app/src/theme/theme.ts.
+- localStorage keys: `elanero.theme` (web/app/src/theme/theme.ts), `elanero.prefs`
+  (web/app/src/prefs/store.ts), `elanero.recentFiles` (web/app/src/recent/recentFiles.ts),
+  `elanero.recentCommands` (web/app/src/palette/recentCommands.ts), `elanero.layout.panelWidths`
+  (web/app/src/layout/panelWidths.ts); sessionStorage `elanero.layout.narrowNoticeDismissed`
+  (web/app/src/layout/NarrowNotice.tsx). The password is held only in the engine registry
+  (src/pdfeditor/webapi/registry.py), cleared on close.
+- Autosave copies are not deleted on pagehide (web/app/src/storage/autosaver.ts); no code calls
+  `removeTab` (web/app/src/storage/autosaveStore.ts), so copies of a closed tab stay until its
+  documents close or the site data is cleared.
+- Clear all local data: web/app/src/storage/clearLocalData.ts (keys with prefix `elanero.`, OPFS
+  folders fonts and secrets, not autosave/); button in web/app/src/prefs/PreferencesDialog.tsx.
 - Autosave copies are the only OPFS use: web/app/src/storage/ (folder autosave/<tab-id>, deleted in
   autosaver.ts and autosaveStore.ts; never a password-protected document, save.autosave_bytes in
   src/pdfeditor/webapi/save.py). No IndexedDB or cookies in web/app/src, web/app/public or
@@ -138,7 +167,7 @@ How the web version section was checked (repository paths):
   (FORBIDDEN_GLOBALS).
 - GitHub Pages hosting: docs/web/plan.md (intro) and docs/web/design/W1.1.md section 9.
 - "Clear your data" uses browser site-data settings, which is browser behaviour, not code. The
-  in-app clear button is W4.5 (docs/web/plan.md), not built.
+  in-app button is W4.5 (docs/web/plan.md), built in web/app/src/prefs/PreferencesDialog.tsx.
 - No analytics, telemetry, sign-in or accounts: grep of web/app/src, web/app/public and
   web/app/index.html finds none.
 
