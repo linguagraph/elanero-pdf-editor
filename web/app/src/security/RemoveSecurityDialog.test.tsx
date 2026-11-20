@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
@@ -137,6 +137,28 @@ describe('RemoveSecurityDialog', () => {
     expect(removeCalls(call)).toHaveLength(1);
     expect(document.body.textContent).toContain(t('security.pendingDropped'));
     expect(button(t('action.cancel'))).toBeDefined();
+  });
+
+  it('drops a pending change once under StrictMode, where effects run twice on mount', async () => {
+    const { call, rpc } = fakeRpc(state({ pending: 'encrypt', pending_method: 'aes-256' }));
+    const store = createToastStore();
+    act(() => {
+      root.render(
+        <StrictMode>
+          <RemoveSecurityDialog
+            isOpen
+            onClose={vi.fn()}
+            rpc={rpc}
+            handle="h1"
+            name="Report.pdf"
+            store={store}
+          />
+        </StrictMode>,
+      );
+    });
+    await flush();
+    expect(removeCalls(call)).toHaveLength(1);
+    expect(document.body.textContent).toContain(t('security.pendingDropped'));
   });
 
   it('asks for the owner password, then confirms, then removes once', async () => {
