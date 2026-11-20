@@ -628,7 +628,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W8.2** Visual golden tests for rendering
 - [ ] **W8.3** Performance tests in CI
 - [x] **W8.4** Fuzz and robustness tests
-- [ ] **W8.5** Accessibility checks _(partial: on main: axe component checks #394, contrast and motion tests #391, Playwright axe on the start page and dialogs #404, keyboard and F6 walkthrough #410; the document view with forced colours, reduced motion and touch targets (S5, #422) is in; pending: the web-a11y run in Actions, which runs on demand (#426))_
+- [ ] **W8.5** Accessibility checks _(partial: on main: S1 axe component checks #394, S2 contrast and reduced-motion source tests #391, S3 Playwright axe on the start page and dialogs #404, S4 keyboard and F6 walkthrough #410 (runs nightly in `web-e2e`), S5 document view, forced colours and touch targets #422 (source tests), the web-a11y workflow #426 (on demand only); S6 adds the release checklist in RELEASING.md, the guide page "Web version: accessibility" and this note; pending: a passing web-a11y run in Actions; axe on the document view and the side panels in the browser; the Reduce motion preference does not yet switch off animations (only the system setting does); smooth scrolling is not turned off under reduced motion; the 44 px touch rule covers the ribbon, document tabs and document view toolbar only; the manual NVDA and VoiceOver pass is recorded per release)_
 - [ ] **W8.6** Security review
 
 **W9 Build, release and docs, #142**
