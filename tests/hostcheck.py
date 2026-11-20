@@ -971,6 +971,57 @@ def _docinfo_lacks_key_pikepdf(data: bytes, key: str) -> None:
         assert key not in pdf.docinfo
 
 
+@host_check("sanitized_catalog_pikepdf")
+def _sanitized_catalog_pikepdf(data: bytes, parts: list[str]) -> None:
+    """Each named part of a sanitize is absent from the file (pikepdf, not MuPDF).
+
+    ``xmp``, ``attachments``, ``javascript``, ``links`` and ``thumbnails`` name what sanitize
+    removes from the catalog and the pages; a sanitize with every option on names all five.
+    """
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        root = pdf.Root
+        pages = list(pdf.pages)
+        annots = [a for p in pages for a in p.get("/Annots", [])]
+        if "xmp" in parts:
+            assert "/Metadata" not in root
+        if "attachments" in parts:
+            # sanitize empties the embedded-files name tree rather than removing the key
+            names = root.get("/Names", {}).get("/EmbeddedFiles", {}).get("/Names", [])
+            assert len(names) == 0
+            assert all(a.get("/Subtype") != "/FileAttachment" for a in annots)
+        if "javascript" in parts:
+            action = root.get("/OpenAction")
+            assert not (
+                isinstance(action, pikepdf.Dictionary) and action.get("/S") == "/JavaScript"
+            )
+            assert "/AA" not in root and "/JavaScript" not in root.get("/Names", {})
+            assert all("/AA" not in p for p in pages)
+        if "links" in parts:
+            assert all(a.get("/Subtype") != "/Link" for a in annots)
+        if "thumbnails" in parts:
+            assert all("/Thumb" not in p for p in pages)
+
+
+@host_check("form_fields_pikepdf")
+def _form_fields_pikepdf(data: bytes, fields: dict[str, str]) -> None:
+    """Each named top-level AcroForm field is there, as a widget too, with the value given
+    ("" when the value was reset: the key is absent or empty)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        values = {str(f.T): str(f.get("/V", "")) for f in pdf.Root.AcroForm.Fields}
+        widgets = {
+            str(a.get("/T", ""))
+            for p in pdf.pages
+            for a in p.get("/Annots", [])
+            if a.get("/Subtype") == "/Widget"
+        }
+    assert values == fields, values
+    assert set(fields) <= widgets, widgets
+
+
 @host_check("outline_pikepdf")
 def _outline_pikepdf(data: bytes, expected: list[list[Any]]) -> None:
     """(level, title) of every bookmark, walked by hand through /First and /Next."""

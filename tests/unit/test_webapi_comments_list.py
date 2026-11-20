@@ -27,6 +27,10 @@ NOTE_A = "note-a"
 NOTE_B = "note-b"
 NOTE_C = "note-c"
 REPLIES_OF_A = ["reply-a1", "reply-a2"]
+# MuPDF writes the trailer /ID as two strings, each hex <...> or literal (...). A literal's random
+# bytes can hold a ] (or a ( and ), escaped with a backslash), so the match must skip string tokens
+# instead of stopping at the first ].
+TRAILER_ID = re.compile(rb"/ID\[(?:<[0-9A-Fa-f]*>|\((?:\\.|[^\\)])*\))*\]", re.DOTALL)
 
 
 @pytest.fixture
@@ -110,7 +114,7 @@ def test_the_list_changes_nothing(web: None, fixture_pdf: Any) -> None:
     def state() -> tuple[bytes, list[int], int]:
         reply, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
         # MuPDF writes a new random trailer /ID on every save, so it is left out of the bytes.
-        data = re.sub(rb"/ID\[[^\]]*\]", b"", binary(ok(reply)["data"], out))
+        data = TRAILER_ID.sub(b"", binary(ok(reply)["data"], out))
         revisions = [session.document.page(i).revision for i in range(session.document.page_count)]
         return data, revisions, session.undo_stack.version
 

@@ -314,6 +314,9 @@ class ProtectController:
             result = security_actions.sanitize(session, SanitizeDocument(dialog.options()))
         except Busy:
             return []  # the BLOCKED event has already told the user
+        except Refused as exc:
+            QMessageBox.warning(self.w, "Sanitize Document", str(exc))
+            return []
         removed = list(result.value)
         summary = ("Removed: " + "; ".join(removed)) if removed else "Nothing needed removing."
         self.last_message = summary + "\n\nSave the document to write the cleaned file."
