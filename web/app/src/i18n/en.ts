@@ -43,6 +43,7 @@ export const EN = {
   'ribbon.expand': 'Show the ribbon',
   'ribbon.collapseTip': 'Collapse the ribbon to its tabs ({keys})',
   'ribbon.commandTip': '{label} ({keys})',
+  'ribbon.more': 'More commands',
   'ribbon.group.app.ribbon': 'Ribbon',
   'command.collapse-ribbon.label': 'Collapse Ribbon',
   'command.compact-ribbon.label': 'Compact Ribbon',

@@ -86,6 +86,9 @@ is reloaded until you press it.
   icons and labels. From 1024 px to 1279 px it is compact: icons only, with each command's name in
   its tooltip. Below 1024 px the ribbon is collapsed to one row of tabs; each tab opens its commands
   in a drop-down that closes when a command runs. On a narrow window that row scrolls sideways.
+- **More commands.** When a tab's groups are wider than the window, the last groups move to a
+  **»** (More commands) button at the end of the row. It opens those groups, in the same order,
+  and closes when a command runs. A tab with room for all its groups shows no **»**.
 - **Collapse and compact.** The chevron at the right of the tab row collapses the ribbon to its
   tabs, and shows it again. Press **Ctrl+F1** to do the same. Pressing a tab, or double-clicking
   one, also brings a collapsed ribbon back. **Compact ribbon** in Preferences (Appearance) shows

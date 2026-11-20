@@ -45,7 +45,8 @@
 
 .ribbon-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  /* One row: the groups that do not fit move to the "More commands" menu (W4.3a S3). */
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -53,6 +54,7 @@
 
 .ribbon-group {
   position: relative;
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -70,6 +72,32 @@
 .ribbon-group-label {
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
+}
+
+.ribbon-more {
+  /* The overflow measurement assumes this width (useGroupOverflow.ts MORE_BUTTON_FALLBACK_PX). */
+  width: 2.5rem;
+  min-height: 28px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.ribbon-more:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
+.ribbon-more[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
 }
 
 .ribbon-command {

@@ -33,6 +33,7 @@ import { layoutTierForWidth } from '../layout/breakpoints';
 import { useViewportWidth } from '../layout/useViewportWidth';
 import { Icon } from '../theme/Icon';
 import { type RibbonForm, ribbonForm } from './form';
+import { useGroupOverflow } from './useGroupOverflow';
 import './ribbon.css';
 
 export interface RibbonProps {
@@ -87,6 +88,15 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
   // When the last press expanded the ribbon, the double-click that press began must not collapse
   // it again (desktop _tab_double_clicked).
   const lastExpandRef = useRef(0);
+  const currentEntry = tabs.find((entry) => entry.tab === current);
+  // The groups that fit in the row; the rest go to the "More commands" menu (W4.3a S3). A
+  // collapsed ribbon has no row of groups, so it never overflows.
+  const { count: fitting, measureRow } = useGroupOverflow({
+    tab: current ?? 'home',
+    groupIds: currentEntry?.groups.map((group) => group.group.id) ?? [],
+    form: form.kind,
+    enabled: !userCollapsed,
+  });
 
   function toggleRibbon(): void {
     runCommand(registry, 'collapse-ribbon', state, handlers);
@@ -126,6 +136,7 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
       onSelectionChange={(key) => setSelected(String(key) as TabId)}
     >
       <div
+        ref={measureRow}
         className="ribbon-tabrow"
         onClickCapture={onRowClick}
         onDoubleClickCapture={onRowDoubleClick}
@@ -145,17 +156,28 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
         : tabs.map((entry) => (
             <TabPanel key={entry.tab} id={entry.tab} className="ribbon-panel">
               <Toolbar aria-label={t('ribbon.label')} className="ribbon-toolbar">
-                {entry.groups.map((group) => (
-                  <RibbonGroup
-                    key={group.group.id}
-                    label={t(group.group.labelId)}
-                    commands={group.commands}
+                {(entry.tab === current ? entry.groups.slice(0, fitting) : entry.groups).map(
+                  (group) => (
+                    <RibbonGroup
+                      key={group.group.id}
+                      groupId={group.group.id}
+                      label={t(group.group.labelId)}
+                      commands={group.commands}
+                      registry={registry}
+                      state={state}
+                      handlers={handlers}
+                      compact={compact}
+                    />
+                  ),
+                )}
+                {entry.tab === current && entry.groups.length > fitting ? (
+                  <MoreCommands
+                    tab={{ tab: entry.tab, groups: entry.groups.slice(fitting) }}
                     registry={registry}
                     state={state}
                     handlers={handlers}
-                    compact={compact}
                   />
-                ))}
+                ) : null}
               </Toolbar>
             </TabPanel>
           ))}
@@ -237,6 +259,7 @@ function CollapsedTabBody({ tab, registry, state, handlers, close }: CollapsedTa
       {tab.groups.map((group) => (
         <RibbonGroup
           key={group.group.id}
+          groupId={group.group.id}
           label={t(group.group.labelId)}
           commands={group.commands}
           registry={registry}
@@ -253,7 +276,42 @@ function CollapsedTabBody({ tab, registry, state, handlers, close }: CollapsedTa
   );
 }
 
+interface MoreCommandsProps {
+  // The groups that did not fit in the row, in tab order.
+  tab: RibbonTab;
+  registry: Registry;
+  state: CommandState;
+  handlers: CommandHandlers;
+}
+
+// The "»" control at the row's end. Its menu holds the overflowed groups, rendered as the collapsed
+// drop-down renders them: it closes when a command runs and keeps the disabled notice.
+function MoreCommands({ tab, registry, state, handlers }: MoreCommandsProps) {
+  return (
+    <DialogTrigger>
+      <Button className="ribbon-more" aria-label={t('ribbon.more')}>
+        <Icon name="chevrons-down" size={20} />
+      </Button>
+      <Popover className="ribbon-popover" placement="bottom end">
+        <Dialog className="ribbon-popover-body" aria-label={t('ribbon.more')}>
+          {({ close }) => (
+            <CollapsedTabBody
+              tab={tab}
+              registry={registry}
+              state={state}
+              handlers={handlers}
+              close={close}
+            />
+          )}
+        </Dialog>
+      </Popover>
+    </DialogTrigger>
+  );
+}
+
 interface RibbonGroupProps {
+  // The group's id, kept on the element so the overflow measurement can find it.
+  groupId: string;
   label: string;
   commands: readonly CommandDef[];
   registry: Registry;
@@ -268,6 +326,7 @@ interface RibbonGroupProps {
 }
 
 function RibbonGroup({
+  groupId,
   label,
   commands,
   registry,
@@ -279,7 +338,7 @@ function RibbonGroup({
 }: RibbonGroupProps) {
   const labelId = useId();
   return (
-    <div role="group" aria-labelledby={labelId} className="ribbon-group">
+    <div role="group" aria-labelledby={labelId} className="ribbon-group" data-group={groupId}>
       <div className="ribbon-group-commands">
         {commands.map((def) => (
           <CommandButton
