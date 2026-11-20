@@ -85,6 +85,47 @@ def test_the_reply_is_truncated_at_the_cap(
     ]
 
 
+def test_a_cap_equal_to_the_object_count_is_not_truncated(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    everything = objects_of(handle, 0)["objects"]
+
+    monkeypatch.setattr(content, "MAX_PAGE_OBJECTS", len(everything))
+    result = objects_of(handle, 0)
+    assert result["truncated"] is False
+    assert [o["key"] for o in result["objects"]] == [o["key"] for o in everything]
+
+
+def test_one_object_over_the_cap_is_truncated_to_the_cap(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    everything = objects_of(handle, 0)["objects"]
+    assert len(everything) > 1
+
+    monkeypatch.setattr(content, "MAX_PAGE_OBJECTS", len(everything) - 1)
+    result = objects_of(handle, 0)
+    assert result["truncated"] is True
+    assert [o["key"] for o in result["objects"]] == [o["key"] for o in everything[:-1]]
+
+
+def test_a_malformed_page_lists_no_objects_and_no_error(
+    web: None, fixture_pdf: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    handle = open_data(fixture_pdf("malformed_content").read_bytes(), "malformed.pdf")
+    with caplog.at_level("WARNING", logger=content.log.name):
+        first = objects_of(handle, 0)
+        again = objects_of(handle, 0)
+
+    assert first["objects"] == []
+    assert first["truncated"] is False
+    assert again == first
+    # Logged once for this revision, not on every poll.
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+
+
 def test_a_bad_page_number_is_invalid_args(web: None, fixture_pdf: Any) -> None:
     handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
     for page in (-1, 99):

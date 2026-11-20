@@ -23,6 +23,12 @@ log = logging.getLogger(__name__)
 # with ``truncated``; the outlines of the objects it does hold are still usable.
 MAX_PAGE_OBJECTS = 5000
 
+# Pages whose malformed content was already logged, as (handle, page, revision). The web polls
+# this call, so a page that stays malformed would otherwise log a traceback on every poll. The set
+# is cleared once it grows past the bound: a page then logs once more, which keeps memory bounded.
+_LOGGED_MALFORMED_MAX = 256
+_logged_malformed: set[tuple[str, int, int]] = set()
+
 
 def list_objects(params: dto.PageParams) -> dto.ContentObjectsResult:
     session = REGISTRY.get(params.handle)
@@ -42,13 +48,23 @@ def list_objects(params: dto.PageParams) -> dto.ContentObjectsResult:
             try:
                 found = page.content_objects()
             except Exception:  # malformed content: nothing editable on this page, as on the desktop
-                log.exception("can't list content objects on page %d", params.page)
+                _log_malformed(params.handle, params.page, revision)
     # The DTOs are built from plain model values, so the lock is not needed past this point.
     return dto.ContentObjectsResult(
         revision=revision,
         objects=tuple(_object_dto(o) for o in found[:MAX_PAGE_OBJECTS]),
         truncated=len(found) > MAX_PAGE_OBJECTS,
     )
+
+
+def _log_malformed(handle: str, page: int, revision: int) -> None:
+    key = (handle, page, revision)
+    if key in _logged_malformed:
+        return
+    if len(_logged_malformed) >= _LOGGED_MALFORMED_MAX:
+        _logged_malformed.clear()
+    _logged_malformed.add(key)
+    log.warning("can't list content objects on page %d (malformed content)", page, exc_info=True)
 
 
 def _object_dto(obj: PageObject) -> dto.PageObjectDto:
