@@ -34,7 +34,6 @@ import {
   type PageSizePt,
   scrollTopForPage,
   scrollForRect,
-  scrollTopForSpread,
   type PageRectPt,
   type ViewLayout,
   visibleRange,
@@ -469,15 +468,12 @@ export function DocumentView({
   const scrollToPage = useCallback(
     (index: number) => {
       const element = scrollRef.current;
-      const top =
-        viewLayout === 'twoPage'
-          ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
-          : scrollTopForPage(layout.boxes, index, zoom);
+      const top = scrollTopForPage(layout.boxes, index, zoom);
       if (element === null || top === null) return;
       element.scrollTop = top;
       setScroll(viewportOf(element));
     },
-    [layout, zoom, viewLayout, firstAlone],
+    [layout, zoom],
   );
 
   useEffect(() => {
@@ -534,14 +530,11 @@ export function DocumentView({
     const element = scrollRef.current;
     if (index === null || element === null) return;
     pendingPage.current = null;
-    const top =
-      viewLayout === 'twoPage'
-        ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
-        : scrollTopForPage(layout.boxes, index, zoom);
+    const top = scrollTopForPage(layout.boxes, index, zoom);
     if (top === null) return;
     element.scrollTop = top;
     setScroll(viewportOf(element));
-  }, [viewLayout, firstAlone, layout, zoom]);
+  }, [layout, zoom]);
 
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
