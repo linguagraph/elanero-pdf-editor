@@ -232,7 +232,7 @@ export const EN = {
   'command.accessibility-check.label': 'Accessibility Check',
   'command.auto-tag-document-experimental.label': 'Auto-Tag',
   'command.close.label': 'Close',
-  'command.save-as.label': 'Save a Copy',
+  'command.save-as.label': 'Save As…',
   'command.preferences.label': 'Preferences…',
   'command.keyboard-shortcuts.label': 'Keyboard Shortcuts…',
   'command.help.label': 'Help',
@@ -400,6 +400,17 @@ export const EN = {
   'redact.applyFailed': 'The redactions could not be applied. Try again.',
   'redactions.editFailed': 'The redaction could not be changed. Try again.',
   'redactions.stale': 'That redaction is no longer in the document. The list has been updated.',
+  // Redactions panel (W7.4b S4): the marks of the document, selected, went to, and deleted.
+  'redactions.title': 'Redactions',
+  'redactions.list': 'Redaction marks',
+  'redactions.loading': 'Loading redactions…',
+  'redactions.empty':
+    'This document has no redaction marks. Use Mark areas on the toolbar to add one.',
+  'redactions.page': 'Page {page}',
+  'redactions.area': 'Area',
+  'redactions.overlay': 'Text on the box: {text}',
+  'redactions.delete': 'Delete',
+  'redactions.hint': 'Enter opens the page. Delete removes the selected marks.',
 
   // Crop pages (W4.11): the dialog, its checks, and the result.
   'crop.title': 'Crop Pages',
@@ -557,6 +568,13 @@ export const EN = {
     'This signed document was reopened after the engine restarted, so it cannot be saved in place. Save it as a new file instead; its signatures stay in the original.',
   'save.downloadBlocked':
     'The browser blocked the download of {name}. Your changes are still here; download the file again.',
+  // Save As (W4.9): a full copy under a new name; the tab takes the name.
+  'saveAs.title': 'Save As',
+  'saveAs.label': 'File name',
+  'saveAs.submit': 'Save As',
+  'saveAs.signedNote':
+    'The copy is a full rewrite, so its signatures will not be valid. Use Save to keep them.',
+  'saveAs.encryptedNote': 'The copy keeps the password.',
   'tabs.menu': 'Open documents',
   'tabs.menuNamed': 'Open documents: {name}',
   'tabs.menuClose': 'Close this document',

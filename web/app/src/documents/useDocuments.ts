@@ -25,6 +25,7 @@ import {
   closeTab as closeTabState,
   EMPTY_TABS,
   hasDirtyTab,
+  renameTab as renameTabState,
   replaceHandle,
   setPageCount,
   type TabState,
@@ -90,6 +91,8 @@ export interface Documents {
   closeTab(id: number): void;
   // Keeps a tab's page count in step with the engine after an organizer change.
   setPages(id: number, pages: number): void;
+  // Gives a tab the name it was saved as, and adds the name to the recent list (W4.9).
+  renameTab(id: number, name: string): void;
 }
 
 export function useDocuments(engine: EngineConnection): Documents {
@@ -351,6 +354,15 @@ export function useDocuments(engine: EngineConnection): Documents {
     [commitTabs],
   );
 
+  // A Save As gave the document a new name (W4.9): the tab takes it and the recent list gets it.
+  const renameTab = useCallback(
+    (id: number, name: string) => {
+      commitTabs((state) => renameTabState(state, id, name));
+      setRecent(addRecentFile(name));
+    },
+    [commitTabs],
+  );
+
   return {
     tabs,
     recent,
@@ -365,5 +377,6 @@ export function useDocuments(engine: EngineConnection): Documents {
     selectTab,
     closeTab,
     setPages,
+    renameTab,
   };
 }

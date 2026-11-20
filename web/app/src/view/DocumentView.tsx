@@ -49,8 +49,9 @@ import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import type { ActionJobWorker } from '../actionJob/actionJob';
 import type { RedactionController } from '../redaction/controller';
-import { RedactLayer } from '../redaction/RedactLayer';
+import { RedactLayer, SelectedMarkOutlines } from '../redaction/RedactLayer';
 import { RedactionBar } from '../redaction/RedactionBar';
+import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import { TextLayerCache } from '../text/textLayerCache';
 import { CachedCanvas } from './pixels';
@@ -621,6 +622,10 @@ export function DocumentView({
                       onPlace={(rect, text) => place(box.index, rect, text)}
                     />
                   ) : null}
+                  <SelectedMarkOutlines
+                    rects={selectedRectsOn(redactionTools.state, box.index)}
+                    zoom={zoom}
+                  />
                   {redactionTools.state.active && sizes !== null ? (
                     <RedactLayer
                       zoom={zoom}

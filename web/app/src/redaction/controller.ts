@@ -251,3 +251,15 @@ export class RedactionController {
     }
   }
 }
+
+// Whether a mark is in the selection (both by page and name).
+export function isSelectedMark(selected: readonly MarkRef[], mark: MarkRef): boolean {
+  return selected.some((ref) => sameMark(ref, mark));
+}
+
+// The boxes of the selected marks that lie on one page, for the viewer's outline (W7.4b S4).
+export function selectedRectsOn(state: RedactionSnapshot, page: number): PageRect[] {
+  return state.marks
+    .filter((mark) => mark.page === page && isSelectedMark(state.selected, mark))
+    .map((mark) => mark.rect);
+}
