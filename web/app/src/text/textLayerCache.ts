@@ -28,15 +28,17 @@ export class TextLayerCache {
     const key = `${page}:${revision}`;
     const known = this.entries.get(key);
     if (known !== undefined) return known;
-    const pending = this.rpc
+    // A request evicted (or replaced) while pending must not reappear in arrived: only the entry
+    // that is still cached under this key may store its result.
+    const pending: Promise<TextLine[]> = this.rpc
       .call('text.layer', { handle: this.handle, page })
       .then((layer) => {
         const lines = decodeTextLayer(layer);
-        this.arrived.set(key, lines);
+        if (this.entries.get(key) === pending) this.arrived.set(key, lines);
         return lines;
       })
       .catch((error: unknown) => {
-        this.entries.delete(key);
+        if (this.entries.get(key) === pending) this.entries.delete(key);
         throw error;
       });
     this.entries.set(key, pending);

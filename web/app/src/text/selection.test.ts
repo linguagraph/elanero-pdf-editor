@@ -109,6 +109,42 @@ describe('domSelectionAreas', () => {
     expect(area).toMatchObject({ rect: { x0: 3, y0: 3, x1: 4, y1: 4 }, text: 'b' });
   });
 
+  it('gives one area per range, leaving out the text between the ranges', () => {
+    const page = mountPage(0, LINES_0);
+    // Two ranges like a Ctrl-select: "a" of line one and "d" of line two. The gap ("b", the
+    // separator, "c") is in neither range, so it is in neither area.
+    const first = document.createRange();
+    first.setStart(textOf(page, 0), 0);
+    first.setEnd(textOf(page, 0), 1);
+    const second = document.createRange();
+    second.setStart(textOf(page, 1), 1);
+    second.setEnd(textOf(page, 1), 2);
+    const selection = {
+      rangeCount: 2,
+      getRangeAt: (index: number) => (index === 0 ? first : second),
+    } as unknown as Selection;
+    const areas = domSelectionAreas(selection, lookup);
+    expect(areas.map((area) => area.text)).toEqual(['a', 'd']);
+    expect(areas[0]?.rect).toEqual({ x0: 10, y0: 20, x1: 20, y1: 30 });
+    expect(areas[1]?.rect).toEqual({ x0: 20, y0: 40, x1: 31, y1: 52 });
+    expect(areas.every((area) => area.page === 0)).toBe(true);
+  });
+
+  it('counts a char once when two ranges overlap on a line', () => {
+    const page = mountPage(0, LINES_0);
+    const first = document.createRange();
+    first.setStart(textOf(page, 0), 0);
+    first.setEnd(textOf(page, 0), 2);
+    const second = document.createRange();
+    second.setStart(textOf(page, 0), 1);
+    second.setEnd(textOf(page, 0), 2);
+    const selection = {
+      rangeCount: 2,
+      getRangeAt: (index: number) => (index === 0 ? first : second),
+    } as unknown as Selection;
+    expect(domSelectionAreas(selection, lookup).map((area) => area.text)).toEqual(['ab']);
+  });
+
   it('gives nothing for a selection outside the text layer', () => {
     mountPage(0, LINES_0);
     const outside = document.createElement('p');

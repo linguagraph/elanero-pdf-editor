@@ -7,31 +7,41 @@ import { type PageArea, selectionAreas, type TextLine } from './textLayer';
 // The lines of a page as they are shown, or undefined when they have not arrived.
 export type TextLineLookup = (page: number) => readonly TextLine[] | undefined;
 
-// The page areas the selection covers, one per page, in page order. A selection outside the text
-// layer, or on a page whose lines have not arrived, gives no area for that page.
+// A code-point span of one page's layer text: [start, end).
+interface Extent {
+  start: number;
+  end: number;
+}
+
+// The page areas the selection covers, in page order and then text order. Each DOM range (a
+// multi-range selection, e.g. Firefox Ctrl-select) gives its own area per page, so the text in the
+// gap between two ranges is not covered. A selection outside the text layer, or on a page whose
+// lines have not arrived, gives no area for that page.
 export function domSelectionAreas(selection: Selection | null, lookup: TextLineLookup): PageArea[] {
   if (selection === null) return [];
-  const extents = new Map<number, { start: number; end: number }>();
+  const extents = new Map<number, Extent[]>();
   for (let index = 0; index < selection.rangeCount; index += 1) {
-    collectRange(selection.getRangeAt(index), lookup, extents);
+    for (const [page, extent] of rangeExtents(selection.getRangeAt(index), lookup)) {
+      const known = extents.get(page);
+      if (known === undefined) extents.set(page, [extent]);
+      else known.push(extent);
+    }
   }
   const areas: PageArea[] = [];
   for (const page of [...extents.keys()].sort((a, b) => a - b)) {
     const lines = lookup(page);
-    const extent = extents.get(page);
-    if (lines === undefined || extent === undefined) continue;
-    const area = selectionAreas(lines, page, extent.start, extent.end);
-    if (area !== null) areas.push(area);
+    if (lines === undefined) continue;
+    for (const extent of withoutOverlap(extents.get(page) ?? [])) {
+      const area = selectionAreas(lines, page, extent.start, extent.end);
+      if (area !== null) areas.push(area);
+    }
   }
   return areas;
 }
 
-// Adds the part of one range that falls in each line span to its page's extent (code points).
-function collectRange(
-  range: Range,
-  lookup: TextLineLookup,
-  extents: Map<number, { start: number; end: number }>,
-): void {
+// The extent one range covers on each page (code points), from the line spans it touches.
+function rangeExtents(range: Range, lookup: TextLineLookup): Map<number, Extent> {
+  const extents = new Map<number, Extent>();
   const root = range.commonAncestorContainer;
   const doc = root.ownerDocument ?? (root as Document);
   doc.querySelectorAll<HTMLElement>('.page-text-line').forEach((span) => {
@@ -61,6 +71,22 @@ function collectRange(
         : { start: Math.min(known.start, start), end: Math.max(known.end, end) },
     );
   });
+  return extents;
+}
+
+// Clips overlapping extents of one page so no char is counted twice (ranges that share a line).
+// Sorted by start; an extent keeps only the part after the one before it.
+function withoutOverlap(extents: readonly Extent[]): Extent[] {
+  const sorted = [...extents].sort((a, b) => a.start - b.start);
+  const kept: Extent[] = [];
+  let cursor = Number.NEGATIVE_INFINITY;
+  for (const extent of sorted) {
+    const start = Math.max(extent.start, cursor);
+    if (start >= extent.end) continue;
+    kept.push({ start, end: extent.end });
+    cursor = extent.end;
+  }
+  return kept;
 }
 
 // The UTF-16 offset of a DOM boundary point inside a span, measured from the span's start.
