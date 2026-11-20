@@ -36,7 +36,6 @@ import {
   scrollTopForPage,
   scrollForRect,
   scrollTopForAnchor,
-  scrollTopForSpread,
   type PageRectPt,
   type ViewAnchor,
   singlePageScene,
@@ -521,16 +520,15 @@ export function DocumentView({
         setScroll(viewportOf(element));
         return;
       }
-      const top =
-        viewLayout === 'twoPage'
-          ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
-          : scrollTopForPage(layout.boxes, index, zoom);
+      // Spreads aim at the page's own top like the continuous column (the desktop's go_to_page rule),
+      // so one function serves both layouts here.
+      const top = scrollTopForPage(layout.boxes, index, zoom);
       if (element === null || top === null) return;
       element.scrollTop = top;
       capturePlace();
       setScroll(viewportOf(element));
     },
-    [layout, sizes, zoom, viewLayout, firstAlone, capturePlace],
+    [layout, sizes, zoom, viewLayout, capturePlace],
   );
 
   useEffect(() => {

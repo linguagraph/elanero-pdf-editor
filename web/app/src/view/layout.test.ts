@@ -8,7 +8,7 @@ import {
   isInViewport,
   PAGE_GAP_PT,
   type PageBox,
-  scrollTopForSpread,
+  scrollTopForPage,
   visibleRange,
 } from './layout';
 
@@ -110,11 +110,12 @@ describe('currentPageIndex', () => {
     expect(currentPageIndex(boxes, 0, 100)).toBe(0);
   });
 
-  it('is the page whose centre is nearest the middle of the viewport', () => {
-    // The viewport from 120 to 220 has its centre at 170, on page 1.
+  it('is the page a third of the way down the viewport (desktop page_at)', () => {
+    // The viewport from 120 to 220 has its point at 120 + 100 / 3, on page 1.
     expect(currentPageIndex(boxes, 120, 100)).toBe(1);
-    // From 160 to 260 the centre is at 210, on page 2.
-    expect(currentPageIndex(boxes, 160, 100)).toBe(2);
+    // From 160 the point is at 193, still on page 1; from 170 it is at 203, on page 2.
+    expect(currentPageIndex(boxes, 160, 100)).toBe(1);
+    expect(currentPageIndex(boxes, 170, 100)).toBe(2);
   });
 
   it('is the last page when scrolled to the end', () => {
@@ -149,8 +150,8 @@ describe('currentPageIndex in two-page spreads', () => {
   });
 });
 
-describe('scrollTopForSpread', () => {
-  it('scrolls to the top of the row holding the page, not the page itself', () => {
+describe('scrollTopForPage in a spread', () => {
+  it("scrolls to the page's own top, not the top of the row (desktop go_to_page)", () => {
     // Page 1 is shorter than page 0: it is centred in the row, so its own top is lower.
     const sizes = [
       { width: 100, height: 200 },
@@ -161,9 +162,9 @@ describe('scrollTopForSpread', () => {
     const { boxes } = computeSpreads(sizes, 1, false);
     const rowTop = boxes[0]?.top ?? 0;
     expect(boxes[1]?.top).toBeGreaterThan(rowTop);
-    expect(scrollTopForSpread(boxes, 1, 1, false)).toBe(
-      Math.max(0, rowTop - PAGE_GAP_PT * CSS_PX_PER_POINT),
+    expect(scrollTopForPage(boxes, 1, 1)).toBe(
+      Math.max(0, (boxes[1]?.top ?? 0) - (PAGE_GAP_PT / 2) * CSS_PX_PER_POINT),
     );
-    expect(scrollTopForSpread(boxes, 9, 1, false)).toBeNull();
+    expect(scrollTopForPage(boxes, 9, 1)).toBeNull();
   });
 });
