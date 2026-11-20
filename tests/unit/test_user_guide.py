@@ -82,16 +82,24 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     # Read-only by default; the Pages rights belong to the deploy job alone.
     assert workflow["permissions"] == {"contents": "read"}
     jobs = workflow["jobs"]
-    assert jobs["deploy"]["permissions"] == {"pages": "write", "id-token": "write"}
+    # contents: read is needed so the reusable web-deploy workflow can check out the code
+    # (a called workflow cannot hold more permission than its caller grants).
+    assert jobs["deploy"]["permissions"] == {
+        "contents": "read",
+        "pages": "write",
+        "id-token": "write",
+    }
     assert "permissions" not in jobs["site"]
     build_steps = jobs["site"]["steps"]
     # The site (guide strictly, landing page, redirect stubs) is assembled by the script.
     assert any("scripts/build_site.py" in str(s.get("run", "")) for s in build_steps)
-    build_uses = [str(s.get("uses", "")) for s in build_steps]
-    assert any(u.startswith("actions/configure-pages@v5") for u in build_uses)
-    assert any(u.startswith("actions/upload-pages-artifact@v3") for u in build_uses)
-    deploy_uses = [str(s.get("uses", "")) for s in jobs["deploy"]["steps"]]
-    assert any(u.startswith("actions/deploy-pages@v4") for u in deploy_uses)
+    # The Pages steps live in web-deploy.yml, which the deploy job calls, so the guide and the
+    # web app ship in one artifact (W9.2).
+    assert jobs["deploy"]["uses"] == "./.github/workflows/web-deploy.yml"
+    web_deploy = (ROOT / ".github" / "workflows" / "web-deploy.yml").read_text(encoding="utf-8")
+    assert "actions/configure-pages@v5" in web_deploy
+    assert "actions/upload-pages-artifact@v3" in web_deploy
+    assert "actions/deploy-pages@v4" in web_deploy
     assert "refs/heads/main" in str(jobs["deploy"]["if"])
 
 
