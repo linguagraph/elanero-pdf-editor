@@ -13,8 +13,9 @@ const APP_PORT = 4174;
 export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.spec.ts',
-  // The key probe has its own config (playwright.keys.config.ts) and a manual workflow (W4.3b).
-  testIgnore: 'keys.spec.ts',
+  // The key probe has its own config (playwright.keys.config.ts) and a manual workflow (W4.3b). The
+  // feature round trips run on three browsers under playwright.features.config.ts (W8.1).
+  testIgnore: ['keys.spec.ts', 'features/**'],
   timeout: 5 * 60_000,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`,

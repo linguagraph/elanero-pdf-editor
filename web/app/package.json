@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "e2e:features": "playwright test -c playwright.features.config.ts",
     "tokens": "node --experimental-strip-types scripts/generate-tokens.ts",
     "tokens:check": "node --experimental-strip-types scripts/generate-tokens.ts --check",
     "icons": "node --experimental-strip-types scripts/generate-icons.ts",
