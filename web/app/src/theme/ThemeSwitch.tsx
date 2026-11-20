@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import type { MessageId } from '../i18n/en';
+import { t } from '../i18n/t';
 import { ThemeIcon } from './icons';
 import { readStoredTheme, setTheme, THEME_CHOICES, type ThemeChoice } from './theme';
 import './ThemeSwitch.css';
 
-const LABELS: Record<ThemeChoice, string> = {
-  system: 'System',
-  light: 'Light',
-  dark: 'Dark',
+// The labels are the Preferences dialog's theme texts, so both places say the same thing.
+const LABELS: Record<ThemeChoice, MessageId> = {
+  system: 'theme.system',
+  light: 'prefs.theme.light',
+  dark: 'prefs.theme.dark',
 };
 
 export function ThemeSwitch() {
@@ -14,7 +17,7 @@ export function ThemeSwitch() {
 
   return (
     <fieldset className="theme-switch">
-      <legend>Theme</legend>
+      <legend>{t('prefs.theme.label')}</legend>
       {THEME_CHOICES.map((value) => (
         <label key={value} className="theme-switch-option">
           <input
@@ -28,7 +31,7 @@ export function ThemeSwitch() {
             }}
           />
           <ThemeIcon choice={value} />
-          <span>{LABELS[value]}</span>
+          <span>{t(LABELS[value])}</span>
         </label>
       ))}
     </fieldset>
