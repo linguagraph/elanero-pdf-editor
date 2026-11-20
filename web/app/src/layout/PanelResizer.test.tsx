@@ -247,6 +247,36 @@ describe('AppFrame panel widths', () => {
     });
   }
 
+  it.each([375, 400])('shows a phone drawer at its default width at %i px', (width) => {
+    setWindowWidth(width);
+    renderFrame();
+    const panel = host.querySelector<HTMLElement>('.app-panel-left');
+    expect(panel?.style.width).toBe('220px');
+  });
+
+  it('keeps a stored 260 px drawer at 260 px at 400 px and lets it be resized', () => {
+    setWindowWidth(400);
+    window.localStorage.setItem(
+      PANEL_WIDTHS_STORAGE_KEY,
+      JSON.stringify({ left: 260, right: 260 }),
+    );
+    renderFrame();
+    const panel = host.querySelector<HTMLElement>('.app-panel-left');
+    expect(panel?.style.width).toBe('260px');
+    const el = separator('left');
+    expect(Number(el.getAttribute('aria-valuemax'))).toBeGreaterThan(
+      Number(el.getAttribute('aria-valuemin')),
+    );
+    act(() => {
+      key(el, 'ArrowLeft');
+    });
+    expect(panel?.style.width).toBe('244px');
+    act(() => {
+      key(el, 'ArrowRight');
+    });
+    expect(panel?.style.width).toBe('260px');
+  });
+
   it('sizes the panel from the remembered width and saves once per drag end', () => {
     setWindowWidth(1366);
     window.localStorage.setItem(
@@ -279,15 +309,15 @@ describe('AppFrame panel widths', () => {
     });
   });
 
-  it('caps a remembered width at 40 % of a narrow window and keeps the stored value', () => {
-    setWindowWidth(1100);
+  it('caps a remembered width at 40 % of a wide window and keeps the stored value', () => {
+    setWindowWidth(1366);
     window.localStorage.setItem(
       PANEL_WIDTHS_STORAGE_KEY,
       JSON.stringify({ left: 600, right: 260 }),
     );
     renderFrame();
-    expect(host.querySelector<HTMLElement>('.app-panel-left')?.style.width).toBe('440px');
-    expect(separator('left').getAttribute('aria-valuemax')).toBe('440');
+    expect(host.querySelector<HTMLElement>('.app-panel-left')?.style.width).toBe('546px');
+    expect(separator('left').getAttribute('aria-valuemax')).toBe('546');
     expect(JSON.parse(window.localStorage.getItem(PANEL_WIDTHS_STORAGE_KEY) ?? '{}').left).toBe(
       600,
     );

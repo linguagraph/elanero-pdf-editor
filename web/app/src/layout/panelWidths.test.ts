@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clampPanelWidth,
   DEFAULT_PANEL_WIDTHS,
+  maxPanelWidth,
   PANEL_WIDTHS_STORAGE_KEY,
   readPanelWidths,
   writePanelWidth,
@@ -30,6 +31,29 @@ describe('clampPanelWidth', () => {
 
   it('never caps below the minimum, even in a very narrow window', () => {
     expect(clampPanelWidth(300, 300)).toBe(160);
+  });
+
+  it('keeps the 40 % cap on the wide tier', () => {
+    expect(clampPanelWidth(300, 1100, 'wide')).toBe(300);
+    expect(clampPanelWidth(9999, 1100, 'wide')).toBe(440);
+  });
+
+  it('gives a drawer its default width on a phone or tablet, not the 40 % share', () => {
+    expect(clampPanelWidth(220, 375, 'phone')).toBe(220);
+    expect(clampPanelWidth(220, 400, 'phone')).toBe(220);
+    expect(clampPanelWidth(260, 400, 'phone')).toBe(260);
+    expect(clampPanelWidth(260, 375, 'tablet')).toBe(260);
+  });
+
+  it('caps a drawer at the window less both rails and a margin', () => {
+    expect(clampPanelWidth(9999, 400, 'phone')).toBe(288);
+    expect(maxPanelWidth(375, 'phone')).toBe(263);
+  });
+
+  it('keeps the drawer maximum above the minimum at phone widths', () => {
+    expect(maxPanelWidth(320, 'phone')).toBeGreaterThan(160);
+    expect(maxPanelWidth(375, 'phone')).toBeGreaterThan(160);
+    expect(maxPanelWidth(400, 'phone')).toBeGreaterThan(160);
   });
 });
 

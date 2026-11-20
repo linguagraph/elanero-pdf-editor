@@ -46,10 +46,10 @@ export function AppFrame({
   // by a narrower window, so a wider one shows the panel at its remembered width again.
   const [widths, setWidths] = useState<PanelWidths>(readPanelWidths);
   const shownWidth: PanelWidths = {
-    left: clampPanelWidth(widths.left, windowWidth),
-    right: clampPanelWidth(widths.right, windowWidth),
+    left: clampPanelWidth(widths.left, windowWidth, regions.tier),
+    right: clampPanelWidth(widths.right, windowWidth, regions.tier),
   };
-  const maxWidth = maxPanelWidth(windowWidth);
+  const maxWidth = maxPanelWidth(windowWidth, regions.tier);
   const showWidth = (side: Side, width: number) => {
     setWidths((previous) => ({ ...previous, [side]: width }));
   };
