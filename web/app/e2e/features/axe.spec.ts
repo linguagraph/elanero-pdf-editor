@@ -1,0 +1,52 @@
+// W8.5 S3: axe on the start page and the dialogs that open with no document, in light and dark.
+// The start page and its ribbon render while the engine loads, so these screens need no engine and
+// run on every features browser. Dialogs that need a document or an engine session (Save As,
+// Print, Export, and the rest) are S5's, once the engine is staged in the workflow.
+import { expect, test, type Page } from '@playwright/test';
+import { checkAxe } from './axe';
+
+const SCHEMES = ['light', 'dark'] as const;
+
+async function openStartPage(page: Page): Promise<void> {
+  await page.goto('/');
+  await expect(page.locator('.start-page')).toBeVisible();
+}
+
+async function openPreferences(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Preferences…', exact: true }).click();
+  await expect(page.getByRole('dialog').first()).toBeVisible();
+}
+
+for (const scheme of SCHEMES) {
+  test.describe(`${scheme} scheme`, () => {
+    test.use({ colorScheme: scheme });
+
+    test(`axe: start page (${scheme})`, async ({ page }, testInfo) => {
+      await openStartPage(page);
+      await checkAxe(page, testInfo);
+    });
+
+    test(`axe: Preferences dialog (${scheme})`, async ({ page }, testInfo) => {
+      await openStartPage(page);
+      await openPreferences(page);
+      await checkAxe(page, testInfo);
+    });
+
+    test(`axe: Keyboard Shortcuts dialog (${scheme})`, async ({ page }, testInfo) => {
+      await openStartPage(page);
+      await openPreferences(page);
+      await page.getByRole('button', { name: 'Keyboard Shortcuts…', exact: true }).click();
+      await expect(page.getByRole('dialog').last()).toBeVisible();
+      await checkAxe(page, testInfo);
+    });
+
+    test(`axe: command palette (${scheme})`, async ({ page }, testInfo) => {
+      await openStartPage(page);
+      // Typing in the ribbon's search box opens the palette with that text as its query.
+      await page.getByRole('searchbox', { name: 'Search tools' }).click();
+      await page.keyboard.type('a');
+      await expect(page.getByRole('dialog').first()).toBeVisible();
+      await checkAxe(page, testInfo);
+    });
+  });
+}
