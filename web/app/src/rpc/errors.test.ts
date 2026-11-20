@@ -173,14 +173,21 @@ describe('error coverage', () => {
   });
 
   it('names only REFUSED reasons that the engine sends', () => {
-    // web/app/src/rpc -> the repo root is four levels up.
-    const dir = join(dirname(fileURLToPath(import.meta.url)), '../../../../src/pdfeditor/webapi');
-    const source = readdirSync(dir)
-      .filter((file) => file.endsWith('.py'))
-      .map((file) => readFileSync(join(dir, file), 'utf8'))
+    // web/app/src/rpc -> the repo root is four levels up. The webapi sends its own reasons, and an
+    // action's `reason=` (actions/*.py, e.g. the crop refusals) reaches the web through errors.py.
+    const root = join(dirname(fileURLToPath(import.meta.url)), '../../../../src/pdfeditor');
+    const source = ['webapi', 'actions']
+      .flatMap((sub) => {
+        const dir = join(root, sub);
+        return readdirSync(dir)
+          .filter((file) => file.endsWith('.py'))
+          .map((file) => readFileSync(join(dir, file), 'utf8'));
+      })
       .join('\n');
     for (const reason of Object.keys(REFUSED_REASON)) {
-      expect(source, reason).toContain(`"reason": "${reason}"`);
+      const sent =
+        source.includes(`"reason": "${reason}"`) || source.includes(`reason="${reason}"`);
+      expect(sent, reason).toBe(true);
     }
   });
 });

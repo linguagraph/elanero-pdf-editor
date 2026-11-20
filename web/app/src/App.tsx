@@ -43,6 +43,8 @@ import { startJobWorker } from './engine/start';
 import { createJobWorkerPool, type JobWorkerPool } from './engine/jobPool';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
+import { CropDialog } from './crop/CropDialog';
+import type { ChangedDto } from './rpc/generated';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
 import { SplitDialog } from './split/SplitDialog';
@@ -163,6 +165,7 @@ export function App({
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -352,6 +355,13 @@ export function App({
     const view = viewRef.current;
     if (view !== null) runViewCommand(id, view);
   }, []);
+  // A crop (or its Undo) changes the page sizes and the visible space: the search marks name the
+  // old positions, and the view and thumbnails mount again to read the new sizes.
+  const onCropped = (changed: ChangedDto | null) => {
+    setSearchMarks(null);
+    setStructureRevision((value) => value + 1);
+    scheduler?.noteRevisions(changed?.revisions ?? {});
+  };
   const handlers: CommandHandlers = {
     ...baseHandlers,
     ...(documentShown
@@ -378,6 +388,8 @@ export function App({
           save: () => {
             if (activeTab !== undefined) void saveTab(activeTab);
           },
+          // Crop (W4.11) opens the crop dialog for the open document.
+          'crop-pages': () => setCropOpen(true),
           // Close (W4.3a S4) closes the open tab, as the tab's own close button does.
           close: () => {
             if (activeId !== null) docs.closeTab(activeId);
@@ -607,6 +619,18 @@ export function App({
           handle={session.handle}
           name={activeTab.name}
           startWorker={jobs.acquire}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <CropDialog
+          isOpen={cropOpen}
+          onClose={() => setCropOpen(false)}
+          rpc={session.rpc}
+          handle={session.handle}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          signed={activeTab.signed}
+          onChanged={onCropped}
         />
       ) : null}
       {documentShown && session !== null ? (
