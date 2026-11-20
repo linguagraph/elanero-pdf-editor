@@ -77,7 +77,8 @@ function refusedReason(details: Details): Variant | undefined {
   if (typeof reason !== 'string' || !Object.prototype.hasOwnProperty.call(REFUSED_REASON, reason)) {
     return undefined;
   }
-  return { messageId: REFUSED_REASON[reason] as MessageId, params: {} };
+  const messageId = REFUSED_REASON[reason];
+  return messageId === undefined ? undefined : { messageId, params: {} };
 }
 
 // One entry per code. The Record type makes a new code in the generated union a compile error

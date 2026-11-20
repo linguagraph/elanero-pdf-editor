@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { APP_VERSION } from './version';
+import { GUIDE_URL } from './help/guide';
 import { type EngineClient, setTabSession } from './engine/engineConnection';
 import { fakeEngine } from './engine/testEngine';
 import type { JobWorkerPool } from './engine/jobPool';
@@ -449,5 +450,84 @@ describe('App side rails (W4.2a S2)', () => {
     expect(host.querySelector('[data-panel="search"]')?.getAttribute('aria-expanded')).toBe('true');
     const input = host.querySelector<HTMLInputElement>('#app-panel-left input[type="search"]');
     expect(document.activeElement).toBe(input);
+  });
+});
+
+describe('App help, about and quick access (W4.3a S4)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  function menuItem(label: string): HTMLElement | undefined {
+    return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.trim() === label,
+    );
+  }
+
+  async function openMenuItem(label: string): Promise<void> {
+    const menu = host.querySelector<HTMLButtonElement>(
+      `button[aria-label="${t('appMenu.label')}"]`,
+    );
+    if (menu === null) throw new Error('no app menu');
+    act(() => {
+      menu.click();
+    });
+    await until(() => menuItem(label) !== undefined);
+    const item = menuItem(label);
+    if (item === undefined) throw new Error(`no menu item ${label}`);
+    act(() => {
+      item.click();
+    });
+  }
+
+  function renderApp(): void {
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(drawingEngine().client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+  }
+
+  it('shows the quick-access buttons in the header, with Save disabled until its handler lands', () => {
+    renderApp();
+    const save = host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+    expect(save).not.toBeNull();
+    expect(save?.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('opens the guide start from the app menu Help item', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderApp();
+    await openMenuItem(t('command.help.label'));
+    expect(open).toHaveBeenCalledWith(GUIDE_URL, '_blank', expect.any(String));
+  });
+
+  it('opens About Elanero as an overlay from the app menu', async () => {
+    renderApp();
+    await openMenuItem(t('command.about-elanero.label'));
+    const dialog = await vi.waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (found === null) throw new Error('no dialog');
+      return found;
+    });
+    expect(dialog.textContent).toContain(APP_VERSION);
   });
 });

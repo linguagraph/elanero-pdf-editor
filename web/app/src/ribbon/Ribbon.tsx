@@ -33,6 +33,7 @@ import { layoutTierForWidth } from '../layout/breakpoints';
 import { useViewportWidth } from '../layout/useViewportWidth';
 import { Icon } from '../theme/Icon';
 import { type RibbonForm, ribbonForm } from './form';
+import { HelpButton } from './HelpButton';
 import { useGroupOverflow } from './useGroupOverflow';
 import './ribbon.css';
 
@@ -149,6 +150,7 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
             </Tab>
           ))}
         </TabList>
+        <HelpButton tab={current} />
         <CollapseChevron expanded={!userCollapsed} onPress={toggleRibbon} />
       </div>
       {userCollapsed
@@ -238,6 +240,7 @@ function CollapsedRibbon({ registry, state, handlers }: RibbonProps) {
           </DialogTrigger>
         ))}
       </div>
+      <HelpButton />
     </div>
   );
 }
@@ -373,7 +376,7 @@ interface CommandButtonProps {
   compact: boolean;
 }
 
-function CommandButton({
+export function CommandButton({
   def,
   registry,
   state,

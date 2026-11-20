@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
@@ -93,5 +96,26 @@ describe('offerUndo', () => {
     queue?.visible[0]?.action?.run();
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1));
     expect(call).toHaveBeenCalledWith('actions.undo', { handle: 'doc-1', expect_history: 7 });
+  });
+});
+
+// Every Undo goes through the helper, so the stale and error policy is in one place (W4.4b). A
+// caller that sent actions.undo itself would skip the history check.
+describe('actions.undo has one caller', () => {
+  it('is sent only from undoToast.ts', () => {
+    const src = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(path);
+      }
+    };
+    walk(src);
+    const senders = files.filter((file) => /'actions\.undo'\s*,/.test(readFileSync(file, 'utf8')));
+    expect(senders.map((file) => relative(src, file).split(/[\\/]/).join('/'))).toEqual([
+      'feedback/undoToast.ts',
+    ]);
   });
 });

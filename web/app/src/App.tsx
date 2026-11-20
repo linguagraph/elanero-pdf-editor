@@ -20,6 +20,9 @@ import { useViewportWidth } from './layout/useViewportWidth';
 import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
 import { type AppMenuPanelItem, AppMenu } from './ribbon/AppMenu';
+import { QuickAccess } from './ribbon/QuickAccess';
+import { openGuide, WEB_VERSION_PAGE } from './help/guide';
+import { Overlay } from './layout/Overlay';
 import { type RibbonPrefs } from './ribbon/form';
 import { Ribbon } from './ribbon/Ribbon';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
@@ -117,6 +120,8 @@ export function App({
   // Bumped by Ctrl+F so the search panel moves focus to its query box (see SearchPanel).
   const [searchFocus, setSearchFocus] = useState(0);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  // About Elanero (W4.3a S4), from the app menu.
+  const [aboutOpen, setAboutOpen] = useState(false);
   // Keyboard Shortcuts (W4.5 S2): from the app menu, the ribbon or Preferences. It opens above
   // Preferences, which keeps its unsaved draft.
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -181,6 +186,10 @@ export function App({
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
     'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
     'keyboard-shortcuts': () => setShortcutsOpen(true),
+    // Help opens the guide's start; the "?" button opens the page of the tab shown instead.
+    help: () => openGuide(),
+    'whats-different': () => openGuide(WEB_VERSION_PAGE),
+    'about-elanero': () => setAboutOpen(true),
     print: () => setPrintOpen(true),
     open: () => docs.openPicker(),
     'open-recent': () => docs.showStartPage(),
@@ -315,6 +324,10 @@ export function App({
           'next-page': () => runView('next-page'),
           back: () => stepBack(-1),
           forward: () => stepBack(1),
+          // Close (W4.3a S4) closes the open tab, as the tab's own close button does.
+          close: () => {
+            if (activeId !== null) docs.closeTab(activeId);
+          },
         }
       : {}),
   };
@@ -437,6 +450,7 @@ export function App({
                 panelItems={leftRailShown ? undefined : menuPanelItems}
               />
               <BrandMark />
+              <QuickAccess registry={REGISTRY} state={state} handlers={handlers} />
             </div>
             <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
             <button
@@ -461,6 +475,9 @@ export function App({
         hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
+      <Overlay isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title={t('about.title')}>
+        <About />
+      </Overlay>
       <ShortcutsDialog
         isOpen={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}

@@ -7,11 +7,12 @@ import { reportActionError } from '../actionJob/errors';
 import type { PageRect } from '../comments/coordinates';
 import type { PageRpc } from '../engine/engineConnection';
 import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
-import { toasts, type ToastStore, undoAction } from '../feedback/toasts';
+import { offerUndo } from '../feedback/undoToast';
+import { toasts, type ToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { MarkRef } from './marks';
-import { addRedactionMark, applyRedactions, removeRedactionMarks, undoLastStep } from './redaction';
+import { addRedactionMark, applyRedactions, removeRedactionMarks } from './redaction';
 
 export interface RedactionDeps {
   readonly rpc: PageRpc;
@@ -107,24 +108,19 @@ export class RedactionController {
       );
       this.deps.scheduler.noteRevisions(outcome.changed?.revisions ?? {});
       this.update({ marks: [], busy: false });
-      this.store.push(
-        'success',
-        t('redact.applied'),
-        undoAction(() => void this.undo()),
-      );
+      // The marks are already cleared above, so an undo brings the step back without them; the
+      // marks list is not rebuilt (pre-existing; see W7.4).
+      offerUndo('success', t('redact.applied'), {
+        rpc: this.deps.rpc,
+        handle: this.deps.handle,
+        history: outcome.history,
+        onUndone: (undone) => this.deps.scheduler.noteRevisions(undone.changed?.revisions ?? {}),
+        store: this.store,
+      });
     } catch (error) {
       this.update({ busy: false });
       if (!(error instanceof ActionJobCancelled))
         reportActionError(this.store, error, 'redact.applyFailed');
-    }
-  }
-
-  private async undo(): Promise<void> {
-    try {
-      const changed = await undoLastStep(this.deps.rpc, this.deps.handle);
-      this.deps.scheduler.noteRevisions(changed?.revisions ?? {});
-    } catch (error) {
-      reportActionError(this.store, error, 'redact.applyFailed');
     }
   }
 }
