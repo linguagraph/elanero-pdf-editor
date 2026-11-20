@@ -185,13 +185,14 @@ def test_extract_images_and_fonts(fixture_pdf, report, tmp_path: Path) -> None:
     with Image.open(images[0]) as img:
         assert img.size == (320, 200)
     assert extract_images(report, tmp_path / "none", pages=[1]) == []
-    written, skipped = extract_fonts(report, tmp_path / "fonts")
-    assert written == [] and set(skipped) == {"Helvetica", "Helvetica-Bold"}
+    result = extract_fonts(report, tmp_path / "fonts")
+    assert result.written == [] and set(result.not_embedded) == {"Helvetica", "Helvetica-Bold"}
+    assert result.refused == []
     doc = ENGINE.open(fixture_pdf("subset_fonts"))
-    written, _ = extract_fonts(doc, tmp_path / "fonts")
+    result = extract_fonts(doc, tmp_path / "fonts")
     doc.close()
-    assert written and all(p.stat().st_size > 1000 for p in written)
-    assert all("+" not in p.name for p in written)
+    assert result.written and all(p.stat().st_size > 1000 for p in result.written)
+    assert all("+" not in p.name for p in result.written)
 
 
 def test_office_conversion_without_libreoffice(tmp_path: Path, monkeypatch) -> None:

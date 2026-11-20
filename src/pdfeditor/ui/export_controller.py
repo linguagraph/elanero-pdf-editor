@@ -12,7 +12,12 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from pdfeditor.services.export import export_document, find_tables, tables_to_xlsx
-from pdfeditor.services.export.images import export_pages, extract_fonts, extract_images
+from pdfeditor.services.export.images import (
+    FontExtraction,
+    export_pages,
+    extract_fonts,
+    extract_images,
+)
 from pdfeditor.services.export.office import (
     INSTALL_HINT,
     OFFICE_SUFFIXES,
@@ -261,15 +266,23 @@ class ExportController:
             return None
         doc, lock = session.document, session.lock
 
-        def work(job: Job) -> tuple[list[Path], list[str]]:
+        def work(job: Job) -> FontExtraction:
             with job.hold(lock):
                 return extract_fonts(doc, target, job.token, job.progress)
 
         def done(result: object) -> list[Path]:
-            written, skipped = result if isinstance(result, tuple) else ([], [])
+            extraction = result if isinstance(result, FontExtraction) else None
+            written = extraction.written if extraction else []
             message = f"Extracted {len(written)} font(s) to {target}"
-            if skipped:
-                message += f"; {len(skipped)} not embedded ({', '.join(sorted(set(skipped))[:5])})"
+            if extraction and extraction.refused:
+                names = sorted({name for name, _ in extraction.refused})
+                message += (
+                    f"; {len(extraction.refused)} not saved: the font licence does not allow it"
+                    f" ({', '.join(names[:5])})"
+                )
+            if extraction and extraction.not_embedded:
+                names = sorted(set(extraction.not_embedded))
+                message += f"; {len(extraction.not_embedded)} not embedded ({', '.join(names[:5])})"
             self._report(message, target if written else None)
             return list(written)
 

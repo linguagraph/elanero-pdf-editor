@@ -68,7 +68,9 @@ download the file. Several page images come together in one ZIP file.
 
 - **Images** in the **Export** group of the **Tools** tab (**File ▸ Extract Images…**) saves every image in
   the document as a file.
-- **Fonts** in the same group (**File ▸ Extract Fonts…**) saves the fonts embedded in the document.
+- **Fonts** in the same group (**File ▸ Extract Fonts…**) saves the fonts embedded in the
+  document. A font whose licence forbids embedding (a restricted font, or one allowed only as
+  bitmaps) is not saved, and the message names it.
 
 In the web version, **Extract Images** (in the **Export** group of the **Tools** tab, or from the
 command palette) asks for the pages: all pages, the current page, or a range such as `1-3, 5`. Each

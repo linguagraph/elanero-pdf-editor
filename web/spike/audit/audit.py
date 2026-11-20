@@ -362,8 +362,12 @@ def _():
 def _():
     from pdfeditor.services.export.images import extract_fonts
 
-    written, skipped = extract_fonts(_open_doc(), _work("extract-fonts"))
-    return {"files": len(written), "skipped": skipped}
+    result = extract_fonts(_open_doc(), _work("extract-fonts"))
+    return {
+        "files": len(result.written),
+        "skipped": result.not_embedded,
+        "refused": result.refused,
+    }
 
 
 @check("export.office", "export", "services/export/office.py (excluded from the web)")
