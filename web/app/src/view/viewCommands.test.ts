@@ -30,7 +30,7 @@ const STATE_WITH_DOCUMENT: CommandState = {
 const STATE_NO_DOCUMENT: CommandState = { ...STATE_WITH_DOCUMENT, hasDocument: false };
 
 function fakeView(): DocumentViewHandle {
-  return { scrollToPage: vi.fn(), zoom: vi.fn(), stepPage: vi.fn() };
+  return { scrollToPage: vi.fn(), zoom: vi.fn(), stepPage: vi.fn(), focusPageField: vi.fn() };
 }
 
 // The handlers the app gives the registry for these commands, with the view and the history fakes.

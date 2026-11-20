@@ -1,8 +1,13 @@
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n/t';
-import { DocumentStatusBar, type DocumentStatusBarProps } from './DocumentStatusBar';
+import {
+  DocumentStatusBar,
+  type DocumentStatusBarHandle,
+  type DocumentStatusBarProps,
+} from './DocumentStatusBar';
+import { PageJumpField } from './PageJumpField';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -76,6 +81,42 @@ describe('back and forward', () => {
     expect(event.defaultPrevented).toBe(false);
     expect(onBack).not.toHaveBeenCalled();
     expect(onForward).not.toHaveBeenCalled();
+  });
+});
+
+describe('focusPageField', () => {
+  it('asks the host through onFocusPageField', () => {
+    const onFocusPageField = vi.fn();
+    const ref = createRef<DocumentStatusBarHandle>();
+    act(() => {
+      root.render(<DocumentStatusBar {...props({ onFocusPageField })} ref={ref} />);
+    });
+    act(() => ref.current?.focusPageField());
+    expect(onFocusPageField).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves focus into the page input the host focuses', () => {
+    // Stands in for App, which routes the call to the view handle; the field is the pill's input.
+    const fieldRef = createRef<HTMLInputElement>();
+    const barRef = createRef<DocumentStatusBarHandle>();
+    const focusField = () => {
+      fieldRef.current?.focus();
+      fieldRef.current?.select();
+    };
+    act(() => {
+      root.render(
+        <>
+          <DocumentStatusBar {...props({ onFocusPageField: focusField })} ref={barRef} />
+          <PageJumpField ref={fieldRef} page={2} total={5} onGoTo={vi.fn()} />
+        </>,
+      );
+    });
+    act(() => barRef.current?.focusPageField());
+    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${t('view.goToPage')}"]`);
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(input?.selectionStart).toBe(0);
+    expect(input?.selectionEnd).toBe(input?.value.length);
   });
 });
 

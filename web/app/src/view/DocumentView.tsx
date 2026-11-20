@@ -72,6 +72,8 @@ export interface DocumentViewHandle {
   zoom(request: ZoomRequest | { readonly step: -1 | 1 }): void;
   // Moves to the next or the previous page, clamped to the document.
   stepPage(direction: -1 | 1): void;
+  // Focuses the canvas pill's page field and selects its text (the status bar's Go to Page, W4.3b).
+  focusPageField(): void;
 }
 
 // What the view reports to its host for the status bar: the page at the middle of the viewport
@@ -159,6 +161,8 @@ export function DocumentView({
   const [night, setNight] = useState(() => readPreferences().nightReading);
   // The zoom as the latest wheel event left it, so a burst of events builds on each other.
   const zoomRef = useRef(manualZoom);
+  // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
+  const pageFieldRef = useRef<HTMLInputElement>(null);
   const wheelPending = useRef(0);
   // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
   const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
@@ -425,6 +429,10 @@ export function DocumentView({
       zoom: (request) =>
         applyZoom('step' in request ? { zoom: stepZoom(zoom, request.step) } : request),
       stepPage,
+      focusPageField: () => {
+        pageFieldRef.current?.focus();
+        pageFieldRef.current?.select();
+      },
     }),
     [scrollToPage, zoom, applyZoom, stepPage],
   );
@@ -603,6 +611,7 @@ export function DocumentView({
           onStep={stepPage}
           onZoom={applyZoom}
           onZoomStep={(direction) => zoomTo(stepZoom(zoom, direction))}
+          pageFieldRef={pageFieldRef}
         />
       )}
     </section>

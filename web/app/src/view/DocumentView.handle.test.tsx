@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
+import { t } from '../i18n/t';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { DocumentView, type DocumentViewHandle } from './DocumentView';
 import { computeColumn, fitWidthZoom, scrollTopForPage } from './layout';
@@ -107,6 +108,17 @@ describe('DocumentView.zoom', () => {
     act(() => handle.current?.zoom({ fit: 'width' }));
     const fitted = fitWidthZoom(612, window.innerWidth, 1);
     expect(firstPageWidth()).toBeCloseTo(computeColumn(PAGES, fitted).boxes[0]?.width ?? -1);
+  });
+});
+
+describe('DocumentView.focusPageField', () => {
+  it('focuses the canvas pill page input and selects its text', async () => {
+    await mount('actual');
+    act(() => handle.current?.focusPageField());
+    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${t('view.goToPage')}"]`);
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(input?.selectionEnd).toBe(input?.value.length);
   });
 });
 

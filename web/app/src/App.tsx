@@ -286,6 +286,7 @@ export function App({
             canForward={canGoForward(history)}
             onBack={() => stepBack(-1)}
             onForward={() => stepBack(1)}
+            onFocusPageField={() => viewRef.current?.focusPageField()}
           />
         ) : undefined
       }
