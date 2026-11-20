@@ -505,11 +505,11 @@ export interface PreviewFontParams {
 }
 
 export interface PreviewFontResult {
-  /** True when ``program`` holds a font that can show the text's glyphs */
+  /** True when the embedded font has a character map; no glyph check per text */
   found: boolean;
   /** the generic family to show when the program isn't usable */
   family: PreviewFamily;
-  /** the font program: a $bin buffer; None when not found */
+  /** the embedded font program's bytes, as a $bin buffer; None if not found */
   program: ArrayBuffer | null;
 }
 

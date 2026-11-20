@@ -18,7 +18,7 @@ from pdfeditor.services import font_preview
 from pdfeditor.webapi.errors import INVALID_ARGS
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
-from tests.unit.test_webapi_jobs import call, error, ok, open_data
+from tests.unit.test_webapi_jobs import call, call_raw, error, ok, open_data
 
 FONT = Path(__file__).resolve().parents[1] / "fixtures" / "generated" / "fonts"
 # Embedded TrueType faces with a character map (scripts/make_fixtures.py licensed_fonts).
@@ -87,13 +87,31 @@ def test_without_fonttools_nothing_is_usable(monkeypatch: pytest.MonkeyPatch) ->
     assert font_preview.preview_font_program(_font_bytes()) is None
 
 
+def _embedded_program(data: bytes, resource: str) -> bytes:
+    """The FontFile2 stream of a page font, read with pikepdf: the expected bytes come from the
+    PDF itself, not from the engine call under test."""
+    pikepdf = pytest.importorskip("pikepdf")
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        font = pdf.pages[0].Resources.Font[resource]
+        if "/DescendantFonts" in font:  # a composite (Type0) font keeps its descriptor below
+            font = font.DescendantFonts[0]
+        return bytes(font.FontDescriptor.FontFile2.read_bytes())
+
+
 def test_the_call_returns_the_program_of_an_embedded_font(web: None, fixture_pdf: Any) -> None:
     pytest.importorskip("fontTools")
-    handle = open_data(fixture_pdf("licensed_fonts").read_bytes(), "licensed.pdf")
-    result = _preview(handle, EMBEDDED_FONT)
+    data = fixture_pdf("licensed_fonts").read_bytes()
+    handle = open_data(data, "licensed.pdf")
+    reply, buffers = call_raw(
+        "content.preview_font",
+        {"handle": handle, "page": 0, "font_name": EMBEDDED_FONT},
+    )
+    result = ok(reply)
     assert result["found"] is True
     assert result["family"] == "sans-serif"
-    assert "$bin" in result["program"]  # the program travels as a buffer, not inline JSON
+    # The program travels as a buffer, not inline JSON, and is the embedded bytes unchanged.
+    assert "$bin" in result["program"]
+    assert buffers[result["program"]["$bin"]] == _embedded_program(data, "/F0")
 
 
 def test_the_call_names_the_generic_family(web: None, fixture_pdf: Any) -> None:

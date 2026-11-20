@@ -626,9 +626,9 @@ class PreviewFontParams:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class PreviewFontResult:
-    found: bool  # True when ``program`` holds a font that can show the text's glyphs
+    found: bool  # True when the embedded font has a character map; no glyph check per text
     family: PreviewFamily  # the generic family to show when the program isn't usable
-    program: bytes | None  # the font program: a $bin buffer; None when not found
+    program: bytes | None  # the embedded font program's bytes, as a $bin buffer; None if not found
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

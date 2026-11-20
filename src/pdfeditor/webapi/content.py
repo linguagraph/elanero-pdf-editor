@@ -75,8 +75,10 @@ def preview_font(params: dto.PreviewFontParams) -> dto.PreviewFontResult:
     (W6.8a). Read-only: it issues no Command, so the document and its undo history are unchanged.
 
     The program is returned only when it has a character map (a subset MuPDF wrote on save has
-    none, and the preview then falls back to ``family``). An unknown name, a base-14 font that
-    isn't embedded, or a program fontTools can't read is "not found", not an error.
+    none, and the preview then falls back to ``family``). That is the whole check: the call takes
+    no text, so it does not test that the program has glyphs for any particular edit. The bytes
+    are the embedded program as the PDF stores it. An unknown name, a base-14 font that isn't
+    embedded, or a program fontTools can't read is "not found", not an error.
     """
     if len(params.font_name) > MAX_FONT_NAME:
         raise RpcFailure(
