@@ -797,6 +797,22 @@ def _font_names_complete_pikepdf(data: bytes, family: str) -> None:
     assert any(family in n and "+" not in n for n in names), names
 
 
+@host_check("font_program_sha256_pikepdf")
+def _font_program_sha256_pikepdf(data: bytes, resource: str, sha256: str) -> None:
+    """The FontFile2 stream of page 0's font ``resource`` (a composite font's descendant) has
+    the SHA-256 ``sha256``: the bytes the PDF itself embeds, not the engine's copy."""
+    import hashlib
+
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        font = pdf.pages[0].Resources.Font[resource]
+        if "/DescendantFonts" in font:  # a composite (Type0) font keeps its descriptor below
+            font = font.DescendantFonts[0]
+        program = bytes(font.FontDescriptor.FontFile2.read_bytes())
+    assert hashlib.sha256(program).hexdigest() == sha256
+
+
 @host_check("artifact_tags_pikepdf")
 def _artifact_tags_pikepdf(data: bytes, present: list[list[str]]) -> None:
     """Each (Subtype, PDFEditorMark) pair is a marked-content artifact on page 0."""

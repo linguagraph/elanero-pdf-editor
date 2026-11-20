@@ -5,6 +5,7 @@ gives "not found" and the editor falls back to a generic family.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import sys
 from collections.abc import Iterator
@@ -18,6 +19,7 @@ from pdfeditor.services import font_preview
 from pdfeditor.webapi.errors import INVALID_ARGS
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
+from tests.hostcheck import record
 from tests.unit.test_webapi_jobs import call, call_raw, error, ok, open_data
 
 FONT = Path(__file__).resolve().parents[1] / "fixtures" / "generated" / "fonts"
@@ -87,17 +89,6 @@ def test_without_fonttools_nothing_is_usable(monkeypatch: pytest.MonkeyPatch) ->
     assert font_preview.preview_font_program(_font_bytes()) is None
 
 
-def _embedded_program(data: bytes, resource: str) -> bytes:
-    """The FontFile2 stream of a page font, read with pikepdf: the expected bytes come from the
-    PDF itself, not from the engine call under test."""
-    pikepdf = pytest.importorskip("pikepdf")
-    with pikepdf.open(io.BytesIO(data)) as pdf:
-        font = pdf.pages[0].Resources.Font[resource]
-        if "/DescendantFonts" in font:  # a composite (Type0) font keeps its descriptor below
-            font = font.DescendantFonts[0]
-        return bytes(font.FontDescriptor.FontFile2.read_bytes())
-
-
 def test_the_call_returns_the_program_of_an_embedded_font(web: None, fixture_pdf: Any) -> None:
     pytest.importorskip("fontTools")
     data = fixture_pdf("licensed_fonts").read_bytes()
@@ -111,7 +102,15 @@ def test_the_call_returns_the_program_of_an_embedded_font(web: None, fixture_pdf
     assert result["family"] == "sans-serif"
     # The program travels as a buffer, not inline JSON, and is the embedded bytes unchanged.
     assert "$bin" in result["program"]
-    assert buffers[result["program"]["$bin"]] == _embedded_program(data, "/F0")
+    program = buffers[result["program"]["$bin"]]
+    # The expected bytes are the PDF's own FontFile2 stream, read with pikepdf in the host
+    # check (not the engine call under test); the SHA-256 keeps the recorded arguments small.
+    record(
+        "font_program_sha256_pikepdf",
+        data,
+        resource="/F0",
+        sha256=hashlib.sha256(program).hexdigest(),
+    )
 
 
 def test_the_call_names_the_generic_family(web: None, fixture_pdf: Any) -> None:
