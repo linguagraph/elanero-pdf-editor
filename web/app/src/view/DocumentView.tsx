@@ -33,7 +33,9 @@ import {
   type FitMode,
   type PageSizePt,
   scrollTopForPage,
+  scrollForRect,
   scrollTopForSpread,
+  type PageRectPt,
   type ViewLayout,
   visibleRange,
 } from './layout';
@@ -101,6 +103,8 @@ export interface DocumentViewHandle {
   setRedacting(on: boolean): void;
   // Selects the text of the page at the top of the view, for Select All (W5.4 S4).
   selectPageText(): void;
+  // Scrolls so a rectangle on the page (in points) is in view, as the search panel does for a hit.
+  revealRect(index: number, rect: PageRectPt): void;
 }
 
 // What the view reports to its host for the status bar and the ribbon's checked states: the page at
@@ -437,6 +441,29 @@ export function DocumentView({
     [],
   );
 
+  // Brings a rectangle of a page into view. Out-of-range indexes do nothing.
+  const revealRect = useCallback(
+    (index: number, rect: PageRectPt) => {
+      const element = scrollRef.current;
+      const box = layout.boxes[index];
+      if (element === null || box === undefined) return;
+      const target = scrollForRect(
+        box,
+        rect,
+        zoom,
+        { top: element.scrollTop, left: element.scrollLeft },
+        {
+          height: element.clientHeight || window.innerHeight,
+          width: element.clientWidth || window.innerWidth,
+        },
+      );
+      element.scrollTop = target.top;
+      element.scrollLeft = target.left;
+      setScroll(viewportOf(element));
+    },
+    [layout, zoom],
+  );
+
   // Scrolls so the page's top edge is at the top of the viewport; shared by the handle and the pill.
   const scrollToPage = useCallback(
     (index: number) => {
@@ -587,6 +614,7 @@ export function DocumentView({
     ref,
     () => ({
       scrollToPage,
+      revealRect,
       zoom: (request) =>
         applyZoom('step' in request ? { zoom: stepZoom(zoom, request.step) } : request),
       stepPage,
@@ -616,6 +644,7 @@ export function DocumentView({
     }),
     [
       scrollToPage,
+      revealRect,
       zoom,
       applyZoom,
       stepPage,

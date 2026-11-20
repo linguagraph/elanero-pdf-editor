@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
-import type { SearchHitDto } from '../rpc/generated';
+import type { RectDto, SearchHitDto } from '../rpc/generated';
 import { RpcError } from '../rpc/client';
 import { type FindRequest, SearchPanel, type SearchPanelProps } from './SearchPanel';
 import type { SearchMarks } from './search';
@@ -100,6 +100,7 @@ function resultTexts(): string[] {
 interface Spies {
   onMarks: ReturnType<typeof vi.fn<(marks: SearchMarks | null) => void>>;
   onGoTo: ReturnType<typeof vi.fn<(page: number) => void>>;
+  onReveal: ReturnType<typeof vi.fn<(page: number, rect: RectDto) => void>>;
   onClose: ReturnType<typeof vi.fn<() => void>>;
 }
 
@@ -107,6 +108,7 @@ function render(rpc: Pick<PageRpc, 'chunked'>, extra: Partial<SearchPanelProps> 
   const spies: Spies = {
     onMarks: vi.fn<(marks: SearchMarks | null) => void>(),
     onGoTo: vi.fn<(page: number) => void>(),
+    onReveal: vi.fn<(page: number, rect: RectDto) => void>(),
     onClose: vi.fn<() => void>(),
   };
   act(() => {
@@ -116,6 +118,7 @@ function render(rpc: Pick<PageRpc, 'chunked'>, extra: Partial<SearchPanelProps> 
         handle="doc-1"
         onMarks={spies.onMarks}
         onGoTo={spies.onGoTo}
+        onReveal={spies.onReveal}
         onClose={spies.onClose}
         {...extra}
       />,
@@ -202,6 +205,18 @@ describe('SearchPanel', () => {
       expect.objectContaining({ start_page: 3 }),
       expect.any(Object),
     );
+  });
+
+  it('asks the view to reveal the rectangle of the chosen match, in page points', async () => {
+    const { rpc } = fakeRpc(twoPages);
+    const spies = render(rpc);
+    typeQuery('cat');
+    submit();
+    await flush();
+    // The first hit's quad spans x 10 to 40 and y 20 to 32 points.
+    expect(spies.onReveal).toHaveBeenLastCalledWith(0, { x0: 10, y0: 20, x1: 40, y1: 32 });
+    act(() => buttonNamed('Next match').click());
+    expect(spies.onReveal).toHaveBeenLastCalledWith(2, { x0: 10, y0: 20, x1: 40, y1: 32 });
   });
 
   it('steps with Enter and Shift+Enter while the query is the one searched', async () => {
