@@ -50,6 +50,7 @@ import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
 import { SplitDialog } from './split/SplitDialog';
 import { ExportDialog } from './export/ExportDialog';
+import { ExtractImagesDialog } from './extract/ExtractImagesDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { RedactionController } from './redaction/controller';
@@ -166,6 +167,7 @@ export function App({
   }
   const [splitOpen, setSplitOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [extractImagesOpen, setExtractImagesOpen] = useState(false);
   const [compressOpen, setCompressOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
@@ -227,6 +229,7 @@ export function App({
     'open-recent': () => docs.showStartPage(),
     'split-document': () => setSplitOpen(true),
     'export-pdf': () => setExportOpen(true),
+    'extract-images': () => setExtractImagesOpen(true),
     'reduce-file-size': () => setCompressOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
@@ -647,6 +650,18 @@ export function App({
           onClose={() => setExportOpen(false)}
           engine={rpc}
           handle={session.handle}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          startWorker={jobs.acquire}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined && rpc !== undefined ? (
+        <ExtractImagesDialog
+          isOpen={extractImagesOpen}
+          onClose={() => setExtractImagesOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          name={activeTab.name}
           pageCount={activeTab.pages}
           currentPage={viewState.page}
           startWorker={jobs.acquire}

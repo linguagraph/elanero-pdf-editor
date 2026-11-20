@@ -42,6 +42,10 @@ export interface FileJobDeps {
   readonly engine: FileJobEngine;
   readonly startWorker: () => JobWorker;
   readonly progress?: JobProgressStore;
+  // Aborting it cancels this run, and only this run's job. Before prepare returns, the run stops
+  // once prepare returns (and frees the prepared job); before the bar shows the job, it never
+  // starts. Once running, it is cancelled as the bar's Cancel cancels it.
+  readonly signal?: AbortSignal;
   // The caller reports the outcome itself (its toasts are more specific than the job bar's). The
   // bar then hides with no success or error toast, so the user sees one message per result.
   readonly ownToasts?: boolean;
@@ -147,6 +151,11 @@ export async function runFileJobOutput(
   const { engine } = deps;
   const prepared = await engine.call('jobs.prepare', { handle, job, args });
   const { token } = prepared;
+  if (deps.signal?.aborted === true) {
+    // Cancelled while prepare was in flight: nothing is on the bar and no worker has started.
+    await engine.call('jobs.abort', { handle, token }).catch(() => undefined);
+    throw new FileJobCancelled();
+  }
   // The job worker's copy counts against the heap warning (W3.9 D4). Read before the copy is sent.
   void memoryWarner.check(engine, 'job', prepared.document.byteLength);
 
@@ -173,6 +182,11 @@ export async function runFileJobOutput(
     await engine.call('jobs.abort', { handle, token });
     throw new RpcError('BUSY', 'another job is running');
   }
+  // Scoped to this run's token, so an abort never cancels a different job on the bar.
+  const onAbort = (): void => {
+    void progress.cancel(token);
+  };
+  deps.signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
     const request = JSON.stringify({
@@ -207,6 +221,7 @@ export async function runFileJobOutput(
     progress.finish(token, { ok: false, error, quiet });
     throw error;
   } finally {
+    deps.signal?.removeEventListener('abort', onAbort);
     worker.terminate();
   }
 }
