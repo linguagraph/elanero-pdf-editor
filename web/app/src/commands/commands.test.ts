@@ -133,6 +133,27 @@ describe('registry declarations', () => {
   });
 });
 
+describe('document navigation commands (W4.3b S3)', () => {
+  it('needs a document for Go to Page and for Next and Previous Document, like the others', () => {
+    for (const id of ['go-to-page', 'next-document', 'previous-document']) {
+      const handler = vi.fn();
+      expect(runCommand(REGISTRY, id, state(), { [id]: handler }), id).toBe(false);
+      expect(runCommand(REGISTRY, id, withDoc, { [id]: handler }), id).toBe(true);
+      expect(handler, id).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('has no menu entry for Next and Previous Document (palette and keys only)', () => {
+    const menu = MENU.flat();
+    expect(menu).not.toContain('next-document');
+    expect(menu).not.toContain('previous-document');
+  });
+
+  it('puts Go to Page on the Home ribbon, in the navigate group', () => {
+    expect(REGISTRY.get('go-to-page')?.group).toBe('home.navigate');
+  });
+});
+
 describe('open recent', () => {
   it('is disabled while the recent list is empty, and runs once there are files', () => {
     const openRecent = vi.fn();

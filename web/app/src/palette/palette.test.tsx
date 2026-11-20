@@ -265,6 +265,27 @@ describe('command palette', () => {
     expect(rows()[1]?.dataset.recent).toBeUndefined();
   });
 
+  it('focuses the page field after the palette closes when Go to Page runs from it', async () => {
+    // The page field stands in for the status bar's, which focusPageField focuses in the app.
+    const handlers = spies();
+    handlers['go-to-page'] = vi.fn(() => {
+      document.querySelector<HTMLInputElement>('#field')?.focus();
+    });
+    render(OPEN_STATE, handlers);
+    document.querySelector<HTMLButtonElement>('#invoker')?.focus();
+    openPalette();
+    type('go to page');
+    key(input(), { key: 'Enter' });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    // The palette restores focus to the invoker on the next frame; Go to Page runs after that.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(handlers['go-to-page']).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(document.querySelector('#field'));
+  });
+
   it('does not record a run that is refused because the command is disabled', () => {
     render(NO_DOCUMENT_STATE, spies());
     openPalette();
@@ -382,6 +403,33 @@ describe('keyboard shortcuts', () => {
     expect(handlers.close).not.toHaveBeenCalled();
     key(document.body, { key: 'w', altKey: true });
     expect(handlers.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs Go to Page once from Alt+G, and not from a text field', () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    key(document.body, { key: 'g', code: 'KeyG', altKey: true });
+    expect(handlers['go-to-page']).toHaveBeenCalledTimes(1);
+    key(document.querySelector('#field') as HTMLElement, { key: 'g', code: 'KeyG', altKey: true });
+    expect(handlers['go-to-page']).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs Next and Previous Document from Alt+PgDn and Alt+PgUp, and not in a text field', () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    key(document.body, { key: 'PageDown', altKey: true });
+    expect(handlers['next-document']).toHaveBeenCalledTimes(1);
+    key(document.body, { key: 'PageUp', altKey: true });
+    expect(handlers['previous-document']).toHaveBeenCalledTimes(1);
+    key(document.querySelector('#field') as HTMLElement, { key: 'PageDown', altKey: true });
+    expect(handlers['next-document']).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run Next Document with no document open', () => {
+    const handlers = spies();
+    render(NO_DOCUMENT_STATE, handlers);
+    key(document.body, { key: 'PageDown', altKey: true });
+    expect(handlers['next-document']).not.toHaveBeenCalled();
   });
 
   it('opens the palette from a text field too, and not while it is open', () => {

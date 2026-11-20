@@ -29,6 +29,7 @@ import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
 import { StartPage } from './start/StartPage';
 import { DocumentTabs } from './tabs/DocumentTabs';
+import { neighbourTabId } from './tabs/tabState';
 import { useTabSession } from './engine/engineConnection';
 import { jobWorkerBootOptions } from './engine/bootOptions';
 import { startJobWorker } from './engine/start';
@@ -42,7 +43,7 @@ import { ExportDialog } from './export/ExportDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
-import { DocumentStatusBar } from './view/DocumentStatusBar';
+import { DocumentStatusBar, type DocumentStatusBarHandle } from './view/DocumentStatusBar';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
@@ -163,8 +164,19 @@ export function App({
       engine.dispose();
     };
   }, [engine]);
+  // The status bar's page field, focused by Go to Page (Alt+G).
+  const statusBarRef = useRef<DocumentStatusBarHandle>(null);
+  // Next and Previous Document (W4.3b D6): step through the tabs in order and wrap, as the
+  // desktop does. With no tab active, Next starts at the first and Previous at the last.
+  const cycleDocument = (step: 1 | -1): void => {
+    const id = neighbourTabId(docs.tabs, step);
+    if (id !== null) docs.selectTab(id);
+  };
   const handlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
+    'go-to-page': () => statusBarRef.current?.focusPageField(),
+    'next-document': () => cycleDocument(1),
+    'previous-document': () => cycleDocument(-1),
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
     'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
     'keyboard-shortcuts': () => setShortcutsOpen(true),
@@ -256,6 +268,7 @@ export function App({
       statusBar={
         documentShown ? (
           <DocumentStatusBar
+            ref={statusBarRef}
             page={viewState.page}
             total={activeTab?.pages ?? 0}
             zoom={viewState.zoom}
