@@ -25,6 +25,9 @@ export interface MarkStyleFieldsProps {
   // The fields that differ across the selection: shown as "Mixed" and left empty.
   readonly mixed?: Partial<Record<MarkStyleField, boolean>>;
   readonly disabled?: boolean;
+  // The longest overlay text the field takes. The panel keeps the engine's limit; the new-mark
+  // style dialog passes the preferences' limit, which is shorter (W4.14).
+  readonly overlayMaxLength?: number;
   readonly onChange: (patch: MarkStylePatch) => void;
 }
 
@@ -42,6 +45,7 @@ export function MarkStyleFields({
   value,
   mixed = {},
   disabled = false,
+  overlayMaxLength = OVERLAY_TEXT_LIMIT,
   onChange,
 }: MarkStyleFieldsProps) {
   const overlayId = useId();
@@ -82,7 +86,7 @@ export function MarkStyleFields({
         id={overlayId}
         type="text"
         className="mark-style-overlay"
-        maxLength={OVERLAY_TEXT_LIMIT}
+        maxLength={overlayMaxLength}
         value={draft}
         placeholder={mixed.overlayText ? t('redactions.mixed') : undefined}
         disabled={disabled}
