@@ -175,6 +175,13 @@
   background: var(--color-surface-alt);
 }
 
+/* The keyboard's place in the menu gets the same 2 px ring as the other controls (W8.5 S4): the
+   tint alone is too faint to count as a visible focus. */
+.app-menu-item[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
 .app-menu-item[aria-disabled='true'] {
   color: var(--color-text-disabled);
   cursor: default;
