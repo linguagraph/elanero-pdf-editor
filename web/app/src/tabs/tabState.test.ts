@@ -5,6 +5,7 @@ import {
   closeTab,
   EMPTY_TABS,
   hasDirtyTab,
+  neighbourTabId,
   replaceHandle,
   setDirty,
   setPageCount,
@@ -76,6 +77,37 @@ describe('tab state', () => {
     const state = setPageCount(withThree(), 2, 7);
     expect(state.tabs.map((tab) => tab.pages)).toEqual([1, 7, 1]);
     expect(state.activeId).toBe(3);
+  });
+});
+
+describe('neighbourTabId (Next and Previous Document, W4.3b)', () => {
+  it('steps to the next and previous tab from the active one', () => {
+    const state = activateTab(withThree(), 2);
+    expect(neighbourTabId(state, 1)).toBe(3);
+    expect(neighbourTabId(state, -1)).toBe(1);
+  });
+
+  it('wraps from the last tab to the first, and from the first to the last', () => {
+    const last = activateTab(withThree(), 3);
+    expect(neighbourTabId(last, 1)).toBe(1);
+    const first = activateTab(withThree(), 1);
+    expect(neighbourTabId(first, -1)).toBe(3);
+  });
+
+  it('lands on the only tab in either direction', () => {
+    const one = addTab(EMPTY_TABS, pdf('a.pdf'));
+    expect(neighbourTabId(one, 1)).toBe(1);
+    expect(neighbourTabId(one, -1)).toBe(1);
+  });
+
+  it('starts at the first tab for Next and the last for Previous when none is active', () => {
+    const none = { ...withThree(), activeId: null };
+    expect(neighbourTabId(none, 1)).toBe(1);
+    expect(neighbourTabId(none, -1)).toBe(3);
+  });
+
+  it('returns null with no tabs', () => {
+    expect(neighbourTabId(EMPTY_TABS, 1)).toBeNull();
   });
 });
 
