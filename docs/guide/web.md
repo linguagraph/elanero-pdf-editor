@@ -197,6 +197,14 @@ browser, so nothing is overwritten.
   downloads nothing.
 - If the browser blocks the download, the tab stays unsaved and a **Download** button is offered.
 
+**Save As…** (in the app menu, and in the command palette) asks for a file name, prefilled with the
+document's name, and downloads a full copy of the document under that name. A blank name gives the
+document's own name, and the .pdf ending is added when you leave it out. The tab then takes the new
+name, and it is clean, as after a Save. The original file is not changed. A copy of a **signed**
+document is a full rewrite, so its signatures are not valid in it; use Save to keep them. A copy of
+an encrypted document keeps the password. When Save refuses a signed document, its message offers
+**Save as a new file**, which opens Save As.
+
 Writing back to the original file in place needs the browser's File System Access API, and is not
 available yet.
 

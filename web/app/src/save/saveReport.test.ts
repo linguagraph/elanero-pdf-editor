@@ -89,4 +89,43 @@ describe('reportSaveOutcome', () => {
     reportSaveOutcome({ status: 'skipped', reason: 'signed-restored' }, vi.fn(), store);
     expect(store.getState().visible[0]?.kind).toBe('warning');
   });
+
+  it('offers Save as a new file on a refused signed save, which opens Save As', () => {
+    const store = createToastStore();
+    const saveAs = vi.fn();
+    reportSaveOutcome(
+      {
+        status: 'failed',
+        error: new RpcError('SAVE_FAILED', 'refused'),
+        context: { signedInPlaceSave: true },
+      },
+      vi.fn(),
+      store,
+      saveAs,
+    );
+    const [toast] = store.getState().visible;
+    expect(toast?.action?.label).toBe('Save as a new file');
+    toast?.action?.run();
+    expect(saveAs).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no Save As button on a refused save that was not a signed in-place save', () => {
+    const store = createToastStore();
+    reportSaveOutcome(
+      { status: 'failed', error: new RpcError('SAVE_FAILED', 'refused'), context: {} },
+      vi.fn(),
+      store,
+      vi.fn(),
+    );
+    expect(store.getState().visible[0]?.action).toBeUndefined();
+  });
+
+  it('offers Save as a new file on a restored signed document, which opens Save As', () => {
+    const store = createToastStore();
+    const saveAs = vi.fn();
+    reportSaveOutcome({ status: 'skipped', reason: 'signed-restored' }, vi.fn(), store, saveAs);
+    const [toast] = store.getState().visible;
+    toast?.action?.run();
+    expect(saveAs).toHaveBeenCalledTimes(1);
+  });
 });

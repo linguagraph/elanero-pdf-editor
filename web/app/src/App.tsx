@@ -71,6 +71,8 @@ import { downloadBytes } from './files/downloads';
 import { createSaver } from './save/saver';
 import { reportSaveOutcome } from './save/saveReport';
 import { pdfFileName } from './save/fileName';
+import { SaveAsDialog } from './save/SaveAsDialog';
+import { toasts } from './feedback/toasts';
 import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
 
@@ -165,6 +167,8 @@ export function App({
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
+  // The tab Save As is asked about (W4.9): the dialog is open while it is set.
+  const [saveAsTab, setSaveAsTab] = useState<DocumentTab | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const docs = useDocuments(engine);
   // The Save flow of the open tabs (W4.8): one saver for the page, one save at a time per document.
@@ -312,6 +316,18 @@ export function App({
       },
       'in_place',
     );
+    reportSaveOutcome(outcome, downloadBytes, toasts, () => {
+      setSaveAsTab(tab);
+    });
+  };
+  // Save As (W4.9) writes a full copy under the name the dialog gave. The copy is then the file the
+  // tab is named after, so the tab takes the name; a refused or blocked copy leaves the tab as it was.
+  const saveAsCopy = async (tab: DocumentTab, name: string): Promise<void> => {
+    const outcome = await saver.save(
+      { handle: tab.handle, name, signed: tab.signed, restored: tab.restored },
+      'copy',
+    );
+    if (outcome.status === 'saved') docs.renameTab(tab.id, outcome.name);
     reportSaveOutcome(outcome, downloadBytes);
   };
   // The page and zoom the document view reports, for the status bar under the document.
@@ -377,6 +393,10 @@ export function App({
           // Save (W4.8) writes the open document back as a download; Ctrl+S runs it too.
           save: () => {
             if (activeTab !== undefined) void saveTab(activeTab);
+          },
+          // Save As (W4.9) asks for a name, then writes a full copy under it.
+          'save-as': () => {
+            if (activeTab !== undefined) setSaveAsTab(activeTab);
           },
           // Close (W4.3a S4) closes the open tab, as the tab's own close button does.
           close: () => {
@@ -528,6 +548,17 @@ export function App({
         // opening (docs.pending) counts too: it can finish while the confirmation is showing.
         hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
         onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+      <SaveAsDialog
+        tab={saveAsTab}
+        onCancel={() => {
+          setSaveAsTab(null);
+        }}
+        onSave={(name) => {
+          const tab = saveAsTab;
+          setSaveAsTab(null);
+          if (tab !== null) void saveAsCopy(tab, name);
+        }}
       />
       <Overlay isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title={t('about.title')}>
         <About />
