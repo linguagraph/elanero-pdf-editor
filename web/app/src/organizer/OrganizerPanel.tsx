@@ -9,7 +9,8 @@ import type { JobWorker } from '../files/fileJob';
 import { FileJobCancelled } from '../files/fileJob';
 import { downloadBytes } from '../files/downloads';
 import { passwordPrompt, type PasswordPrompt } from '../documents/passwordRequest';
-import { reportRpcError, toasts, type ToastStore, undoAction } from '../feedback/toasts';
+import { reportRpcError, toasts, type ToastStore } from '../feedback/toasts';
+import { offerUndo } from '../feedback/undoToast';
 import { RpcError } from '../rpc/client';
 import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
@@ -134,17 +135,16 @@ export function OrganizerPanel({
     onChanged?.(reply.pages.length);
   };
 
-  const undoChange = async () => {
-    setBusy(true);
-    try {
-      const reply = await rpc.call('actions.undo', { handle, expect_history: null });
-      if (reply.done) await reload();
-    } catch (error) {
-      reportFailure(error);
-    } finally {
-      setBusy(false);
-    }
-  };
+  // The Undo offer for one step. It names that step's history, so a press after another change
+  // is refused by the engine (the helper says so) instead of undoing the newer step.
+  const offerChangeUndo = (message: string, history: number) =>
+    offerUndo('info', message, {
+      rpc,
+      handle,
+      history,
+      onUndone: () => reload().catch(reportFailure),
+      store: toastStore,
+    });
 
   // Runs one page action, refreshes the list and shows the Undo toast. When the engine reports
   // nothing to do (executed false, a move that changes no order), nothing is shown.
@@ -159,11 +159,7 @@ export function OrganizerPanel({
       const reply = await rpc.call('actions.run', { handle, name, args });
       if (!reply.executed) return;
       await reload(nextSelection(reply.value));
-      toastStore.push(
-        'info',
-        message,
-        undoAction(() => void undoChange()),
-      );
+      offerChangeUndo(message, reply.state.history);
     } catch (error) {
       reportFailure(error);
     } finally {
@@ -228,11 +224,7 @@ export function OrganizerPanel({
       if (reply === null || !reply.executed) return;
       const count = insertedCount(reply.value);
       await reload(insertedSelection(at, count));
-      toastStore.push(
-        'info',
-        tp('organizer.inserted', count),
-        undoAction(() => void undoChange()),
-      );
+      offerChangeUndo(tp('organizer.inserted', count), reply.state.history);
     } catch (error) {
       if (error instanceof PasswordGaveUp) toastStore.push('error', t('organizer.passwordGaveUp'));
       else reportFailure(error);

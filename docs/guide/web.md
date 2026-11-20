@@ -127,6 +127,8 @@ is reloaded until you press it.
   password, up to five times. Extract downloads the selected pages as a new PDF named
   "<name> (extract).pdf"; the document itself does not change. Each change, other than an
   extract, can be undone from the notice that follows it. Dragging pages is not available yet.
+  Undo on a notice undoes only that change; if you have changed the document since, nothing is
+  undone and the notice says so.
 
 ## Going to a page
 

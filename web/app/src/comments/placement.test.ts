@@ -3,7 +3,8 @@ import type { PageRpc } from '../engine/engineConnection';
 import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
-import { type PlacementDeps, placeComment, undoComment } from './placement';
+import { RpcError } from '../rpc/client';
+import { type PlacementDeps, placeComment } from './placement';
 
 const rect = { x0: 72, y0: 72, x1: 144, y1: 144 };
 
@@ -15,14 +16,14 @@ function setup(executed = true) {
         executed,
         value: null,
         changed: { changes: [], revisions: { '0': 3 } },
-        state: {},
+        state: { history: 7 },
       };
     }
     return {
       done: true,
       label: 'Add Rectangle',
       changed: { changes: [], revisions: { '0': 4 } },
-      state: {},
+      state: { history: 6 },
     };
   });
   const noteRevisions = vi.fn();
@@ -80,20 +81,24 @@ describe('placing a comment', () => {
     expect(noteRevisions).not.toHaveBeenCalled();
   });
 
-  it('Undo calls actions.undo and redraws the page it changed', async () => {
+  it('Undo undoes the offered step (its history) and redraws the page it changed', async () => {
     const { call, noteRevisions, store, deps } = setup();
     await placeComment(deps, 'rectangle', 0, rect, '');
     noteRevisions.mockClear();
     store.getState().visible[0]?.action?.run();
     await settle();
-    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: null });
+    expect(call).toHaveBeenLastCalledWith('actions.undo', { handle: 'h1', expect_history: 7 });
     expect(noteRevisions).toHaveBeenCalledWith({ '0': 4 });
   });
 
-  it('an undo with nothing to undo redraws nothing', async () => {
-    const { call, noteRevisions, deps } = setup();
-    call.mockResolvedValueOnce({ done: false, label: '', changed: null, state: {} } as never);
-    await undoComment(deps);
+  it('a stale Undo says so and redraws nothing', async () => {
+    const { call, noteRevisions, store, deps } = setup();
+    await placeComment(deps, 'rectangle', 0, rect, '');
+    noteRevisions.mockClear();
+    call.mockRejectedValueOnce(new RpcError('STALE_OBJECT', 'changed', { history: 9 }));
+    store.getState().visible[0]?.action?.run();
+    await settle();
     expect(noteRevisions).not.toHaveBeenCalled();
+    expect(store.getState().visible.at(-1)?.text).toBe(t('toast.undo.stale'));
   });
 });
