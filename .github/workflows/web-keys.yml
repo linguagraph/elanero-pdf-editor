@@ -1,0 +1,63 @@
+name: Browser key probe (W4.3b)
+
+# The W4.3b key probe (web/app/e2e/keys.spec.ts, its own config playwright.keys.config.ts): which
+# browser-reserved and second-group keys reach the page, on Windows and macOS, in Chromium, Firefox
+# and WebKit. It is a measurement, not a gate, so it is manual only and never runs on a PR. The
+# hard checks (the Alt replacements and Ctrl+Shift+P) make the job red when they fail; the JSON
+# report is uploaded either way. Results are written up in docs/web/spikes/W4.3b-keys.md.
+# Trigger with: gh workflow run web-keys.yml --ref <branch>
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-keys-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  key-probe:
+    name: key-probe (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned Node version
+        id: versions
+        shell: bash
+        run: echo "node=$(jq -r .node web/spike/versions.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+
+      - name: Install the npm packages (exact, from the lockfile)
+        working-directory: web/app
+        run: npm ci
+
+      - name: Install the browsers (Chromium, Firefox, WebKit)
+        working-directory: web/app
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run the key probe (three browsers)
+        working-directory: web/app
+        run: npx playwright test -c playwright.keys.config.ts
+
+      - name: Upload the key report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: keys-${{ matrix.os }}
+          path: web/app/test-results/keys-*.json
+          if-no-files-found: warn
