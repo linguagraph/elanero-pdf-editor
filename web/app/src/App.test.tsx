@@ -8,6 +8,7 @@ import { type EngineClient, setTabSession } from './engine/engineConnection';
 import { fakeEngine } from './engine/testEngine';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
+import { RedactionController } from './redaction/controller';
 import type { MessageId } from './i18n/en';
 import { TAB_LABELS } from './commands/registry';
 import { closePanel, openPanel } from './layout/sidePanels';
@@ -22,11 +23,33 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
 
 // An engine that opens every PDF and answers the first page render with pixels, so the first
 // page is drawn and the scheduler's firstPage resolves. Other calls never answer.
-function drawingEngine(): { client: EngineClient; renders: () => number } {
+// With `marks`, the engine lists one mark on every open document, so Apply Redactions is enabled.
+function drawingEngine(options: { marks?: boolean } = {}): {
+  client: EngineClient;
+  renders: () => number;
+} {
   let opened = 0;
   let renders = 0;
   const call = vi.fn((method: string, params: Record<string, unknown>) => {
     if (method === 'session.close') return Promise.resolve({});
+    if (method === 'redaction.list') {
+      const marks = options.marks
+        ? [
+            {
+              page: 0,
+              name: 'm1',
+              rect: { x0: 10, y0: 10, x1: 80, y1: 40 },
+              fill: null,
+              overlay_text: '',
+              text_color: null,
+              contents: '',
+              author: '',
+              locked: false,
+            },
+          ]
+        : [];
+      return Promise.resolve({ marks, truncated: false });
+    }
     if (method === 'session.pages') {
       return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }] });
     }
@@ -663,6 +686,213 @@ describe('App Save (W4.8 S2)', () => {
     });
     expect(event.defaultPrevented).toBe(true);
     expect(downloads).toEqual([]);
+  });
+});
+
+describe('App comment and redaction tools (W4.3a S7)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    openPanel('pages');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  async function openDocument(marks = false): Promise<void> {
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App
+          engine={fakeEngine(drawingEngine({ marks }).client)}
+          jobs={jobs as unknown as JobWorkerPool}
+        />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('report.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => host.querySelector('.doc-view-toolbar') !== null);
+  }
+
+  function ribbonButton(command: string): HTMLElement {
+    const el = host.querySelector<HTMLElement>(`[data-command="${command}"]`);
+    if (el === null) throw new Error(`no ribbon button for ${command}`);
+    return el;
+  }
+
+  function selectTab(label: string): void {
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"], .ribbon-tabs > button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    if (tab === undefined) throw new Error(`no tab ${label}`);
+    act(() => {
+      tab.click();
+    });
+  }
+
+  function toolbarPressed(label: string): string | null | undefined {
+    const found = [...host.querySelectorAll<HTMLButtonElement>('.doc-view-toolbar button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    return found?.getAttribute('aria-pressed');
+  }
+
+  it('Note turns the comment tool on in the open document, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    act(() => {
+      ribbonButton('sticky-note').click();
+    });
+    expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('true');
+    expect(toolbarPressed(t('comment.tool.note'))).toBe('true');
+
+    act(() => {
+      ribbonButton('sticky-note').click();
+    });
+    expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('false');
+    expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
+  });
+
+  it('Redact turns the mark tool on, the same as the toolbar Mark button', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.protect'));
+    act(() => {
+      ribbonButton('redact').click();
+    });
+    expect(ribbonButton('redact').getAttribute('aria-pressed')).toBe('true');
+    expect(toolbarPressed(t('redact.mark'))).toBe('true');
+  });
+
+  it('Apply Redactions is disabled with no marks, with its reason, and opens no confirmation', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.protect'));
+    const apply = ribbonButton('apply-redactions');
+    expect(apply.getAttribute('aria-disabled')).toBe('true');
+    const described = (apply.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain(t('disabled.noRedactionMarks'));
+    act(() => {
+      apply.click();
+    });
+    expect(document.querySelector('.redact-confirm')).toBeNull();
+  });
+
+  // The engine lists one mark (drawingEngine({ marks: true })), so the list loads and Apply is on.
+  async function waitForApplyEnabled(): Promise<void> {
+    await until(() => ribbonButton('apply-redactions').getAttribute('aria-disabled') !== 'true');
+    expect(ribbonButton('apply-redactions').getAttribute('aria-disabled')).not.toBe('true');
+  }
+
+  function clickButton(text: string): void {
+    const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (el) => el.textContent?.trim() === text,
+    );
+    if (button === undefined) throw new Error(`no button ${text}`);
+    act(() => {
+      button.click();
+    });
+  }
+
+  function tabLabels(): string[] {
+    return [...host.querySelectorAll<HTMLElement>('.doc-tabs-list [role="tab"]')].map(
+      (tab) => tab.textContent ?? '',
+    );
+  }
+
+  async function openSecondDocument(): Promise<void> {
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('no open input');
+    Object.defineProperty(input, 'files', { value: [pdf('second.pdf')], configurable: true });
+    act(() => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await until(() => tabLabels().length === 2);
+    expect(tabLabels()).toHaveLength(2);
+  }
+
+  it('with marks, Apply Redactions opens the confirmation and does not apply yet', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    expect(document.querySelector('.redact-confirm')).not.toBeNull();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('Cancel in the confirmation closes it and does not apply', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    clickButton(t('redact.confirm.cancel'));
+    await until(() => document.querySelector('.redact-confirm') === null);
+    expect(document.querySelector('.redact-confirm')).toBeNull();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('Confirm in the confirmation applies the marks exactly once', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    clickButton(t('redact.confirm.apply'));
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(null);
+  });
+
+  it('switching tabs while the confirmation is open closes it and applies nothing', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    await openSecondDocument();
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    expect(document.querySelector('.redact-confirm')).not.toBeNull();
+
+    const first = [...host.querySelectorAll<HTMLElement>('.doc-tabs-list [role="tab"]')].find(
+      (tab) => (tab.textContent ?? '').includes('report.pdf'),
+    );
+    if (first === undefined) throw new Error('no first tab');
+    act(() => {
+      first.click();
+    });
+    await until(() => document.querySelector('.redact-confirm') === null);
+    expect(document.querySelector('.redact-confirm')).toBeNull();
+    expect(apply).not.toHaveBeenCalled();
   });
 });
 

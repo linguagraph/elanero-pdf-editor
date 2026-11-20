@@ -88,6 +88,10 @@ export interface DocumentViewHandle {
   setNight(on: boolean): void;
   // The text lines of a page as they are shown, or undefined until they arrive (W4.12: the selection maps them).
   cachedLines(page: number): readonly TextLine[] | undefined;
+  // Turns a comment tool on, or off with null (W4.3a S7). A tool turned on sets the view tool to Select.
+  setCommentTool(tool: CommentToolId | null): void;
+  // Turns the redaction mark tool on or off, as the toolbar's Mark button does (W4.3a S7).
+  setRedacting(on: boolean): void;
 }
 
 // What the view reports to its host for the status bar and the ribbon's checked states: the page at
@@ -130,6 +134,9 @@ export interface DocumentViewProps {
   // The crop box tool (W4.11 S5) reports the box it drew, as margins on its page (1-based), or null
   // when Esc ends the tool with no box. The app ends the tool and reopens the crop dialog.
   readonly onCropBoxEnd?: (drawn: DrawnCrop | null) => void;
+  // Reports which comment tool is on (or null), so the ribbon shows it pressed (W4.3a S7). Called
+  // on mount too, so a remounted view reports its reset state.
+  readonly onCommentToolChange?: (tool: CommentToolId | null) => void;
 }
 
 // The job worker is missing: the apply reports its failure, as any other failed job does.
@@ -173,6 +180,7 @@ export function DocumentView({
   tool = 'select',
   onToolChange,
   onCropBoxEnd,
+  onCommentToolChange,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   // The page labels, from the same session.pages reply as the sizes (W5.3).
@@ -221,6 +229,29 @@ export function DocumentView({
     startWorker: startWorker ?? noJobWorker,
     controller: redaction,
   });
+  // The toolbar and the ribbon choose tools through these, so both do the same thing. A comment
+  // tool or the mark tool is never on with the other, and turning one on sets the view tool to Select.
+  const chooseCommentTool = useCallback(
+    (chosen: CommentToolId | null) => {
+      redactionTools.controller.setActive(false);
+      setCommentTool(chosen);
+      if (chosen !== null) onToolChange?.('select');
+    },
+    [redactionTools.controller, onToolChange],
+  );
+  const chooseRedacting = useCallback(
+    (on: boolean) => {
+      redactionTools.controller.setActive(on);
+      if (on) {
+        setCommentTool(null);
+        onToolChange?.('select');
+      }
+    },
+    [redactionTools.controller, onToolChange],
+  );
+  useEffect(() => {
+    onCommentToolChange?.(commentTool);
+  }, [commentTool, onCommentToolChange]);
   const pan = useHandPan(tool === 'hand');
   // The Hand and crop box tools and the comment or mark tools are not on together: choosing one of
   // the view tools turns them off (the last tool chosen wins, as the desktop has one tool per
@@ -522,6 +553,8 @@ export function DocumentView({
       },
       setNight: chooseNight,
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
+      setCommentTool: chooseCommentTool,
+      setRedacting: chooseRedacting,
     }),
     [
       scrollToPage,
@@ -530,6 +563,8 @@ export function DocumentView({
       stepPage,
       textLayers,
       scheduler,
+      chooseCommentTool,
+      chooseRedacting,
       viewLayout,
       firstAlone,
       chooseNight,
@@ -591,24 +626,10 @@ export function DocumentView({
         <button type="button" aria-pressed={night} onClick={() => chooseNight(!night)}>
           {t('view.night')}
         </button>
-        <CommentToolbar
-          tool={commentTool}
-          onChoose={(chosen) => {
-            redactionTools.controller.setActive(false);
-            setCommentTool(chosen);
-            if (chosen !== null) onToolChange?.('select');
-          }}
-        />
+        <CommentToolbar tool={commentTool} onChoose={chooseCommentTool} />
         <RedactionBar
           state={redactionTools.state}
-          onToggle={() => {
-            const on = !redactionTools.state.active;
-            redactionTools.controller.setActive(on);
-            if (on) {
-              setCommentTool(null);
-              onToolChange?.('select');
-            }
-          }}
+          onToggle={() => chooseRedacting(!redactionTools.state.active)}
           onClear={() => void redactionTools.controller.clear()}
           onApply={() => void redactionTools.controller.apply(null)}
         />

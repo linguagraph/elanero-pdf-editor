@@ -7,6 +7,7 @@
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import type { MessageId } from '../i18n/en';
 import { ICONS, type IconName } from '../theme/icons.generated';
+import type { CommentToolId } from '../comments/tools';
 import { MAX_ZOOM, MIN_ZOOM } from '../view/zoom';
 import type { ViewTool } from '../view/viewTool';
 
@@ -50,6 +51,14 @@ export interface CommandState {
   readonly ribbonCollapsed: boolean;
   // The document's view tool (W4.10): Select or Hand. Select when no document is open.
   readonly viewTool: ViewTool;
+  // The comment tool on in the open document (W7.1a), or null; null when no document is open.
+  readonly commentTool: CommentToolId | null;
+  // The redaction mark tool is on (W7.4); false when no document is open.
+  readonly redacting: boolean;
+  // There are marks to apply and no apply is running (W7.4). False when no document is open.
+  readonly canApplyRedactions: boolean;
+  // An apply is running (W7.4). Optional, so a state without it reads as not busy.
+  readonly redactionBusy?: boolean;
   // Back and Forward through the navigation history of the open document (W5.3).
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
@@ -74,6 +83,8 @@ export type DisabledReason =
   | 'nothingToUndo'
   | 'nothingToRedo'
   | 'noRecentFiles'
+  | 'noRedactionMarks'
+  | 'redactionBusy'
   | 'cannotGoBack'
   | 'cannotGoForward'
   | 'firstPage'
@@ -87,6 +98,8 @@ export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>>
   nothingToUndo: 'disabled.nothingToUndo',
   nothingToRedo: 'disabled.nothingToRedo',
   noRecentFiles: 'disabled.noRecentFiles',
+  noRedactionMarks: 'disabled.noRedactionMarks',
+  redactionBusy: 'disabled.redactionBusy',
   cannotGoBack: 'disabled.cannotGoBack',
   cannotGoForward: 'disabled.cannotGoForward',
   firstPage: 'disabled.firstPage',
@@ -101,6 +114,13 @@ export type Enabled = (state: CommandState) => DisabledReason | null;
 
 export const ALWAYS: Enabled = () => null;
 export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'needsDocument');
+// Apply needs a document and at least one mark to remove content under (W7.4). While an apply runs
+// the marks are not offered, so the reason says the work is in progress, not that none exist.
+export const CAN_APPLY_REDACTIONS: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  if (state.redactionBusy === true) return 'redactionBusy';
+  return state.canApplyRedactions ? null : 'noRedactionMarks';
+};
 // Undo and Redo need an open document first, then their own step (the engine's can-undo flags).
 export const CAN_UNDO: Enabled = (state) =>
   NEEDS_DOCUMENT(state) ?? (state.canUndo ? null : 'nothingToUndo');

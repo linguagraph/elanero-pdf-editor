@@ -77,6 +77,9 @@ const withDoc: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
   canGoBack: false,
   canGoForward: false,
   view: null,
@@ -838,5 +841,70 @@ describe('Ribbon: the Select and Hand toggles (W4.10)', () => {
       el.click();
     });
     expect(hand).not.toHaveBeenCalled();
+  });
+});
+
+describe('Ribbon: the comment and redaction tools (W4.3a S7)', () => {
+  // The groups show for the selected tab only, so each test picks the tab first.
+  function selectTab(label: string): void {
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"], .ribbon-tabs > button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    if (tab === undefined) throw new Error(`no tab ${label}`);
+    act(() => {
+      tab.click();
+    });
+  }
+
+  it('shows the comment tool on as pressed, and runs another comment tool on a press', () => {
+    const highlight = vi.fn();
+    render(
+      <Ribbon
+        registry={REGISTRY}
+        state={{ ...withDoc, commentTool: 'note' }}
+        handlers={{ highlight }}
+      />,
+    );
+    selectTab(t('ribbon.tab.comment'));
+    expect(button('sticky-note').getAttribute('aria-pressed')).toBe('true');
+    expect(button('highlight').getAttribute('aria-pressed')).toBe('false');
+    act(() => {
+      button('highlight').click();
+    });
+    expect(highlight).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows Redact as pressed while the mark tool is on, and runs it on a press', () => {
+    const redact = vi.fn();
+    render(
+      <Ribbon registry={REGISTRY} state={{ ...withDoc, redacting: true }} handlers={{ redact }} />,
+    );
+    selectTab(t('ribbon.tab.protect'));
+    expect(button('redact').getAttribute('aria-pressed')).toBe('true');
+    act(() => {
+      button('redact').click();
+    });
+    expect(redact).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Apply Redactions disabled with no marks, with its reason, and does not run it', () => {
+    const apply = vi.fn();
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ 'apply-redactions': apply }} />);
+    selectTab(t('ribbon.tab.protect'));
+    const el = button('apply-redactions');
+    expect(el.getAttribute('aria-disabled')).toBe('true');
+    expect(describedText(el)).toContain(t('disabled.noRedactionMarks'));
+    act(() => {
+      el.click();
+    });
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('says a comment tool needs an open document when none is open', () => {
+    render(<Ribbon registry={REGISTRY} state={noDoc} handlers={{}} />);
+    selectTab(t('ribbon.tab.comment'));
+    const el = button('rectangle');
+    expect(el.getAttribute('aria-disabled')).toBe('true');
+    expect(describedText(el)).toContain(t('disabled.needsDocument'));
   });
 });

@@ -13,6 +13,7 @@ import {
   CAN_ZOOM_IN,
   CAN_ZOOM_OUT,
   createRegistry,
+  CAN_APPLY_REDACTIONS,
   HAS_RECENT,
   NEEDS_DOCUMENT,
   NOT_FIRST_PAGE,
@@ -191,11 +192,17 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('add-background', 'command.add-background.label', 'organize.marks'),
 
   // Protect
-  aliased(cmd('redact', 'command.redact.label', 'protect.redact'), 'command.redact.keywords'),
+  aliased(
+    {
+      ...cmd('redact', 'command.redact.label', 'protect.redact'),
+      checked: (state) => state.redacting,
+    },
+    'command.redact.keywords',
+  ),
   cmd('mark-text', 'command.mark-text.label', 'protect.redact'),
   cmd('mark-whole-pages', 'command.mark-whole-pages.label', 'protect.redact'),
   cmd('redaction-properties', 'command.redaction-properties.label', 'protect.redact', ALWAYS),
-  cmd('apply-redactions', 'command.apply-redactions.label', 'protect.redact'),
+  cmd('apply-redactions', 'command.apply-redactions.label', 'protect.redact', CAN_APPLY_REDACTIONS),
   aliased(
     cmd('sanitize-document', 'command.sanitize-document.label', 'protect.cleanup'),
     'command.sanitize-document.keywords',
@@ -225,16 +232,26 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   ),
 
   // Comment
-  cmd('highlight', 'command.highlight.label', 'comment.markup'),
+  // The three comment tools (W7.1a) are toggles: each is pressed while it is the tool on.
+  {
+    ...cmd('highlight', 'command.highlight.label', 'comment.markup'),
+    checked: (state) => state.commentTool === 'highlight',
+  },
   cmd('underline', 'command.underline.label', 'comment.markup'),
   cmd('strikethrough', 'command.strikethrough.label', 'comment.markup'),
   cmd('squiggly', 'command.squiggly.label', 'comment.markup'),
-  cmd('sticky-note', 'command.sticky-note.label', 'comment.comments'),
+  {
+    ...cmd('sticky-note', 'command.sticky-note.label', 'comment.comments'),
+    checked: (state) => state.commentTool === 'note',
+  },
   cmd('text-box', 'command.text-box.label', 'comment.comments'),
   cmd('callout', 'command.callout.label', 'comment.comments'),
   cmd('stamp', 'command.stamp.label', 'comment.comments'),
   cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
-  cmd('rectangle', 'command.rectangle.label', 'comment.drawing'),
+  {
+    ...cmd('rectangle', 'command.rectangle.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'rectangle',
+  },
   cmd('oval', 'command.oval.label', 'comment.drawing'),
   cmd('line', 'command.line.label', 'comment.drawing'),
   cmd('arrow', 'command.arrow.label', 'comment.drawing'),

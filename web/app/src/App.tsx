@@ -54,6 +54,7 @@ import { ExportDialog } from './export/ExportDialog';
 import { ExtractImagesDialog } from './extract/ExtractImagesDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
+import { ApplyConfirm } from './redaction/ApplyConfirm';
 import { RedactionController } from './redaction/controller';
 import { MarkPagesDialog } from './redaction/MarkPagesDialog';
 import { markSelectedText } from './redaction/markText';
@@ -65,6 +66,7 @@ import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { setViewTool, useViewTool } from './view/viewTool';
+import type { CommentToolId } from './comments/tools';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -96,6 +98,9 @@ const BASE_COMMAND_STATE: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
   canGoBack: false,
   canGoForward: false,
   view: null,
@@ -181,6 +186,10 @@ export function App({
   const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
   // Mark Pages (W4.13): the dialog that marks whole pages. Opens only with a document.
   const [markPagesOpen, setMarkPagesOpen] = useState(false);
+  // The comment tool on in the open document (W7.1a), as the view reports it for the ribbon's
+  // pressed state (W4.3a S7). Apply Redactions asks first, as the toolbar's Apply does.
+  const [commentTool, setCommentToolState] = useState<CommentToolId | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
@@ -333,6 +342,18 @@ export function App({
     },
   ];
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
+  // The apply confirmation belongs to the tab it was opened on: a switch of tab closes it, so Apply
+  // never runs on another tab's controller. The reset happens while rendering, not in an effect.
+  const [applyTab, setApplyTab] = useState(activeId);
+  if (applyTab !== activeId) {
+    setApplyTab(activeId);
+    setApplyOpen(false);
+  }
+  // Closing a tab closes the confirmation too, whichever tab it is.
+  const closeTab = (id: number) => {
+    setApplyOpen(false);
+    docs.closeTab(id);
+  };
   // Save writes the document as a download under its own name, and marks it clean (W4.8).
   const saveTab = async (tab: DocumentTab): Promise<void> => {
     const outcome = await saver.save(
@@ -402,6 +423,14 @@ export function App({
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
     viewTool,
+    commentTool: documentShown ? commentTool : null,
+    redacting: documentShown && (redactionState?.active ?? false),
+    canApplyRedactions:
+      documentShown &&
+      redactionState !== null &&
+      !redactionState.busy &&
+      redactionState.marks.length > 0,
+    redactionBusy: documentShown && (redactionState?.busy ?? false),
     canGoBack: canGoBack(history),
     canGoForward: canGoForward(history),
     view: documentShown
@@ -474,6 +503,17 @@ export function App({
               lookup: (page) => view.cachedLines(page),
             });
           },
+          // Comment tools (W7.1a) are toggles: choosing the tool that is on turns it off.
+          'sticky-note': () =>
+            viewRef.current?.setCommentTool(commentTool === 'note' ? null : 'note'),
+          highlight: () =>
+            viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+          rectangle: () =>
+            viewRef.current?.setCommentTool(commentTool === 'rectangle' ? null : 'rectangle'),
+          // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
+          redact: () => viewRef.current?.setRedacting(!state.redacting),
+          // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.
+          'apply-redactions': () => setApplyOpen(true),
           'zoom-in': () => runView('zoom-in'),
           'zoom-out': () => runView('zoom-out'),
           'fit-width': () => runView('fit-width'),
@@ -520,7 +560,7 @@ export function App({
           },
           // Close (W4.3a S4) closes the open tab, as the tab's own close button does.
           close: () => {
-            if (activeId !== null) docs.closeTab(activeId);
+            if (activeId !== null) closeTab(activeId);
           },
         }
       : {}),
@@ -664,7 +704,7 @@ export function App({
               <BrandMark />
               <QuickAccess registry={REGISTRY} state={state} handlers={handlers} />
             </div>
-            <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
+            <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
             <button
               type="button"
               onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
@@ -681,6 +721,15 @@ export function App({
       <RedactionPropertiesDialog
         isOpen={redactionPropsOpen}
         onClose={() => setRedactionPropsOpen(false)}
+      />
+      <ApplyConfirm
+        isOpen={applyOpen}
+        count={redactionState?.marks.length ?? 0}
+        onCancel={() => setApplyOpen(false)}
+        onConfirm={() => {
+          setApplyOpen(false);
+          if (redaction !== null) void redaction.apply(null);
+        }}
       />
       <PreferencesDialog
         isOpen={preferencesOpen}
@@ -887,6 +936,7 @@ export function App({
               if (activeId !== null) setViewTool(activeId, tool);
             }}
             onCropBoxEnd={crop.boxEnded}
+            onCommentToolChange={setCommentToolState}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }

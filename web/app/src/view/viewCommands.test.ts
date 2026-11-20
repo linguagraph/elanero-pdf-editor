@@ -27,6 +27,9 @@ const STATE_WITH_DOCUMENT: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
   canGoBack: false,
   canGoForward: false,
   view: null,
@@ -42,6 +45,8 @@ function fakeView(): DocumentViewHandle {
     setLayout: vi.fn(),
     setNight: vi.fn(),
     cachedLines: vi.fn(() => undefined),
+    setCommentTool: vi.fn(),
+    setRedacting: vi.fn(),
   };
 }
 
