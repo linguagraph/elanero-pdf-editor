@@ -270,6 +270,7 @@ export function App({
         ) : undefined
       }
       railsHidden={showStart}
+      onDismissPanel={closePanel}
       leftRail={
         <>
           <RailButton
