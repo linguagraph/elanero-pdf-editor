@@ -1265,3 +1265,31 @@ def _comments_pikepdf(data: bytes, comments: int, replies: int) -> None:
         linked = [a for a in with_text if "/IRT" in a]
         assert len(with_text) == comments, len(with_text)
         assert len(linked) == replies, len(linked)
+
+
+@host_check("comment_replies_pikepdf")
+def _comment_replies_pikepdf(data: bytes, parent: str, replies: list[list[str]]) -> None:
+    """The replies to the comment named ``parent``, in file order, as [/Contents, state] pairs.
+
+    Each reply has /IRT to the parent. A text reply has /State None, and a status has its review
+    state with /StateModel Review (what Acrobat reads as a status). The state is "" for a text
+    reply. MuPDF writes /State and /StateModel as text strings, so the leading slash is dropped.
+    """
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        annots = [a for page in pdf.pages for a in page.get("/Annots", [])]
+        targets = [a for a in annots if str(a.get("/NM", "")) == parent]
+        assert len(targets) == 1, len(targets)
+        found: list[list[str]] = []
+        for annot in annots:
+            irt = annot.get("/IRT")
+            if irt is None or irt.objgen != targets[0].objgen:
+                continue
+            state = str(annot.get("/State", "None")).lstrip("/")
+            if state == "None":
+                state = ""
+            else:
+                assert str(annot.get("/StateModel", "")).lstrip("/") == "Review"
+            found.append([str(annot.get("/Contents", "")), state])
+        assert found == replies, found

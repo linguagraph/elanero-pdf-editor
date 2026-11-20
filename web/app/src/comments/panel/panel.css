@@ -76,3 +76,33 @@
   margin: 8px 0;
   font-size: 0.875rem;
 }
+
+/* The reply and status controls (W7.1b S4). Each button keeps a 44px target, as the rows do. */
+.comments-thread-actions,
+.comments-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.comments-thread-actions button,
+.comments-thread-actions select,
+.comments-actions button {
+  min-height: 44px;
+  font: inherit;
+}
+
+.comments-reply-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px 16px;
+  font-size: 0.875rem;
+}
+
+.comments-reply-box textarea {
+  width: 100%;
+  font: inherit;
+}
