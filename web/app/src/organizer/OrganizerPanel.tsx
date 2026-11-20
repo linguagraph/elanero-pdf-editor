@@ -33,6 +33,7 @@ import {
   type PageSelection,
   selectPage,
 } from './selection';
+import { useReorderDrag } from './useReorderDrag';
 import './organizer.css';
 
 // The first pages get the engine's attention before the rest, as the thumbnails panel does.
@@ -82,6 +83,7 @@ export function OrganizerPanel({
   const [scheduler, setScheduler] = useState(() => new RenderScheduler(rpc, handle));
   const [tick, setTick] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   // Adopts a fresh page list. A move passes the pages it placed, which become the selection.
   const adopt = (pages: readonly ThumbnailSize[], nextSelection?: PageSelection) => {
@@ -184,16 +186,33 @@ export function OrganizerPanel({
     );
   };
 
-  const moveSelected = (direction: 'up' | 'down') => {
-    const before = moveTarget(direction, picked, total);
-    if (before === null) return;
-    const count = picked.length;
-    void change('pages.move', { pages: picked, before }, tp('organizer.moved', count), (value) => {
+  // Moves pages in front of `before` (the original numbering, 0..total). The moved pages become the
+  // selection, and the Undo toast offers one step back. Move up/down and a drag both end here.
+  const moveTo = (pages: readonly number[], before: number) => {
+    const count = pages.length;
+    void change('pages.move', { pages, before }, tp('organizer.moved', count), (value) => {
       const moved = movedPages(value);
       if (moved === null || moved.length === 0) return undefined;
       return { picked: moved, anchor: moved[0] ?? null };
     });
   };
+
+  const moveSelected = (direction: 'up' | 'down') => {
+    const before = moveTarget(direction, picked, total);
+    if (before === null) return;
+    moveTo(picked, before);
+  };
+
+  // A drag that presses an unselected page takes just that page as the selection first.
+  const reorder = useReorderDrag({
+    gridRef,
+    picked,
+    total,
+    disabled: busy,
+    onPick: (page) => choose(page, { ctrl: false, shift: false }),
+    onDrop: moveTo,
+  });
+  const drag = reorder.drag;
 
   // The blank page takes the size of the page before it, and becomes the selection.
   const insertBlank = () => {
@@ -287,7 +306,11 @@ export function OrganizerPanel({
       ) : (
         <div className="organizer panel-fill">
           <p className="organizer-status" aria-live="polite">
-            {tp('organizer.selected', total, { selected: picked.length, total })}
+            {drag !== null
+              ? tp('organizer.dragging', drag.pages.length, {
+                  position: drag.slot.before + 1,
+                })
+              : tp('organizer.selected', total, { selected: picked.length, total })}
           </p>
           <div role="toolbar" aria-label={t('organizer.actions')} className="organizer-actions">
             <button type="button" disabled={!hasSelection || busy} onClick={() => rotate(270)}>
@@ -340,11 +363,15 @@ export function OrganizerPanel({
             </p>
           ) : null}
           <div
+            ref={gridRef}
             role="listbox"
             aria-label={t('organizer.pages')}
+            aria-description={t('organizer.dragHint')}
             aria-multiselectable="true"
             className="organizer-grid"
             tabIndex={0}
+            data-dragging={drag !== null ? 'true' : undefined}
+            {...reorder.gridHandlers}
           >
             {sizes.map((size, index) => {
               const selected = picked.includes(index);
@@ -360,8 +387,12 @@ export function OrganizerPanel({
                   aria-selected={selected}
                   aria-label={t('organizer.pageNumber', { page: index + 1, total })}
                   tabIndex={0}
+                  draggable={false}
                   className="organizer-item"
+                  data-page={index}
                   data-selected={selected ? 'true' : 'false'}
+                  data-dragging={drag?.pages.includes(index) ? 'true' : undefined}
+                  data-drop={drag?.slot.marker?.index === index ? drag.slot.marker.side : undefined}
                   onClick={(event) =>
                     choose(index, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey })
                   }

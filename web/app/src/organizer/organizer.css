@@ -70,6 +70,50 @@
   background: var(--color-surface);
 }
 
+/* A drag starts from the thumbnail, so the browser must not take it as a native image drag. */
+.organizer-item {
+  position: relative;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.organizer-item[data-dragging='true'] {
+  opacity: 0.5;
+}
+
+/* The insertion line sits in the grid gap, on the edge the drop lands on. */
+.organizer-item[data-drop]::before,
+.organizer-item[data-drop]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-focus-ring);
+  pointer-events: none;
+}
+
+.organizer-item[data-drop='before']::before {
+  left: calc(-1 * var(--space-2) / 2 - 1.5px);
+}
+
+.organizer-item[data-drop='after']::after {
+  right: calc(-1 * var(--space-2) / 2 - 1.5px);
+}
+
+.organizer-grid[data-dragging='true'] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+@media (forced-colors: active) {
+  .organizer-item[data-drop]::before,
+  .organizer-item[data-drop]::after {
+    background: Highlight;
+  }
+}
+
 .organizer-item:focus-visible,
 .organizer-actions button:focus-visible,
 .organizer-confirm button:focus-visible {
