@@ -1,0 +1,16 @@
+{
+  "about.licence": "Licencja: AGPL-3.0-or-later",
+  "app.version": "Wersja {version}",
+  "sample.pages": {
+    "one": "{count} strona",
+    "few": "{count} strony",
+    "many": "{count} stron",
+    "other": "{count} strony"
+  },
+  "rail.count": {
+    "one": "{panel}, 1 element",
+    "few": "{panel}, {count} elementy",
+    "many": "{panel}, {count} elementów",
+    "other": "{panel}, {count} elementu"
+  }
+}
