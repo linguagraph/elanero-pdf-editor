@@ -95,6 +95,9 @@ const BASE_COMMAND_STATE: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 // Placeholder shell: the region frame is in place (W4.2a); the ribbon and the features come later.
@@ -360,7 +363,18 @@ export function App({
     zoom: DEFAULT_ZOOM,
     layout: 'continuous',
     labels: [],
+    pageCount: 0,
+    fit: null,
+    firstAlone: false,
+    night: false,
   });
+  // The night flag the view last reported (or the one this handler set since). Night Mode flips
+  // this, not the render's copy, so two toggles before a re-render still flip twice.
+  const nightRef = useRef(false);
+  const onViewChange = useCallback((next: DocumentViewState) => {
+    nightRef.current = next.night;
+    setViewState(next);
+  }, []);
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).
   const history = useNavHistory(activeId);
@@ -384,6 +398,19 @@ export function App({
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
     viewTool,
+    canGoBack: canGoBack(history),
+    canGoForward: canGoForward(history),
+    view: documentShown
+      ? {
+          page: viewState.page,
+          pageCount: viewState.pageCount,
+          zoom: viewState.zoom,
+          fit: viewState.fit,
+          layout: viewState.layout,
+          firstAlone: viewState.firstAlone,
+          night: viewState.night,
+        }
+      : null,
   };
   // The View zoom and Home navigate commands run on the open document's view (W4.2a S6). The view is
   // read when a command runs, not during render; with no document no handler is given, and the
@@ -431,6 +458,21 @@ export function App({
           'fit-width': () => runView('fit-width'),
           'fit-page': () => runView('fit-page'),
           'actual-size': () => runView('actual-size'),
+          // The page layouts and night reading (W4.3a S6) set the view's own state, so the ribbon's
+          // pressed state follows the view as it reports back.
+          'single-page-continuous': () =>
+            viewRef.current?.setLayout({ layout: 'continuous', firstAlone: false }),
+          'two-up-continuous': () =>
+            viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: false }),
+          'two-up-with-cover-page': () =>
+            viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: true }),
+          'night-reading': () => {
+            const next = !nightRef.current;
+            nightRef.current = next;
+            viewRef.current?.setNight(next);
+          },
+          // Organize Pages opens the organizer panel on the right, as its rail button does.
+          'organize-pages': () => openPanel('organizer'),
           // Select and Hand (W4.10). Hand pressed again returns to Select, as on the desktop.
           'select-tool': () => {
             if (activeId !== null) setViewTool(activeId, 'select');
@@ -814,7 +856,7 @@ export function App({
             handle={session.handle}
             scheduler={scheduler}
             redaction={redaction ?? undefined}
-            onViewChange={setViewState}
+            onViewChange={onViewChange}
             startWorker={jobs.acquire}
             tool={viewTool}
             onToolChange={(tool) => {

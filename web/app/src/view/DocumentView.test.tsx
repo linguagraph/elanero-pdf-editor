@@ -1,10 +1,10 @@
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { Methods } from '../rpc/generated';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
-import { DocumentView } from './DocumentView';
+import { DocumentView, type DocumentViewHandle } from './DocumentView';
 import { computeColumn, computeSpreads, scrollTopForPage, scrollTopForSpread } from './layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -577,5 +577,59 @@ describe('DocumentView tiles (W5.1b)', () => {
     const methods = calls.map((call) => call.method);
     expect(methods).toContain('render.page');
     expect(methods).not.toContain('render.tile');
+  });
+});
+
+describe('DocumentView handle: layout, night and the reported view state (W4.3a S6)', () => {
+  it('reports the page count, the fit mode and the layout flags', async () => {
+    const { rpc } = fakeRpc(3);
+    const onViewChange = vi.fn();
+    act(() => {
+      root.render(<DocumentView rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+    });
+    await flush();
+    expect(onViewChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pageCount: 3, fit: null, firstAlone: false, night: false }),
+    );
+  });
+
+  it('sets the layout and the cover alone through setLayout', async () => {
+    const { rpc } = fakeRpc(3);
+    const onViewChange = vi.fn();
+    const ref = createRef<DocumentViewHandle>();
+    act(() => {
+      root.render(<DocumentView ref={ref} rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+    });
+    await flush();
+    act(() => {
+      ref.current?.setLayout({ layout: 'twoPage', firstAlone: true });
+    });
+    await flush();
+    expect(onViewChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layout: 'twoPage', firstAlone: true }),
+    );
+    act(() => {
+      ref.current?.setLayout({ layout: 'continuous', firstAlone: false });
+    });
+    await flush();
+    expect(onViewChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layout: 'continuous', firstAlone: false }),
+    );
+  });
+
+  it('turns night reading on through setNight and saves the choice', async () => {
+    const { rpc } = fakeRpc(3);
+    const onViewChange = vi.fn();
+    const ref = createRef<DocumentViewHandle>();
+    act(() => {
+      root.render(<DocumentView ref={ref} rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+    });
+    await flush();
+    act(() => {
+      ref.current?.setNight(true);
+    });
+    await flush();
+    expect(onViewChange).toHaveBeenLastCalledWith(expect.objectContaining({ night: true }));
+    expect(readPreferences().nightReading).toBe(true);
   });
 });

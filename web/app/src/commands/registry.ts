@@ -7,6 +7,7 @@
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import type { MessageId } from '../i18n/en';
 import { ICONS, type IconName } from '../theme/icons.generated';
+import { MAX_ZOOM, MIN_ZOOM } from '../view/zoom';
 import type { ViewTool } from '../view/viewTool';
 
 export const TAB_ORDER = [
@@ -49,17 +50,49 @@ export interface CommandState {
   readonly ribbonCollapsed: boolean;
   // The document's view tool (W4.10): Select or Hand. Select when no document is open.
   readonly viewTool: ViewTool;
+  // Back and Forward through the navigation history of the open document (W5.3).
+  readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
+  // The open document's view (W4.3a S6); null when no document is shown.
+  readonly view: ViewCommandState | null;
+}
+
+// What the View and Home commands read from the open document's view.
+export interface ViewCommandState {
+  readonly page: number;
+  readonly pageCount: number;
+  readonly zoom: number;
+  readonly fit: 'width' | 'page' | null;
+  readonly layout: 'continuous' | 'twoPage';
+  readonly firstAlone: boolean;
+  readonly night: boolean;
 }
 
 // notAvailableYet is not an enabled rule: the caller reports it when a command has no handler.
 export type DisabledReason =
-  'needsDocument' | 'nothingToUndo' | 'nothingToRedo' | 'noRecentFiles' | 'notAvailableYet';
+  | 'needsDocument'
+  | 'nothingToUndo'
+  | 'nothingToRedo'
+  | 'noRecentFiles'
+  | 'cannotGoBack'
+  | 'cannotGoForward'
+  | 'firstPage'
+  | 'lastPage'
+  | 'maxZoom'
+  | 'minZoom'
+  | 'notAvailableYet';
 
 export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>> = {
   needsDocument: 'disabled.needsDocument',
   nothingToUndo: 'disabled.nothingToUndo',
   nothingToRedo: 'disabled.nothingToRedo',
   noRecentFiles: 'disabled.noRecentFiles',
+  cannotGoBack: 'disabled.cannotGoBack',
+  cannotGoForward: 'disabled.cannotGoForward',
+  firstPage: 'disabled.firstPage',
+  lastPage: 'disabled.lastPage',
+  maxZoom: 'disabled.maxZoom',
+  minZoom: 'disabled.minZoom',
   notAvailableYet: 'disabled.notAvailableYet',
 };
 
@@ -71,6 +104,39 @@ export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'n
 export const CAN_UNDO: Enabled = (state) => (state.canUndo ? null : 'nothingToUndo');
 export const CAN_REDO: Enabled = (state) => (state.canRedo ? null : 'nothingToRedo');
 export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');
+// Back and Forward need an open document, then an entry in the history that way (W5.3).
+export const CAN_GO_BACK: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.canGoBack ? null : 'cannotGoBack';
+};
+export const CAN_GO_FORWARD: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.canGoForward ? null : 'cannotGoForward';
+};
+// The view's page and zoom rules (W4.3a S6). A view that has not reported yet has no page or zoom
+// to check against, so the command stays enabled and its handler finds the view when it runs.
+// A view that has reported no pages yet (pageCount 0) cannot tell first from last, so the page
+// commands say "not available yet" rather than "first page" or "last page".
+export const NOT_FIRST_PAGE: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  if (state.view === null) return null;
+  if (state.view.pageCount === 0) return 'notAvailableYet';
+  return state.view.page > 1 ? null : 'firstPage';
+};
+export const NOT_LAST_PAGE: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  if (state.view === null) return null;
+  if (state.view.pageCount === 0) return 'notAvailableYet';
+  return state.view.page < state.view.pageCount ? null : 'lastPage';
+};
+export const CAN_ZOOM_IN: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.view === null || state.view.zoom < MAX_ZOOM ? null : 'maxZoom';
+};
+export const CAN_ZOOM_OUT: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.view === null || state.view.zoom > MIN_ZOOM ? null : 'minZoom';
+};
 
 // A ribbon group (tab `null` marks a group that only the app menu uses).
 export interface GroupDef {

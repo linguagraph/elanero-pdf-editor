@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import { EN, type MessageId } from '../i18n/en';
 import { COMMANDS, GROUPS, MENU, REGISTRY, WEB_ONLY_IDS } from './catalog';
+import { MAX_ZOOM, MIN_ZOOM } from '../view/zoom';
 import {
   type CommandState,
   type CommandDef,
@@ -10,6 +11,7 @@ import {
   isSharedId,
   TAB_LABELS,
   TAB_ORDER,
+  type ViewCommandState,
 } from './registry';
 import { menuSections, ribbonLayout, runCommand } from './run';
 
@@ -25,6 +27,9 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     ribbonCompact: false,
     ribbonCollapsed: false,
     viewTool: 'select',
+    canGoBack: false,
+    canGoForward: false,
+    view: null,
     ...overrides,
   };
 }
@@ -297,6 +302,91 @@ describe('the Select and Hand tools (W4.10)', () => {
     expect(hand).toHaveBeenCalledTimes(1);
     expect(runCommand(REGISTRY, 'hand-tool', state(), { 'hand-tool': hand })).toBe(false);
     expect(hand).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The view state of an open document on the given page, at 100 % in the continuous layout.
+function viewOf(overrides: Partial<ViewCommandState> = {}): ViewCommandState {
+  return {
+    page: 2,
+    pageCount: 3,
+    zoom: 1,
+    fit: null,
+    layout: 'continuous',
+    firstAlone: false,
+    night: false,
+    ...overrides,
+  };
+}
+
+describe('the View and Home commands (W4.3a S6)', () => {
+  const inView = state({ hasDocument: true, view: viewOf(), capabilities: ALL_CAPABILITIES });
+
+  it('enables Back and Forward only when the history has an entry that way', () => {
+    expect(commandDisabledReasonOf('back', inView)).toBe('cannotGoBack');
+    expect(commandDisabledReasonOf('forward', inView)).toBe('cannotGoForward');
+    const moved = { ...inView, canGoBack: true, canGoForward: true };
+    expect(commandDisabledReasonOf('back', moved)).toBeNull();
+    expect(commandDisabledReasonOf('forward', moved)).toBeNull();
+  });
+
+  it('disables Previous Page on the first page and Next Page on the last, with reasons', () => {
+    const first = { ...inView, view: viewOf({ page: 1 }) };
+    const last = { ...inView, view: viewOf({ page: 3 }) };
+    expect(commandDisabledReasonOf('previous-page', first)).toBe('firstPage');
+    expect(commandDisabledReasonOf('next-page', first)).toBeNull();
+    expect(commandDisabledReasonOf('next-page', last)).toBe('lastPage');
+    expect(commandDisabledReasonOf('previous-page', last)).toBeNull();
+    expect(commandDisabledReasonOf('next-page', inView)).toBeNull();
+  });
+
+  it('says not available yet, not last or first page, before the view reports its page count', () => {
+    // The view's first state has page 1 and no pages: Next Page must not claim it is the last page.
+    const unknown = { ...inView, view: viewOf({ page: 1, pageCount: 0 }) };
+    expect(commandDisabledReasonOf('next-page', unknown)).toBe('notAvailableYet');
+    expect(commandDisabledReasonOf('previous-page', unknown)).toBe('notAvailableYet');
+  });
+
+  it('needs a document for the page commands and the zoom commands', () => {
+    for (const id of ['previous-page', 'next-page', 'zoom-in', 'zoom-out']) {
+      expect(commandDisabledReasonOf(id, state())).toBe('needsDocument');
+    }
+  });
+
+  it('disables Zoom In at the largest zoom and Zoom Out at the smallest', () => {
+    expect(
+      commandDisabledReasonOf('zoom-in', { ...inView, view: viewOf({ zoom: MAX_ZOOM }) }),
+    ).toBe('maxZoom');
+    expect(
+      commandDisabledReasonOf('zoom-out', { ...inView, view: viewOf({ zoom: MIN_ZOOM }) }),
+    ).toBe('minZoom');
+    expect(commandDisabledReasonOf('zoom-in', inView)).toBeNull();
+    expect(commandDisabledReasonOf('zoom-out', inView)).toBeNull();
+  });
+
+  it('shows the page layout the view is in as pressed, and Night Mode while night reading', () => {
+    const checkedOf = (id: string, current: CommandState) => REGISTRY.get(id)?.checked?.(current);
+    const twoCover = { ...inView, view: viewOf({ layout: 'twoPage', firstAlone: true }) };
+    const twoPlain = { ...inView, view: viewOf({ layout: 'twoPage' }) };
+    expect(checkedOf('single-page-continuous', inView)).toBe(true);
+    expect(checkedOf('two-up-continuous', inView)).toBe(false);
+    expect(checkedOf('two-up-continuous', twoPlain)).toBe(true);
+    expect(checkedOf('two-up-with-cover-page', twoPlain)).toBe(false);
+    expect(checkedOf('two-up-with-cover-page', twoCover)).toBe(true);
+    // A cover flag left over from a two-page layout does not press Single Page when continuous.
+    expect(
+      checkedOf('single-page-continuous', { ...inView, view: viewOf({ firstAlone: true }) }),
+    ).toBe(true);
+    expect(checkedOf('night-reading', inView)).toBe(false);
+    expect(checkedOf('night-reading', { ...inView, view: viewOf({ night: true }) })).toBe(true);
+  });
+
+  it('runs the layout and night handlers, and not when the document is closed', () => {
+    const night = vi.fn();
+    expect(runCommand(REGISTRY, 'night-reading', inView, { 'night-reading': night })).toBe(true);
+    expect(night).toHaveBeenCalledTimes(1);
+    expect(runCommand(REGISTRY, 'night-reading', state(), { 'night-reading': night })).toBe(false);
+    expect(night).toHaveBeenCalledTimes(1);
   });
 });
 

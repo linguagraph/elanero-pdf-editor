@@ -6,11 +6,17 @@ import type { MessageId } from '../i18n/en';
 import type { IconName } from '../theme/icons.generated';
 import {
   ALWAYS,
+  CAN_GO_BACK,
+  CAN_GO_FORWARD,
   CAN_REDO,
   CAN_UNDO,
+  CAN_ZOOM_IN,
+  CAN_ZOOM_OUT,
   createRegistry,
   HAS_RECENT,
   NEEDS_DOCUMENT,
+  NOT_FIRST_PAGE,
+  NOT_LAST_PAGE,
   type CommandDef,
   type Enabled,
   type GroupDef,
@@ -134,10 +140,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     checked: (state) => state.viewTool === 'hand',
   },
   aliased(cmd('find', 'command.find.label', 'home.search'), 'command.find.keywords'),
-  cmd('back', 'command.back.label', 'home.navigate'),
-  cmd('forward', 'command.forward.label', 'home.navigate'),
-  cmd('previous-page', 'command.previous-page.label', 'home.navigate'),
-  cmd('next-page', 'command.next-page.label', 'home.navigate'),
+  cmd('back', 'command.back.label', 'home.navigate', CAN_GO_BACK),
+  cmd('forward', 'command.forward.label', 'home.navigate', CAN_GO_FORWARD),
+  cmd('previous-page', 'command.previous-page.label', 'home.navigate', NOT_FIRST_PAGE),
+  cmd('next-page', 'command.next-page.label', 'home.navigate', NOT_LAST_PAGE),
   // Alt+G (web override, W4.3b): focuses the status bar's page field.
   cmd('go-to-page', 'command.go-to-page.label', 'home.navigate'),
 
@@ -242,18 +248,31 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('import-comments', 'command.import-comments.label', 'comment.manage'),
 
   // View
-  cmd('zoom-out', 'command.zoom-out.label', 'view.zoom'),
-  cmd('zoom-in', 'command.zoom-in.label', 'view.zoom'),
+  cmd('zoom-out', 'command.zoom-out.label', 'view.zoom', CAN_ZOOM_OUT),
+  cmd('zoom-in', 'command.zoom-in.label', 'view.zoom', CAN_ZOOM_IN),
   cmd('fit-width', 'command.fit-width.label', 'view.zoom'),
   cmd('fit-page', 'command.fit-page.label', 'view.zoom'),
   cmd('actual-size', 'command.actual-size.label', 'view.zoom'),
   cmd('single-page', 'command.single-page.label', 'view.display'),
-  cmd('single-page-continuous', 'command.single-page-continuous.label', 'view.display'),
-  cmd('two-up-continuous', 'command.two-up-continuous.label', 'view.display'),
-  cmd('two-up-with-cover-page', 'command.two-up-with-cover-page.label', 'view.display'),
+  // The page layouts are toggles (W1.6 section 9): the one the view is in shows as pressed.
+  {
+    ...cmd('single-page-continuous', 'command.single-page-continuous.label', 'view.display'),
+    checked: (state) => state.view?.layout === 'continuous',
+  },
+  {
+    ...cmd('two-up-continuous', 'command.two-up-continuous.label', 'view.display'),
+    checked: (state) => state.view?.layout === 'twoPage' && !state.view.firstAlone,
+  },
+  {
+    ...cmd('two-up-with-cover-page', 'command.two-up-with-cover-page.label', 'view.display'),
+    checked: (state) => state.view?.layout === 'twoPage' && state.view.firstAlone,
+  },
   cmd('rotate-view-counterclockwise', 'command.rotate-view-counterclockwise.label', 'view.reading'),
   cmd('rotate-view-clockwise', 'command.rotate-view-clockwise.label', 'view.reading'),
-  cmd('night-reading', 'command.night-reading.label', 'view.reading'),
+  {
+    ...cmd('night-reading', 'command.night-reading.label', 'view.reading'),
+    checked: (state) => state.view?.night === true,
+  },
 
   // Tools
   cmd('recognize-text-ocr', 'command.recognize-text-ocr.label', 'tools.ocr', NEEDS_DOCUMENT, 'ocr'),
