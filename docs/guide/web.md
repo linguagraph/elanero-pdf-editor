@@ -145,6 +145,17 @@ is reloaded until you press it.
   extract, can be undone from the notice that follows it. Dragging pages is not available yet.
   Undo on a notice undoes only that change; if you have changed the document since, nothing is
   undone and the notice says so.
+- **Redactions.** The **Redactions** button on the left rail lists every redaction mark in the
+  document: the marks you drew, the ones an undo brought back, and the ones already in the file.
+  Each row shows its page, the text it covers (or "Area") and its overlay text, with a swatch of its
+  box colour. Click a row to select it; Ctrl-click or Space adds one, and Shift-click selects a range.
+  Enter or a double-click goes to the mark's page, and the selected boxes are outlined on the page.
+  Escape clears the selection. With a selection you can change its **Fill**, **Text colour** and
+  **Overlay text** (up to 500 characters, saved when you press Enter or leave the field). When the
+  selected marks differ in a field, that field shows "Mixed", and a change sets only that field on
+  every selected mark. A locked mark cannot be changed. **Delete** removes the selected marks.
+  **Apply Selected** and **Apply All** burn the marks into the document after you confirm; Apply All
+  includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
 
 ## Going to a page
 
@@ -167,7 +178,7 @@ version yet:
 - opening, viewing, searching and saving PDF files, and the start page with recent files;
 - the ribbon, the command palette and keyboard shortcuts;
 - editing text and images, inserting, duplicating and extracting pages, combining, splitting and compressing files;
-- comments other than sticky notes, rectangles and highlights, the Comments panel, redaction, stamps and watermarks, password protection, and comparing files;
+- comments other than sticky notes, rectangles and highlights, the Comments panel, stamps and watermarks, password protection, and comparing files;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
 - printing, and translation (which will be turned on only when you ask for it);
 - the **Install App** command.
@@ -247,7 +258,8 @@ full policy, with what the desktop app stores, is in the
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (command palette, Ctrl+Shift+P; Undo after each change) |
-| Other comments, redaction, stamps, watermarks, security | Yes | Coming soon |
+| Redaction: mark areas, the Redactions panel, apply | Yes | Yes (Mark areas on the toolbar; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
+| Other comments, stamps, watermarks, security | Yes | Coming soon |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
 | Print | Yes | Coming soon |

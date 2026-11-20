@@ -60,8 +60,10 @@ Sanitizing changes the file, so save a copy first, with **Save As…**.
 ### In the web version
 
 The web version has the same two jobs. On the document toolbar, use **Mark areas** and drag over the
-areas to remove; the count shows the marks. **Clear marks** drops them, and **Apply redactions** asks
-you to confirm first. **Sanitize document** opens a dialog with the same categories as above, which
+areas to remove; the count shows the marks. **Clear marks** drops all the marks of the document,
+including any already in the file, and **Apply redactions** asks you to confirm first. The
+**Redactions** panel on the left rail lists the marks, lets you change each one's fill, text colour and
+overlay text, and has **Apply Selected** and **Apply All**, which also ask you to confirm. **Sanitize document** opens a dialog with the same categories as above, which
 you confirm before anything is removed. Both show their progress and can be cancelled, and Undo works
 until you close the document. A document with a password cannot be redacted or sanitized in the
 browser: open it in the desktop app.
