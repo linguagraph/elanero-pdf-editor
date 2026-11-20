@@ -53,6 +53,7 @@ import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { RedactionController } from './redaction/controller';
 import { RedactionsPanel } from './redaction/RedactionsPanel';
+import { RedactionPropertiesDialog } from './redaction/RedactionPropertiesDialog';
 import { useRedactionState } from './redaction/useRedaction';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
@@ -167,6 +168,8 @@ export function App({
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  // Redaction Properties (W4.14): the style of new marks. It needs no document.
+  const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
@@ -220,6 +223,7 @@ export function App({
     'reduce-file-size': () => setCompressOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
+    'redaction-properties': () => setRedactionPropsOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
     'flatten-all-comments': () => setFlattenOpen(true),
@@ -574,6 +578,10 @@ export function App({
         </>
       }
     >
+      <RedactionPropertiesDialog
+        isOpen={redactionPropsOpen}
+        onClose={() => setRedactionPropsOpen(false)}
+      />
       <PreferencesDialog
         isOpen={preferencesOpen}
         onClose={() => setPreferencesOpen(false)}

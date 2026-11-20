@@ -68,6 +68,11 @@ you confirm before anything is removed. Both show their progress and can be canc
 until you close the document. A document with a password cannot be redacted or sanitized in the
 browser: open it in the desktop app.
 
+**Properties** (on the **Redact** group) sets the box colour, the text colour and the text on the box
+for the marks you make from now on. The overlay text is limited to 64 characters. Properties works
+with no document open and never changes a document: marks already drawn keep their style. The same
+settings are the redaction box style in [Preferences](preferences.md).
+
 ## Encrypt with a password
 
 **Encrypt with Password…** (in the **Security** group) protects the file. You can require a password to

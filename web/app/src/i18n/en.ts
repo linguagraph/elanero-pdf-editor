@@ -300,6 +300,7 @@ export const EN = {
   'prefs.redaction.overlayText': 'Text on the box',
   'prefs.redaction.overlayHint':
     'Shown on the box once the redactions are applied. Empty for none.',
+  'prefs.redaction.saveFailed': 'The setting could not be saved in this browser. Try again.',
 
   // Engine load stages (W3.1) and the load failure dialog.
   'loading.stage.pyodide': 'Loading the Python runtime',

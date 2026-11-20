@@ -188,7 +188,7 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   aliased(cmd('redact', 'command.redact.label', 'protect.redact'), 'command.redact.keywords'),
   cmd('mark-text', 'command.mark-text.label', 'protect.redact'),
   cmd('mark-whole-pages', 'command.mark-whole-pages.label', 'protect.redact'),
-  cmd('redaction-properties', 'command.redaction-properties.label', 'protect.redact'),
+  cmd('redaction-properties', 'command.redaction-properties.label', 'protect.redact', ALWAYS),
   cmd('apply-redactions', 'command.apply-redactions.label', 'protect.redact'),
   aliased(
     cmd('sanitize-document', 'command.sanitize-document.label', 'protect.cleanup'),
