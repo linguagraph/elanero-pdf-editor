@@ -20,6 +20,12 @@ const info: DocInfo = {
   producer: 'PDF library',
   creation_date: 'D:20240101120000',
   mod_date: 'D:20240102120000',
+  pdf_version: '1.7',
+  is_tagged: false,
+  has_forms: false,
+  has_javascript: false,
+  is_repaired: false,
+  has_xmp: false,
 };
 
 describe('changed fields', () => {
