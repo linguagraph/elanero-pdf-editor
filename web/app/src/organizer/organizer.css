@@ -81,9 +81,11 @@
   opacity: 0.5;
 }
 
-/* The insertion line sits in the grid gap, on the edge the drop lands on. */
-.organizer-item[data-drop]::before,
-.organizer-item[data-drop]::after {
+/* The insertion line sits in the grid gap, on the edge the drop lands on. Each side draws only its
+   own pseudo-element: a shared rule would also draw the other one at its static position, which is
+   the middle of the cell, over the page. */
+.organizer-item[data-drop='before']::before,
+.organizer-item[data-drop='after']::after {
   content: '';
   position: absolute;
   top: 0;
@@ -108,8 +110,8 @@
 }
 
 @media (forced-colors: active) {
-  .organizer-item[data-drop]::before,
-  .organizer-item[data-drop]::after {
+  .organizer-item[data-drop='before']::before,
+  .organizer-item[data-drop='after']::after {
     background: Highlight;
   }
 }
