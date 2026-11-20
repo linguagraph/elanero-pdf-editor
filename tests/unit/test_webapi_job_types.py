@@ -911,3 +911,17 @@ def test_extract_images_can_be_cancelled_before_it_starts(web: None, fixture_pdf
     token.cancel()
     reply, _ = run_on_copy("extract_images", args, copy, cancel=token)
     assert error(reply)["code"] == CANCELLED
+
+
+@pytest.mark.parametrize("name", ["..", ".", "..."])
+def test_a_dot_only_document_name_gives_a_zip_name_that_does_not_start_with_a_dot(
+    web: None, fixture_pdf: Any, name: str
+) -> None:
+    # Several images, so the job answers with one ZIP whose name comes from the stem.
+    handle = open_data(bytes(fixture_pdf("several_images").read_bytes()), name)
+    args = {"name": name}
+    _, copy = prepare(handle, "extract_images", args)
+    reply, out = run_on_copy("extract_images", args, copy)
+    ((zip_name, _, _),) = files_of(ok(reply), out)
+    assert not zip_name.startswith(".")
+    assert zip_name == "document-images.zip"

@@ -51,7 +51,14 @@ def test_a_page_filter_takes_only_the_images_that_page_shows(
     doc = engine.open(fixture_pdf("images"))
     try:
         assert extract_images(doc, tmp_path / "beyond", pages=[doc.page_count + 5]) == []
+        # The fixture has one page, and MuPDF stores the two identical pictures once or twice
+        # (it dedups by content), so the expected set comes from the document's own image table:
+        # the images that list page 1 as a page they show, compared by their saved bytes.
+        shown = [info for info in doc.images() if 0 in info.pages]
+        assert shown, "the images fixture puts its pictures on page 1"
+        expected = sorted(doc.extract_image(info.ref)[0] for info in shown)
         first = extract_images(doc, tmp_path / "first", pages=[0])
-        assert len(first) <= len(extract_images(doc, tmp_path / "all"))
+        assert len(first) == len(shown)
+        assert sorted(path.read_bytes() for path in first) == expected
     finally:
         doc.close()

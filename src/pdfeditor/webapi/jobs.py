@@ -377,9 +377,12 @@ def _as_archive(
 
 def _stem(name: str) -> str:
     """The file-name stem of a document's display name, safe for any target system."""
-    # safe_name never returns "" (it falls back to "part"), so an empty stem is caught first.
-    raw_stem = Path(name).stem.strip()
-    return safe_name(raw_stem) if raw_stem else "document"
+    # A stem of "." or ".." (or "...") would make a hidden or relative-looking file name, so the
+    # leading dots go first. safe_name never returns "" (it falls back to "part"), so an empty
+    # stem is caught before it.
+    raw_stem = Path(name).stem.strip().lstrip(".").strip()
+    stem = safe_name(raw_stem).lstrip(".").strip() if raw_stem else ""
+    return stem or "document"
 
 
 def _check_pages(pages: Sequence[int], count: int, path: str) -> None:
