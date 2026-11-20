@@ -10,6 +10,7 @@ import { ribbonLayout } from '../commands/run';
 import { t } from '../i18n/t';
 import { CommandPalette } from '../palette/CommandPalette';
 import { AppMenu } from './AppMenu';
+import { GUIDE_URL } from '../help/guide';
 import { Ribbon } from './Ribbon';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -702,3 +703,17 @@ function labelOf(groupId: string): string {
   if (group === undefined) throw new Error(`no group ${groupId}`);
   return t(group.labelId);
 }
+
+describe('Ribbon help button (W4.3a S4)', () => {
+  it('opens the guide page of the tab shown', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    const help = host.querySelector<HTMLButtonElement>('.ribbon-help');
+    expect(help?.getAttribute('aria-label')).toBe(t('ribbon.help'));
+    act(() => {
+      help?.click();
+    });
+    expect(open).toHaveBeenCalledWith(`${GUIDE_URL}getting-started/`, '_blank', expect.any(String));
+    open.mockRestore();
+  });
+});

@@ -241,6 +241,34 @@
   border-bottom: none;
 }
 
+.ribbon-help {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  margin-inline: var(--space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ribbon-help:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
+.ribbon-help[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.quick-access {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .ribbon-chevron {
   flex: 0 0 auto;
   min-width: 32px;
