@@ -8,6 +8,7 @@ import { type EngineClient, setTabSession } from './engine/engineConnection';
 import { fakeEngine } from './engine/testEngine';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
+import { RedactionController } from './redaction/controller';
 import { closePanel, openPanel } from './layout/sidePanels';
 
 // jsdom has no CSS.escape, and react-aria calls it when a tab takes focus.
@@ -20,11 +21,33 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
 
 // An engine that opens every PDF and answers the first page render with pixels, so the first
 // page is drawn and the scheduler's firstPage resolves. Other calls never answer.
-function drawingEngine(): { client: EngineClient; renders: () => number } {
+// With `marks`, the engine lists one mark on every open document, so Apply Redactions is enabled.
+function drawingEngine(options: { marks?: boolean } = {}): {
+  client: EngineClient;
+  renders: () => number;
+} {
   let opened = 0;
   let renders = 0;
   const call = vi.fn((method: string, params: Record<string, unknown>) => {
     if (method === 'session.close') return Promise.resolve({});
+    if (method === 'redaction.list') {
+      const marks = options.marks
+        ? [
+            {
+              page: 0,
+              name: 'm1',
+              rect: { x0: 10, y0: 10, x1: 80, y1: 40 },
+              fill: null,
+              overlay_text: '',
+              text_color: null,
+              contents: '',
+              author: '',
+              locked: false,
+            },
+          ]
+        : [];
+      return Promise.resolve({ marks, truncated: false });
+    }
     if (method === 'session.pages') {
       return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }] });
     }
@@ -690,11 +713,14 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     vi.restoreAllMocks();
   });
 
-  async function openDocument(): Promise<void> {
+  async function openDocument(marks = false): Promise<void> {
     const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
     act(() => {
       root.render(
-        <App engine={fakeEngine(drawingEngine().client)} jobs={jobs as unknown as JobWorkerPool} />,
+        <App
+          engine={fakeEngine(drawingEngine({ marks }).client)}
+          jobs={jobs as unknown as JobWorkerPool}
+        />,
       );
     });
     const zone = host.querySelector<HTMLElement>('.start-drop');
@@ -770,5 +796,100 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
       apply.click();
     });
     expect(document.querySelector('.redact-confirm')).toBeNull();
+  });
+
+  // The engine lists one mark (drawingEngine({ marks: true })), so the list loads and Apply is on.
+  async function waitForApplyEnabled(): Promise<void> {
+    await until(() => ribbonButton('apply-redactions').getAttribute('aria-disabled') !== 'true');
+    expect(ribbonButton('apply-redactions').getAttribute('aria-disabled')).not.toBe('true');
+  }
+
+  function clickButton(text: string): void {
+    const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (el) => el.textContent?.trim() === text,
+    );
+    if (button === undefined) throw new Error(`no button ${text}`);
+    act(() => {
+      button.click();
+    });
+  }
+
+  function tabLabels(): string[] {
+    return [...host.querySelectorAll<HTMLElement>('.doc-tabs-list [role="tab"]')].map(
+      (tab) => tab.textContent ?? '',
+    );
+  }
+
+  async function openSecondDocument(): Promise<void> {
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('no open input');
+    Object.defineProperty(input, 'files', { value: [pdf('second.pdf')], configurable: true });
+    act(() => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await until(() => tabLabels().length === 2);
+    expect(tabLabels()).toHaveLength(2);
+  }
+
+  it('with marks, Apply Redactions opens the confirmation and does not apply yet', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    expect(document.querySelector('.redact-confirm')).not.toBeNull();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('Cancel in the confirmation closes it and does not apply', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    clickButton(t('redact.confirm.cancel'));
+    await until(() => document.querySelector('.redact-confirm') === null);
+    expect(document.querySelector('.redact-confirm')).toBeNull();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('Confirm in the confirmation applies the marks exactly once', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    clickButton(t('redact.confirm.apply'));
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(null);
+  });
+
+  it('switching tabs while the confirmation is open closes it and applies nothing', async () => {
+    const apply = vi.spyOn(RedactionController.prototype, 'apply').mockResolvedValue(undefined);
+    await openDocument(true);
+    await openSecondDocument();
+    selectTab(t('ribbon.tab.protect'));
+    await waitForApplyEnabled();
+    act(() => {
+      ribbonButton('apply-redactions').click();
+    });
+    expect(document.querySelector('.redact-confirm')).not.toBeNull();
+
+    const first = [...host.querySelectorAll<HTMLElement>('.doc-tabs-list [role="tab"]')].find(
+      (tab) => (tab.textContent ?? '').includes('report.pdf'),
+    );
+    if (first === undefined) throw new Error('no first tab');
+    act(() => {
+      first.click();
+    });
+    await until(() => document.querySelector('.redact-confirm') === null);
+    expect(document.querySelector('.redact-confirm')).toBeNull();
+    expect(apply).not.toHaveBeenCalled();
   });
 });

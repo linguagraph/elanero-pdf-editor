@@ -330,6 +330,13 @@ describe('the comment and redaction tools (W4.3a S7)', () => {
     expect(commandDisabledReasonOf('apply-redactions', ready)).toBeNull();
   });
 
+  it('says an apply in progress is the reason while it runs, not that there are no marks', () => {
+    // A running apply has marks on the list but no longer offers them.
+    const busy = state({ hasDocument: true, canApplyRedactions: false, redactionBusy: true });
+    expect(commandDisabledReasonOf('apply-redactions', busy)).toBe('redactionBusy');
+    expect(DISABLED_REASON_LABELS.redactionBusy).toBe('disabled.redactionBusy');
+  });
+
   it('runs Redact through its handler, and not without a document', () => {
     const redact = vi.fn();
     expect(runCommand(REGISTRY, 'redact', withDoc, { redact })).toBe(true);

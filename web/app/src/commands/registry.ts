@@ -56,6 +56,8 @@ export interface CommandState {
   readonly redacting: boolean;
   // There are marks to apply and no apply is running (W7.4). False when no document is open.
   readonly canApplyRedactions: boolean;
+  // An apply is running (W7.4). Optional, so a state without it reads as not busy.
+  readonly redactionBusy?: boolean;
 }
 
 // notAvailableYet is not an enabled rule: the caller reports it when a command has no handler.
@@ -65,6 +67,7 @@ export type DisabledReason =
   | 'nothingToRedo'
   | 'noRecentFiles'
   | 'noRedactionMarks'
+  | 'redactionBusy'
   | 'notAvailableYet';
 
 export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>> = {
@@ -73,6 +76,7 @@ export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>>
   nothingToRedo: 'disabled.nothingToRedo',
   noRecentFiles: 'disabled.noRecentFiles',
   noRedactionMarks: 'disabled.noRedactionMarks',
+  redactionBusy: 'disabled.redactionBusy',
   notAvailableYet: 'disabled.notAvailableYet',
 };
 
@@ -81,9 +85,11 @@ export type Enabled = (state: CommandState) => DisabledReason | null;
 
 export const ALWAYS: Enabled = () => null;
 export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'needsDocument');
-// Apply needs a document and at least one mark to remove content under (W7.4).
+// Apply needs a document and at least one mark to remove content under (W7.4). While an apply runs
+// the marks are not offered, so the reason says the work is in progress, not that none exist.
 export const CAN_APPLY_REDACTIONS: Enabled = (state) => {
   if (!state.hasDocument) return 'needsDocument';
+  if (state.redactionBusy === true) return 'redactionBusy';
   return state.canApplyRedactions ? null : 'noRedactionMarks';
 };
 export const CAN_UNDO: Enabled = (state) => (state.canUndo ? null : 'nothingToUndo');

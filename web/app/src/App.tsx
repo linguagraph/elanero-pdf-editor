@@ -338,6 +338,18 @@ export function App({
     },
   ];
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
+  // The apply confirmation belongs to the tab it was opened on: a switch of tab closes it, so Apply
+  // never runs on another tab's controller. The reset happens while rendering, not in an effect.
+  const [applyTab, setApplyTab] = useState(activeId);
+  if (applyTab !== activeId) {
+    setApplyTab(activeId);
+    setApplyOpen(false);
+  }
+  // Closing a tab closes the confirmation too, whichever tab it is.
+  const closeTab = (id: number) => {
+    setApplyOpen(false);
+    docs.closeTab(id);
+  };
   // Save writes the document as a download under its own name, and marks it clean (W4.8).
   const saveTab = async (tab: DocumentTab): Promise<void> => {
     const outcome = await saver.save(
@@ -400,6 +412,7 @@ export function App({
       redactionState !== null &&
       !redactionState.busy &&
       redactionState.marks.length > 0,
+    redactionBusy: documentShown && (redactionState?.busy ?? false),
   };
   // The View zoom and Home navigate commands run on the open document's view (W4.2a S6). The view is
   // read when a command runs, not during render; with no document no handler is given, and the
@@ -481,7 +494,7 @@ export function App({
           },
           // Close (W4.3a S4) closes the open tab, as the tab's own close button does.
           close: () => {
-            if (activeId !== null) docs.closeTab(activeId);
+            if (activeId !== null) closeTab(activeId);
           },
         }
       : {}),
@@ -625,7 +638,7 @@ export function App({
               <BrandMark />
               <QuickAccess registry={REGISTRY} state={state} handlers={handlers} />
             </div>
-            <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
+            <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
             <button
               type="button"
               onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
