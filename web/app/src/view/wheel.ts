@@ -40,6 +40,19 @@ export function keyScrollPixels(
   return null;
 }
 
+// The scaled scroll moves the spacer by a fraction of a pixel per event. A browser reads scrollTop
+// back in whole pixels on a 1x display, so the fraction is carried to the next event instead of
+// being lost: this returns the whole pixels to apply now and the remainder to keep. The rounding to
+// 1e-6 keeps ten steps of 0.1 from summing to 0.9999999 and losing the last pixel.
+export function takeWholePixels(
+  remainder: number,
+  amount: number,
+): { readonly whole: number; readonly remainder: number } {
+  const total = Math.round((remainder + amount) * 1e6) / 1e6;
+  const whole = Math.trunc(total);
+  return { whole, remainder: total - whole };
+}
+
 // A trackpad pinch sends many small deltas, so one zoom step is taken per this many pixels.
 export const WHEEL_STEP_PX = 40;
 

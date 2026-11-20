@@ -80,6 +80,7 @@ import {
   isZoomWheel,
   keyScrollPixels,
   takeWheelSteps,
+  takeWholePixels,
   wheelDeltaPixels,
 } from './wheel';
 import {
@@ -171,6 +172,16 @@ export interface DocumentViewProps {
   readonly onCommentToolChange?: (tool: CommentToolId | null) => void;
 }
 
+// A button, link or ARIA widget inside the scroller keeps its own Space and arrow keys (W5.1a S4 fix).
+// The match must lie inside the scroller: an ancestor outside it (a region around the whole view)
+// does not make the scroller's keys belong to a control.
+const INTERACTIVE_SELECTOR = 'button, a[href], [role]';
+
+function isInsideControl(target: HTMLElement, scroller: HTMLElement): boolean {
+  const control = target.closest<HTMLElement>(INTERACTIVE_SELECTOR);
+  return control !== null && control !== scroller && scroller.contains(control);
+}
+
 // The job worker is missing: the apply reports its failure, as any other failed job does.
 function noJobWorker(): ActionJobWorker {
   throw new Error('the job worker is not available');
@@ -257,6 +268,9 @@ export function DocumentView({
   // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
   const pageFieldRef = useRef<HTMLInputElement>(null);
   const wheelPending = useRef(0);
+  // The fraction of a pixel the scaled scroll still owes the spacer (one scroller per view), carried
+  // from one wheel or key event to the next so small deltas are not lost (W5.1a S4 fix).
+  const scaledRemainder = useRef(0);
   // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
   const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
   // The page at the top of the view, kept up to date (the selection of the page at the top uses it).
@@ -586,13 +600,18 @@ export function DocumentView({
       if (!isZoomWheel(event)) {
         // Above the scaled-space limit a native scroll would move the spacer, not the scene, so the
         // wheel scrolls the spacer at the scene's rate instead (W5.1a S4). Below it, native scrolling.
-        if (!isScaledSpace(contentHeight.current)) return;
+        if (!isScaledSpace(contentHeight.current)) {
+          scaledRemainder.current = 0;
+          return;
+        }
         event.preventDefault();
         const ratio = scrollPerScenePixel(
           contentHeight.current,
           viewportOf(element, contentHeight.current).height,
         );
-        element.scrollTop += wheelDeltaPixels(event) * ratio;
+        const step = takeWholePixels(scaledRemainder.current, wheelDeltaPixels(event) * ratio);
+        scaledRemainder.current = step.remainder;
+        element.scrollTop += step.whole;
         element.scrollLeft += wheelDeltaPixels({
           deltaY: event.deltaX,
           deltaMode: event.deltaMode,
@@ -629,19 +648,31 @@ export function DocumentView({
   // A key typed into a field or a control is left to it.
   const scrollByKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (!isScaledSpace(contentHeight.current)) return;
+    const element = event.currentTarget;
+    if (!isScaledSpace(contentHeight.current)) {
+      scaledRemainder.current = 0;
+      return;
+    }
     const target = event.target;
     if (
       target instanceof HTMLElement &&
-      target.closest('input, textarea, select, [contenteditable]')
+      (target.closest('input, textarea, select, [contenteditable]') ||
+        isInsideControl(target, element))
     )
       return;
-    const element = event.currentTarget;
     const height = viewportOf(element, contentHeight.current).height;
     const px = keyScrollPixels(event.key, event.shiftKey, height);
     if (px === null) return;
     event.preventDefault();
-    element.scrollTop += px * scrollPerScenePixel(contentHeight.current, height);
+    const before = element.scrollTop;
+    const step = takeWholePixels(
+      scaledRemainder.current,
+      px * scrollPerScenePixel(contentHeight.current, height),
+    );
+    element.scrollTop = before + step.whole;
+    // A browser stops the write at the end of the range: then the owed fraction points past the end
+    // and is dropped, so the next key starts from the end and not from a stale fraction.
+    scaledRemainder.current = element.scrollTop === before + step.whole ? step.remainder : 0;
   };
 
   // Runs once a new layout (a zoom, a fit refit or a layout change) is in the DOM, so the scroll range
