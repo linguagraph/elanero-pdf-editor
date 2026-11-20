@@ -32,6 +32,9 @@ export const EN = {
   // The separator on a side panel's inner edge (W4.2a S4): drag or arrow keys change its width.
   'layout.resizeLeftPanel': 'Resize left panel',
   'layout.resizeRightPanel': 'Resize right panel',
+  // The notice under the top bar below 768 px (W4.2a S7b), and its dismiss button.
+  'layout.narrowNotice': 'Elanero works best on a wider screen.',
+  'layout.narrowNotice.dismiss': 'Dismiss',
   // A rail button's name with its count badge (W4.2a S2): "Search, 1 item", "Search, 5 items".
   'rail.count': { one: '{panel}, 1 item', other: '{panel}, {count} items' },
   'rail.badgeOverflow': '99+',
@@ -92,6 +95,7 @@ export const EN = {
   'ribbon.group.app.settings': 'Settings',
   'ribbon.group.app.help': 'Help',
   'appMenu.label': 'Main menu',
+  'appMenu.panels': 'Panels',
   'disabled.needsDocument': 'Open a PDF first.',
   'disabled.nothingToUndo': 'There is nothing to undo.',
   'disabled.nothingToRedo': 'There is nothing to redo.',

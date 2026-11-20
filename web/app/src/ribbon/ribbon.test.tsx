@@ -310,6 +310,46 @@ describe('AppMenu', () => {
     });
     expect(preferences).toHaveBeenCalledTimes(1);
   });
+
+  it('shows no Panels section unless panel items are passed', () => {
+    render(<AppMenu registry={REGISTRY} state={withDoc} handlers={{}} />);
+    act(() => {
+      host.querySelector<HTMLElement>('button[aria-label="Main menu"]')?.click();
+    });
+    expect(document.querySelector('.app-menu')?.textContent).not.toContain(t('appMenu.panels'));
+  });
+
+  it('runs a panel item from the menu, and marks a disabled one', () => {
+    const onPages = vi.fn();
+    const onSearch = vi.fn();
+    render(
+      <AppMenu
+        registry={REGISTRY}
+        state={noDoc}
+        handlers={{}}
+        panelItems={[
+          { id: 'pages', label: 'Pages', disabled: false, onAction: onPages },
+          { id: 'search', label: 'Search', disabled: true, onAction: onSearch },
+        ]}
+      />,
+    );
+    act(() => {
+      host.querySelector<HTMLElement>('button[aria-label="Main menu"]')?.click();
+    });
+    const menu = document.querySelector<HTMLElement>('.app-menu');
+    expect(menu?.textContent).toContain(t('appMenu.panels'));
+    const item = (id: string): HTMLElement | null =>
+      document.querySelector<HTMLElement>(`[role="menuitem"][data-key="panel:${id}"]`);
+    expect(item('search')?.getAttribute('aria-disabled')).toBe('true');
+    act(() => {
+      item('search')?.click();
+    });
+    expect(onSearch).not.toHaveBeenCalled();
+    act(() => {
+      item('pages')?.click();
+    });
+    expect(onPages).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Ribbon forms (W4.3a S2)', () => {

@@ -14,9 +14,12 @@ import { NotRespondingHost } from './feedback/NotRespondingHost';
 import { JobProgressHost } from './feedback/JobProgressHost';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { AppFrame } from './layout/AppFrame';
+import { NarrowNotice } from './layout/NarrowNotice';
+import { layoutForWidth } from './layout/breakpoints';
+import { useViewportWidth } from './layout/useViewportWidth';
 import { BrandMark } from './theme/BrandMark';
 import { ThemeSwitch } from './theme/ThemeSwitch';
-import { AppMenu } from './ribbon/AppMenu';
+import { type AppMenuPanelItem, AppMenu } from './ribbon/AppMenu';
 import { type RibbonPrefs } from './ribbon/form';
 import { Ribbon } from './ribbon/Ribbon';
 import { PreferencesDialog } from './prefs/PreferencesDialog';
@@ -56,7 +59,7 @@ import { SearchPanel } from './search/SearchPanel';
 import type { SearchMarks } from './search/search';
 import { RailButton } from './layout/RailButton';
 import { RAIL_ICONS } from './layout/railIcons';
-import { closePanel, openPanel, useOpenPanel } from './layout/sidePanels';
+import { closePanel, openPanel, togglePanel, useOpenPanel } from './layout/sidePanels';
 import { APP_VERSION } from './version';
 import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
@@ -227,11 +230,40 @@ export function App({
   // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
+  // With the left rail hidden (below 768 px) the menu lists the left panels instead (W4.2a S7b).
+  const leftRailShown = layoutForWidth(useViewportWidth()).leftRail;
   // The search hits the document view draws, with the tab they belong to (W5.4).
   const [searchMarks, setSearchMarks] = useState<{ tabId: number; marks: SearchMarks } | null>(
     null,
   );
   const documentShown = !showStart && activeId !== null && session !== null && scheduler !== null;
+  // The left panels as menu items: they open the same panel the rail button does.
+  const menuPanelItems: readonly AppMenuPanelItem[] = [
+    {
+      id: 'pages',
+      label: t('thumbnails.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('pages');
+      },
+    },
+    {
+      id: 'bookmarks',
+      label: t('bookmarks.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('bookmarks');
+      },
+    },
+    {
+      id: 'search',
+      label: t('search.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('search');
+      },
+    },
+  ];
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
   // The page and zoom the document view reports, for the status bar under the document.
   const [viewState, setViewState] = useState<DocumentViewState>({
@@ -398,7 +430,12 @@ export function App({
         <>
           <div className="app-header">
             <div className="app-header-start">
-              <AppMenu registry={REGISTRY} state={state} handlers={handlers} />
+              <AppMenu
+                registry={REGISTRY}
+                state={state}
+                handlers={handlers}
+                panelItems={leftRailShown ? undefined : menuPanelItems}
+              />
               <BrandMark />
             </div>
             <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={docs.closeTab} />
@@ -410,6 +447,7 @@ export function App({
             </button>
             <ThemeSwitch />
           </div>
+          <NarrowNotice />
           <Ribbon registry={REGISTRY} state={state} handlers={handlers} />
         </>
       }
