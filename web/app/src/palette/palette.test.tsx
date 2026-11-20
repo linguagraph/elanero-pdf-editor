@@ -9,6 +9,7 @@ import { type CommandState, TAB_LABELS } from '../commands/registry';
 import { type CommandHandlers, runCommand } from '../commands/run';
 import { t } from '../i18n/t';
 import { CommandPalette } from './CommandPalette';
+import { openCommandPalette } from './openCommandPalette';
 import { RECENT_COMMANDS_KEY } from './recentCommands';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -362,6 +363,46 @@ describe('command palette', () => {
       expect([...text.matchAll(JSX_TEXT)].map((m) => m[1])).toEqual([]);
       expect([...text.matchAll(READABLE_ATTRIBUTE)].map((m) => m[0])).toEqual([]);
     }
+  });
+});
+
+describe('command palette opened with a seed', () => {
+  it('opens filtered by the seed query, with the input and the list showing it', () => {
+    render(OPEN_STATE, spies());
+    act(() => {
+      openCommandPalette({ query: 'redo' });
+    });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(input().value).toBe('redo');
+    expect(rows().map((row) => row.dataset.command)).toEqual(['redo']);
+  });
+
+  it('opens with an empty query when the seed has none', () => {
+    render(OPEN_STATE, spies());
+    act(() => {
+      openCommandPalette();
+    });
+    expect(input().value).toBe('');
+    expect(rows().length).toBeGreaterThan(20);
+  });
+
+  it('opens the shortcuts view when the seed asks for it', () => {
+    render(OPEN_STATE, spies());
+    act(() => {
+      openCommandPalette({ view: 'shortcuts' });
+    });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('.palette-input')).toBeNull();
+  });
+
+  it('forgets the seed on the next plain open with Ctrl+Shift+P', () => {
+    render(OPEN_STATE, spies());
+    act(() => {
+      openCommandPalette({ query: 'redo' });
+    });
+    key(input(), { key: 'Escape' });
+    openPalette();
+    expect(input().value).toBe('');
   });
 });
 

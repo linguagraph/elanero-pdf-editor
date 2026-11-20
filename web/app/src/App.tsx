@@ -30,6 +30,7 @@ import { onPreferencesChanged, readPreferences, writePreferences } from './prefs
 import { CombineDialog } from './combine/CombineDialog';
 import { PropertiesDialog } from './properties/PropertiesDialog';
 import { CommandPalette } from './palette/CommandPalette';
+import { openCommandPalette } from './palette/openCommandPalette';
 import { ShortcutsDialog } from './palette/ShortcutsDialog';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
@@ -185,7 +186,7 @@ export function App({
     'previous-document': () => cycleDocument(-1),
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
     'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
-    'keyboard-shortcuts': () => setShortcutsOpen(true),
+    'keyboard-shortcuts': () => openCommandPalette({ view: 'shortcuts' }),
     // Help opens the guide's start; the "?" button opens the page of the tab shown instead.
     help: () => openGuide(),
     'whats-different': () => openGuide(WEB_VERSION_PAGE),

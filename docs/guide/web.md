@@ -97,7 +97,10 @@ is reloaded until you press it.
   icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
 - **Quick access and help.** Above the ribbon, next to the menu button, the quick-access buttons
   are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
-  button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
+  button at the right of the tab row opens this guide at the page for the tab you are on.
+- **Search tools.** The box at the right of the tab row (the search icon alone in a narrow window
+  or a compact ribbon) opens the command palette. Type in the box and the palette opens already
+  filtered by what you typed; the icon opens the palette empty. **About Elanero** in the app menu shows the version, the licence and
   a link to the source code. Close in the app menu closes the open document. The Select, Hand, Undo,
   Redo and Save buttons are greyed out for now, and they work once their commands are added.
 - **Keyboard shortcuts.** A few web keys work so far: **Alt+Left** and **Alt+Right** go back and
