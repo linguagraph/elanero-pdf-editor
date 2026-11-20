@@ -5,6 +5,7 @@
 // layer (W5.4) and the search highlights. Pages above 4 MP are drawn as tiles (W5.1b, tiles.ts);
 // comments are drawn into the page image by the engine.
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type Ref,
   useCallback,
   useEffect,
@@ -74,7 +75,13 @@ import { planPageRenders, tileRect, tilesInViewport } from './tiles';
 import { CanvasPill } from './CanvasPill';
 import { DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
 import type { ZoomRequest } from './zoomBox';
-import { anchoredScroll, isZoomWheel, takeWheelSteps, wheelDeltaPixels } from './wheel';
+import {
+  anchoredScroll,
+  isZoomWheel,
+  keyScrollPixels,
+  takeWheelSteps,
+  wheelDeltaPixels,
+} from './wheel';
 import {
   isScaledSpace,
   sceneTopForScroll,
@@ -576,7 +583,22 @@ export function DocumentView({
     const element = scrollRef.current;
     if (element === null || sizes === null) return;
     const onWheel = (event: WheelEvent) => {
-      if (!isZoomWheel(event)) return;
+      if (!isZoomWheel(event)) {
+        // Above the scaled-space limit a native scroll would move the spacer, not the scene, so the
+        // wheel scrolls the spacer at the scene's rate instead (W5.1a S4). Below it, native scrolling.
+        if (!isScaledSpace(contentHeight.current)) return;
+        event.preventDefault();
+        const ratio = scrollPerScenePixel(
+          contentHeight.current,
+          viewportOf(element, contentHeight.current).height,
+        );
+        element.scrollTop += wheelDeltaPixels(event) * ratio;
+        element.scrollLeft += wheelDeltaPixels({
+          deltaY: event.deltaX,
+          deltaMode: event.deltaMode,
+        });
+        return;
+      }
       event.preventDefault();
       const step = takeWheelSteps(wheelPending.current, wheelDeltaPixels(event));
       wheelPending.current = step.pending;
@@ -601,6 +623,26 @@ export function DocumentView({
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
   }, [sizes]);
+
+  // The arrow, page and space keys scroll the spacer; above the scaled-space limit they move it by the
+  // scene's rate, as the wheel does (W5.1a S4). Home and End need nothing: both ends map to each other.
+  // A key typed into a field or a control is left to it.
+  const scrollByKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!isScaledSpace(contentHeight.current)) return;
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest('input, textarea, select, [contenteditable]')
+    )
+      return;
+    const element = event.currentTarget;
+    const height = viewportOf(element, contentHeight.current).height;
+    const px = keyScrollPixels(event.key, event.shiftKey, height);
+    if (px === null) return;
+    event.preventDefault();
+    element.scrollTop += px * scrollPerScenePixel(contentHeight.current, height);
+  };
 
   // Runs once a new layout (a zoom, a fit refit or a layout change) is in the DOM, so the scroll range
   // already has the new size. A wheel zoom restores the point under the pointer (its own anchor);
@@ -836,6 +878,7 @@ export function DocumentView({
           tabIndex={0}
           aria-label={t('view.pages')}
           onScroll={measure}
+          onKeyDown={scrollByKey}
           onFocus={(event) => {
             // Focus inside a page pins that page; focus outside the pages (the pill, the scroller) unpins it.
             const page =

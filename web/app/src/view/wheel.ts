@@ -21,6 +21,25 @@ export function wheelDeltaPixels(event: {
   return event.deltaY;
 }
 
+// The vertical scroll a key moves a scroll container by, in CSS pixels: an arrow moves one line, as
+// the browsers do, and the page keys (PageUp, PageDown, Space, Shift+Space) move seven eighths of the
+// viewport. Null for any other key, which the browser handles.
+export const KEY_LINE_PX = 40;
+const KEY_PAGE_FRACTION = 7 / 8;
+
+export function keyScrollPixels(
+  key: string,
+  shiftKey: boolean,
+  viewportHeight: number,
+): number | null {
+  const page = viewportHeight * KEY_PAGE_FRACTION;
+  if (key === 'ArrowDown') return KEY_LINE_PX;
+  if (key === 'ArrowUp') return -KEY_LINE_PX;
+  if (key === 'PageDown' || (key === ' ' && !shiftKey)) return page;
+  if (key === 'PageUp' || (key === ' ' && shiftKey)) return -page;
+  return null;
+}
+
 // A trackpad pinch sends many small deltas, so one zoom step is taken per this many pixels.
 export const WHEEL_STEP_PX = 40;
 
