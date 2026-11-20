@@ -578,7 +578,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W4.8** Save ribbon handler: Save writes the document back through the verified save path and downloads it under the document's name _(slices 1-2 on main: #354, #359)_
 - [x] **W4.9** Save As ribbon handler: Save As writes a full copy under a new name and renames the tab _(slices 2-3 on main: #359, #361)_
 - [ ] **W4.10** Hand tool ribbon handler: the hand tool pans the page with the pointer; it is a view state and changes no document. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
-- [ ] **W4.11** Crop ribbon handler: crop the page box as a document change through the action layer, with undo. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
+- [x] **W4.11** Crop ribbon handler: crop the page box as a document change through the action layer, with undo. _(on main: #355, #362, #370)_
 - [ ] **W4.12** Mark Text ribbon handler: mark the selected text for redaction, as the desktop does. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
 - [ ] **W4.13** Mark Whole Pages ribbon handler: mark every object on the chosen pages for redaction. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
 - [ ] **W4.14** Redaction Properties ribbon handler: the fill colour, overlay text and text colour of new marks (the settings the W7.4b panel shows). _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
