@@ -1,31 +1,60 @@
 // The toast region (W1.6 section 10). It is always in the page so screen readers have a live region
 // to announce into. Info and success toasts time out unless the pointer is over the region or
 // keyboard focus is inside it; errors wait for the user.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/t';
-import { AUTO_DISMISS_MS, timesOut, toasts, useToasts, type ToastStore } from './toasts';
+import { timesOut, toastDuration, toasts, useToasts, type ToastStore } from './toasts';
 import './feedback.css';
 
 export function ToastRegion({ store = toasts }: { store?: ToastStore }) {
   const { visible } = useToasts(store);
   const [paused, setPaused] = useState(false);
 
-  // The timers are keyed on the ids of the timed toasts, not on the list, so a new toast does not
-  // restart the clocks of the ones already on screen.
+  // The timers are keyed on the ids and durations of the timed toasts, not on the list, so a new
+  // toast does not restart the clocks of the ones already on screen.
   const timedKey = visible
     .filter((toast) => timesOut(toast.kind))
-    .map((toast) => toast.id)
+    .map((toast) => `${toast.id}:${toastDuration(toast)}`)
     .join(' ');
 
+  // One timer per toast, kept across renders: when another toast leaves, the timers of the toasts
+  // still on screen keep running. Pausing clears them all, so leaving restarts each from full.
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+
   useEffect(() => {
-    if (paused || timedKey === '') return undefined;
-    const timers = timedKey
-      .split(' ')
-      .map((id) => setTimeout(() => store.dismiss(Number(id)), AUTO_DISMISS_MS));
-    return () => {
-      for (const timer of timers) clearTimeout(timer);
-    };
+    const pending = timers.current;
+    const wanted = new Map<number, number>();
+    if (!paused && timedKey !== '') {
+      for (const pair of timedKey.split(' ')) {
+        const [id, duration] = pair.split(':');
+        wanted.set(Number(id), Number(duration));
+      }
+    }
+    for (const [id, timer] of pending) {
+      if (!wanted.has(id)) {
+        clearTimeout(timer);
+        pending.delete(id);
+      }
+    }
+    for (const [id, duration] of wanted) {
+      if (pending.has(id)) continue;
+      pending.set(
+        id,
+        setTimeout(() => {
+          pending.delete(id);
+          store.dismiss(id);
+        }, duration),
+      );
+    }
   }, [timedKey, paused, store]);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
 
   return (
     <section
@@ -50,6 +79,7 @@ export function ToastRegion({ store = toasts }: { store?: ToastStore }) {
             <button
               type="button"
               className="toast-action"
+              aria-label={t('toast.actionNamed', { action: toast.action.label, text: toast.text })}
               onClick={() => {
                 toast.action?.run();
                 store.dismiss(toast.id);
