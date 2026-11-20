@@ -75,6 +75,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "save.save_bytes": "io",
     "session.capabilities": "instant",
     "session.close": "instant",
+    "session.fonts": "action",  # Document.fonts() walks every page (W7.6)
     "session.info": "instant",
     "session.open": "io",
     "session.outline": "instant",

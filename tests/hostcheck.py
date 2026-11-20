@@ -729,11 +729,36 @@ def _widget_link_names_pikepdf(data: bytes, prefix: str) -> None:
 
 
 @host_check("docinfo_title_pikepdf")
-def _docinfo_title_pikepdf(data: bytes, title: str) -> None:
+def _docinfo_title_pikepdf(data: bytes, title: str, password: str = "") -> None:
     import pikepdf
 
-    with pikepdf.open(io.BytesIO(data)) as pdf:
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
         assert str(pdf.docinfo.get("/Title", "")) == title
+
+
+@host_check("xmp_dc_title_pikepdf")
+def _xmp_dc_title_pikepdf(data: bytes, title: str, password: str = "") -> None:
+    """The XMP packet's dc:title, which must agree with the Info /Title (W7.6)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf, pdf.open_metadata() as meta:
+        assert meta.get("dc:title") == title
+
+
+@host_check("no_xmp_pikepdf")
+def _no_xmp_pikepdf(data: bytes, password: str = "") -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
+        assert "/Metadata" not in pdf.Root
+
+
+@host_check("pdf_version_pikepdf")
+def _pdf_version_pikepdf(data: bytes, version: str, password: str = "") -> None:
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data), password=password) as pdf:
+        assert pdf.pdf_version == version
 
 
 @host_check("font_names_complete_pikepdf")

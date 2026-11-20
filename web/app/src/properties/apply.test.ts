@@ -19,6 +19,12 @@ const info: DocInfo = {
   producer: 'PDF library',
   creation_date: '',
   mod_date: '',
+  pdf_version: '1.7',
+  is_tagged: false,
+  has_forms: false,
+  has_javascript: false,
+  is_repaired: false,
+  has_xmp: false,
 };
 
 function setup(executed = true) {
