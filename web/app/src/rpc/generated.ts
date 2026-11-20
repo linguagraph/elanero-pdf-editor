@@ -58,6 +58,8 @@ export const REDUCE_QUALITY_RANGE = [10, 100] as const;
 export const SPACE_CATEGORY_KEYS = ['images', 'fonts', 'page_content', 'comments_forms', 'tags', 'bookmarks_links', 'embedded_files', 'metadata_thumbnails', 'other', 'file_overhead'] as const;
 export type SpaceCategoryKey = (typeof SPACE_CATEGORY_KEYS)[number];
 
+export type Align = 'left' | 'center' | 'right' | 'justify';
+
 export type EncryptionMethod = 'none' | 'rc4-40' | 'rc4-128' | 'aes-128' | 'aes-256' | 'unknown';
 
 /**
@@ -67,6 +69,8 @@ export type EncryptionMethod = 'none' | 'rc4-40' | 'rc4-128' | 'aes-128' | 'aes-
  * found again to update or remove, and keeps the settings used next to it.
  */
 export type MarkKind = 'HeaderFooter' | 'Bates' | 'Watermark' | 'Background';
+
+export type ObjectType = 'text' | 'image' | 'form' | 'path';
 
 /** The kind of a security change queued for the next save (``session.security``). */
 export type PendingSecurity = 'encrypt' | 'remove';
@@ -139,6 +143,15 @@ export interface ColorDto {
   g: number;
   b: number;
   a: number;
+}
+
+export interface ContentObjectsResult {
+  /** the page revision the keys belong to */
+  revision: number;
+  /** in the engine's order (text, then images, forms, paths) */
+  objects: PageObjectDto[];
+  /** True when the page has more objects than the reply holds */
+  truncated: boolean;
 }
 
 export interface DocInfo {
@@ -348,6 +361,27 @@ export interface PageImage {
   format: string;
   /** empty when the revision changed */
   pixels: ArrayBuffer;
+}
+
+/** One content object on a page. ``key`` is valid for the page revision it was listed at. */
+export interface PageObjectDto {
+  type: ObjectType;
+  key: string;
+  /** visible page points, origin top-left */
+  bbox: RectDto;
+  /** "" unless a text block */
+  text: string;
+  /** text blocks only */
+  style: TextStyleDto | null;
+  editable: boolean;
+  /** why it isn't editable, "" when it is */
+  reason: string;
+  /** [width, height] in pixels; [0, 0] unless an image */
+  image_size: number[];
+  /** paths only */
+  stroke: boolean;
+  /** paths only */
+  fill: boolean;
 }
 
 export interface PageParams {
@@ -589,6 +623,24 @@ export interface TextPosition {
   index: number;
 }
 
+/** A text block's dominant style (W6.7a S1). ``font_ref`` is left out until W6.8b needs it. */
+export interface TextStyleDto {
+  /** font name as found in the document, or a standard family */
+  font: string;
+  /** points */
+  size: number;
+  color: ColorDto;
+  bold: boolean;
+  italic: boolean;
+  align: Align;
+  /** multiple of the font size */
+  line_height: number;
+  /** points, PDF Tc */
+  char_spacing: number;
+  /** points, PDF Tw */
+  word_spacing: number;
+}
+
 export interface UndoParams {
   handle: string;
   expect_history: number | null;
@@ -627,6 +679,7 @@ export interface Methods {
   'actions.undo': { params: UndoParams; result: HistoryResult; deadline: 'edit' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
+  'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
@@ -661,6 +714,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'actions.undo': 'edit',
   'comments.flattenable': 'instant',
   'comments.xfdf_preview': 'action',
+  'content.objects': 'render',
   'hello': 'instant',
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
@@ -700,6 +754,7 @@ export const RESULT_DECODERS: {
   'actions.undo': decodeHistoryResult,
   'comments.flattenable': decodeFlattenableResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
+  'content.objects': decodeContentObjectsResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
@@ -867,6 +922,20 @@ export function decodeColorDto(
     g: expectNumber(field(o, 'g', path), `${path}.g`),
     b: expectNumber(field(o, 'b', path), `${path}.b`),
     a: expectNumber(field(o, 'a', path), `${path}.a`),
+  };
+}
+
+export function decodeContentObjectsResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): ContentObjectsResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['revision', 'objects', 'truncated'], path);
+  return {
+    revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
+    objects: expectArray(field(o, 'objects', path), `${path}.objects`).map((item1, index1) => decodePageObjectDto(item1, ctx, `${`${path}.objects`}[${index1}]`)),
+    truncated: expectBoolean(field(o, 'truncated', path), `${path}.truncated`),
   };
 }
 
@@ -1218,6 +1287,27 @@ export function decodePageImage(
     revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
     format: expectString(field(o, 'format', path), `${path}.format`),
     pixels: takeBinary(field(o, 'pixels', path), ctx, `${path}.pixels`),
+  };
+}
+
+export function decodePageObjectDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): PageObjectDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['type', 'key', 'bbox', 'text', 'style', 'editable', 'reason', 'image_size', 'stroke', 'fill'], path);
+  return {
+    type: expectOneOf(field(o, 'type', path), ['text', 'image', 'form', 'path'] as const, `${path}.type`),
+    key: expectString(field(o, 'key', path), `${path}.key`),
+    bbox: decodeRectDto(field(o, 'bbox', path), ctx, `${path}.bbox`),
+    text: expectString(field(o, 'text', path), `${path}.text`),
+    style: orNull(field(o, 'style', path), `${path}.style`, (v1, p1) => decodeTextStyleDto(v1, ctx, p1)),
+    editable: expectBoolean(field(o, 'editable', path), `${path}.editable`),
+    reason: expectString(field(o, 'reason', path), `${path}.reason`),
+    image_size: expectArray(field(o, 'image_size', path), `${path}.image_size`).map((item1, index1) => expectInteger(item1, `${`${path}.image_size`}[${index1}]`)),
+    stroke: expectBoolean(field(o, 'stroke', path), `${path}.stroke`),
+    fill: expectBoolean(field(o, 'fill', path), `${path}.fill`),
   };
 }
 
@@ -1601,6 +1691,26 @@ export function decodeTextPosition(
   return {
     page: expectInteger(field(o, 'page', path), `${path}.page`),
     index: expectInteger(field(o, 'index', path), `${path}.index`),
+  };
+}
+
+export function decodeTextStyleDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): TextStyleDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['font', 'size', 'color', 'bold', 'italic', 'align', 'line_height', 'char_spacing', 'word_spacing'], path);
+  return {
+    font: expectString(field(o, 'font', path), `${path}.font`),
+    size: expectNumber(field(o, 'size', path), `${path}.size`),
+    color: decodeColorDto(field(o, 'color', path), ctx, `${path}.color`),
+    bold: expectBoolean(field(o, 'bold', path), `${path}.bold`),
+    italic: expectBoolean(field(o, 'italic', path), `${path}.italic`),
+    align: expectOneOf(field(o, 'align', path), ['left', 'center', 'right', 'justify'] as const, `${path}.align`),
+    line_height: expectNumber(field(o, 'line_height', path), `${path}.line_height`),
+    char_spacing: expectNumber(field(o, 'char_spacing', path), `${path}.char_spacing`),
+    word_spacing: expectNumber(field(o, 'word_spacing', path), `${path}.word_spacing`),
   };
 }
 

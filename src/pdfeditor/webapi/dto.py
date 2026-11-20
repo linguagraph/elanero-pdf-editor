@@ -18,6 +18,7 @@ from enum import Enum, IntFlag
 from typing import Any, NoReturn, Union, get_args, get_origin
 
 from pdfeditor.model.metadata import EncryptionMethod, Permissions
+from pdfeditor.model.objects import Align, ObjectType
 from pdfeditor.model.pages import MarkKind
 from pdfeditor.services.assembly import SplitMode
 from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
@@ -514,6 +515,44 @@ class RedactionMarkDto:
 class RedactionListResult:
     marks: tuple[RedactionMarkDto, ...]  # document order: page ascending, then annotation order
     truncated: bool  # True when the document has more marks than the list holds
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class TextStyleDto:
+    """A text block's dominant style (W6.7a S1). ``font_ref`` is left out until W6.8b needs it."""
+
+    font: str  # font name as found in the document, or a standard family
+    size: float  # points
+    color: ColorDto
+    bold: bool
+    italic: bool
+    align: Align
+    line_height: float  # multiple of the font size
+    char_spacing: float  # points, PDF Tc
+    word_spacing: float  # points, PDF Tw
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageObjectDto:
+    """One content object on a page. ``key`` is valid for the page revision it was listed at."""
+
+    type: ObjectType
+    key: str
+    bbox: RectDto  # visible page points, origin top-left
+    text: str  # "" unless a text block
+    style: TextStyleDto | None  # text blocks only
+    editable: bool
+    reason: str  # why it isn't editable, "" when it is
+    image_size: tuple[int, ...]  # [width, height] in pixels; [0, 0] unless an image
+    stroke: bool  # paths only
+    fill: bool  # paths only
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ContentObjectsResult:
+    revision: int  # the page revision the keys belong to
+    objects: tuple[PageObjectDto, ...]  # in the engine's order (text, then images, forms, paths)
+    truncated: bool  # True when the page has more objects than the reply holds
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

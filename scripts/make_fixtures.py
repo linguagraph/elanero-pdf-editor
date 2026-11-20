@@ -504,6 +504,17 @@ def mixed_content() -> None:
     _save(doc, "mixed_content.pdf")
 
 
+def malformed_content() -> None:
+    """A page whose content stream is broken (an operator inside an array): the content listing
+    must fail on it, and the web's content.objects call must answer with no objects."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 72), "Broken page", fontsize=12)
+    broken = b"BT /F1 12 Tf 72 72 Td (unclosed ) Tj << /Bad [ ET q Q Q 1 2 3 @@ ("
+    doc.update_stream(page.get_contents()[0], broken)
+    _save(doc, "malformed_content.pdf")
+
+
 def sensitive() -> None:
     """Personal data, an image under text, hidden text and other sanitization targets."""
     doc = pymupdf.open()
@@ -1098,6 +1109,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "sensitive": sensitive,
     "redact_marks_preexisting": redact_marks_preexisting,
     "mixed_content": mixed_content,
+    "malformed_content": malformed_content,
     "layers": layers,
     "hidden_layers": hidden_layers,
     "off_page_text": off_page_text,
