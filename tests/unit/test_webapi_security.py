@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -317,6 +318,33 @@ def test_both_actions_on_a_signed_document_are_refused_with_a_reason(
     state = security(handle)
     assert state["has_signatures"] is True and state["pending"] is None
     assert REGISTRY.get(handle).undo_stack.can_undo is False
+
+
+# -- sanitize on a signed document ----------------------------------------------------------
+
+SIGNED_SAMPLE = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"
+
+
+def test_sanitize_of_the_signed_sample_is_refused_by_the_job_with_a_reason(web: None) -> None:
+    # The real signed file, not a pretend: the job's copy must still carry the signature, or the
+    # refusal would never fire in the worker. The file is read only; nothing is signed here.
+    original = SIGNED_SAMPLE.read_bytes()
+    handle, _ = open_bytes(original, "signed.pdf")
+    session = REGISTRY.get(handle)
+    before = session.structure_version
+
+    prepared, copy = prepare(handle, "action", sanitize_args())
+    reply, _ = run_job("action", sanitize_args(), copy)
+    err = error(reply)
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "signed_document"}
+    assert "signed" in err["message"].lower()
+
+    state = ok(call("jobs.abort", {"handle": handle, "token": prepared["token"]}))["state"]
+    assert state["busy"] == ""
+    assert session.structure_version == before
+    assert session.undo_stack.can_undo is False
+    assert SIGNED_SAMPLE.read_bytes() == original
 
 
 # -- invalid settings ---------------------------------------------------------------------------

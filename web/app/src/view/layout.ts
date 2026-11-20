@@ -289,3 +289,31 @@ export function fitPageZoom(
   const byHeight = clampZoom(viewHeightPx / (CSS_PX_PER_POINT * (pageHeightPt + 2 * PAGE_GAP_PT)));
   return Math.min(byWidth, byHeight);
 }
+
+// Where the reader is: the page whose box the top of the viewport falls in, and how far down that
+// box the top edge is, as a fraction of the page's height. A top edge in the gap above a page gives
+// a negative fraction. Every box scales linearly with the zoom and the layout only moves boxes, so
+// the same anchor names the same spot after a zoom or a layout change (W5.1a S2).
+export interface ViewAnchor {
+  readonly page: number;
+  readonly yFraction: number;
+}
+
+// The anchor at a scroll position. The page is the first whose bottom edge is below the top of the
+// viewport (the page the reader sees at the top); past the last page, the last one, with a fraction
+// over 1. Null when there are no pages.
+export function viewAnchor(boxes: readonly PageBox[], scrollTop: number): ViewAnchor | null {
+  const box =
+    boxes.find((candidate) => candidate.top + candidate.height > scrollTop) ?? boxes.at(-1);
+  if (box === undefined) return null;
+  const yFraction = box.height > 0 ? (scrollTop - box.top) / box.height : 0;
+  return { page: box.index, yFraction };
+}
+
+// The scroll position an anchor names in a layout: the same fraction down the same page. Null for a
+// page index out of range.
+export function scrollTopForAnchor(boxes: readonly PageBox[], anchor: ViewAnchor): number | null {
+  const box = boxes[anchor.page];
+  if (box === undefined) return null;
+  return Math.max(0, box.top + anchor.yFraction * box.height);
+}

@@ -31,12 +31,16 @@ import {
   fitWidthZoom,
   largestPage,
   type FitMode,
+  type PageBox,
   type PageSizePt,
   scrollTopForPage,
   scrollForRect,
+  scrollTopForAnchor,
   scrollTopForSpread,
   type PageRectPt,
+  type ViewAnchor,
   type ViewLayout,
+  viewAnchor,
   visibleRange,
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
@@ -223,10 +227,16 @@ export function DocumentView({
   const wheelPending = useRef(0);
   // Where the content point under the pointer must be scrolled to once the new zoom is laid out.
   const pendingAnchor = useRef<{ left: number; top: number } | null>(null);
-  // The page at the top of the view, kept up to date, and the page a changed default layout must
-  // keep in view once the new layout is laid out (W4.5 S2: the layout change must not lose place).
+  // The page at the top of the view, kept up to date (the selection of the page at the top uses it).
   const topPage = useRef(0);
-  const pendingPage = useRef<number | null>(null);
+  // Where the reader is (page and offset within it), so a zoom, a fit refit or a layout change keeps
+  // the place (W5.1a S2). It is read at each measure, against the boxes on screen then, and the
+  // handlers that change the zoom or the layout read it again before they change anything.
+  const readingPlace = useRef<ViewAnchor | null>(null);
+  // The boxes of the layout on screen, as last committed; a measure reads them, not a stale closure.
+  const boxesOnScreen = useRef<readonly PageBox[]>([]);
+  // The page holding keyboard focus, kept mounted whatever the scroll position (W5.1a risks).
+  const [focusedPage, setFocusedPage] = useState<number | null>(null);
   const [scroll, setScroll] = useState({ top: 0, height: 0, width: 0 });
   // Bumped whenever the scheduler finished a render; the queue is re-planned then.
   const [tick, setTick] = useState(0);
@@ -375,8 +385,29 @@ export function DocumentView({
           );
   const zoom = fitted ?? manualZoom;
 
+  // Records where the reader is, from the scroll position on screen and the boxes laid out there.
+  // Called before any change of zoom or layout, so the place is the one the reader saw. Stable: it
+  // reads refs only, so the handlers that use it can keep empty dependency lists.
+  const capturePlace = useCallback(() => {
+    const element = scrollRef.current;
+    if (element === null) return;
+    readingPlace.current = viewAnchor(boxesOnScreen.current, element.scrollTop);
+  }, []);
+
+  // Changes the page layout and keeps the place: the saved default, the toolbar and the handle all
+  // come through here, so a layout change never loses the page the reader was on (W4.5 S2).
+  const changeLayout = useCallback(
+    (next: { readonly layout: ViewLayout; readonly firstAlone: boolean }) => {
+      capturePlace();
+      setViewLayout(next.layout);
+      setFirstAlone(next.firstAlone);
+    },
+    [capturePlace],
+  );
+
   // Leaves any fit mode for a manual zoom: the steps, the wheel and the presets all do this.
   const zoomTo = (value: number) => {
+    capturePlace();
     setFit(null);
     setManualZoom(value);
   };
@@ -393,14 +424,16 @@ export function DocumentView({
   // and the element's own, which moves when the layout around it does) and once the pages are known.
   // A width or height change under 1 px is ignored: a scrollbar appearing or a rounding step must not
   // make the fitted zoom flip back and forth between two values.
-  const measure = () => {
+  const measure = useCallback(() => {
+    // Read before the new size is set: the refit that follows must start from this place.
+    capturePlace();
     const next = viewportOf(scrollRef.current);
     setScroll((prev) => ({
       top: next.top,
       height: Math.abs(next.height - prev.height) >= 1 ? next.height : prev.height,
       width: Math.abs(next.width - prev.width) >= 1 ? next.width : prev.width,
     }));
-  };
+  }, [capturePlace]);
   useEffect(() => {
     measure();
     window.addEventListener('resize', measure);
@@ -411,7 +444,7 @@ export function DocumentView({
       window.removeEventListener('resize', measure);
       observer?.disconnect();
     };
-  }, [sizes]);
+  }, [sizes, measure]);
 
   // The saved default zoom, applied when the user saves a different one while the document is open.
   // Saving other preferences leaves the zoom alone.
@@ -435,11 +468,9 @@ export function DocumentView({
         if (choice === appliedLayout.current) return;
         appliedLayout.current = choice;
         const next = layoutForChoice(choice);
-        pendingPage.current = topPage.current;
-        setViewLayout(next.layout);
-        setFirstAlone(next.firstAlone);
+        changeLayout(next);
       }),
-    [],
+    [changeLayout],
   );
 
   // Brings a rectangle of a page into view. Out-of-range indexes do nothing.
@@ -460,9 +491,10 @@ export function DocumentView({
       );
       element.scrollTop = target.top;
       element.scrollLeft = target.left;
+      capturePlace();
       setScroll(viewportOf(element));
     },
-    [layout, zoom],
+    [layout, zoom, capturePlace],
   );
 
   // Scrolls so the page's top edge is at the top of the viewport; shared by the handle and the pill.
@@ -475,9 +507,10 @@ export function DocumentView({
           : scrollTopForPage(layout.boxes, index, zoom);
       if (element === null || top === null) return;
       element.scrollTop = top;
+      capturePlace();
       setScroll(viewportOf(element));
     },
-    [layout, zoom, viewLayout, firstAlone],
+    [layout, zoom, viewLayout, firstAlone, capturePlace],
   );
 
   useEffect(() => {
@@ -516,36 +549,37 @@ export function DocumentView({
     return () => element.removeEventListener('wheel', onWheel);
   }, [sizes]);
 
-  // Applies the anchor after the new zoom is in the DOM, so the scroll range already has the new size.
+  // Runs once a new layout (a zoom, a fit refit or a layout change) is in the DOM, so the scroll range
+  // already has the new size. A wheel zoom restores the point under the pointer (its own anchor);
+  // any other change restores the place the reader had (W5.1a S2).
   useLayoutEffect(() => {
+    boxesOnScreen.current = layout.boxes;
+    const element = scrollRef.current;
+    if (element === null) return;
     const anchor = pendingAnchor.current;
-    const element = scrollRef.current;
-    if (anchor === null || element === null) return;
-    pendingAnchor.current = null;
-    element.scrollLeft = anchor.left;
-    element.scrollTop = anchor.top;
-    setScroll(viewportOf(element));
-  }, [zoom]);
-
-  // Keeps the page that was at the top in view when the default layout changed: the new layout is
-  // laid out here, so the page's new top is known. Spreads are scrolled to by their row.
-  useLayoutEffect(() => {
-    const index = pendingPage.current;
-    const element = scrollRef.current;
-    if (index === null || element === null) return;
-    pendingPage.current = null;
+    if (anchor !== null) {
+      pendingAnchor.current = null;
+      element.scrollLeft = anchor.left;
+      element.scrollTop = anchor.top;
+      setScroll(viewportOf(element));
+      return;
+    }
     const top =
-      viewLayout === 'twoPage'
-        ? scrollTopForSpread(layout.boxes, index, zoom, firstAlone)
-        : scrollTopForPage(layout.boxes, index, zoom);
+      readingPlace.current === null ? null : scrollTopForAnchor(layout.boxes, readingPlace.current);
     if (top === null) return;
     element.scrollTop = top;
     setScroll(viewportOf(element));
-  }, [viewLayout, firstAlone, layout, zoom]);
+  }, [layout]);
 
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
+  // The pages mounted: the window, plus the focused page when it lies outside it, so the page keeps
+  // the keyboard focus (and a comment draft or a text span in it) as the reader scrolls on.
+  const focusedBox = focusedPage === null ? undefined : layout.boxes[focusedPage];
+  const mounted = [...layout.boxes.slice(range.first, range.end)];
+  if (focusedBox !== undefined && (focusedBox.index < range.first || focusedBox.index >= range.end))
+    mounted.push(focusedBox);
   const currentPage = currentPageIndex(layout.boxes, scroll.top, scroll.height) + 1;
   useEffect(() => {
     topPage.current = currentPage - 1;
@@ -589,14 +623,18 @@ export function DocumentView({
 
   // The canvas pill's and the handle's zoom request: a fit mode or a manual zoom. Only setters are
   // used, so the callback is stable.
-  const applyZoom = useCallback((request: ZoomRequest) => {
-    if ('fit' in request) {
-      setFit(request.fit);
-    } else {
-      setFit(null);
-      setManualZoom(clampZoom(request.zoom));
-    }
-  }, []);
+  const applyZoom = useCallback(
+    (request: ZoomRequest) => {
+      capturePlace();
+      if ('fit' in request) {
+        setFit(request.fit);
+      } else {
+        setFit(null);
+        setManualZoom(clampZoom(request.zoom));
+      }
+    },
+    [capturePlace],
+  );
   // The next or previous page, clamped to the document (the pill's steps and the handle's).
   const stepPage = useCallback(
     (direction: -1 | 1) => {
@@ -624,14 +662,7 @@ export function DocumentView({
         pageFieldRef.current?.select();
       },
       deleteEditSelection,
-      setLayout: (choice) => {
-        // A real change keeps the page at the top in view, as a changed default layout does.
-        if (choice.layout !== viewLayout || choice.firstAlone !== firstAlone) {
-          pendingPage.current = topPage.current;
-        }
-        setViewLayout(choice.layout);
-        setFirstAlone(choice.firstAlone);
-      },
+      setLayout: changeLayout,
       setNight: chooseNight,
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
       setCommentTool: chooseCommentTool,
@@ -654,8 +685,7 @@ export function DocumentView({
       deleteEditSelection,
       chooseCommentTool,
       chooseRedacting,
-      viewLayout,
-      firstAlone,
+      changeLayout,
       chooseNight,
     ],
   );
@@ -693,14 +723,14 @@ export function DocumentView({
           <button
             type="button"
             aria-pressed={viewLayout === 'continuous'}
-            onClick={() => setViewLayout('continuous')}
+            onClick={() => changeLayout({ layout: 'continuous', firstAlone })}
           >
             {t('view.layoutSingle')}
           </button>
           <button
             type="button"
             aria-pressed={viewLayout === 'twoPage'}
-            onClick={() => setViewLayout('twoPage')}
+            onClick={() => changeLayout({ layout: 'twoPage', firstAlone })}
           >
             {t('view.layoutTwoPage')}
           </button>
@@ -709,7 +739,7 @@ export function DocumentView({
           type="button"
           aria-pressed={firstAlone}
           disabled={viewLayout !== 'twoPage'}
-          onClick={() => setFirstAlone(!firstAlone)}
+          onClick={() => changeLayout({ layout: viewLayout, firstAlone: !firstAlone })}
         >
           {t('view.coverAlone')}
         </button>
@@ -735,6 +765,14 @@ export function DocumentView({
           tabIndex={0}
           aria-label={t('view.pages')}
           onScroll={measure}
+          onFocus={(event) => {
+            // Focus inside a page pins that page; focus outside the pages (the pill, the scroller) unpins it.
+            const page =
+              event.target instanceof Element
+                ? event.target.closest<HTMLElement>('.doc-page')
+                : null;
+            setFocusedPage(page === null ? null : Number(page.dataset.page));
+          }}
           onPointerDown={pan.onPointerDown}
           onPointerMove={pan.onPointerMove}
           onPointerUp={pan.onPointerUp}
@@ -742,7 +780,7 @@ export function DocumentView({
           onLostPointerCapture={pan.onLostPointerCapture}
         >
           <div className="doc-view-content" style={{ width: layout.width, height: layout.height }}>
-            {layout.boxes.slice(range.first, range.end).map((box) => {
+            {mounted.map((box) => {
               // A page above 4 MP is drawn as the tiles of its visible part; a smaller one as one image.
               const size = sizes[box.index];
               const tiled =

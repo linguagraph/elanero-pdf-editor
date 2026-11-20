@@ -125,6 +125,28 @@ def test_sanitize_then_save(qtbot, window: MainWindow, view) -> None:
     assert not view.session.require_full_save  # cleared by the save
 
 
+def test_sanitize_on_a_signed_document_shows_the_refusal(
+    qtbot, window: MainWindow, view, monkeypatch
+) -> None:
+    import dataclasses
+
+    from pdfeditor.ui import protect_controller
+
+    shown: list[str] = []
+    monkeypatch.setattr(
+        protect_controller.QMessageBox, "warning", lambda _w, _title, text: shown.append(text)
+    )
+    real_info = view.session.document.info
+    monkeypatch.setattr(
+        view.session.document,
+        "info",
+        lambda: dataclasses.replace(real_info(), has_signatures=True),
+    )
+    assert window.protect.sanitize(accepted(SanitizeDialog(window))) == []
+    assert shown == ["This document is signed. Sanitizing it would invalidate the signatures."]
+    assert not view.session.undo_stack.can_undo
+
+
 def test_redaction_properties_persist(qtbot, window: MainWindow, view) -> None:
     d = RedactionPropertiesDialog(window.protect.style, window)
     d.overlay.setText("WITHHELD")
