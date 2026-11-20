@@ -68,8 +68,11 @@ export type Enabled = (state: CommandState) => DisabledReason | null;
 
 export const ALWAYS: Enabled = () => null;
 export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'needsDocument');
-export const CAN_UNDO: Enabled = (state) => (state.canUndo ? null : 'nothingToUndo');
-export const CAN_REDO: Enabled = (state) => (state.canRedo ? null : 'nothingToRedo');
+// Undo and Redo need an open document first, then their own step (the engine's can-undo flags).
+export const CAN_UNDO: Enabled = (state) =>
+  NEEDS_DOCUMENT(state) ?? (state.canUndo ? null : 'nothingToUndo');
+export const CAN_REDO: Enabled = (state) =>
+  NEEDS_DOCUMENT(state) ?? (state.canRedo ? null : 'nothingToRedo');
 export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');
 
 // A ribbon group (tab `null` marks a group that only the app menu uses).

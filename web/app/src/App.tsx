@@ -45,7 +45,8 @@ import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
-import type { ChangedDto } from './rpc/generated';
+import type { ChangedDto, HistoryResult } from './rpc/generated';
+import { type HistoryDirection, runHistoryStep } from './history/runHistory';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
 import { SplitDialog } from './split/SplitDialog';
@@ -381,6 +382,9 @@ export function App({
     ...BASE_COMMAND_STATE,
     hasDocument: documentShown,
     hasRecentFiles: docs.recent.length > 0,
+    // The engine's flags, from the tab's state events (W4.8 S1); no document means none.
+    canUndo: documentShown && activeTab !== undefined && activeTab.canUndo,
+    canRedo: documentShown && activeTab !== undefined && activeTab.canRedo,
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
     viewTool,
@@ -398,6 +402,23 @@ export function App({
     setSearchMarks(null);
     setStructureRevision((value) => value + 1);
     scheduler?.noteRevisions(changed?.revisions ?? {});
+  };
+  // Undo and Redo (W4.3a S8) run the engine's own history. A step that changed pages redraws them;
+  // one that changed the structure or the outline remounts the lists, as a crop does.
+  const onHistoryStep = (reply: HistoryResult) => {
+    scheduler?.noteRevisions(reply.changed?.revisions ?? {});
+    if (reply.changed?.changes.some((c) => c.kind === 'structure' || c.kind === 'outline')) {
+      setStructureRevision((value) => value + 1);
+    }
+  };
+  const runHistory = (direction: HistoryDirection) => {
+    if (session !== null) {
+      void runHistoryStep(direction, {
+        rpc: session.rpc,
+        handle: session.handle,
+        onDone: onHistoryStep,
+      });
+    }
   };
   const handlers: CommandHandlers = {
     ...baseHandlers,
@@ -446,6 +467,9 @@ export function App({
           save: () => {
             if (activeTab !== undefined) void saveTab(activeTab);
           },
+          // Undo and Redo (W4.3a S8): the engine's history; the tab's flags say what is possible.
+          undo: () => runHistory('undo'),
+          redo: () => runHistory('redo'),
           // Crop (W4.11) opens the crop dialog for the open document.
           'crop-pages': () => crop.openDialog(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
