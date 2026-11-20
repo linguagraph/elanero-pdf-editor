@@ -116,7 +116,7 @@
   filter: invert(1);
 }
 
-/* The status bar under the document (W1.6 section 1): the page indicator and the zoom. */
+/* The status bar under the document (W1.6 section 1): Back and Forward, the zoom and the view mode. */
 .doc-status {
   display: flex;
   flex-wrap: wrap;
@@ -129,14 +129,7 @@
   color: var(--color-text-muted);
 }
 
-/* The page jump field and its message (W5.3): a narrow field with the page label or number. */
-.doc-status-jump {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* The two groups of the status bar: the page on the left, the zoom and the view mode on the right. */
+/* The two groups of the status bar: Back and Forward on the left, the zoom and the view mode on the right. */
 .doc-status-start,
 .doc-status-end {
   display: flex;
@@ -152,12 +145,4 @@
 .doc-status-mode {
   color: var(--color-text-muted);
   white-space: nowrap;
-}
-
-.doc-status-jump input {
-  width: 6em;
-}
-
-.doc-status-error {
-  color: var(--color-danger);
 }

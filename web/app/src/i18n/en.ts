@@ -30,6 +30,9 @@ export const EN = {
   'layout.rightRail': 'Right panels',
   'layout.statusBar': 'Status bar',
   'layout.skipToDocument': 'Skip to document',
+  // The separator on a side panel's inner edge (W4.2a S4): drag or arrow keys change its width.
+  'layout.resizeLeftPanel': 'Resize left panel',
+  'layout.resizeRightPanel': 'Resize right panel',
   // A rail button's name with its count badge (W4.2a S2): "Search, 1 item", "Search, 5 items".
   'rail.count': { one: '{panel}, 1 item', other: '{panel}, {count} items' },
   'rail.badgeOverflow': '99+',
@@ -44,6 +47,7 @@ export const EN = {
   'ribbon.expand': 'Show the ribbon',
   'ribbon.collapseTip': 'Collapse the ribbon to its tabs ({keys})',
   'ribbon.commandTip': '{label} ({keys})',
+  'ribbon.more': 'More commands',
   'ribbon.group.app.ribbon': 'Ribbon',
   'command.collapse-ribbon.label': 'Collapse Ribbon',
   'command.compact-ribbon.label': 'Compact Ribbon',
@@ -134,6 +138,9 @@ export const EN = {
   'command.forward.label': 'Forward',
   'command.previous-page.label': 'Previous Page',
   'command.next-page.label': 'Next Page',
+  'command.go-to-page.label': 'Go to Page',
+  'command.next-document.label': 'Next Document',
+  'command.previous-document.label': 'Previous Document',
   'command.edit-text-images.label': 'Edit Text & Images',
   'command.add-text.label': 'Add Text',
   'command.add-image.label': 'Add Image',
@@ -268,6 +275,13 @@ export const EN = {
   'prefs.section.shortcuts': 'Shortcuts',
   'prefs.shortcuts.hint': 'Lists every keyboard shortcut in Elanero.',
   'prefs.shortcuts.open': 'Keyboard Shortcuts…',
+  'prefs.section.redaction': 'Redaction',
+  'prefs.redaction.hint': 'The style of new redaction boxes. Boxes already drawn keep their style.',
+  'prefs.redaction.fill': 'Box colour',
+  'prefs.redaction.textColor': 'Text colour',
+  'prefs.redaction.overlayText': 'Text on the box',
+  'prefs.redaction.overlayHint':
+    'Shown on the box once the redactions are applied. Empty for none.',
 
   // Engine load stages (W3.1) and the load failure dialog.
   'loading.stage.pyodide': 'Loading the Python runtime',
@@ -484,6 +498,9 @@ export const EN = {
   'tabs.label': 'Open documents',
   'tabs.close': 'Close {name}',
   'tabs.unsaved': 'Unsaved changes',
+  'tabs.menu': 'Open documents',
+  'tabs.menuNamed': 'Open documents: {name}',
+  'tabs.menuClose': 'Close this document',
   'open.notPdf': '{name} is not a PDF. Choose a file whose name ends in .pdf.',
   'open.largeFile': '{name} is large, so opening and editing may be slow.',
   'open.launchFailed': '{name} could not be opened. Open it again from the app.',

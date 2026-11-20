@@ -151,3 +151,30 @@ describe('document tab names', () => {
     expect(name?.textContent).toBe(long);
   });
 });
+
+describe('document tabs by width', () => {
+  const original = window.innerWidth;
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: original });
+  });
+
+  function setWidth(width: number) {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  it('keeps the strip at 1024 px and wider', () => {
+    setWidth(1024);
+    render(threeTabs());
+    expect(host.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(host.querySelector('.doc-tabs-menu-button')).toBeNull();
+  });
+
+  it('becomes a drop-down below 1024 px, with no tab strip', () => {
+    setWidth(1023);
+    render(activateTab(threeTabs(), 3));
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    const button = host.querySelector<HTMLElement>('.doc-tabs-menu-button');
+    expect(button).not.toBeNull();
+    expect(button?.textContent).toContain('c.pdf');
+  });
+});

@@ -550,3 +550,155 @@ describe('Ribbon collapse keys (W4.3a S2)', () => {
     expect(host.querySelector('.ribbon')?.getAttribute('data-collapsed-by')).toBeNull();
   });
 });
+
+describe('Ribbon group overflow (W4.3a S3)', () => {
+  const realWidth = window.innerWidth;
+  let rowWidth = 0;
+  let observed: (() => void) | null = null;
+
+  beforeEach(() => {
+    rowWidth = 0;
+    observed = null;
+    // Every group is 100 px wide; the toolbar's content width is the test's `rowWidth`.
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.getAttribute('data-group') === null ? 0 : 100;
+    });
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('ribbon-toolbar') || this.classList.contains('ribbon-tabrow')
+        ? rowWidth
+        : 0;
+    });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          observed = callback;
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function homeGroupIds(): string[] {
+    return (ribbonLayout(REGISTRY, withDoc).find((tab) => tab.tab === 'home')?.groups ?? []).map(
+      (group) => group.group.id,
+    );
+  }
+
+  function rowGroupIds(): string[] {
+    return [...host.querySelectorAll<HTMLElement>('.ribbon-panel [data-group]')].map(
+      (el) => el.dataset.group ?? '',
+    );
+  }
+
+  // The menu's groups, read from its group captions in order.
+  function menuLabels(): string[] {
+    return [...document.querySelectorAll('[role="dialog"] .ribbon-group-label')].map(
+      (el) => el.textContent ?? '',
+    );
+  }
+
+  it('shows every group and no "More commands" button when all fit', () => {
+    rowWidth = 10_000;
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(rowGroupIds()).toEqual(homeGroupIds());
+    expect(host.querySelector('.ribbon-more')).toBeNull();
+  });
+
+  it('moves the groups that do not fit to the menu, whole and in order', () => {
+    // 3 groups of 100 px plus the menu button's 40 px fit in 350 px; the rest go to the menu.
+    rowWidth = 350;
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    const ids = homeGroupIds();
+    expect(rowGroupIds()).toEqual(ids.slice(0, 3));
+    expect(host.querySelector('.ribbon-more')).not.toBeNull();
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-more')?.click();
+    });
+    expect(menuLabels()).toEqual(ids.slice(3).map((id) => labelOf(id)));
+  });
+
+  it('keeps no group in the row when even one does not fit beside the menu button', () => {
+    rowWidth = 120;
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(rowGroupIds()).toEqual([]);
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-more')?.click();
+    });
+    expect(menuLabels()).toEqual(homeGroupIds().map((id) => labelOf(id)));
+  });
+
+  it('recomputes the row when the observed row changes width', () => {
+    rowWidth = 10_000;
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon-more')).toBeNull();
+    rowWidth = 350;
+    act(() => {
+      observed?.();
+    });
+    expect(rowGroupIds()).toEqual(homeGroupIds().slice(0, 3));
+  });
+
+  it('runs a command from the menu and closes the menu', () => {
+    rowWidth = 350;
+    const run = vi.fn();
+    // Every command gets the same handler, so the first command of a hidden group can be run.
+    const handlers = Object.fromEntries(REGISTRY.commands.map((def) => [def.id, run]));
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={handlers} />);
+    const hidden = ribbonLayout(REGISTRY, withDoc)
+      .find((tab) => tab.tab === 'home')
+      ?.groups.slice(3);
+    const first = hidden?.[0]?.commands[0];
+    expect(first).toBeDefined();
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-more')?.click();
+    });
+    act(() => {
+      document.querySelector<HTMLElement>(`[data-command="${first?.id}"]`)?.click();
+    });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('shows the disabled notice in the menu for a disabled command, and keeps the menu open', () => {
+    rowWidth = 350;
+    render(<Ribbon registry={REGISTRY} state={noDoc} handlers={{}} />);
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-more')?.click();
+    });
+    const disabled = document.querySelector<HTMLElement>('[role="dialog"] [aria-disabled="true"]');
+    expect(disabled).not.toBeNull();
+    act(() => {
+      disabled?.click();
+    });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="status"]')?.textContent).toBe(
+      t('disabled.needsDocument'),
+    );
+  });
+});
+
+// The caption of a group in the home tab, by its id.
+function labelOf(groupId: string): string {
+  const group = REGISTRY.groups.find((entry) => entry.id === groupId);
+  if (group === undefined) throw new Error(`no group ${groupId}`);
+  return t(group.labelId);
+}

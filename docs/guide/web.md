@@ -56,11 +56,13 @@ is reloaded until you press it.
   light or dark setting, and changes with it), **Light** or **Dark**. The choice is remembered in
   this browser.
 - **Preferences.** Click **Preferences** in the top bar. The dialog has three sections:
-  - **General**: the language (English is the only one for now) and the **Author name** shown on the
-    comments you add.
+  - **General**: the language (English is the only one for now) and the **Author name**, which is
+    saved with each comment and redaction mark you add.
   - **Appearance**: the theme, and **Reduce motion**, which turns off animations.
   - **Viewing**: **Default zoom** (Fit Width, Fit Page or 100%) and **Default page layout** (Single
     column, Two pages, or Two pages with page 1 alone), both used when a document is opened.
+  - **Redaction**: the **Box colour**, **Text colour** and **Text on the box** used for new redaction
+    marks (black, white and empty by default). Marks you have already drawn keep their style.
   - **Shortcuts**: **Keyboard Shortcuts…** lists every keyboard shortcut. It opens on top of
     Preferences, and your unsaved changes there are kept.
   - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and
@@ -70,7 +72,7 @@ is reloaded until you press it.
 
   **Apply** saves your changes; **Cancel**, Esc or a click outside the dialog puts back the saved
   theme. The default zoom applies to the open document at once, and to each document you open. The
-  author name is saved now and used once comments are available in the web version (coming soon).
+  author name is written into each comment and redaction mark you add from now on.
 
   Zoom above 100% on a high-density screen can ask for more pixels than a page can be drawn at. The
   viewer then draws the page at the largest size it supports, so the page stays visible rather than
@@ -86,15 +88,20 @@ is reloaded until you press it.
   icons and labels. From 1024 px to 1279 px it is compact: icons only, with each command's name in
   its tooltip. Below 1024 px the ribbon is collapsed to one row of tabs; each tab opens its commands
   in a drop-down that closes when a command runs. On a narrow window that row scrolls sideways.
+- **More commands.** When a tab's groups are wider than the window, the last groups move to a
+  **»** (More commands) button at the end of the row. It opens those groups, in the same order,
+  and closes when a command runs. A tab with room for all its groups shows no **»**.
 - **Collapse and compact.** The chevron at the right of the tab row collapses the ribbon to its
   tabs, and shows it again. Press **Ctrl+F1** to do the same. Pressing a tab, or double-clicking
   one, also brings a collapsed ribbon back. **Compact ribbon** in Preferences (Appearance) shows
   icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
-- **Keyboard shortcuts.** Only three are active in the web version so far: **Alt+Left** and
-  **Alt+Right** go back and forward through the pages you have visited, and **Alt+G** moves the
-  cursor to the page box in the status bar. The web version will use
-  the desktop's keys wherever the browser allows, and will list them in
-  [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming soon).
+- **Keyboard shortcuts.** A few web keys work so far: **Alt+Left** and **Alt+Right** go back and
+  forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
+  box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
+  document, wrapping at the ends. Go to Page and the two document keys are also in the command
+  palette. The web version will use the desktop's keys wherever the browser allows, and will list
+  them in [Keyboard shortcuts](keyboard-shortcuts.md) once the command palette is built (coming
+  soon).
   **Keyboard Shortcuts…** in the app menu and in Preferences shows the list that is available now.
 
 ## Side panels
@@ -185,12 +192,12 @@ full policy, with what the desktop app stores, is in the
 | Feature | Desktop | Web version |
 |---|---|---|
 | Light, dark and system theme | Yes | Yes |
-| Preferences: language, author name, reduce motion, default zoom, default page layout | Yes | Saved; default zoom and page layout apply now, author name comes with comments (coming soon) |
+| Preferences: language, author name, reduce motion, default zoom, default page layout, redaction box style | Yes | Saved; default zoom and page layout apply now; the author name and redaction style apply to the comments and marks you add next |
 | Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
 | Open, view, search and save PDFs | Yes | Coming soon |
-| Ribbon, command palette and keyboard shortcuts | Yes | Coming soon |
+| Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and some Alt keys work; the full palette and shortcut list are coming soon |
 | Edit text and images, insert and extract pages, split, combine, compress | Yes | Coming soon |
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |

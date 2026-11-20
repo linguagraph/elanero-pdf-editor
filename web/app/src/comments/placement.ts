@@ -2,6 +2,7 @@
 // pages are drawn again and an info toast offers Undo, which calls actions.undo. Nothing here
 // builds a comment; the engine does (the actions layer, W1.3).
 import type { PageRpc } from '../engine/engineConnection';
+import { readPreferences } from '../prefs/store';
 import { t } from '../i18n/t';
 import { reportRpcError, type ToastStore, toasts, undoAction } from '../feedback/toasts';
 import { RpcError } from '../rpc/client';
@@ -31,10 +32,11 @@ export async function placeComment(
 ): Promise<void> {
   const store = deps.store ?? toasts;
   try {
+    // The author is read at each comment, so a changed name applies to the next one (W4.5 S3).
     const reply = await deps.rpc.call('actions.run', {
       handle: deps.handle,
       name: 'annotations.create',
-      args: { tool, page, rect, text },
+      args: { tool, page, rect, text, author: readPreferences().authorName },
     });
     if (!reply.executed) return;
     deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});

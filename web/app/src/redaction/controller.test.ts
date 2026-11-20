@@ -79,7 +79,15 @@ describe('RedactionController (W7.4)', () => {
     expect(call).toHaveBeenCalledWith('actions.run', {
       handle: 'h1',
       name: 'redaction.mark',
-      args: { areas: [{ page: 0, rect: BOX }] },
+      args: {
+        areas: [{ page: 0, rect: BOX }],
+        author: '',
+        style: {
+          fill: { r: 0, g: 0, b: 0 },
+          overlay_text: '',
+          text_color: { r: 1, g: 1, b: 1 },
+        },
+      },
     });
     expect(controller.getSnapshot().marks).toEqual([{ page: 0, name: 'm1' }]);
     expect(noteRevisions).toHaveBeenCalledWith({ '0': 4 });

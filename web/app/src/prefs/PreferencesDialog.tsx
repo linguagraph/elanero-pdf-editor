@@ -13,6 +13,9 @@ import {
 } from '../theme/theme';
 import {
   AUTHOR_NAME_MAX_LENGTH,
+  cleanHexColour,
+  DEFAULT_PREFERENCES,
+  OVERLAY_TEXT_MAX_LENGTH,
   PAGE_LAYOUT_CHOICES,
   readPreferences,
   writePreferences,
@@ -262,6 +265,54 @@ function PreferencesForm({
           </select>
           <span className="prefs-hint">{t('prefs.layout.hint')}</span>
         </label>
+      </section>
+
+      <section className="prefs-section" aria-labelledby={`${ids}-redaction`}>
+        <h3 id={`${ids}-redaction`} className="prefs-heading">
+          {t('prefs.section.redaction')}
+        </h3>
+        <span className="prefs-hint">{t('prefs.redaction.hint')}</span>
+        <label className="prefs-field" htmlFor={`${ids}-redaction-fill`}>
+          <span className="prefs-label">{t('prefs.redaction.fill')}</span>
+          <input
+            id={`${ids}-redaction-fill`}
+            type="color"
+            className="prefs-colour"
+            value={draft.redactionFill}
+            onChange={(event) =>
+              update(
+                'redactionFill',
+                cleanHexColour(event.target.value, DEFAULT_PREFERENCES.redactionFill),
+              )
+            }
+          />
+        </label>
+        <label className="prefs-field" htmlFor={`${ids}-redaction-text`}>
+          <span className="prefs-label">{t('prefs.redaction.textColor')}</span>
+          <input
+            id={`${ids}-redaction-text`}
+            type="color"
+            className="prefs-colour"
+            value={draft.redactionTextColor}
+            onChange={(event) =>
+              update(
+                'redactionTextColor',
+                cleanHexColour(event.target.value, DEFAULT_PREFERENCES.redactionTextColor),
+              )
+            }
+          />
+        </label>
+        <TextField
+          className="prefs-field"
+          value={draft.redactionOverlayText}
+          onChange={(value) =>
+            update('redactionOverlayText', value.slice(0, OVERLAY_TEXT_MAX_LENGTH))
+          }
+        >
+          <Label className="prefs-label">{t('prefs.redaction.overlayText')}</Label>
+          <Input className="prefs-input" maxLength={OVERLAY_TEXT_MAX_LENGTH} />
+          <span className="prefs-hint">{t('prefs.redaction.overlayHint')}</span>
+        </TextField>
       </section>
 
       <section className="prefs-section" aria-labelledby={`${ids}-shortcuts`}>

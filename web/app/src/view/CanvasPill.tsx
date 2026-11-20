@@ -2,7 +2,7 @@
 // the zoom box with its presets, the zoom minus and plus, and the fit width and fit page buttons.
 // It floats at the bottom centre of the page area and fades after a few seconds without use. It
 // keeps no zoom or page state of its own: the document view passes them in and handles the calls.
-import { type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { t } from '../i18n/t';
 import { PageJumpField } from './PageJumpField';
 import { MAX_ZOOM, MIN_ZOOM } from './zoom';
@@ -28,6 +28,8 @@ export interface CanvasPillProps {
   onStep(direction: -1 | 1): void;
   onZoom(request: ZoomRequest): void;
   onZoomStep(direction: -1 | 1): void;
+  // The page field's input, for the host to focus (the status bar's Go to Page, W4.3b).
+  readonly pageFieldRef?: Ref<HTMLInputElement>;
 }
 
 // The label of a zoom preset in the list: the fit names, or the percentage.
@@ -54,6 +56,7 @@ export function CanvasPill({
   onStep,
   onZoom,
   onZoomStep,
+  pageFieldRef,
 }: CanvasPillProps) {
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<number | null>(null);
@@ -179,7 +182,13 @@ export function CanvasPill({
         >
           {'‹'}
         </button>
-        <PageJumpField page={page} total={total} labels={labels} onGoTo={onGoTo} />
+        <PageJumpField
+          ref={pageFieldRef}
+          page={page}
+          total={total}
+          labels={labels}
+          onGoTo={onGoTo}
+        />
         <button
           type="button"
           aria-label={t('pill.nextPage')}

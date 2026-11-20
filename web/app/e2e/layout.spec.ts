@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 // W4.2a browser check: the region frame at a phone width and a desktop width (W1.6 section 8).
 // The page is the production build of the app, served by `vite preview` (see playwright.config.ts),
 // so the strict CSP applies to its real stylesheet. No horizontal page scroll at any width, and the
@@ -131,7 +133,7 @@ test('phone width (390 px): the ribbon shows the collapsed form, no horizontal p
 }) => {
   await openAtWidth(page, 390, 844);
   await expect(page.locator('.app-frame-header .ribbon-collapsed')).toBeVisible();
-  await expect(page.locator('.app-frame-header [role="tablist"]')).toHaveCount(0);
+  await expect(page.getByRole('tablist', { name: 'Open documents' })).toHaveCount(0);
   await expect(
     page.locator('.app-frame-header .ribbon-collapsed > .ribbon-tabs > button'),
   ).toHaveCount(7);
@@ -255,3 +257,46 @@ for (const width of [390, 800, 1023, 1024, 1279, 1280]) {
     expect(await horizontalOverflow(page)).toBe(0);
   });
 }
+
+// W4.2a S7a: the document tabs sit in the top bar, and below 1024 px they are a drop-down. Opening
+// a document needs the staged engine (scripts/stage_engine_assets.mjs), so the check skips without it.
+const ENGINE_STAGED = existsSync(
+  fileURLToPath(new URL('../public/engine-assets/pyodide.mjs', import.meta.url)),
+);
+
+const ONE_PAGE_PDF =
+  '%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n' +
+  '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n' +
+  '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj\n' +
+  'trailer << /Root 1 0 R >>\n%%EOF\n';
+
+test.describe('document tabs in the top bar', () => {
+  test.skip(
+    !ENGINE_STAGED,
+    'engine assets are not staged (scripts/stage_engine_assets.mjs); not run',
+  );
+
+  test('tabs are in the header at 1366 px, and a drop-down at 800 px with no horizontal scroll', async ({
+    page,
+  }) => {
+    await openAtWidth(page, 1366, 768);
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles({
+        name: 'layout.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from(ONE_PAGE_PDF),
+      });
+    await expect(page.getByRole('tab', { name: /layout\.pdf/ })).toBeVisible({ timeout: 180_000 });
+    await expect(page.getByRole('tablist', { name: 'Open documents' })).toHaveCount(1);
+
+    await page.setViewportSize({ width: 800, height: 1024 });
+    await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'tablet');
+    await expect(page.getByRole('tablist', { name: 'Open documents' })).toHaveCount(0);
+    await expect(page.locator('.app-frame-header .doc-tabs-menu-button')).toContainText(
+      'layout.pdf',
+    );
+    expect(await horizontalOverflow(page)).toBe(0);
+  });
+});
