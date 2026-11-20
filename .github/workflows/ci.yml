@@ -27,7 +27,7 @@ jobs:
       packaging: ${{ steps.classify.outputs.packaging }}
       web: ${{ steps.classify.outputs.web }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2 # the merge commit and the branch it merges into
       - id: classify
@@ -39,8 +39,8 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -60,14 +60,14 @@ jobs:
     needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read the pinned Node version
         id: versions
         if: needs.changes.outputs.web == 'true'
         run: echo "node=$(jq -r .node web/spike/versions.json)" >> "$GITHUB_OUTPUT"
       - name: Set up Node
         if: needs.changes.outputs.web == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ steps.versions.outputs.node }}
       - name: Install the npm packages (exact, from the lockfile)
@@ -92,7 +92,7 @@ jobs:
         if: needs.changes.outputs.web == 'true'
         working-directory: web/app
         run: npm run format:check
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
         if: needs.changes.outputs.web == 'true'
         with:
           enable-cache: true
@@ -121,8 +121,8 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -157,8 +157,8 @@ jobs:
       # without hiding a real regression (tests/benchmarks/test_ui_budgets.py).
       PDFEDITOR_PERF_FACTOR: "1.5"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -180,10 +180,10 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the upgrade test reads the old installer script from history
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -194,12 +194,12 @@ jobs:
       # Our own launcher: the prebuilt one is flagged by antivirus (#90). MSVC is on the image.
       - run: uv run python scripts/build_bootloader.py
       - run: uv run python scripts/build_exe.py --all --clean-env --no-window-check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: elanero-exe
           path: dist/Elanero.exe
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request'
         with:
           name: elanero-folder
@@ -212,7 +212,7 @@ jobs:
       - name: Build the installer from this build
         if: needs.changes.outputs.packaging == 'true'
         run: uv run python scripts/build_exe.py --skip-build --installer
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: needs.changes.outputs.packaging == 'true'
         with:
           name: elanero-installer
