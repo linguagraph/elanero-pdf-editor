@@ -3,10 +3,14 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { SearchHitDto } from '../rpc/generated';
-import { SearchPanel } from './SearchPanel';
+import { RpcError } from '../rpc/client';
+import { type FindRequest, SearchPanel, type SearchPanelProps } from './SearchPanel';
 import type { SearchMarks } from './search';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const EMPTY_HINT =
+  'Type text and press Enter to search this document. Pages with no text, such as scanned pages, have nothing to find.';
 
 function hit(page: number, context: string): SearchHitDto {
   return {
@@ -99,7 +103,7 @@ interface Spies {
   onClose: ReturnType<typeof vi.fn<() => void>>;
 }
 
-function render(rpc: Pick<PageRpc, 'chunked'>): Spies {
+function render(rpc: Pick<PageRpc, 'chunked'>, extra: Partial<SearchPanelProps> = {}): Spies {
   const spies: Spies = {
     onMarks: vi.fn<(marks: SearchMarks | null) => void>(),
     onGoTo: vi.fn<(page: number) => void>(),
@@ -113,6 +117,7 @@ function render(rpc: Pick<PageRpc, 'chunked'>): Spies {
         onMarks={spies.onMarks}
         onGoTo={spies.onGoTo}
         onClose={spies.onClose}
+        {...extra}
       />,
     );
   });
@@ -176,13 +181,117 @@ describe('SearchPanel', () => {
     expect(spies.onGoTo).toHaveBeenLastCalledWith(2);
   });
 
-  it('does not send an empty query', async () => {
+  it('shows the empty hint, and does not send an empty query', async () => {
     const { rpc, chunked } = fakeRpc(twoPages);
     render(rpc);
+    expect(statusText()).toBe(EMPTY_HINT);
     submit();
     await flush();
     expect(chunked).not.toHaveBeenCalled();
-    expect(statusText()).toBe('');
+    expect(statusText()).toBe(EMPTY_HINT);
+  });
+
+  it('starts the search at the current page', async () => {
+    const { rpc, chunked } = fakeRpc([slice([], 4, true)]);
+    render(rpc, { currentPage: 3 });
+    typeQuery('cat');
+    submit();
+    await flush();
+    expect(chunked).toHaveBeenCalledWith(
+      'text.search',
+      expect.objectContaining({ start_page: 3 }),
+      expect.any(Object),
+    );
+  });
+
+  it('steps with Enter and Shift+Enter while the query is the one searched', async () => {
+    const { rpc } = fakeRpc(twoPages);
+    const spies = render(rpc);
+    typeQuery('cat');
+    submit();
+    await flush();
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]');
+    const press = (shiftKey: boolean) =>
+      act(() => {
+        input?.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', shiftKey, bubbles: true, cancelable: true }),
+        );
+      });
+    press(false);
+    expect(statusText()).toBe('2 of 2 matches');
+    expect(spies.onGoTo).toHaveBeenLastCalledWith(2);
+    press(true);
+    expect(statusText()).toBe('1 of 2 matches');
+    expect(spies.onGoTo).toHaveBeenLastCalledWith(0);
+  });
+
+  it('does not step with Enter once the query box holds another query', async () => {
+    const { rpc, chunked } = fakeRpc(twoPages);
+    render(rpc);
+    typeQuery('cat');
+    submit();
+    await flush();
+    typeQuery('cats');
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]');
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(statusText()).toBe('1 of 2 matches');
+    expect(chunked).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the run in progress when a new query is searched', async () => {
+    const { rpc, chunked } = fakeRpc([slice([hit(0, '[cat] one')], 1, false)], true);
+    render(rpc);
+    typeQuery('cat');
+    submit();
+    await flush();
+    const first = chunked.mock.calls[0]?.[2]?.signal;
+    expect(first?.aborted).toBe(false);
+    typeQuery('dog');
+    submit();
+    await flush();
+    expect(first?.aborted).toBe(true);
+    expect(chunked).toHaveBeenCalledTimes(2);
+    expect(chunked.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ query: 'dog' }));
+    expect(statusText()).toBe('Searching… page 1 of 4');
+  });
+
+  it('shows the engine reason when the query is refused', async () => {
+    const chunked = vi.fn(async function* (): AsyncGenerator<unknown, void, undefined> {
+      yield* [];
+      throw new RpcError('INVALID_ARGS', 'params.query: the pattern does not parse');
+    });
+    render({ chunked } as unknown as Pick<PageRpc, 'chunked'>, {});
+    typeQuery('(');
+    submit();
+    await flush();
+    expect(statusText()).toBe('This search cannot run: params.query: the pattern does not parse');
+  });
+
+  it('steps when a Find Next or Find Previous request arrives', async () => {
+    const { rpc } = fakeRpc(twoPages);
+    const spies = render(rpc);
+    typeQuery('cat');
+    submit();
+    await flush();
+    const request = (findRequest: FindRequest) =>
+      act(() => {
+        root.render(
+          <SearchPanel
+            rpc={rpc}
+            handle="doc-1"
+            onMarks={spies.onMarks}
+            onGoTo={spies.onGoTo}
+            onClose={spies.onClose}
+            findRequest={findRequest}
+          />,
+        );
+      });
+    request({ direction: 1, id: 1 });
+    expect(statusText()).toBe('2 of 2 matches');
+    request({ direction: -1, id: 2 });
+    expect(statusText()).toBe('1 of 2 matches');
   });
 
   it('reports no matches when the search finds none', async () => {

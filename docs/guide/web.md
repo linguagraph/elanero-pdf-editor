@@ -146,6 +146,16 @@ is reloaded until you press it.
   and Enter goes to the page.
   Entries without a page are greyed out. The panel is read-only for now: you cannot add, rename or
   move bookmarks yet. Each open document keeps its own expanded entries until you close it.
+- **Search.** The **Search** button on the left rail opens a panel that finds text in the open
+  document. Type in the box and press Enter (or **Search**). The search starts at the page you are
+  on and wraps round to the first page. Each match is listed with its page and the text around it,
+  and the current match is outlined on the page. **Previous match** and **Next match** move between
+  the matches; while the box still holds the query searched, Enter and Shift+Enter do the same, and
+  F3 and Shift+F3 do it from the keyboard. **Match case**, **Whole words** and **Regular expression**
+  change how the text is matched; a pattern that does not work is refused, and the panel says why.
+  A long search runs in parts: **Stop** ends it and keeps the matches found so far, and a new search
+  replaces it. Pages with no text, such as scanned pages, have nothing to find. Searching only reads
+  the document, so it is not part of Undo.
 - **Comments.** The **Comments** button on the left rail lists the document's comments, one entry
   per thread, with the replies under their comment. Each entry shows its page, type, author, date,
   status and text. Search the text and authors, or choose a type, author or status to narrow the

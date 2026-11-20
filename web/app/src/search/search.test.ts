@@ -75,6 +75,7 @@ describe('collectSearch', () => {
       'doc-1',
       'cat',
       OPTIONS,
+      0,
       new AbortController().signal,
       (hits) => seen.push(hits.map((h) => h.page)),
     );
@@ -84,6 +85,26 @@ describe('collectSearch', () => {
       'text.search',
       expect.objectContaining({ handle: 'doc-1', query: 'cat', start_page: 0 }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('starts at the given page, so the search wraps from the current page', async () => {
+    const chunked = vi.fn(async function* () {
+      yield slice([hit(3)], 4, true);
+    });
+    await collectSearch(
+      { chunked } as unknown as Pick<PageRpc, 'chunked'>,
+      'doc-1',
+      'cat',
+      OPTIONS,
+      3,
+      new AbortController().signal,
+      () => undefined,
+    );
+    expect(chunked).toHaveBeenCalledWith(
+      'text.search',
+      expect.objectContaining({ start_page: 3 }),
+      expect.any(Object),
     );
   });
 
@@ -100,6 +121,7 @@ describe('collectSearch', () => {
       'doc-1',
       'cat',
       OPTIONS,
+      0,
       controller.signal,
       (hits) => seen.push(hits.map((h) => h.page)),
     );
@@ -118,6 +140,7 @@ describe('collectSearch', () => {
         'doc-1',
         '(',
         { ...OPTIONS, regex: true },
+        0,
         new AbortController().signal,
         () => undefined,
       ),

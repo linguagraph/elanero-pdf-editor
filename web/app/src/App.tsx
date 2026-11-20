@@ -80,7 +80,7 @@ import { RenderScheduler } from './view/renderScheduler';
 import { BookmarksPanel } from './bookmarks/BookmarksPanel';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { OrganizerPanel } from './organizer/OrganizerPanel';
-import { SearchPanel } from './search/SearchPanel';
+import { type FindRequest, SearchPanel } from './search/SearchPanel';
 import type { SearchMarks } from './search/search';
 import { RailButton } from './layout/RailButton';
 import { RAIL_ICONS } from './layout/railIcons';
@@ -154,6 +154,9 @@ export function App({
   );
   // Bumped by Ctrl+F so the search panel moves focus to its query box (see SearchPanel).
   const [searchFocus, setSearchFocus] = useState(0);
+  // F3 and Shift+F3 (W5.4 S5): a request for the search panel to step. Its id makes each one new.
+  const [findRequest, setFindRequest] = useState<FindRequest | undefined>(undefined);
+  const findCount = useRef(0);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   // About Elanero (W4.3a S4), from the app menu.
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -239,6 +242,16 @@ export function App({
     const id = neighbourTabId(docs.tabs, step);
     if (id !== null) docs.selectTab(id);
   };
+  // F3 and Shift+F3 step through the hits of the open search. With the panel closed they open it.
+  const requestFind = (direction: 1 | -1) => {
+    if (!documentShown) return;
+    if (leftPanelOpen !== 'search') {
+      openPanel('search');
+      return;
+    }
+    findCount.current += 1;
+    setFindRequest({ direction, id: findCount.current });
+  };
   const baseHandlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
     'next-document': () => cycleDocument(1),
@@ -278,6 +291,8 @@ export function App({
       openPanel('search');
       setSearchFocus((count) => count + 1);
     },
+    'find-next': () => requestFind(1),
+    'find-previous': () => requestFind(-1),
   };
   const showStart = docs.tabs.tabs.length === 0 || docs.showStart;
   const activeId = docs.tabs.activeId;
@@ -685,6 +700,8 @@ export function App({
             onGoTo={goTo}
             onClose={() => closePanel('left')}
             focusRequest={searchFocus}
+            currentPage={viewState.page - 1}
+            findRequest={findRequest}
           />
         ) : documentShown &&
           leftPanelOpen === 'bookmarks' &&
