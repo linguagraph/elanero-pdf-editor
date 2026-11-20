@@ -85,6 +85,35 @@ export type ReviewState = 'None' | 'Accepted' | 'Rejected' | 'Cancelled' | 'Comp
  */
 export type SaveMode = 'in_place' | 'copy';
 
+export interface AttachmentData {
+  /** the declared file name (untrusted text; the front end cleans it for a download) */
+  filename: string;
+  /** the whole attachment; a $bin buffer */
+  data: ArrayBuffer;
+}
+
+export interface AttachmentEntry {
+  /** the key in the document's name tree; passed back to attachments.get */
+  name: string;
+  /** the file name the attachment declares (untrusted text) */
+  filename: string;
+  /** bytes, as the listing reports them; 0 when the file does not say */
+  size: number;
+  /** untrusted text; "" when there is none */
+  description: string;
+}
+
+export interface AttachmentParams {
+  handle: string;
+  /** the attachment's name, as attachments.list gives it */
+  name: string;
+}
+
+export interface AttachmentsResult {
+  /** in the document's order */
+  entries: AttachmentEntry[];
+}
+
 /**
  * ``save.autosave_bytes`` (W1.2 section 12): an unverified snapshot for the browser's private
  * copy. ``skipped`` names why no bytes came back: "protected" (a password or encryption) or
@@ -738,6 +767,8 @@ export interface Methods {
   'actions.redo': { params: HandleParams; result: HistoryResult; deadline: 'edit' };
   'actions.run': { params: RunParams; result: RunResult; deadline: 'action' };
   'actions.undo': { params: UndoParams; result: HistoryResult; deadline: 'edit' };
+  'attachments.get': { params: AttachmentParams; result: AttachmentData; deadline: 'io' };
+  'attachments.list': { params: HandleParams; result: AttachmentsResult; deadline: 'instant' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
@@ -775,6 +806,8 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'actions.redo': 'edit',
   'actions.run': 'action',
   'actions.undo': 'edit',
+  'attachments.get': 'io',
+  'attachments.list': 'instant',
   'comments.flattenable': 'instant',
   'comments.list': 'instant',
   'comments.xfdf_preview': 'action',
@@ -817,6 +850,8 @@ export const RESULT_DECODERS: {
   'actions.redo': decodeHistoryResult,
   'actions.run': decodeRunResult,
   'actions.undo': decodeHistoryResult,
+  'attachments.get': decodeAttachmentData,
+  'attachments.list': decodeAttachmentsResult,
   'comments.flattenable': decodeFlattenableResult,
   'comments.list': decodeCommentListResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
@@ -872,6 +907,59 @@ export const EVENT_DECODERS: {
   'saved': decodeSavedEvent,
   'state': decodeStateEvent,
 };
+
+export function decodeAttachmentData(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): AttachmentData {
+  const o = expectObject(value, path);
+  checkKeys(o, ['filename', 'data'], path);
+  return {
+    filename: expectString(field(o, 'filename', path), `${path}.filename`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+  };
+}
+
+export function decodeAttachmentEntry(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): AttachmentEntry {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'filename', 'size', 'description'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    filename: expectString(field(o, 'filename', path), `${path}.filename`),
+    size: expectInteger(field(o, 'size', path), `${path}.size`),
+    description: expectString(field(o, 'description', path), `${path}.description`),
+  };
+}
+
+export function decodeAttachmentParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): AttachmentParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'name'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+  };
+}
+
+export function decodeAttachmentsResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): AttachmentsResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['entries'], path);
+  return {
+    entries: expectArray(field(o, 'entries', path), `${path}.entries`).map((item1, index1) => decodeAttachmentEntry(item1, ctx, `${`${path}.entries`}[${index1}]`)),
+  };
+}
 
 export function decodeAutosaveResult(
   value: unknown,

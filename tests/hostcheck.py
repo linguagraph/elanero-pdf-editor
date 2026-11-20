@@ -601,6 +601,15 @@ def _attachment_bytes_pikepdf(data: bytes, expected: str) -> None:
         assert annot.FS.EF.F.read_bytes() == expected.encode()
 
 
+@host_check("embedded_file_name_pikepdf")
+def _embedded_file_name_pikepdf(data: bytes, attachment: str) -> None:
+    """The catalog's name tree lists the embedded file ``attachment``: it survived a save."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        assert str(pdf.Root.Names.EmbeddedFiles.Names[0]) == attachment
+
+
 @host_check("comments_unnamed_pikepdf")
 def _comments_unnamed_pikepdf(data: bytes) -> None:
     import pikepdf
