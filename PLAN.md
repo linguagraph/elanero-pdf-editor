@@ -582,7 +582,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W4.12** Mark Text ribbon handler: mark the selected text for redaction, as the desktop does. _(on main: #372, #374)_
 - [x] **W4.13** Mark Whole Pages ribbon handler: mark every object on the chosen pages for redaction. _(on main: #379)_
 - [x] **W4.14** Redaction Properties ribbon handler: the fill colour, overlay text and text colour of new marks (the settings the W7.4b panel shows). _(on main: #371)_
-- [ ] **W4.15** Extract Images ribbon handler: save the images of the document or the selected pages to files, as a read-only job. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
+- [x] **W4.15** Extract Images ribbon handler: save the images of the document or the selected pages to files, as a read-only job. _(done: #375 service and engine, #378 web dialog, job and guide)_
 - [ ] **W4.16** Extract Fonts ribbon handler: save the embedded fonts to files, where the licence allows, as a read-only job. _(partial: no handler yet; the ribbon shows it disabled "not available yet")_
 
 **W5 Viewer and navigation, #138**
