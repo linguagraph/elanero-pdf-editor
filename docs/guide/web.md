@@ -102,11 +102,20 @@ is reloaded until you press it.
   are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
   button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
   a link to the source code. Close in the app menu closes the open document. Select and Hand switch
-  the tool of the open tab (see Hand tool below). Save works (see Saving below). The Undo and Redo
-  buttons are greyed out for now, and they work once their commands are added.
+  the tool of the open tab (see Hand tool below). Save works (see Saving below).
+- **Undo and Redo.** Undo (Ctrl+Z) and Redo (Ctrl+Y) step back and forward through the changes to
+  the open document, in the Home tab's History group and in the quick-access buttons. Each is
+  enabled only when there is a step to take; with no document open, the disabled note says so.
+  Each document keeps its own steps, and they are cleared when the document is closed.
 - **Search tools.** The box at the right of the tab row (the search icon alone in a narrow window
   or a compact ribbon) opens the command palette. Type in the box and the palette opens already
   filtered by what you typed; the icon opens the palette empty.
+- **View and navigation.** The View tab's zoom commands (Zoom In and Out, Fit Width, Fit Page and
+  Actual Size) and its page layouts (Single Page Continuous, Two-Up Continuous and Two-Up with
+  Cover Page) work on the open document. The layout you are in shows as pressed, and so does Night
+  Mode. Home's Back and Forward follow the view's history, and Previous and Next Page are greyed out
+  on the first and last page. Organize Pages opens the organizer panel. Single Page and the view
+  rotation are not available yet.
 - **Hand tool.** Choose **Hand** (or press **H**) and a drag with the mouse or a pen moves the pages
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is

@@ -44,6 +44,9 @@ const state: CommandState = {
   commentTool: null,
   redacting: false,
   canApplyRedactions: false,
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 function commandsShown(): string[] {

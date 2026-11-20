@@ -53,6 +53,9 @@ const NO_DOCUMENT: CommandState = {
   commentTool: null,
   redacting: false,
   canApplyRedactions: false,
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 describe('layout context tiers', () => {

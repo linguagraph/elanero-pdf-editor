@@ -28,6 +28,9 @@ const STATE: CommandState = {
   commentTool: null,
   redacting: false,
   canApplyRedactions: false,
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 function event(init: Partial<KeyEventLike> & { key: string }): KeyEventLike {

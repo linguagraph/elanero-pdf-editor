@@ -30,6 +30,9 @@ const STATE_WITH_DOCUMENT: CommandState = {
   commentTool: null,
   redacting: false,
   canApplyRedactions: false,
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 const STATE_NO_DOCUMENT: CommandState = { ...STATE_WITH_DOCUMENT, hasDocument: false };
 
@@ -39,6 +42,8 @@ function fakeView(): DocumentViewHandle {
     zoom: vi.fn(),
     stepPage: vi.fn(),
     focusPageField: vi.fn(),
+    setLayout: vi.fn(),
+    setNight: vi.fn(),
     cachedLines: vi.fn(() => undefined),
     setCommentTool: vi.fn(),
     setRedacting: vi.fn(),
@@ -92,8 +97,13 @@ describe('the nine navigation commands in the registry', () => {
   it('run through the registry and reach the view when a document is open', () => {
     const view = fakeView();
     const handlers = handlersFor(view);
-    for (const id of [...VIEW_IDS, ...HISTORY_IDS]) {
+    for (const id of VIEW_IDS) {
       expect(runCommand(REGISTRY, id, STATE_WITH_DOCUMENT, handlers), id).toBe(true);
+    }
+    // Back and Forward run only when the history has an entry that way (W4.3a S6).
+    const withHistory = { ...STATE_WITH_DOCUMENT, canGoBack: true, canGoForward: true };
+    for (const id of HISTORY_IDS) {
+      expect(runCommand(REGISTRY, id, withHistory, handlers), id).toBe(true);
     }
     expect(view.zoom).toHaveBeenCalledTimes(5);
     expect(view.stepPage).toHaveBeenCalledTimes(2);

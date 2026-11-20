@@ -34,6 +34,9 @@ const OPEN_STATE: CommandState = {
   commentTool: null,
   redacting: false,
   canApplyRedactions: false,
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 const NO_DOCUMENT_STATE: CommandState = { ...OPEN_STATE, hasDocument: false, canUndo: false };

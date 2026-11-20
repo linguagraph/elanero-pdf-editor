@@ -17,6 +17,9 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     commentTool: null,
     redacting: false,
     canApplyRedactions: false,
+    canGoBack: false,
+    canGoForward: false,
+    view: null,
     ...overrides,
   };
 }

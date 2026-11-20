@@ -9,6 +9,8 @@ import { fakeEngine } from './engine/testEngine';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
 import { RedactionController } from './redaction/controller';
+import type { MessageId } from './i18n/en';
+import { TAB_LABELS } from './commands/registry';
 import { closePanel, openPanel } from './layout/sidePanels';
 
 // jsdom has no CSS.escape, and react-aria calls it when a tab takes focus.
@@ -891,5 +893,107 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     await until(() => document.querySelector('.redact-confirm') === null);
     expect(document.querySelector('.redact-confirm')).toBeNull();
     expect(apply).not.toHaveBeenCalled();
+  });
+});
+
+describe('App: Organize Pages and the view toggles (W4.3a S6)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    window.localStorage.clear();
+  });
+
+  // Opens a one-page document through the start page's drop zone, as the user does.
+  async function openDocument(): Promise<void> {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(scripted.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('ribbon.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+  }
+
+  // The ribbon tab with the given caption, opened (its panel shows the commands of that tab).
+  function openRibbonTab(caption: MessageId): void {
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (element) => element.textContent === t(caption),
+    );
+    if (tab === undefined) throw new Error(`no ribbon tab ${caption}`);
+    act(() => {
+      tab.click();
+    });
+  }
+
+  function ribbonButton(command: string): HTMLElement {
+    const el = host.querySelector<HTMLElement>(`[data-command="${command}"]`);
+    if (el === null) throw new Error(`no ribbon button for ${command}`);
+    return el;
+  }
+
+  it('Organize Pages from the ribbon opens the organizer panel on the right', async () => {
+    await openDocument();
+    expect(host.querySelector('#app-panel-right')).toBeNull();
+
+    openRibbonTab(TAB_LABELS.organize);
+    act(() => {
+      ribbonButton('organize-pages').click();
+    });
+
+    expect(host.querySelector('[data-panel="organizer"]')?.getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    expect(host.querySelector('#app-panel-right')?.textContent).toContain(t('organizer.title'));
+  });
+
+  it('marks the layout the view changed to as pressed on the ribbon', async () => {
+    await openDocument();
+    openRibbonTab(TAB_LABELS.view);
+    expect(ribbonButton('single-page-continuous').getAttribute('aria-pressed')).toBe('true');
+
+    act(() => {
+      ribbonButton('two-up-continuous').click();
+    });
+    await until(() => ribbonButton('two-up-continuous').getAttribute('aria-pressed') === 'true');
+
+    expect(ribbonButton('two-up-continuous').getAttribute('aria-pressed')).toBe('true');
+    expect(ribbonButton('single-page-continuous').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('turns Night Mode on and then off from the ribbon, one press at a time', async () => {
+    await openDocument();
+    openRibbonTab(TAB_LABELS.view);
+    act(() => {
+      ribbonButton('night-reading').click();
+    });
+    expect(ribbonButton('night-reading').getAttribute('aria-pressed')).toBe('true');
+    act(() => {
+      ribbonButton('night-reading').click();
+    });
+    expect(ribbonButton('night-reading').getAttribute('aria-pressed')).toBe('false');
   });
 });

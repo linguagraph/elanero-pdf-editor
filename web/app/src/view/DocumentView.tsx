@@ -81,6 +81,11 @@ export interface DocumentViewHandle {
   stepPage(direction: -1 | 1): void;
   // Focuses the canvas pill's page field and selects its text (the status bar's Go to Page, W4.3b).
   focusPageField(): void;
+  // Sets the page layout (single column or two-page spreads, the cover alone or not), keeping the
+  // page at the top in view (the ribbon's View commands, W4.3a S6).
+  setLayout(choice: { readonly layout: ViewLayout; readonly firstAlone: boolean }): void;
+  // Turns night reading on or off and saves the choice, as the toolbar's button does.
+  setNight(on: boolean): void;
   // The text lines of a page as they are shown, or undefined until they arrive (W4.12: the selection maps them).
   cachedLines(page: number): readonly TextLine[] | undefined;
   // Turns a comment tool on, or off with null (W4.3a S7). A tool turned on sets the view tool to Select.
@@ -89,14 +94,20 @@ export interface DocumentViewHandle {
   setRedacting(on: boolean): void;
 }
 
-// What the view reports to its host for the status bar: the page at the middle of the viewport
-// (one-based), the zoom, and the document's page labels (one per page; empty when it has none).
+// What the view reports to its host for the status bar and the ribbon's checked states: the page at
+// the middle of the viewport (one-based), the zoom, and the document's page labels (one per page;
+// empty when it has none), plus the page count, the fit mode and the view's layout and night flags.
 export interface DocumentViewState {
   readonly page: number;
   readonly zoom: number;
   // The page layout the reader chose (single column or two-page spreads).
   readonly layout: ViewLayout;
   readonly labels: readonly string[];
+  readonly pageCount: number;
+  // The fit mode in effect, or null for a manual zoom.
+  readonly fit: FitMode | null;
+  readonly firstAlone: boolean;
+  readonly night: boolean;
 }
 
 export interface DocumentViewProps {
@@ -460,9 +471,19 @@ export function DocumentView({
   useEffect(() => {
     topPage.current = currentPage - 1;
   }, [currentPage]);
+  const pageCount = layout.boxes.length;
   useEffect(() => {
-    onViewChange?.({ page: currentPage, zoom, layout: viewLayout, labels });
-  }, [currentPage, zoom, viewLayout, labels, onViewChange]);
+    onViewChange?.({
+      page: currentPage,
+      zoom,
+      layout: viewLayout,
+      labels,
+      pageCount,
+      fit,
+      firstAlone,
+      night,
+    });
+  }, [currentPage, zoom, viewLayout, labels, pageCount, fit, firstAlone, night, onViewChange]);
 
   // Plans the page renders from what is on screen now: the visible pages first, then the pages
   // just outside the viewport (prefetch, which the scheduler sends after the visible ones). A page
@@ -504,6 +525,12 @@ export function DocumentView({
     },
     [scrollToPage, total, currentPage],
   );
+  // Night reading is saved as the preference the next document opens with (W4.5), as the toolbar's
+  // button does. Stable, so the handle does not change for it.
+  const chooseNight = useCallback((on: boolean) => {
+    setNight(on);
+    writePreferences({ ...readPreferences(), nightReading: on });
+  }, []);
   // Hooks stay above the load-failed return, so the handle is set before it.
   useImperativeHandle(
     ref,
@@ -516,6 +543,15 @@ export function DocumentView({
         pageFieldRef.current?.focus();
         pageFieldRef.current?.select();
       },
+      setLayout: (choice) => {
+        // A real change keeps the page at the top in view, as a changed default layout does.
+        if (choice.layout !== viewLayout || choice.firstAlone !== firstAlone) {
+          pendingPage.current = topPage.current;
+        }
+        setViewLayout(choice.layout);
+        setFirstAlone(choice.firstAlone);
+      },
+      setNight: chooseNight,
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
       setCommentTool: chooseCommentTool,
       setRedacting: chooseRedacting,
@@ -529,6 +565,9 @@ export function DocumentView({
       scheduler,
       chooseCommentTool,
       chooseRedacting,
+      viewLayout,
+      firstAlone,
+      chooseNight,
     ],
   );
 
@@ -543,11 +582,6 @@ export function DocumentView({
   const commentDeps = { rpc, handle, scheduler };
   const place = (page: number, rect: PageRect, text: string) => {
     if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
-  };
-
-  const chooseNight = (on: boolean) => {
-    setNight(on);
-    writePreferences({ ...readPreferences(), nightReading: on });
   };
 
   return (

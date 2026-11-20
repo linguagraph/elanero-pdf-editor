@@ -107,6 +107,12 @@ export const EN = {
   'disabled.noRecentFiles': 'No recent files yet.',
   'disabled.noRedactionMarks': 'There are no marks to apply.',
   'disabled.redactionBusy': 'Redactions are being applied. Wait for them to finish.',
+  'disabled.cannotGoBack': 'There is no earlier view to go back to.',
+  'disabled.cannotGoForward': 'There is no later view to go forward to.',
+  'disabled.firstPage': 'This is the first page.',
+  'disabled.lastPage': 'This is the last page.',
+  'disabled.maxZoom': 'The zoom is at its largest.',
+  'disabled.minZoom': 'The zoom is at its smallest.',
   'disabled.notAvailableYet': 'This command is not available yet.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
@@ -356,6 +362,7 @@ export const EN = {
   'toast.actionNamed': '{action}: {text}',
   'toast.undo.stale': 'Nothing was undone: the document has changed since.',
   'toast.undo.failed': 'Nothing was undone, because something went wrong.',
+  'toast.redo.failed': 'Nothing was redone, because something went wrong.',
   'job.cancel': 'Cancel',
   'job.working': 'Working',
   'job.percent': '{percent}% done',

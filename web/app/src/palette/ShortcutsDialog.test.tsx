@@ -29,6 +29,9 @@ const STATE: CommandState = {
   commentTool: null,
   redacting: false,
   canApplyRedactions: false,
+  canGoBack: false,
+  canGoForward: false,
+  view: null,
 };
 
 let host: HTMLDivElement;

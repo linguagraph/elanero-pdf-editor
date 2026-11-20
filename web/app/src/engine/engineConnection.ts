@@ -234,6 +234,7 @@ export interface PageRpc {
       | 'text.layer'
       | 'actions.run'
       | 'actions.undo'
+      | 'actions.redo'
       | 'jobs.prepare'
       | 'jobs.apply'
       | 'jobs.abort'

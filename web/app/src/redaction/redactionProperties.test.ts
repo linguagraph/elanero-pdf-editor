@@ -77,6 +77,9 @@ describe('Redaction Properties command', () => {
     commentTool: null,
     redacting: false,
     canApplyRedactions: false,
+    canGoBack: false,
+    canGoForward: false,
+    view: null,
   };
 
   it('is enabled with no document open', () => {
