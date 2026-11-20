@@ -41,6 +41,9 @@ const state: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
 };
 
 function commandsShown(): string[] {

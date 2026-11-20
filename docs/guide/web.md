@@ -167,6 +167,13 @@ is reloaded until you press it.
   dialog says how many it will mark. It only marks: nothing is removed until you apply the marks, so
   the page stays readable until then. A bad range is refused inside the dialog. The Redactions panel
   does not open; a message says how many pages were marked.
+- **Comment tools.** On the **Comment** tab, **Note**, **Highlight** and **Rectangle** choose a
+  comment tool for the open document. The chosen tool shows as pressed; choose it again, or the same
+  button in the document toolbar, to turn it off. A click places a note; a drag places a highlight or
+  a rectangle. Choosing a comment tool turns the Hand tool off.
+- **Redact and Apply.** On the **Protect** tab, **Redact** turns the mark tool on or off, the same as
+  **Mark areas** on the document toolbar. **Apply** asks you to confirm, then removes the content under
+  the marks, as the toolbar's Apply button does. It is disabled when there are no marks to apply.
 
 ## Going to a page
 

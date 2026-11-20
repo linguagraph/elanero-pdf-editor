@@ -25,6 +25,9 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     ribbonCompact: false,
     ribbonCollapsed: false,
     viewTool: 'select',
+    commentTool: null,
+    redacting: false,
+    canApplyRedactions: false,
     ...overrides,
   };
 }
@@ -297,6 +300,41 @@ describe('the Select and Hand tools (W4.10)', () => {
     expect(hand).toHaveBeenCalledTimes(1);
     expect(runCommand(REGISTRY, 'hand-tool', state(), { 'hand-tool': hand })).toBe(false);
     expect(hand).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the comment and redaction tools (W4.3a S7)', () => {
+  it('shows each comment tool as pressed only while it is the tool on', () => {
+    const on = state({ hasDocument: true, commentTool: 'rectangle' });
+    expect(REGISTRY.get('rectangle')?.checked?.(on)).toBe(true);
+    expect(REGISTRY.get('sticky-note')?.checked?.(on)).toBe(false);
+    expect(REGISTRY.get('highlight')?.checked?.(on)).toBe(false);
+  });
+
+  it('shows Redact as pressed while the mark tool is on', () => {
+    expect(REGISTRY.get('redact')?.checked?.(state({ redacting: true }))).toBe(true);
+    expect(REGISTRY.get('redact')?.checked?.(state())).toBe(false);
+  });
+
+  it('needs a document for the comment and redact commands, with that reason', () => {
+    for (const id of ['sticky-note', 'highlight', 'rectangle', 'redact']) {
+      expect(commandDisabledReasonOf(id, state())).toBe('needsDocument');
+      expect(commandDisabledReasonOf(id, withDoc)).toBeNull();
+    }
+  });
+
+  it('enables Apply Redactions only with marks to apply, and says why not otherwise', () => {
+    expect(commandDisabledReasonOf('apply-redactions', state())).toBe('needsDocument');
+    expect(commandDisabledReasonOf('apply-redactions', withDoc)).toBe('noRedactionMarks');
+    const ready = state({ hasDocument: true, canApplyRedactions: true });
+    expect(commandDisabledReasonOf('apply-redactions', ready)).toBeNull();
+  });
+
+  it('runs Redact through its handler, and not without a document', () => {
+    const redact = vi.fn();
+    expect(runCommand(REGISTRY, 'redact', withDoc, { redact })).toBe(true);
+    expect(runCommand(REGISTRY, 'redact', state(), { redact })).toBe(false);
+    expect(redact).toHaveBeenCalledTimes(1);
   });
 });
 

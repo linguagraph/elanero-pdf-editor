@@ -26,6 +26,9 @@ const STATE: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
 };
 
 let host: HTMLDivElement;

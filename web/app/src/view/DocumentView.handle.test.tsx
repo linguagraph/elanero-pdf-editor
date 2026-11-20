@@ -134,3 +134,67 @@ describe('DocumentView.stepPage', () => {
     expect(scroller.scrollTop).toBeCloseTo(0);
   });
 });
+
+describe('DocumentView.setCommentTool and setRedacting (W4.3a S7)', () => {
+  // The toolbar's button with this label, found by its text (the toolbar groups are not named).
+  function toolbarButton(label: string): HTMLButtonElement {
+    const found = [...host.querySelectorAll<HTMLButtonElement>('.doc-view-toolbar button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    if (found === undefined) throw new Error(`no toolbar button ${label}`);
+    return found;
+  }
+
+  async function mountReporting(
+    onCommentToolChange: (tool: string | null) => void,
+    onToolChange: (tool: string) => void,
+  ): Promise<void> {
+    act(() => {
+      root.render(
+        <DocumentView
+          rpc={fakeRpc(PAGES.length)}
+          handle="h"
+          tool="hand"
+          onToolChange={onToolChange}
+          onCommentToolChange={onCommentToolChange}
+          ref={(value) => {
+            handle.current = value;
+          }}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it('turns a comment tool on and off, shows it pressed, and turns the Hand tool off', async () => {
+    const report = vi.fn();
+    const toolChange = vi.fn();
+    await mountReporting(report, toolChange);
+    expect(report).toHaveBeenLastCalledWith(null);
+
+    act(() => handle.current?.setCommentTool('note'));
+    expect(toolbarButton(t('comment.tool.note')).getAttribute('aria-pressed')).toBe('true');
+    expect(report).toHaveBeenLastCalledWith('note');
+    expect(toolChange).toHaveBeenCalledWith('select');
+
+    act(() => handle.current?.setCommentTool(null));
+    expect(toolbarButton(t('comment.tool.note')).getAttribute('aria-pressed')).toBe('false');
+    expect(report).toHaveBeenLastCalledWith(null);
+  });
+
+  it('turns the mark tool on, which turns the comment tool off', async () => {
+    const report = vi.fn();
+    const toolChange = vi.fn();
+    await mountReporting(report, toolChange);
+    act(() => handle.current?.setCommentTool('rectangle'));
+    act(() => handle.current?.setRedacting(true));
+    expect(toolbarButton(t('redact.mark')).getAttribute('aria-pressed')).toBe('true');
+    expect(toolbarButton(t('comment.tool.rectangle')).getAttribute('aria-pressed')).toBe('false');
+    expect(report).toHaveBeenLastCalledWith(null);
+
+    act(() => handle.current?.setRedacting(false));
+    expect(toolbarButton(t('redact.mark')).getAttribute('aria-pressed')).toBe('false');
+  });
+});

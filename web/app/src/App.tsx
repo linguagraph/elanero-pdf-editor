@@ -53,6 +53,7 @@ import { ExportDialog } from './export/ExportDialog';
 import { ExtractImagesDialog } from './extract/ExtractImagesDialog';
 import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
+import { ApplyConfirm } from './redaction/ApplyConfirm';
 import { RedactionController } from './redaction/controller';
 import { MarkPagesDialog } from './redaction/MarkPagesDialog';
 import { markSelectedText } from './redaction/markText';
@@ -64,6 +65,7 @@ import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { setViewTool, useViewTool } from './view/viewTool';
+import type { CommentToolId } from './comments/tools';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -95,6 +97,9 @@ const BASE_COMMAND_STATE: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
 };
 
 // Placeholder shell: the region frame is in place (W4.2a); the ribbon and the features come later.
@@ -177,6 +182,10 @@ export function App({
   const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
   // Mark Pages (W4.13): the dialog that marks whole pages. Opens only with a document.
   const [markPagesOpen, setMarkPagesOpen] = useState(false);
+  // The comment tool on in the open document (W7.1a), as the view reports it for the ribbon's
+  // pressed state (W4.3a S7). Apply Redactions asks first, as the toolbar's Apply does.
+  const [commentTool, setCommentToolState] = useState<CommentToolId | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
@@ -384,6 +393,13 @@ export function App({
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
     viewTool,
+    commentTool: documentShown ? commentTool : null,
+    redacting: documentShown && (redactionState?.active ?? false),
+    canApplyRedactions:
+      documentShown &&
+      redactionState !== null &&
+      !redactionState.busy &&
+      redactionState.marks.length > 0,
   };
   // The View zoom and Home navigate commands run on the open document's view (W4.2a S6). The view is
   // read when a command runs, not during render; with no document no handler is given, and the
@@ -426,6 +442,17 @@ export function App({
               lookup: (page) => view.cachedLines(page),
             });
           },
+          // Comment tools (W7.1a) are toggles: choosing the tool that is on turns it off.
+          'sticky-note': () =>
+            viewRef.current?.setCommentTool(commentTool === 'note' ? null : 'note'),
+          highlight: () =>
+            viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+          rectangle: () =>
+            viewRef.current?.setCommentTool(commentTool === 'rectangle' ? null : 'rectangle'),
+          // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
+          redact: () => viewRef.current?.setRedacting(!state.redacting),
+          // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.
+          'apply-redactions': () => setApplyOpen(true),
           'zoom-in': () => runView('zoom-in'),
           'zoom-out': () => runView('zoom-out'),
           'fit-width': () => runView('fit-width'),
@@ -615,6 +642,15 @@ export function App({
       <RedactionPropertiesDialog
         isOpen={redactionPropsOpen}
         onClose={() => setRedactionPropsOpen(false)}
+      />
+      <ApplyConfirm
+        isOpen={applyOpen}
+        count={redactionState?.marks.length ?? 0}
+        onCancel={() => setApplyOpen(false)}
+        onConfirm={() => {
+          setApplyOpen(false);
+          if (redaction !== null) void redaction.apply(null);
+        }}
       />
       <PreferencesDialog
         isOpen={preferencesOpen}
@@ -821,6 +857,7 @@ export function App({
               if (activeId !== null) setViewTool(activeId, tool);
             }}
             onCropBoxEnd={crop.boxEnded}
+            onCommentToolChange={setCommentToolState}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }

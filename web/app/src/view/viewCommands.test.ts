@@ -27,6 +27,9 @@ const STATE_WITH_DOCUMENT: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
 };
 const STATE_NO_DOCUMENT: CommandState = { ...STATE_WITH_DOCUMENT, hasDocument: false };
 
@@ -37,6 +40,8 @@ function fakeView(): DocumentViewHandle {
     stepPage: vi.fn(),
     focusPageField: vi.fn(),
     cachedLines: vi.fn(() => undefined),
+    setCommentTool: vi.fn(),
+    setRedacting: vi.fn(),
   };
 }
 

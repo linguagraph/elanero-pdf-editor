@@ -25,6 +25,9 @@ const STATE: CommandState = {
   ribbonCompact: false,
   ribbonCollapsed: false,
   viewTool: 'select',
+  commentTool: null,
+  redacting: false,
+  canApplyRedactions: false,
 };
 
 function event(init: Partial<KeyEventLike> & { key: string }): KeyEventLike {

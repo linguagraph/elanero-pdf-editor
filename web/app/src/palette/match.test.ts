@@ -14,6 +14,9 @@ function state(overrides: Partial<CommandState> = {}): CommandState {
     ribbonCompact: false,
     ribbonCollapsed: false,
     viewTool: 'select',
+    commentTool: null,
+    redacting: false,
+    canApplyRedactions: false,
     ...overrides,
   };
 }

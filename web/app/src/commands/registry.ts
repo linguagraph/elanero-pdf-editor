@@ -7,6 +7,7 @@
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import type { MessageId } from '../i18n/en';
 import { ICONS, type IconName } from '../theme/icons.generated';
+import type { CommentToolId } from '../comments/tools';
 import type { ViewTool } from '../view/viewTool';
 
 export const TAB_ORDER = [
@@ -49,17 +50,29 @@ export interface CommandState {
   readonly ribbonCollapsed: boolean;
   // The document's view tool (W4.10): Select or Hand. Select when no document is open.
   readonly viewTool: ViewTool;
+  // The comment tool on in the open document (W7.1a), or null; null when no document is open.
+  readonly commentTool: CommentToolId | null;
+  // The redaction mark tool is on (W7.4); false when no document is open.
+  readonly redacting: boolean;
+  // There are marks to apply and no apply is running (W7.4). False when no document is open.
+  readonly canApplyRedactions: boolean;
 }
 
 // notAvailableYet is not an enabled rule: the caller reports it when a command has no handler.
 export type DisabledReason =
-  'needsDocument' | 'nothingToUndo' | 'nothingToRedo' | 'noRecentFiles' | 'notAvailableYet';
+  | 'needsDocument'
+  | 'nothingToUndo'
+  | 'nothingToRedo'
+  | 'noRecentFiles'
+  | 'noRedactionMarks'
+  | 'notAvailableYet';
 
 export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>> = {
   needsDocument: 'disabled.needsDocument',
   nothingToUndo: 'disabled.nothingToUndo',
   nothingToRedo: 'disabled.nothingToRedo',
   noRecentFiles: 'disabled.noRecentFiles',
+  noRedactionMarks: 'disabled.noRedactionMarks',
   notAvailableYet: 'disabled.notAvailableYet',
 };
 
@@ -68,6 +81,11 @@ export type Enabled = (state: CommandState) => DisabledReason | null;
 
 export const ALWAYS: Enabled = () => null;
 export const NEEDS_DOCUMENT: Enabled = (state) => (state.hasDocument ? null : 'needsDocument');
+// Apply needs a document and at least one mark to remove content under (W7.4).
+export const CAN_APPLY_REDACTIONS: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.canApplyRedactions ? null : 'noRedactionMarks';
+};
 export const CAN_UNDO: Enabled = (state) => (state.canUndo ? null : 'nothingToUndo');
 export const CAN_REDO: Enabled = (state) => (state.canRedo ? null : 'nothingToRedo');
 export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');

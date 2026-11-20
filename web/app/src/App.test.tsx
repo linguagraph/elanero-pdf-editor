@@ -663,3 +663,112 @@ describe('App Save (W4.8 S2)', () => {
     expect(downloads).toEqual([]);
   });
 });
+
+describe('App comment and redaction tools (W4.3a S7)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    openPanel('pages');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  async function openDocument(): Promise<void> {
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(drawingEngine().client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('report.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => host.querySelector('.doc-view-toolbar') !== null);
+  }
+
+  function ribbonButton(command: string): HTMLElement {
+    const el = host.querySelector<HTMLElement>(`[data-command="${command}"]`);
+    if (el === null) throw new Error(`no ribbon button for ${command}`);
+    return el;
+  }
+
+  function selectTab(label: string): void {
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"], .ribbon-tabs > button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    if (tab === undefined) throw new Error(`no tab ${label}`);
+    act(() => {
+      tab.click();
+    });
+  }
+
+  function toolbarPressed(label: string): string | null | undefined {
+    const found = [...host.querySelectorAll<HTMLButtonElement>('.doc-view-toolbar button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    return found?.getAttribute('aria-pressed');
+  }
+
+  it('Note turns the comment tool on in the open document, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    act(() => {
+      ribbonButton('sticky-note').click();
+    });
+    expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('true');
+    expect(toolbarPressed(t('comment.tool.note'))).toBe('true');
+
+    act(() => {
+      ribbonButton('sticky-note').click();
+    });
+    expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('false');
+    expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
+  });
+
+  it('Redact turns the mark tool on, the same as the toolbar Mark button', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.protect'));
+    act(() => {
+      ribbonButton('redact').click();
+    });
+    expect(ribbonButton('redact').getAttribute('aria-pressed')).toBe('true');
+    expect(toolbarPressed(t('redact.mark'))).toBe('true');
+  });
+
+  it('Apply Redactions is disabled with no marks, with its reason, and opens no confirmation', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.protect'));
+    const apply = ribbonButton('apply-redactions');
+    expect(apply.getAttribute('aria-disabled')).toBe('true');
+    const described = (apply.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain(t('disabled.noRedactionMarks'));
+    act(() => {
+      apply.click();
+    });
+    expect(document.querySelector('.redact-confirm')).toBeNull();
+  });
+});
