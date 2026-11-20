@@ -1,12 +1,11 @@
-import { act, useRef, useState } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { t } from '../i18n/t';
-import { DocumentStatusBar } from './DocumentStatusBar';
-import { DocumentView, type DocumentViewHandle, type DocumentViewState } from './DocumentView';
-import { DEFAULT_ZOOM } from './zoom';
+import { DocumentView } from './DocumentView';
+import { computeColumn, scrollTopForPage } from './layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,38 +30,6 @@ function fakeRpc(pageCount: number, labels: readonly string[]): PageRpc {
   return rpc as unknown as PageRpc;
 }
 
-// Wires the view to the status bar the way App does (W5.3b): the view reports its state, the
-// status bar shows the labels, and a jump from the field goes back to the view.
-function Reader({ rpc, total, jumps }: { rpc: PageRpc; total: number; jumps: number[] }) {
-  const [viewState, setViewState] = useState<DocumentViewState>({
-    page: 1,
-    zoom: DEFAULT_ZOOM,
-    layout: 'continuous',
-    labels: [],
-  });
-  const viewRef = useRef<DocumentViewHandle>(null);
-  return (
-    <>
-      <DocumentStatusBar
-        page={viewState.page}
-        total={total}
-        zoom={viewState.zoom}
-        layout={viewState.layout}
-        labels={viewState.labels}
-        canBack={false}
-        canForward={false}
-        onGoTo={(index) => {
-          jumps.push(index);
-          viewRef.current?.scrollToPage(index);
-        }}
-        onBack={() => undefined}
-        onForward={() => undefined}
-      />
-      <DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={setViewState} />
-    </>
-  );
-}
-
 let host: HTMLDivElement;
 let root: Root;
 
@@ -72,10 +39,15 @@ async function flush(): Promise<void> {
   });
 }
 
-// Types into the page field and submits it, as the reader does with Enter.
+function pillField(): HTMLInputElement {
+  const field = host.querySelector<HTMLInputElement>('.canvas-pill-jump input');
+  if (field === null) throw new Error('no page field in the pill');
+  return field;
+}
+
+// Types into the pill's page field and submits it, as the reader does with Enter.
 function typeAndSubmit(text: string): void {
-  const field = host.querySelector('input');
-  if (field === null) throw new Error('no page field');
+  const field = pillField();
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   act(() => {
     setValue?.call(field, text);
@@ -84,10 +56,6 @@ function typeAndSubmit(text: string): void {
   act(() => {
     field.form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
-}
-
-function pageField(): string {
-  return host.querySelector('input')?.value ?? '';
 }
 
 beforeEach(() => {
@@ -115,35 +83,42 @@ afterEach(() => {
 });
 
 describe('page labels in the reader', () => {
-  it('shows the first page label and jumps by a typed label, then by a number', async () => {
-    const jumps: number[] = [];
+  it('shows the first page label in the pill and jumps by a typed label, then by a number', async () => {
     act(() => {
-      root.render(<Reader rpc={fakeRpc(3, ['i', 'ii', '1'])} total={3} jumps={jumps} />);
+      root.render(<DocumentView rpc={fakeRpc(3, ['i', 'ii', '1'])} handle="doc-1" />);
     });
     await flush();
-    expect(pageField()).toBe('i');
-    expect(host.querySelector('.doc-status-page')?.textContent).toBe(
-      t('view.pageNumber', { page: 'i', total: 3 }),
-    );
+    expect(pillField().value).toBe('i');
+
+    const scroller = host.querySelector<HTMLElement>('.doc-view-scroll');
+    if (scroller === null) throw new Error('no scroll area');
+    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true });
+    // At 100 % the pages are 792 pt tall, so the tops are the column's boxes.
+    const boxes = computeColumn(
+      Array.from({ length: 3 }, () => ({ width: 612, height: 792 })),
+      1,
+    ).boxes;
+    const top = (index: number) => scrollTopForPage(boxes, index, 1);
 
     typeAndSubmit('ii');
-    expect(jumps).toEqual([1]);
+    expect(scroller.scrollTop).toBeCloseTo(top(1) ?? -1);
     // '1' is the label of page 3, so the label wins over the page number 1.
     typeAndSubmit('1');
-    expect(jumps).toEqual([1, 2]);
+    expect(scroller.scrollTop).toBeCloseTo(top(2) ?? -1);
     typeAndSubmit('3');
-    expect(jumps).toEqual([1, 2, 2]);
+    expect(scroller.scrollTop).toBeCloseTo(top(2) ?? -1);
   });
 
-  it('shows the page number and jumps by number when the document has no labels', async () => {
-    const jumps: number[] = [];
+  it('shows the page number and refuses a page the document does not have', async () => {
     act(() => {
-      root.render(<Reader rpc={fakeRpc(3, [])} total={3} jumps={jumps} />);
+      root.render(<DocumentView rpc={fakeRpc(3, [])} handle="doc-1" />);
     });
     await flush();
-    expect(pageField()).toBe('1');
+    expect(pillField().value).toBe('1');
 
-    typeAndSubmit('2');
-    expect(jumps).toEqual([1]);
+    typeAndSubmit('9');
+    expect(host.querySelector('.canvas-pill-error')?.textContent).toBe(
+      t('view.jumpInvalid', { input: '9', total: 3 }),
+    );
   });
 });

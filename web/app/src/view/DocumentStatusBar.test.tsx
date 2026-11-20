@@ -11,13 +11,10 @@ let root: Root;
 
 function props(overrides: Partial<DocumentStatusBarProps> = {}): DocumentStatusBarProps {
   return {
-    page: 1,
-    total: 10,
     zoom: 1,
     layout: 'continuous',
     canBack: false,
     canForward: false,
-    onGoTo: vi.fn(),
     onBack: vi.fn(),
     onForward: vi.fn(),
     ...overrides,
@@ -30,37 +27,10 @@ function render(value: DocumentStatusBarProps): void {
   });
 }
 
-function field(): HTMLInputElement {
-  const found = host.querySelector('input');
-  if (found === null) throw new Error('no page field');
-  return found;
-}
-
 function buttonNamed(text: string): HTMLButtonElement {
   const found = [...host.querySelectorAll('button')].find((b) => b.textContent === text);
   if (found === undefined) throw new Error(`no button ${text}`);
   return found;
-}
-
-// Types into the field (through the native setter, so React sees the change) and submits the form,
-// as the reader does with Enter.
-function typeAndSubmit(text: string): void {
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  act(() => {
-    setValue?.call(field(), text);
-    field().dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  act(() => {
-    field().form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  });
-}
-
-function keydown(init: KeyboardEventInit): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
-  act(() => {
-    document.dispatchEvent(event);
-  });
-  return event;
 }
 
 beforeEach(() => {
@@ -77,40 +47,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('page jump', () => {
-  it('shows the page number when the document has no labels', () => {
-    render(props({ page: 4 }));
-    expect(field().value).toBe('4');
-    expect(host.textContent).toContain(t('view.pageNumber', { page: 4, total: 10 }));
-  });
-
-  it('shows the page label when the document has labels', () => {
-    render(props({ page: 1, labels: ['i', 'ii'] }));
-    expect(field().value).toBe('i');
-  });
-
-  it('jumps to a valid page number', () => {
-    const onGoTo = vi.fn();
-    render(props({ onGoTo }));
-    typeAndSubmit('7');
-    expect(onGoTo).toHaveBeenCalledWith(6);
-  });
-
-  it('jumps to a page by its label', () => {
-    const onGoTo = vi.fn();
-    render(props({ onGoTo, labels: ['i', 'ii', 'iii'] }));
-    typeAndSubmit('iii');
-    expect(onGoTo).toHaveBeenCalledWith(2);
-  });
-
-  it('refuses an invalid page, shows the message and does not move', () => {
-    const onGoTo = vi.fn();
-    render(props({ onGoTo }));
-    typeAndSubmit('42');
-    expect(onGoTo).not.toHaveBeenCalled();
-    const alert = host.querySelector('[role="alert"]');
-    expect(alert?.textContent).toBe(t('view.jumpInvalid', { input: '42', total: 10 }));
-    expect(field().getAttribute('aria-invalid')).toBe('true');
+describe('status bar', () => {
+  it('has no page field: the canvas pill carries the page jump', () => {
+    render(props());
+    expect(host.querySelector('input')).toBeNull();
+    expect(host.querySelector('form')).toBeNull();
   });
 });
 
@@ -124,37 +65,26 @@ describe('back and forward', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it('moves back and forward with Alt+Left and Alt+Right', () => {
+  it('leaves Alt+Left and Alt+Right to the registry commands, so a key runs one handler', () => {
     const onBack = vi.fn();
     const onForward = vi.fn();
-    render(props({ onBack, onForward }));
-    expect(keydown({ key: 'ArrowLeft', altKey: true }).defaultPrevented).toBe(true);
-    keydown({ key: 'ArrowRight', altKey: true });
-    expect(onBack).toHaveBeenCalledTimes(1);
-    expect(onForward).toHaveBeenCalledTimes(1);
-  });
-
-  it('ignores the arrow keys without Alt', () => {
-    const onBack = vi.fn();
-    render(props({ onBack }));
-    keydown({ key: 'ArrowLeft' });
+    render(props({ onBack, onForward, canBack: true, canForward: true }));
+    const event = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true });
+    act(() => {
+      document.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(false);
     expect(onBack).not.toHaveBeenCalled();
-  });
-
-  it('focuses the page field with Alt+G', () => {
-    render(props());
-    keydown({ key: 'g', altKey: true });
-    expect(document.activeElement).toBe(field());
+    expect(onForward).not.toHaveBeenCalled();
   });
 });
 
 describe('desktop order', () => {
-  it('puts the page on the left and the zoom and view mode on the right', () => {
-    render(props({ page: 3, total: 10, zoom: 1.5, layout: 'twoPage' }));
+  it('puts Back and Forward on the left and the zoom and view mode on the right', () => {
+    render(props({ zoom: 1.5, layout: 'twoPage' }));
     const start = host.querySelector('.doc-status-start');
     const end = host.querySelector('.doc-status-end');
-    expect(start?.textContent).toContain(t('view.pageNumber', { page: 3, total: 10 }));
-    expect(start?.textContent).not.toContain('150%');
+    expect(start?.textContent).toBe(`${t('view.back')}${t('view.forward')}`);
     expect(end?.textContent).toBe(
       `${t('view.zoomPercent', { percent: 150 })}${t('view.layoutTwoPage')}`,
     );

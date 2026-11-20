@@ -63,10 +63,15 @@ export { MAX_RENDER_ATTEMPTS } from './renderScheduler';
 
 // The page layouts the toolbar offers: the continuous single column, or two-page spreads.
 
-// What the parent can ask the view to do. Scrolling is the only action for now.
+// What the parent can ask the view to do: the ribbon's View and Home commands and the shortcuts reach
+// the view through here (W4.2a S6), as the canvas pill does from inside.
 export interface DocumentViewHandle {
   // Scrolls so the page's top edge is at the top of the viewport. Out-of-range indexes do nothing.
   scrollToPage(index: number): void;
+  // A zoom request (a fit mode or a percentage), or one step of the zoom in either direction.
+  zoom(request: ZoomRequest | { readonly step: -1 | 1 }): void;
+  // Moves to the next or the previous page, clamped to the document.
+  stepPage(direction: -1 | 1): void;
 }
 
 // What the view reports to its host for the status bar: the page at the middle of the viewport
@@ -298,8 +303,6 @@ export function DocumentView({
     [layout, zoom, viewLayout, firstAlone],
   );
 
-  useImperativeHandle(ref, () => ({ scrollToPage }), [scrollToPage]);
-
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
@@ -395,6 +398,37 @@ export function DocumentView({
     // The plan depends on what is on screen and the scale; the scheduler is stable state.
   }, [sizes, layout, range.first, range.end, scroll.top, scroll.height, scale, scheduler, tick]);
 
+  const total = layout.boxes.length;
+
+  // The canvas pill's and the handle's zoom request: a fit mode or a manual zoom. Only setters are
+  // used, so the callback is stable.
+  const applyZoom = useCallback((request: ZoomRequest) => {
+    if ('fit' in request) {
+      setFit(request.fit);
+    } else {
+      setFit(null);
+      setManualZoom(clampZoom(request.zoom));
+    }
+  }, []);
+  // The next or previous page, clamped to the document (the pill's steps and the handle's).
+  const stepPage = useCallback(
+    (direction: -1 | 1) => {
+      scrollToPage(Math.min(total - 1, Math.max(0, currentPage - 1 + direction)));
+    },
+    [scrollToPage, total, currentPage],
+  );
+  // Hooks stay above the load-failed return, so the handle is set before it.
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToPage,
+      zoom: (request) =>
+        applyZoom('step' in request ? { zoom: stepZoom(zoom, request.step) } : request),
+      stepPage,
+    }),
+    [scrollToPage, zoom, applyZoom, stepPage],
+  );
+
   if (loadFailed) {
     return (
       <p role="alert" className="doc-view-status">
@@ -402,17 +436,6 @@ export function DocumentView({
       </p>
     );
   }
-  const total = layout.boxes.length;
-
-  // The canvas pill's calls: a fit mode or a manual zoom, a step of the zoom, and a page jump or step.
-  const zoomRequest = (request: ZoomRequest) => {
-    if ('fit' in request) setFit(request.fit);
-    else zoomTo(clampZoom(request.zoom));
-  };
-  const stepPage = (direction: -1 | 1) => {
-    const index = Math.min(total - 1, Math.max(0, currentPage - 1 + direction));
-    scrollToPage(index);
-  };
 
   const commentDeps = { rpc, handle, scheduler };
   const place = (page: number, rect: PageRect, text: string) => {
@@ -578,7 +601,7 @@ export function DocumentView({
           fit={fit}
           onGoTo={scrollToPage}
           onStep={stepPage}
-          onZoom={zoomRequest}
+          onZoom={applyZoom}
           onZoomStep={(direction) => zoomTo(stepZoom(zoom, direction))}
         />
       )}

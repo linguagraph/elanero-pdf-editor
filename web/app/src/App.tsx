@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
 import { type CommandHandlers, runCommand } from './commands/run';
@@ -43,6 +43,7 @@ import { CompressDialog } from './compress/CompressDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
+import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
@@ -163,7 +164,7 @@ export function App({
       engine.dispose();
     };
   }, [engine]);
-  const handlers: CommandHandlers = {
+  const baseHandlers: CommandHandlers = {
     preferences: () => setPreferencesOpen(true),
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
     'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
@@ -251,19 +252,38 @@ export function App({
     ribbonCompact: ribbonPrefs.compact,
     ribbonCollapsed: ribbonPrefs.collapsed,
   };
+  // The View zoom and Home navigate commands run on the open document's view (W4.2a S6). The view is
+  // read when a command runs, not during render; with no document no handler is given, and the
+  // registry's "needs a document" rule applies first.
+  const runView = useCallback((id: ViewCommandId) => {
+    const view = viewRef.current;
+    if (view !== null) runViewCommand(id, view);
+  }, []);
+  const handlers: CommandHandlers = {
+    ...baseHandlers,
+    ...(documentShown
+      ? {
+          'zoom-in': () => runView('zoom-in'),
+          'zoom-out': () => runView('zoom-out'),
+          'fit-width': () => runView('fit-width'),
+          'fit-page': () => runView('fit-page'),
+          'actual-size': () => runView('actual-size'),
+          'previous-page': () => runView('previous-page'),
+          'next-page': () => runView('next-page'),
+          back: () => stepBack(-1),
+          forward: () => stepBack(1),
+        }
+      : {}),
+  };
   return (
     <AppFrame
       statusBar={
         documentShown ? (
           <DocumentStatusBar
-            page={viewState.page}
-            total={activeTab?.pages ?? 0}
             zoom={viewState.zoom}
             layout={viewState.layout}
-            labels={viewState.labels}
             canBack={canGoBack(history)}
             canForward={canGoForward(history)}
-            onGoTo={goTo}
             onBack={() => stepBack(-1)}
             onForward={() => stepBack(1)}
           />
