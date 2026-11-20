@@ -221,6 +221,27 @@ describe('keys that belong to other elements', () => {
     expect(scroller().scrollTop).toBe(0);
   });
 
+  it('scrolls the scene for a key on a non-control element inside a page', async () => {
+    await mount(LONG, ZOOM);
+    const content = scroller().querySelector<HTMLElement>('[data-page] .doc-page-placeholder');
+    if (content === null) throw new Error('no page content');
+    const event = pressKey('ArrowDown', false, content);
+    expect(event.defaultPrevented).toBe(true);
+    expect(scroller().scrollTop).toBe(wholeOf(40 * RATIO));
+  });
+
+  it('leaves the key alone on a real button inside a page', async () => {
+    await mount(LONG, ZOOM);
+    const page = scroller().querySelector<HTMLElement>('[data-page]');
+    if (page === null) throw new Error('no page');
+    const button = document.createElement('button');
+    page.append(button);
+    button.focus();
+    const event = pressKey(' ', false, button);
+    expect(event.defaultPrevented).toBe(false);
+    expect(scroller().scrollTop).toBe(0);
+  });
+
   it('leaves an unhandled key alone', async () => {
     await mount(LONG, ZOOM);
     const event = pressKey('a');

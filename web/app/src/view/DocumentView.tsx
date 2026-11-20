@@ -174,8 +174,9 @@ export interface DocumentViewProps {
 
 // A button, link or ARIA widget inside the scroller keeps its own Space and arrow keys (W5.1a S4 fix).
 // The match must lie inside the scroller: an ancestor outside it (a region around the whole view)
-// does not make the scroller's keys belong to a control.
-const INTERACTIVE_SELECTOR = 'button, a[href], [role]';
+// does not make the scroller's keys belong to a control. role="group" is not a control: each page
+// div has it, and a key on a page's own content must still scroll the scene.
+const INTERACTIVE_SELECTOR = 'button, a[href], [role]:not([role="group"])';
 
 function isInsideControl(target: HTMLElement, scroller: HTMLElement): boolean {
   const control = target.closest<HTMLElement>(INTERACTIVE_SELECTOR);
@@ -671,8 +672,11 @@ export function DocumentView({
     );
     element.scrollTop = before + step.whole;
     // A browser stops the write at the end of the range: then the owed fraction points past the end
-    // and is dropped, so the next key starts from the end and not from a stale fraction.
-    scaledRemainder.current = element.scrollTop === before + step.whole ? step.remainder : 0;
+    // and is dropped, so the next key starts from the end and not from a stale fraction. A fractional
+    // scrollTop (HiDPI) can differ from the whole pixels written by under 1 px with no clamp, so that
+    // gap still counts as an unclamped move and keeps its remainder.
+    const clamped = Math.abs(element.scrollTop - (before + step.whole)) >= 1;
+    scaledRemainder.current = clamped ? 0 : step.remainder;
   };
 
   // Runs once a new layout (a zoom, a fit refit or a layout change) is in the DOM, so the scroll range
