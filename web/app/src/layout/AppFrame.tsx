@@ -1,8 +1,9 @@
-import { type ReactNode, useRef } from 'react';
+import { type MouseEvent, type ReactNode, useRef } from 'react';
 import { t } from '../i18n/t';
 import { layoutForWidth } from './breakpoints';
 import { LayoutProvider } from './LayoutContext';
 import type { Side } from './sidePanels';
+import { focusRegion, useFocusRegions } from './useFocusRegions';
 import { useDismissablePanels } from './useDismissablePanels';
 import { useViewportWidth } from './useViewportWidth';
 import './layout.css';
@@ -40,12 +41,19 @@ export function AppFrame({
   const hasLeftPanel = leftPanel !== undefined && leftPanel !== null && leftPanel !== false;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null && rightPanel !== false;
   const frameRef = useRef<HTMLDivElement>(null);
+  useFocusRegions();
   useDismissablePanels({
     frame: frameRef,
     shown: { left: hasLeftPanel, right: hasRightPanel },
     floating: { left: regions.leftPanel === 'drawer', right: regions.rightPanel === 'overlay' },
     onDismiss: onDismissPanel,
   });
+
+  // The skip link moves the keyboard past the header, the rails and the panels to the document.
+  const skipToDocument = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    focusRegion('page');
+  };
 
   const frame = (
     <div
@@ -58,10 +66,16 @@ export function AppFrame({
       data-right-panel={hasRightPanel ? regions.rightPanel : 'none'}
       data-rails={railsHidden ? 'hidden' : 'shown'}
     >
-      <header className="app-frame-header">{header}</header>
+      <a href="#app-page-area" className="app-skip-link" onClick={skipToDocument}>
+        {t('layout.skipToDocument')}
+      </a>
+      <header className="app-frame-header" data-region="ribbon">
+        {header}
+      </header>
       <div className="app-frame-body">
         <div
           className="app-rail app-rail-left"
+          data-region="left"
           role="toolbar"
           aria-orientation="vertical"
           aria-label={t('layout.leftRail')}
@@ -72,18 +86,26 @@ export function AppFrame({
           <aside
             id="app-panel-left"
             className="app-panel app-panel-left"
+            data-region="left"
             aria-label={t('layout.leftPanel')}
           >
             {leftPanel}
           </aside>
         ) : null}
-        <main className="app-page-area" aria-label={t('layout.document')}>
+        <main
+          id="app-page-area"
+          className="app-page-area"
+          data-region="page"
+          tabIndex={-1}
+          aria-label={t('layout.document')}
+        >
           {children}
         </main>
         {hasRightPanel ? (
           <aside
             id="app-panel-right"
             className="app-panel app-panel-right"
+            data-region="right"
             aria-label={t('layout.rightPanel')}
           >
             {rightPanel}
@@ -91,6 +113,7 @@ export function AppFrame({
         ) : null}
         <div
           className="app-rail app-rail-right"
+          data-region="right"
           role="toolbar"
           aria-orientation="vertical"
           aria-label={t('layout.rightRail')}
@@ -99,7 +122,11 @@ export function AppFrame({
         </div>
       </div>
       {statusBar ? (
-        <footer className="app-frame-status" aria-label={t('layout.statusBar')}>
+        <footer
+          className="app-frame-status"
+          data-region="status"
+          aria-label={t('layout.statusBar')}
+        >
           {statusBar}
         </footer>
       ) : null}

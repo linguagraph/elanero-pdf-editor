@@ -29,6 +29,7 @@ export const EN = {
   'layout.rightPanel': 'Right panel',
   'layout.rightRail': 'Right panels',
   'layout.statusBar': 'Status bar',
+  'layout.skipToDocument': 'Skip to document',
   // A rail button's name with its count badge (W4.2a S2): "Search, 1 item", "Search, 5 items".
   'rail.count': { one: '{panel}, 1 item', other: '{panel}, {count} items' },
   'rail.badgeOverflow': '99+',
