@@ -67,7 +67,7 @@ jobs:
         run: echo "node=$(jq -r .node web/spike/versions.json)" >> "$GITHUB_OUTPUT"
       - name: Set up Node
         if: needs.changes.outputs.web == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ steps.versions.outputs.node }}
       - name: Install the npm packages (exact, from the lockfile)
