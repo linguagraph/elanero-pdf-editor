@@ -70,6 +70,12 @@ download the file. Several page images come together in one ZIP file.
   the document as a file.
 - **Fonts** in the same group (**File ▸ Extract Fonts…**) saves the fonts embedded in the document.
 
+In the web version, **Extract Images** (in the **Export** group of the **Tools** tab, or from the
+command palette) asks for the pages: all pages, the current page, or a range such as `1-3, 5`. Each
+image is saved in the format it is stored in, not re-encoded. One image comes back as its own file;
+several come together in one ZIP file. A very large image is skipped, because the browser cannot
+decode it safely, and the dialog says how many were skipped.
+
 ## Create a PDF from an Office file
 
 **From Office** in the **Create** group of the **Tools** tab (**File ▸ Create PDF from Office File…**)
