@@ -1,4 +1,4 @@
-import { type MouseEvent, useId, useRef, useState } from 'react';
+import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -107,6 +107,16 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
     toggleRibbon();
   }
 
+  // Keyboard path: react-aria's Tab does not dispatch a DOM click for Enter or Space, so a
+  // collapsed ribbon would never expand from the keyboard. Handled in the capture phase, as the
+  // click is.
+  function onRowKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (!userCollapsed || !isTabTarget(event.target)) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleRibbon();
+  }
+
   return (
     <Tabs
       className="ribbon"
@@ -119,6 +129,7 @@ function FullRibbon({ registry, state, handlers, form }: FullRibbonProps) {
         className="ribbon-tabrow"
         onClickCapture={onRowClick}
         onDoubleClickCapture={onRowDoubleClick}
+        onKeyDownCapture={onRowKeyDown}
       >
         <TabList aria-label={t('ribbon.label')} className="ribbon-tabs">
           {tabs.map((entry) => (

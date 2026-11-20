@@ -174,6 +174,30 @@ describe('PreferencesDialog', () => {
     });
   });
 
+  it('labels the compact ribbon checkbox through t(), and saves its choice on Apply', () => {
+    const scope = openFromCommand();
+    const label = [...scope.querySelectorAll('label')].find(
+      (l) => l.textContent === t('prefs.ribbonCompact'),
+    );
+    const input = label?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(input).toBeDefined();
+    expect(input?.checked).toBe(false);
+    act(() => {
+      input?.click();
+    });
+    expect(input?.checked).toBe(true);
+    act(() => {
+      scope
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(dialog()).toBeNull();
+    expect(readPreferences().ribbonCompact).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem(PREFS_STORAGE_KEY) ?? '{}')).toMatchObject({
+      ribbonCompact: true,
+    });
+  });
+
   it('starts each open from the saved preferences', () => {
     typeInto(authorInput(openFromCommand()), 'Draft');
     pressEscape();
