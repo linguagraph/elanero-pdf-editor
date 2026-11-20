@@ -174,9 +174,11 @@ is reloaded until you press it.
   page (or at the end when nothing is selected); an encrypted PDF asks for its
   password, up to five times. Extract downloads the selected pages as a new PDF named
   "<name> (extract).pdf"; the document itself does not change. Each change, other than an
-  extract, can be undone from the notice that follows it. Dragging pages is not available yet.
-  Undo on a notice undoes only that change; if you have changed the document since, nothing is
-  undone and the notice says so.
+  extract, can be undone from the notice that follows it. Undo on a notice undoes only that change;
+  if you have changed the document since, nothing is undone and the notice says so.
+  To move pages by dragging, press a page and drag it with the mouse or a pen (a selection moves
+  as a block). A line shows where the pages will land, and Escape cancels the drag. A drop that
+  changes nothing does nothing. Touch has no drag: use Move up and Move down instead.
 - **Redactions.** The **Redactions** button on the left rail lists every redaction mark in the
   document: the marks you drew, the ones an undo brought back, and the ones already in the file.
   Each row shows its page, the text it covers (or "Area") and its overlay text, with a swatch of its

@@ -556,3 +556,156 @@ describe('page organizer extract', () => {
     expect(store.getState().visible).toHaveLength(0);
   });
 });
+
+// jsdom has no layout. The grid is 300 px wide and its cells are 100 px squares in three columns:
+// page i sits at column i % 3, row floor(i / 3).
+function stubLayout(): void {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this.getAttribute('role') === 'listbox') {
+      return { left: 0, top: 0, right: 300, bottom: 300, width: 300, height: 300 } as DOMRect;
+    }
+    const page = Number((this as HTMLElement).dataset.page);
+    if (!Number.isInteger(page)) return { left: 0, top: 0, right: 0, bottom: 0 } as DOMRect;
+    const left = (page % 3) * 100;
+    const top = Math.floor(page / 3) * 100;
+    return { left, top, right: left + 100, bottom: top + 100, width: 100, height: 100 } as DOMRect;
+  });
+}
+
+function pointer(target: Element, type: string, x: number, y: number, pointerType = 'mouse'): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+  Object.defineProperties(event, {
+    pointerId: { value: 1 },
+    pointerType: { value: pointerType },
+  });
+  act(() => {
+    target.dispatchEvent(event);
+  });
+}
+
+function grid(): HTMLElement {
+  const el = host.querySelector<HTMLElement>('[role="listbox"]');
+  if (el === null) throw new Error('no listbox');
+  return el;
+}
+
+// Presses on option `from`, drags past the threshold and on to (x, y), and returns the grid.
+function dragTo(from: number, x: number, y: number): HTMLElement {
+  const source = options()[from];
+  if (source === undefined) throw new Error(`no option ${from}`);
+  pointer(source, 'pointerdown', 50, 50);
+  pointer(grid(), 'pointermove', 60, 50);
+  pointer(grid(), 'pointermove', x, y);
+  return grid();
+}
+
+describe('page organizer drag and drop', () => {
+  beforeEach(() => {
+    stubLayout();
+  });
+
+  it('dragging page 1 past page 3 moves it there, selects it, and offers Undo', async () => {
+    const { rpc, calls } = fakeRpc(4, [2]);
+    const store = createToastStore();
+    mount(rpc, store);
+    await flush();
+    // Right of page 3's centre in the first row: the drop lands after it.
+    dragTo(0, 270, 50);
+    pointer(grid(), 'pointerup', 270, 50);
+    await flush();
+
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.move', args: { pages: [0], before: 3 } },
+    });
+    expect(selectedPages()).toEqual([2]);
+    const toast = store.getState().visible[0];
+    expect(toast?.text).toBe(tp('organizer.moved', 1));
+    expect(toast?.action?.label).toBe(t('toast.undo'));
+  });
+
+  it('a drag of a selected page carries the whole selection', async () => {
+    const { rpc, calls } = fakeRpc(5, [3, 4]);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[0]!);
+    click(options()[2]!, { ctrlKey: true });
+    dragTo(2, 270, 50);
+    pointer(grid(), 'pointerup', 270, 50);
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.move', args: { pages: [0, 2], before: 3 } },
+    });
+  });
+
+  it('a drop in place sends no pages.move', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    mount(rpc, createToastStore());
+    await flush();
+    // Page 1 dropped in front of page 2 (its own next slot): nothing changes.
+    dragTo(1, 160, 50);
+    pointer(grid(), 'pointerup', 160, 50);
+    await flush();
+    expect(calls.filter((call) => call.params.name === 'pages.move')).toHaveLength(0);
+  });
+
+  it('shows the drop marker and the status while dragging, and clears both after the drop', async () => {
+    const { rpc } = fakeRpc(4, [2]);
+    mount(rpc, createToastStore());
+    await flush();
+    dragTo(0, 270, 50);
+    const status = host.querySelector('.organizer-status[aria-live="polite"]');
+    // The drop is before original page index 3, which the status calls position 4.
+    expect(status?.textContent).toBe(tp('organizer.dragging', 1, { position: 4 }));
+    expect(options()[0]?.dataset.dragging).toBe('true');
+    expect(options()[2]?.dataset.drop).toBe('after');
+    expect(grid().dataset.dragging).toBe('true');
+
+    pointer(grid(), 'pointerup', 270, 50);
+    await flush();
+    expect(options()[0]?.dataset.dragging).toBeUndefined();
+    expect(options()[2]?.dataset.drop).toBeUndefined();
+    expect(grid().dataset.dragging).toBeUndefined();
+  });
+
+  it('Escape during a drag sends nothing and clears the marker', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    mount(rpc, createToastStore());
+    await flush();
+    dragTo(0, 270, 50);
+    act(() => {
+      grid().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    pointer(grid(), 'pointerup', 270, 50);
+    await flush();
+    expect(calls.filter((call) => call.params.name === 'pages.move')).toHaveLength(0);
+    expect(grid().dataset.dragging).toBeUndefined();
+  });
+
+  it('the click that follows a drag does not change the selection', async () => {
+    const { rpc } = fakeRpc(4, [2]);
+    mount(rpc, createToastStore());
+    await flush();
+    dragTo(0, 270, 50);
+    pointer(grid(), 'pointerup', 270, 50);
+    await flush();
+    expect(selectedPages()).toEqual([2]);
+    click(options()[0]!);
+    expect(selectedPages()).toEqual([2]);
+  });
+
+  it('the keyboard can select a page and then reach Move down', async () => {
+    const { rpc } = fakeRpc(4);
+    mount(rpc, createToastStore());
+    await flush();
+    // Keyboard path: Enter on a page selects it (no pointer); Move down is a real, enabled button.
+    const first = options()[0]!;
+    act(() => {
+      first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    const moveDown = buttonNamed(t('organizer.moveDown'));
+    expect(moveDown.disabled).toBe(false);
+    expect(moveDown.tabIndex).not.toBe(-1);
+  });
+});

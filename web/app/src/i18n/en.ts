@@ -787,6 +787,11 @@ export const EN = {
   'organizer.actions': 'Page actions',
   'organizer.moveUp': 'Move up',
   'organizer.moveDown': 'Move down',
+  'organizer.dragging': {
+    one: 'Moving {count} page to position {position}',
+    other: 'Moving {count} pages to position {position}',
+  },
+  'organizer.dragHint': 'Drag pages to reorder them, or use Move up and Move down.',
   'organizer.rotated': { one: 'Rotated {count} page', other: 'Rotated {count} pages' },
   'organizer.moved': { one: 'Moved {count} page', other: 'Moved {count} pages' },
   'organizer.deleted': { one: 'Deleted {count} page', other: 'Deleted {count} pages' },
