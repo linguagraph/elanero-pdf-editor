@@ -27,7 +27,7 @@ jobs:
       packaging: ${{ steps.classify.outputs.packaging }}
       web: ${{ steps.classify.outputs.web }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2 # the merge commit and the branch it merges into
       - id: classify
@@ -39,7 +39,7 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -60,7 +60,7 @@ jobs:
     needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read the pinned Node version
         id: versions
         if: needs.changes.outputs.web == 'true'
@@ -121,7 +121,7 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -150,7 +150,7 @@ jobs:
       # without hiding a real regression (tests/benchmarks/test_ui_budgets.py).
       PDFEDITOR_PERF_FACTOR: "1.5"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -173,7 +173,7 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the upgrade test reads the old installer script from history
       - uses: astral-sh/setup-uv@v3
