@@ -5,7 +5,12 @@
 import { useSyncExternalStore } from 'react';
 import { engineLoad, type EngineLoadStore } from '../feedback/engineLoad';
 import { notResponding } from '../feedback/notResponding';
-import { type CallOptions, createRpcClient, type RpcClient } from '../rpc/client';
+import {
+  type CallOptions,
+  createRpcClient,
+  type RpcClient,
+  type RpcEventListener,
+} from '../rpc/client';
 import { CallError, EngineLoadError } from './errors';
 import type { FailedStage, Stage } from './protocol';
 import { startEngine, type StartOptions, type WorkerClient } from './start';
@@ -36,6 +41,10 @@ export interface EngineConnection {
   restart(): boolean;
   // Stops the worker. Called when the app unmounts.
   dispose(): void;
+  // Adds a listener of the engine's change events (state, changed, saved, ...). The listener
+  // stays across a restart, and the events of a replaced worker never reach it. Returns the
+  // function that removes it (W4.8 S1).
+  onEvents(listener: RpcEventListener): () => void;
 }
 
 export interface EngineConnectionOptions {
@@ -89,6 +98,8 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
   // Callers waiting in whenReady(). They survive a failed load and a restart; only dispose()
   // rejects them.
   let waiters: { resolve(client: EngineClient): void; reject(error: Error): void }[] = [];
+  // The event listeners outlive the workers: each new RPC client forwards to them.
+  const eventListeners = new Set<RpcEventListener>();
 
   const stop = (): void => {
     generation += 1;
@@ -112,6 +123,11 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
 
     // hello waits for the load and checks the protocol, so its answer is the readiness signal.
     const rpcClient = createRpcClient(next);
+    // The events of a replaced worker are dropped: its document handles mean nothing now.
+    rpcClient.subscribe((events) => {
+      if (!isCurrent()) return;
+      for (const listener of [...eventListeners]) listener(events);
+    });
     // A call of a replaced worker still has its deadline timer: it can time out after the restart.
     // That is no fault of the engine now running, so the report is dropped (the caller still gets
     // its own rejection).
@@ -180,6 +196,12 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
     },
     start,
     restart,
+    onEvents(listener) {
+      eventListeners.add(listener);
+      return () => {
+        eventListeners.delete(listener);
+      };
+    },
     dispose() {
       stop();
       store.setStarter(undefined);

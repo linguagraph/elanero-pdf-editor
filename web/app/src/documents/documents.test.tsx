@@ -12,6 +12,22 @@ import { fitWidthZoom } from '../view/layout';
 import { APP_VERSION } from '../version';
 import { passwordPrompt } from './passwordRequest';
 import { installLaunchInbox, type LaunchFileHandleLike, type LaunchQueueLike } from '../pwa/launch';
+import type { RpcEvent } from '../rpc/generated';
+
+// The autosave copies go to a fake store, which records the document each delete names (W4.8 S1).
+const autosaveRemoved = vi.hoisted(() => [] as number[]);
+vi.mock('../storage/autosaveStore', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createAutosaveStore: () => ({
+    available: async () => true,
+    write: async () => 'written' as const,
+    read: async () => undefined,
+    remove: async (_tabId: string, docId: number) => {
+      autosaveRemoved.push(docId);
+    },
+    removeTab: async () => undefined,
+  }),
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -632,5 +648,97 @@ describe('files handed over by the OS (W4.6 S1)', () => {
     await until(() => host.querySelector('.start-pending') !== null);
     expect(host.querySelector('.start-pending')?.textContent).toContain(t('start.pending.heading'));
     expect(host.querySelector('.start-pending')?.textContent).toContain('waiting.pdf');
+  });
+});
+
+// The state event of a document, as the engine sends it after a call that changed it.
+function stateEvent(handle: string, dirty: boolean): RpcEvent {
+  return {
+    kind: 'state',
+    handle,
+    state: {
+      page_count: 3,
+      structure_version: 1,
+      dirty,
+      busy: '',
+      can_undo: dirty,
+      can_redo: false,
+      undo_label: '',
+      redo_label: '',
+      require_full_save: false,
+      history: dirty ? 1 : 0,
+    },
+  };
+}
+
+// Dispatches beforeunload and reports whether a listener asked for the warning.
+function unloadWarns(): boolean {
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+function dirtyTabName(): string | null {
+  return (
+    host.querySelector('.doc-tab-dirty')?.closest('[role="tab"]')?.querySelector('.doc-tab-name')
+      ?.textContent ?? null
+  );
+}
+
+describe('engine state events (W4.8 S1)', () => {
+  it('shows the unsaved-changes dot on the tab the engine reports dirty, and warns on unload', async () => {
+    dropFiles([pdf('a.pdf'), pdf('b.pdf')]);
+    await until(() => tabNames().length === 2);
+    expect(dirtyTabName()).toBeNull();
+    expect(unloadWarns()).toBe(false);
+
+    act(() => {
+      engine.emit([stateEvent('doc-2', true)]);
+    });
+
+    expect(dirtyTabName()).toBe('b.pdf');
+    expect(unloadWarns()).toBe(true);
+  });
+
+  it('clears the dot and the unload warning when the engine reports the document clean', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => tabNames().length === 1);
+    act(() => {
+      engine.emit([stateEvent('doc-1', true)]);
+    });
+
+    act(() => {
+      engine.emit([stateEvent('doc-1', false)]);
+    });
+
+    expect(dirtyTabName()).toBeNull();
+    expect(unloadWarns()).toBe(false);
+  });
+
+  it('ignores a state for a handle no tab holds', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => tabNames().length === 1);
+
+    act(() => {
+      engine.emit([stateEvent('doc-9', true)]);
+    });
+
+    expect(dirtyTabName()).toBeNull();
+    expect(unloadWarns()).toBe(false);
+  });
+
+  it('deletes the autosave copy of a document that the engine reports clean again', async () => {
+    autosaveRemoved.length = 0;
+    dropFiles([pdf('a.pdf')]);
+    await until(() => tabNames().length === 1);
+    act(() => {
+      engine.emit([stateEvent('doc-1', true)]);
+    });
+    act(() => {
+      engine.emit([stateEvent('doc-1', false)]);
+    });
+
+    await until(() => autosaveRemoved.length > 0);
+    expect(autosaveRemoved).toEqual([1]);
   });
 });

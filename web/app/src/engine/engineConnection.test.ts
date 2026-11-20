@@ -39,6 +39,15 @@ class FakeWorker implements WorkerClient {
     this.listener?.(stage);
   }
 
+  // Answers the next call with an empty result and the given change events, as a call that
+  // changed a document does.
+  answerWithEvents(events: unknown[]): void {
+    const call = this.pending.shift();
+    if (call === undefined) throw new Error('no call to answer');
+    const id = (JSON.parse(call.request) as { id: number }).id;
+    call.resolve({ reply: JSON.stringify({ v: 1, id, ok: true, result: {}, events }) });
+  }
+
   // Answers the hello call the way the loaded engine does.
   answerHello(): void {
     const call = this.pending.shift();
@@ -390,6 +399,71 @@ describe('engine restart and reporting (W3.9)', () => {
     workers[1]!.answerHello();
     await settle();
     expect(store.getState()).toEqual({ status: 'ready' });
+  });
+
+  describe('change events (W4.8 S1)', () => {
+    const stateEvent = (handle: string, dirty: boolean) => ({
+      kind: 'state',
+      handle,
+      state: {
+        page_count: 1,
+        structure_version: 1,
+        dirty,
+        busy: '',
+        can_undo: dirty,
+        can_redo: false,
+        undo_label: '',
+        redo_label: '',
+        require_full_save: false,
+        history: dirty ? 1 : 0,
+      },
+    });
+
+    it('gives each reply events to the listeners', async () => {
+      const { engine } = await readyEngine();
+      const seen: unknown[] = [];
+      engine.onEvents((events) => seen.push(...events));
+
+      const call = engine.client()!.call('session.close', { handle: 'doc-1' });
+      workers[0]!.answerWithEvents([stateEvent('doc-1', true)]);
+      await call;
+
+      expect(seen).toEqual([expect.objectContaining({ kind: 'state', handle: 'doc-1' })]);
+    });
+
+    it('stops a listener once it removes itself', async () => {
+      const { engine } = await readyEngine();
+      const seen: unknown[] = [];
+      const remove = engine.onEvents((events) => seen.push(...events));
+      remove();
+
+      const call = engine.client()!.call('session.close', { handle: 'doc-1' });
+      workers[0]!.answerWithEvents([stateEvent('doc-1', true)]);
+      await call;
+
+      expect(seen).toEqual([]);
+    });
+
+    it('keeps the listeners across a restart, and drops the events of the replaced worker', async () => {
+      const { engine } = await readyEngine();
+      const oldClient = engine.client()!;
+      const seen: unknown[] = [];
+      engine.onEvents((events) => seen.push(...events));
+
+      expect(engine.restart()).toBe(true);
+      workers[1]!.answerHello();
+      await settle();
+      // A late reply of the old worker carries an event for its handle; it must not arrive.
+      const late = oldClient.call('session.close', { handle: 'doc-1' });
+      workers[0]!.answerWithEvents([stateEvent('doc-1', true)]);
+      await late;
+      expect(seen).toEqual([]);
+
+      const call = engine.client()!.call('session.close', { handle: 'doc-2' });
+      workers[1]!.answerWithEvents([stateEvent('doc-2', false)]);
+      await call;
+      expect(seen).toEqual([expect.objectContaining({ kind: 'state', handle: 'doc-2' })]);
+    });
   });
 
   it('reports an out-of-memory call to the report hook and still rejects it', async () => {
