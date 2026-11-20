@@ -39,6 +39,10 @@ body {
 }
 
 .app-main {
+  /* A definite height: the document view's scroll area is then the visible height, which Fit Page
+     reads. With an auto height it grows to the whole document and Fit Page only fits the width. */
+  height: 100%;
+  box-sizing: border-box;
   padding: var(--space-4);
 }
 
