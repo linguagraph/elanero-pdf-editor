@@ -6,11 +6,11 @@ name: Web deploy (W9.2)
 # app into it, and deploys all of it in the same "pages" group. A docs-only deploy that does not
 # include the app would remove it, so docs.yml must include the app once it is deployable.
 #
-# The app is deployed only when the engine assets (Pyodide, the PyMuPDF wheel and the web zip,
-# staged by scripts/stage_engine_assets.mjs) are present in web/app/public/engine-assets. Staging
-# them in CI is the open follow-up in docs/web/plan.md (W9.2): until it lands, this workflow builds,
-# checks the base path and the size budget, and deploys nothing, so no build without the engine
-# goes live.
+# The engine assets (Pyodide, the PyMuPDF wheel and the web zip) are staged in CI before the app is
+# built, by scripts/stage_engine_assets.mjs into web/app/public/engine-assets, so they reach dist.
+# The wheel comes from the same cache as web-pytest.yml (or is built by its route 3), and the web
+# zip from scripts/build_web_wheel.py. The app is deployed only when the staged files are present
+# in dist, so a build without the engine never goes live.
 #
 # Pages must be set to "GitHub Actions" as its source (Settings > Pages), as for docs.yml.
 
@@ -19,6 +19,11 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "src/pdfeditor/**"
+      - "scripts/build_web_wheel.py"
+      - "scripts/web_package.py"
+      - "scripts/stage_engine_assets.mjs"
+      - "pyproject.toml"
       - ".github/workflows/web-deploy.yml"
   workflow_dispatch:
 
@@ -29,16 +34,30 @@ jobs:
   web-site:
     name: web-site
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The cold PyMuPDF wasm build (route 3) takes longer than the 30 minutes of the rest of the job.
+    timeout-minutes: 120
     outputs:
       deploy: ${{ steps.engine.outputs.present }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Read the pinned Node version
+      - name: Read the pinned versions
         id: versions
-        run: echo "node=$(jq -r .node web/spike/versions.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          v=web/spike/versions.json
+          {
+            echo "pyodide=$(jq -r .pyodide $v)"
+            echo "python_line=$(jq -r .pythonLine $v)"
+            echo "pyodide_build=$(jq -r .pyodideBuild $v)"
+            echo "pymupdf=$(jq -r .pymupdf $v)"
+            echo "pymupdf_tag=$(jq -r .pymupdfTag $v)"
+            echo "pymupdf_commit=$(jq -r .pymupdfTagCommit $v)"
+            echo "node=$(jq -r .node $v)"
+            echo "mupdf_url=$(jq -r .mupdfSourceUrl $v)"
+            echo "mupdf_sha=$(jq -r .mupdfSourceSha256 $v)"
+            echo "route=$(jq -r .wheelRoute $v)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -56,6 +75,135 @@ jobs:
 
       - name: Build the website (the user guide, strictly, as docs.yml does)
         run: python scripts/build_site.py --site-dir site
+
+      # W9.2: the engine assets, staged before the build so that npm run build copies them into
+      # dist. The wheel is the one web-pytest.yml uses (the same cache key, so both share it).
+      - name: Install the npm packages of the Pyodide pin (web/spike, for the staging)
+        working-directory: web/spike
+        run: npm ci
+
+      - name: Restore the PyMuPDF wheel from the cache
+        id: wheel-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: web/spike/dist/wheel-build
+          key: pymupdf-${{ steps.versions.outputs.pymupdf }}-pyodide-${{ steps.versions.outputs.pyodide }}-${{ hashFiles('.github/workflows/web-pytest.yml', 'web/spike/versions.json') }}
+
+      # Route 3 (the one that matters for Pyodide 314): build the wheel with PyMuPDF's own
+      # Pyodide route, at the tag. The MuPDF it bundles is used as is.
+      - name: Set up Python for the Pyodide build
+        if: ${{ ((steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build')) }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.versions.outputs.python_line }}
+
+      - name: Build the PyMuPDF wasm wheel (route 3)
+        if: ${{ ((steps.wheel-cache.outputs.cache-hit != 'true' && steps.versions.outputs.route == 'build')) }}
+        env:
+          PB: ${{ steps.versions.outputs.pyodide_build }}
+          PYODIDE: ${{ steps.versions.outputs.pyodide }}
+          PM_TAG: ${{ steps.versions.outputs.pymupdf_tag }}
+          PM_COMMIT: ${{ steps.versions.outputs.pymupdf_commit }}
+          MU_URL: ${{ steps.versions.outputs.mupdf_url }}
+          MU_SHA: ${{ steps.versions.outputs.mupdf_sha }}
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          work="$RUNNER_TEMP/pymupdf-build"
+          mkdir -p "$work"
+          python -m venv "$work/venv"
+          . "$work/venv/bin/activate"
+          python -m pip install --quiet "pyodide-build==$PB"
+          pyodide xbuildenv install "$PYODIDE"
+          git clone --quiet --depth 1 --branch "$PM_TAG" https://github.com/pymupdf/PyMuPDF.git "$work/PyMuPDF"
+          # MuPDF 1.28.2, the version the tag bundles, from its release tarball (checked by sha256).
+          # One line of its SWIG generator is patched: a dead-code call to a Python 2 name that the
+          # 1.28.x branch has already changed to PyUnicode_FromString. The version is unchanged.
+          curl -fsSL -o "$work/mupdf.tar.gz" "$MU_URL"
+          echo "$MU_SHA  $work/mupdf.tar.gz" | sha256sum -c -
+          tar -xzf "$work/mupdf.tar.gz" -C "$work"
+          mu_dir="$work/$(jq -r .mupdfSourceDir web/spike/versions.json)"
+          # Two Python 2 names, each patched to its Python 3 name. A target must hold exactly one
+          # PyString_FromString before the patch (so a new upstream layout fails here, loudly),
+          # and none after it.
+          patch_once() {
+            local n
+            n=$(grep -c 'PyString_FromString' "$1" || true)
+            if [ "$n" -ne 1 ]; then
+              echo "::error::expected exactly one PyString_FromString in $1, found $n"
+              exit 1
+            fi
+            sed -i 's/PyString_FromString/PyUnicode_FromString/' "$1"
+          }
+          sw="$mu_dir/scripts/wrap/swig.py"
+          extra="$work/PyMuPDF/src/extra.i"
+          patch_once "$sw"
+          patch_once "$extra"
+          if grep -n 'PyString_' "$sw" "$extra"; then
+            echo "::error::PyString_ still present after the patch"
+            exit 1
+          fi
+          export PYMUPDF_SETUP_MUPDF_BUILD="$mu_dir"
+          test "$(git -C "$work/PyMuPDF" rev-parse HEAD)" = "$PM_COMMIT"
+          cd "$work/PyMuPDF"
+          # The flags scripts/test.py sets for its Pyodide build (PyMuPDF 1.28.2). Tesseract is
+          # off there, which is why the web build has no OCR. The limited C API is off too: with
+          # Python 3.14 the SWIG bindings call PyString_FromString (Python 2 only) and fail to compile.
+          export HAVE_LIBCRYPTO=no OS=pyodide PYMUPDF_SETUP_FLAVOUR=pb PYMUPDF_SETUP_MUPDF_TESSERACT=0 PYMUPDF_SETUP_PY_LIMITED_API=0
+          pyodide build --exports whole_archive
+          out="$GITHUB_WORKSPACE/web/spike/dist/wheel-build"
+          mkdir -p "$out" "$GITHUB_WORKSPACE/web/spike/out"
+          cp dist/*.whl "$out/"
+          end=$(date +%s)
+          # wheel.sha256 is saved in the cache with the wheel; the verify step re-hashes it.
+          (cd "$out" && sha256sum ./*.whl > wheel.sha256)
+          wheel_name=$(basename "$out"/*.whl)
+          wheel_sha=$(cut -d' ' -f1 "$out/wheel.sha256")
+          jq -n \
+            --arg route build \
+            --arg pyodide "$PYODIDE" \
+            --arg pyodide_build "$PB" \
+            --arg pymupdf_tag "$PM_TAG" \
+            --arg commit "$PM_COMMIT" \
+            --arg python "$(python -c 'import platform; print(platform.python_version())')" \
+            --arg emscripten "$(pyodide config get emscripten_version 2>/dev/null || echo unknown)" \
+            --arg wheel "$wheel_name" \
+            --arg wheel_sha "$wheel_sha" \
+            --argjson seconds "$((end - start))" \
+            '{route: $route, pyodide: $pyodide, pyodideBuild: $pyodide_build, pymupdfTag: $pymupdf_tag,
+              pymupdfCommit: $commit, hostPython: $python, emscripten: $emscripten, wheel: $wheel,
+              wheelSha256: $wheel_sha, coldBuildSeconds: $seconds}' > "$GITHUB_WORKSPACE/web/spike/out/build-info.json"
+
+      # Runs on a cache hit too: the wheel and wheel.sha256 come back from the cache together, and
+      # the wheel is hashed again here, so a damaged or swapped cache entry fails the run.
+
+      - name: Verify the wheel against wheel.sha256
+        run: |
+          set -euo pipefail
+          cd web/spike/dist/wheel-build
+          test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
+          sha256sum -c wheel.sha256
+
+      # Outside web/app/public/engine-assets, which the staging script clears first.
+      - name: Build the web zip and copy the engine inputs out of the way
+        run: |
+          set -euo pipefail
+          python scripts/build_web_wheel.py
+          in="$RUNNER_TEMP/engine-inputs"
+          rm -rf "$in"
+          mkdir -p "$in"
+          n=$(ls web/spike/dist/wheel-build/*.whl | wc -l)
+          test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
+          cp web/spike/dist/wheel-build/*.whl "$in/"
+          cp dist/web/pdfeditor-web.zip "$in/"
+
+      - name: Stage the engine assets (Pyodide, the PyMuPDF wheel, the web zip)
+        run: |
+          set -euo pipefail
+          in="$RUNNER_TEMP/engine-inputs"
+          node scripts/stage_engine_assets.mjs --wheel "$(ls "$in"/*.whl)" --zip "$in/pdfeditor-web.zip"
+          test -f web/app/public/engine-assets/pyodide.mjs
+          test -f web/app/public/engine-assets/pyodide-lock.json
 
       - name: Install the npm packages (exact, from the lockfile)
         working-directory: web/app
