@@ -20,6 +20,7 @@ describe('side panel store', () => {
       pages: 'left',
       bookmarks: 'left',
       attachments: 'left',
+      layers: 'left',
       search: 'left',
       redactions: 'left',
       comments: 'left',
