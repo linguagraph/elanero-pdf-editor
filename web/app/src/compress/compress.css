@@ -128,3 +128,47 @@
   cursor: pointer;
   font-weight: 600;
 }
+
+/* The space table (SpaceAuditTable): the wrapper scrolls it at large text sizes, and the numbers
+   right-align so the digits line up. Borders and text use the theme tokens, so the table reads the
+   same in forced colours (no information is in the background). */
+.compress-audit {
+  overflow-x: auto;
+  border-radius: var(--radius-small);
+}
+
+.compress-audit:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.compress-audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-small);
+}
+
+.compress-audit-table caption {
+  padding: var(--space-1) 0;
+  text-align: start;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.compress-audit-table th,
+.compress-audit-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.compress-audit-table tr > :not(:first-child) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.compress-audit-table th[scope='row'] {
+  font-weight: 400;
+}
