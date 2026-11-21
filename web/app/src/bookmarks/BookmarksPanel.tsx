@@ -355,12 +355,14 @@ function BookmarkTree({
       meta: event.metaKey,
     });
     if (action.kind === 'none') return;
+    // Every key the panel handles is prevented, even an edit key that does nothing here: the Edit
+    // tool's document-level Delete listener must not act on a Delete the panel has taken.
+    event.preventDefault();
     if (action.kind === 'rename' || action.kind === 'delete' || action.kind === 'move') {
       // Edit keys do nothing while an edit runs or when the document cannot be edited; the
       // navigation keys still work.
       if (!canEdit) return;
     }
-    event.preventDefault();
     if (action.kind === 'focus') focusRow(action.index);
     else if (action.kind === 'expand' || action.kind === 'collapse') toggle(action.index);
     else if (action.kind === 'activate') choose(action.index);

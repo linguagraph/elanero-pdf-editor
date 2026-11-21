@@ -319,6 +319,19 @@ describe('bookmarks editing (W5.2 S2)', () => {
     expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
   });
 
+  it('a read-only outline still takes the edit keys, so the Edit tool does not see them', async () => {
+    // fakeRpc has no session.capabilities answer, so the outline reads as not editable.
+    const { rpc, call } = fakeRpc(outline);
+    openPanel('bookmarks');
+    await mount(11, rpc);
+    const del = await press(item('Part One'), { key: 'Delete' });
+    expect(del.defaultPrevented).toBe(true);
+    const rename = await press(item('Part One'), { key: 'F2' });
+    expect(rename.defaultPrevented).toBe(true);
+    expect(host.querySelector('input.bookmarks-rename')).toBeNull();
+    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+  });
+
   it('renames in place: F2 opens the field, Enter sends the trimmed title', async () => {
     const { rpc, call } = editableRpc(outline);
     openPanel('bookmarks');
