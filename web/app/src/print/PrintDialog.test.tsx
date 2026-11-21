@@ -169,11 +169,16 @@ describe('PrintDialog', () => {
   it('asks before printing 201 pages, and Back keeps the form with its values', () => {
     const { call, rpc } = rpcStub();
     render(201, rpc);
+    const dpi = document.querySelector<HTMLSelectElement>('select')!;
+    act(() => {
+      dpi.value = '300';
+      dpi.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     act(() => {
       printButton().click();
     });
     expect(call).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain(tp('print.large.confirm', 201, { dpi: 150 }));
+    expect(document.body.textContent).toContain(tp('print.large.confirm', 201, { dpi: 300 }));
     act(() => {
       [...document.querySelectorAll<HTMLButtonElement>('button')]
         .find((b) => b.textContent === t('print.large.back'))!
@@ -181,6 +186,36 @@ describe('PrintDialog', () => {
     });
     expect(call).not.toHaveBeenCalled();
     expect(radio('all').checked).toBe(true);
+    // The value changed before the question is still there after Back.
+    expect(document.querySelector<HTMLSelectElement>('select')!.value).toBe('300');
+  });
+
+  it('prints exactly 200 selected pages at 300 dpi directly, with no question', () => {
+    const { call, rpc } = rpcStub();
+    render(300, rpc);
+    act(() => {
+      radio('range').click();
+    });
+    typeText(document.querySelector<HTMLInputElement>('.print-range')!, '1-200');
+    const dpi = document.querySelector<HTMLSelectElement>('select')!;
+    act(() => {
+      dpi.value = '300';
+      dpi.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => {
+      printButton().click();
+    });
+    expect(document.body.textContent).not.toContain(tp('print.large.confirm', 200, { dpi: 300 }));
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call).toHaveBeenCalledWith('jobs.prepare', {
+      handle: 'h1',
+      job: 'print_pages',
+      args: {
+        pages: Array.from({ length: 200 }, (_, index) => index),
+        dpi: 300,
+        annotations: true,
+      },
+    });
   });
 
   it('starts the job when the question is confirmed, with the page count and dpi in the copy', () => {
