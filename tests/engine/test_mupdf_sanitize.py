@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 
 import pymupdf
+import pytest
 
 from pdfeditor.engine.base import SaveOptions
 from pdfeditor.engine.registry import get_engine
@@ -145,6 +146,7 @@ def _widget_leaks(path: Path, secret: str) -> list[str]:
     return problems
 
 
+@pytest.mark.desktop_only  # reads the saved file with pikepdf, which the Pyodide run does not have
 def test_form_reset_leaks_neither_value_nor_appearance(tmp_path: Path) -> None:
     path = tmp_path / "form.pdf"
     _form_with_secret(path)
@@ -169,6 +171,7 @@ def test_form_reset_leaks_neither_value_nor_appearance(tmp_path: Path) -> None:
 SIGNED = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"
 
 
+@pytest.mark.desktop_only  # reads the saved file with pikepdf, which the Pyodide run does not have
 def test_form_reset_keeps_a_signature_value(tmp_path: Path) -> None:
     """The /V of a /FT /Sig field is the signature dictionary; a form reset must not clear it."""
     import pikepdf
