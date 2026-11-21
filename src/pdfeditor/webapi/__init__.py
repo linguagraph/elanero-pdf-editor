@@ -69,6 +69,7 @@ METHODS: dict[str, Method] = {
     "session.outline": Method(dto.HandleParams, session.document_outline),
     "session.security": Method(dto.HandleParams, session.document_security),
     "session.fonts": Method(dto.HandleParams, session.document_fonts),
+    "session.links": Method(dto.PageParams, session.page_links),
     "text.layer": Method(dto.PageParams, text.text_layer),
     "text.extract": Method(dto.ExtractParams, text.extract),
     "text.search": Method(dto.SearchParams, text.search),

@@ -35,6 +35,25 @@ def test_link_dest_on_rotated_page_is_visible_space() -> None:
     doc.close()
 
 
+def test_link_rect_on_rotated_page_is_visible_space() -> None:
+    doc = pymupdf.open()
+    page = doc.new_page()
+    # insert_link takes unrotated coordinates. Unrotated (72..152, 85..104) is visible
+    # (842 - 104 .. 842 - 85, 72 .. 152) after the turn to 90 degrees.
+    page.insert_link(
+        {
+            "kind": pymupdf.LINK_URI,
+            "from": pymupdf.Rect(72, 85, 152, 104),
+            "uri": "https://example.org/",
+        }
+    )
+    page.set_rotation(90)
+    (link,) = get_engine("mupdf").open(doc.tobytes()).page(0).links()
+    assert (link.rect.x0, link.rect.y0, link.rect.x1, link.rect.y1) == pytest.approx(
+        (738, 72, 757, 152), abs=0.5
+    )
+
+
 def test_outline_dest_roundtrip_on_rotated_page() -> None:
     doc = get_engine("mupdf").open(_rotated_doc())
     doc.set_outline([OutlineItem("rotated", dest=Destination(1, Point(300, 40)))])

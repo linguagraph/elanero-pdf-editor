@@ -81,6 +81,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "session.close": "instant",
     "session.fonts": "action",  # Document.fonts() walks every page (W7.6)
     "session.info": "instant",
+    "session.links": "render",  # one page's annotations, read once per visible page (W5.3)
     "session.open": "io",
     "session.outline": "instant",
     "session.pages": "instant",
