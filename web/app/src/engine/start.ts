@@ -12,11 +12,12 @@ export interface StartOptions {
 }
 
 export interface WorkerClient {
-  // onNotice gets each notice of this call (a job's progress), in order, before the reply.
+  // onNotice gets each notice of this call (a job's progress, or a partial with its buffer), in
+  // order, before the reply.
   call(
     request: string,
     buffers?: readonly ArrayBuffer[],
-    onNotice?: (notice: Notice) => void,
+    onNotice?: (notice: Notice, buffer?: ArrayBuffer) => void,
   ): Promise<CallResult>;
   onStage(listener: (stage: Stage) => void): () => void;
   terminate(): void;
@@ -75,7 +76,7 @@ function toError(error: ErrorMessage['error']): Error {
 interface Waiter {
   resolve(result: CallResult): void;
   reject(error: Error): void;
-  onNotice?: (notice: Notice) => void;
+  onNotice?: (notice: Notice, buffer?: ArrayBuffer) => void;
 }
 
 function startWorker(options: StartOptions): WorkerClient {
@@ -112,7 +113,9 @@ function startWorker(options: StartOptions): WorkerClient {
     const data = event.data;
     if ('kind' in data && data.kind === 'notice') {
       // A notice belongs to a call still waiting; one for a finished call is dropped.
-      pending.get(data.id)?.onNotice?.(data.notice);
+      const waiter = pending.get(data.id);
+      if (data.buffer === undefined) waiter?.onNotice?.(data.notice);
+      else waiter?.onNotice?.(data.notice, data.buffer);
       return;
     }
     if ('kind' in data) {

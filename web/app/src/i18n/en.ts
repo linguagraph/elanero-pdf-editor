@@ -687,6 +687,17 @@ export const EN = {
     one: 'This prints {count} page. A lower resolution or a page range uses less memory.',
     other: 'This prints {count} pages. A lower resolution or a page range uses less memory.',
   },
+  'print.large.confirm': {
+    one: "Print {count} page at {dpi} dpi? The page is held in memory until the browser's print dialog opens, which can slow this tab down. A lower resolution or a page range uses less memory.",
+    other:
+      "Print {count} pages at {dpi} dpi? Every page is held in memory until the browser's print dialog opens, which can slow this tab down. A lower resolution or a page range uses less memory.",
+  },
+  'print.large.continue': {
+    one: 'Print {count} page',
+    other: 'Print {count} pages',
+  },
+  'print.large.back': 'Back',
+  'print.mismatch': 'Printing stopped: not every page arrived. Try again.',
   'print.start': 'Print',
   'print.busy': 'Another task is running. Try printing again when it finishes.',
   'print.noDocument': 'Open a document to print it.',

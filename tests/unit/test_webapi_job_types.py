@@ -17,24 +17,27 @@ import re
 import zipfile
 from collections.abc import Iterator
 from dataclasses import replace
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine import mupdf as mupdf_engine
 from pdfeditor.model import platform as model_platform
 from pdfeditor.services.export.fonts import program_fs_type
-from pdfeditor.webapi import dispatch, jobs, jobworker, limits
+from pdfeditor.webapi import dispatch, dto, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
     CANCELLED,
     FILE_TOO_LARGE,
     INVALID_ARGS,
     NOT_SUPPORTED,
     RENDER_TOO_LARGE,
+    RpcFailure,
 )
-from pdfeditor.webapi.platform import configure_web
+from pdfeditor.webapi.platform import WEB_SNAPSHOT_BUDGET, configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.hostcheck import record
 
@@ -163,9 +166,10 @@ def run_on_copy(
     *,
     notify: Any = None,
     cancel: CancelToken | None = None,
+    partial: Any = None,
 ) -> tuple[dict[str, Any], list[bytes]]:
     """job.run on a document copy; ``extra`` holds the buffers that ``$bin`` markers in args use
-    (the copy itself is buffer 0)."""
+    (the copy itself is buffer 0). ``partial`` receives each partial notice and its buffers."""
     request = json.dumps(
         {
             "v": 1,
@@ -174,7 +178,7 @@ def run_on_copy(
             "params": {"job": job, "args": args, "document": {"$bin": 0}},
         }
     )
-    reply_json, out = jobworker.dispatch(request, [copy, *(extra or [])], notify, cancel)
+    reply_json, out = jobworker.dispatch(request, [copy, *(extra or [])], notify, cancel, partial)
     reply: dict[str, Any] = json.loads(reply_json)
     return reply, out
 
@@ -499,29 +503,128 @@ def test_compare_reports_a_changed_page(web: None, fixture_pdf: Any) -> None:
 # -- print_pages ------------------------------------------------------------------------------
 
 
+def print_pages_of(
+    handle: str, args: dict[str, Any]
+) -> tuple[dict[str, Any], list[tuple[str, str, bytes]]]:
+    """Runs print_pages and collects the pages from their partial notices, in order."""
+    _, copy = prepare(handle, "print_pages", args)
+    pages: list[tuple[str, str, bytes]] = []
+
+    def partial(notice: dict[str, Any], out: list[bytes]) -> None:
+        data = notice["data"]
+        pages.append((data["name"], data["mime"], out[0]))
+
+    reply, _ = run_on_copy("print_pages", args, copy, partial=partial)
+    return ok(reply), pages
+
+
 def test_print_pages_renders_each_page_as_a_png(web: None, fixture_pdf: Any) -> None:
     handle = open_data(text_fixture(fixture_pdf), "text.pdf")
     pages = page_total(handle)
-    args_150 = {"pages": [0], "dpi": 150}
-    _, copy = prepare(handle, "print_pages", args_150)
-    reply, out = run_on_copy("print_pages", args_150, copy)
-    ((name, mime, data),) = files_of(ok(reply), out)
+    _, low_pages = print_pages_of(handle, {"pages": [0], "dpi": 150})
+    ((name, mime, data),) = low_pages
     assert (name, mime) == ("page-1.png", "image/png")
     low = Image.open(io.BytesIO(data))
     assert low.format == "PNG"
 
-    args_300 = {"pages": [0], "dpi": 300}
-    _, copy = prepare(handle, "print_pages", args_300)
-    reply, out = run_on_copy("print_pages", args_300, copy)
-    ((_, _, data300),) = files_of(ok(reply), out)
+    _, high_pages = print_pages_of(handle, {"pages": [0], "dpi": 300})
+    ((_, _, data300),) = high_pages
     high = Image.open(io.BytesIO(data300))
     assert abs(high.width - 2 * low.width) <= 2  # 300 dpi is twice 150 dpi
 
-    _, copy = prepare(handle, "print_pages", {})
-    reply, out = run_on_copy("print_pages", {}, copy)
-    files = files_of(ok(reply), out)
-    assert len(files) == pages
-    assert files[0][0].startswith("page-")
+    result, every = print_pages_of(handle, {})
+    assert len(every) == pages
+    assert every[0][0].startswith("page-")
+    assert result["value"] == {"pages": pages}
+
+
+def test_print_pages_sends_each_page_as_a_partial_in_order(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    sizes_by_dpi: dict[int, dict[int, tuple[int, int]]] = {}
+    for dpi in (150, 300):
+        partials: list[dict[str, Any]] = []
+        sizes: dict[int, tuple[int, int]] = {}
+
+        def partial(
+            notice: dict[str, Any],
+            out: list[bytes],
+            *,
+            _sizes: dict[int, tuple[int, int]] = sizes,
+            _partials: list[dict[str, Any]] = partials,
+        ) -> None:
+            # One buffer per partial: the page's PNG, under its own marker.
+            assert len(out) == 1
+            _partials.append(notice)
+            _sizes[notice["data"]["index"]] = Image.open(io.BytesIO(out[0])).size
+
+        args = {"pages": [0, 1], "dpi": dpi}
+        _, copy = prepare(handle, "print_pages", args)
+        reply, out = run_on_copy("print_pages", args, copy, partial=partial)
+        result = ok(reply)
+        assert result["files"] == [] and out == []  # the pages came as partials
+        assert result["value"] == {"pages": 2}
+        assert [item["notice"] for item in partials] == ["partial", "partial"]
+        assert [item["data"]["index"] for item in partials] == [0, 1]
+        assert [item["data"]["name"] for item in partials] == ["page-1.png", "page-2.png"]
+        assert all(item["v"] == 1 and item["id"] == 5 for item in partials)
+        sizes_by_dpi[dpi] = sizes
+    # 300 dpi is twice 150 dpi, page by page.
+    assert abs(sizes_by_dpi[300][0][0] - 2 * sizes_by_dpi[150][0][0]) <= 2
+
+
+def test_print_pages_without_a_partial_sink_still_replies_with_the_count(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"pages": [0]}
+    _, copy = prepare(handle, "print_pages", args)
+    reply, out = run_on_copy("print_pages", args, copy)
+    assert ok(reply)["value"] == {"pages": 1}
+    assert out == []
+
+
+def test_a_print_cancelled_after_its_first_partial_sends_no_more(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"pages": [0, 1]}
+    _, copy = prepare(handle, "print_pages", args)
+    token = CancelToken()
+    received: list[dict[str, Any]] = []
+
+    def partial(notice: dict[str, Any], _out: list[bytes]) -> None:
+        received.append(notice)
+        token.cancel()  # the next check in the job stops it
+
+    reply, _ = run_on_copy("print_pages", args, copy, cancel=token, partial=partial)
+    assert error(reply)["code"] == CANCELLED
+    assert len(received) == 1
+
+
+def test_print_partials_stop_at_the_byte_cap(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"pages": [0, 1]}
+    _, copy = prepare(handle, "print_pages", args)
+    # A one-byte cap, so the first page's PNG takes the job over it whatever the sizes are. The
+    # job function runs directly, since jobworker would refuse the copy itself against the same cap.
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", 1)
+    session = DocumentSession.open(copy, None, snapshot_budget=WEB_SNAPSHOT_BUDGET)
+    reported: list[dto.FileDto] = []
+    ctx = SimpleNamespace(
+        token=CancelToken(),
+        report=reported.append,
+        progress=lambda done, total: None,
+    )
+    try:
+        with pytest.raises(RpcFailure) as failure:
+            jobs._run_print(session, dto.PrintArgs(pages=(0, 1)), cast(Any, ctx))
+    finally:
+        session.close()
+    assert failure.value.code == FILE_TOO_LARGE
+    # The cap is checked before a page is reported, so no partial went out.
+    assert reported == []
 
 
 def test_print_pages_can_be_cancelled_before_it_starts(web: None, fixture_pdf: Any) -> None:

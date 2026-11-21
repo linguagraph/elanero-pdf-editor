@@ -15,9 +15,10 @@ per 100 ms, the first and the final one always.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from pdfeditor.core.inline_jobs import InlineRunner
 from pdfeditor.core.jobs import CancelToken, JobContext
@@ -35,8 +36,11 @@ from pdfeditor.webapi.errors import (
 from pdfeditor.webapi.platform import WEB_SNAPSHOT_BUDGET
 
 PROGRESS_INTERVAL_S = 0.1  # W1.2 section 8: at most one notice per 100 ms per job
+_log = logging.getLogger(__name__)
 
 Notify = Callable[[dict[str, object]], None]
+# Receives a partial notice (W6.5 section 3.1) and its one buffer, as the sink's own list of bytes.
+PartialSink = Callable[[dict[str, object], list[bytes]], None]
 
 
 def dispatch(
@@ -44,13 +48,15 @@ def dispatch(
     buffers: list[bytes],
     notify: Notify | None = None,
     cancel: CancelToken | None = None,
+    partial: PartialSink | None = None,
 ) -> tuple[str, list[bytes]]:
     """Handle one ``job.run`` request. The envelope rules are the engine's (W1.2 section 2), and
-    the failures come back the same way. ``notify`` receives each progress notice as a dict."""
+    the failures come back the same way. ``notify`` receives each progress notice as a dict;
+    ``partial`` receives each partial notice (a job's pages as they are made)."""
     request_id = _request_id(request_json)
 
     def handler(params: dto.JobRunParams, buffers: BufferTable) -> dto.JobRunResult:
-        return run_job(params, buffers, request_id, notify, cancel)
+        return run_job(params, buffers, request_id, notify, cancel, partial)
 
     # The job worker's own table: the hello the loader checks at start-up, and job.run.
     methods = {
@@ -66,6 +72,7 @@ def run_job(
     request_id: object,
     notify: Notify | None,
     cancel: CancelToken | None,
+    partial: PartialSink | None = None,
 ) -> dto.JobRunResult:
     job_type = jobs.job_type(params.job)
     typed = job_type.convert(params.args, buffers)
@@ -87,7 +94,7 @@ def run_job(
         # (W1.2 16.1).
         session = DocumentSession.open(params.document, None, snapshot_budget=WEB_SNAPSHOT_BUDGET)
         try:
-            output = _execute(session, job_type, typed, request_id, notify, cancel)
+            output = _execute(session, job_type, typed, request_id, notify, cancel, partial)
         finally:
             session.close()
     else:
@@ -97,7 +104,7 @@ def run_job(
                 "params.document: this job takes no document",
                 {"path": "params.document"},
             )
-        output = _execute(None, job_type, typed, request_id, notify, cancel)
+        output = _execute(None, job_type, typed, request_id, notify, cancel, partial)
     size = len(output.document or b"") + sum(len(item.data) for item in output.files)
     if size > limits.MAX_JOB_BYTES:
         raise RpcFailure(
@@ -124,8 +131,10 @@ def _execute(
     request_id: object,
     notify: Notify | None,
     cancel: CancelToken | None,
+    partial: PartialSink | None,
 ) -> jobs.JobOutput:
     progress = _Progress(request_id, notify)
+    partials = _Partials(request_id, partial)
     failures: list[BaseException] = []
     done: list[jobs.JobOutput] = []
     cancelled: list[bool] = []
@@ -139,7 +148,9 @@ def _execute(
             failures.append(exc)
             raise
 
-    runner = InlineRunner(on_progress=progress, on_status=progress.set_status)
+    runner = InlineRunner(
+        on_progress=progress, on_status=progress.set_status, on_report=partials.report
+    )
     runner.start(
         work,
         label=job_type.name,
@@ -152,6 +163,39 @@ def _execute(
     if failures:
         raise failure_for(failures[0])
     return done[0]
+
+
+class _Partials:
+    """The partial observer of one job: each value a job reports (ctx.report) is a page or
+    another FileDto, sent as a partial notice with its position in the job's order. Nothing is
+    throttled, since each notice carries its data. A value of another type is a programming
+    error, so it is logged and dropped rather than sent."""
+
+    def __init__(self, request_id: object, partial: PartialSink | None) -> None:
+        self._request_id = request_id
+        self._partial = partial
+        self._count = 0
+
+    def report(self, value: object) -> None:
+        if self._partial is None:
+            return
+        if not isinstance(value, dto.FileDto):
+            _log.error("a job reported a value that is not a file: %s", type(value).__name__)
+            return
+        out: list[bytes] = []
+        self._partial(
+            {
+                "v": PROTOCOL_VERSION,
+                "notice": "partial",
+                "id": self._request_id,
+                "data": {
+                    "index": self._count,
+                    **cast(dict[str, object], dto.to_json(value, out)),
+                },
+            },
+            out,
+        )
+        self._count += 1
 
 
 class _Progress:
