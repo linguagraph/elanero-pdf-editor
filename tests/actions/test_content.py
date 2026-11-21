@@ -258,8 +258,13 @@ def test_add_shape_redo_restores_it_at_a_new_revision(open_copy: Opener) -> None
     assert s.undo()
     with s.lock:
         # A web cache keyed by the revision the add reported must not be reused after an undo.
-        assert s.document.page(0).revision != added_at
+        undone_at = s.document.page(0).revision
+        assert undone_at != added_at
     assert s.redo()
+    with s.lock:
+        redone_at = s.document.page(0).revision
+    # The redo is a new revision as well: neither the add's nor the undo's may be reused.
+    assert redone_at not in {added_at, undone_at}
     assert [o.type for o in objects(s)].count(ObjectType.PATH) == 1
     assert snapshot_of(s) == added
 
