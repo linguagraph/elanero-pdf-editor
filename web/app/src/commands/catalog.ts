@@ -166,9 +166,20 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   },
   cmd('add-text', 'command.add-text.label', 'edit.add'),
   cmd('add-image', 'command.add-image.label', 'edit.add'),
-  cmd('add-rectangle', 'command.add-rectangle.label', 'edit.shapes'),
-  cmd('add-ellipse', 'command.add-ellipse.label', 'edit.shapes'),
-  cmd('add-line', 'command.add-line.label', 'edit.shapes'),
+  // The shape tools (W6.7b) are toggles: the one that is on is checked, and a second press returns
+  // to Select.
+  {
+    ...cmd('add-rectangle', 'command.add-rectangle.label', 'edit.shapes', CAN_EDIT_CONTENT),
+    checked: (state) => state.viewTool === 'shape-rectangle',
+  },
+  {
+    ...cmd('add-ellipse', 'command.add-ellipse.label', 'edit.shapes', CAN_EDIT_CONTENT),
+    checked: (state) => state.viewTool === 'shape-ellipse',
+  },
+  {
+    ...cmd('add-line', 'command.add-line.label', 'edit.shapes', CAN_EDIT_CONTENT),
+    checked: (state) => state.viewTool === 'shape-line',
+  },
   cmd('replace-image', 'command.replace-image.label', 'edit.objects'),
   cmd('extract-image', 'command.extract-image.label', 'edit.objects'),
   cmd(

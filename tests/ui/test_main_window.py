@@ -223,6 +223,32 @@ def test_uri_link_asks_before_opening(window: MainWindow, fixture_pdf, monkeypat
     assert opened == ["https://example.org/"]
 
 
+def test_blocked_link_scheme_is_refused_without_asking(window: MainWindow, monkeypatch) -> None:
+    from pdfeditor.model.geometry import Rect
+    from pdfeditor.model.outline import Link, LinkKind
+
+    asked: list[str] = []
+    opened: list[str] = []
+
+    def question(*args, **kwargs):
+        asked.append("asked")
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    monkeypatch.setattr(
+        "pdfeditor.ui.main_window.QDesktopServices.openUrl",
+        lambda url: opened.append(url.toString()),
+    )
+    messages: list[str] = []
+    monkeypatch.setattr(window, "notify", messages.append)
+    for uri in ("javascript:alert(1)", "file:///C:/tool.exe", "www.example.org"):
+        window.open_external_link(Link(Rect(0, 0, 1, 1), LinkKind.URI, uri=uri))
+    assert asked == []
+    assert opened == []
+    assert messages[0] == 'This link was not opened: "javascript" links are blocked.'
+    assert len(messages) == 3
+
+
 def test_single_instance_handoff(qtbot) -> None:
     """A second process forwards its files to the running instance."""
     name = f"pdfeditor-test-{os.getpid()}"

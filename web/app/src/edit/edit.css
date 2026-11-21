@@ -53,3 +53,35 @@
   background: var(--color-on-accent);
   color: var(--color-text-muted);
 }
+
+/* The shape tools' page layer (W6.7b): a drag draws a preview of the shape the engine will add. */
+.shape-layer {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.shape-preview {
+  position: absolute;
+  border: 1.5px solid var(--color-accent);
+  pointer-events: none;
+}
+
+.shape-preview--ellipse {
+  border-radius: 50%;
+}
+
+.shape-line-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.shape-line-preview line {
+  stroke: var(--color-accent);
+  stroke-width: 1.5px;
+}
