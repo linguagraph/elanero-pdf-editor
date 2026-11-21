@@ -13,3 +13,11 @@ export interface GestureTools {
 export function textLayerPassive({ commentTool, viewTool, markToolOn }: GestureTools): boolean {
   return commentTool !== null || markToolOn || viewTool === 'cropBox' || isShapeTool(viewTool);
 }
+
+// Whether the page's links take presses (W5.3): under Select and Hand only. The Edit and crop box
+// tools and the comment and mark tools draw with the pointer, so they get every press and the page
+// offers no tab stops that do nothing.
+export function linksActive({ commentTool, viewTool, markToolOn }: GestureTools): boolean {
+  if (viewTool !== 'select' && viewTool !== 'hand') return false;
+  return commentTool === null && !markToolOn;
+}

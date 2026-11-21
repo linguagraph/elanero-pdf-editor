@@ -229,6 +229,7 @@ export interface PageRpc {
       | 'session.info'
       | 'session.outline'
       | 'session.security'
+      | 'session.links'
       | 'session.unlock_owner'
       | 'render.page'
       | 'render.tile'
