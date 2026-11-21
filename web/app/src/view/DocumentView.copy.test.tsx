@@ -3,9 +3,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { ToastStore } from '../feedback/toasts';
+import { EN } from '../i18n/en';
 import { copySelectedText } from '../text/copy';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { DocumentView, type DocumentViewHandle } from './DocumentView';
+import { RenderScheduler } from './renderScheduler';
 import type { ViewTool } from './viewTool';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -32,17 +34,23 @@ const TEXT_LAYER = {
 };
 
 // Session.pages and text.layer answer at once; render.page never answers, which keeps the test to
-// the view (the page images are not needed to select text).
-function fakeRpc(): PageRpc {
+// the view (the page images are not needed to select text). With `hold`, the text layer of that
+// page answers only once `release` resolves (a page whose text has not arrived yet).
+function fakeRpc(hold?: { page: number; release: Promise<void> }): PageRpc {
   const rpc = {
-    call: vi.fn((method: string) => {
+    call: vi.fn((method: string, params?: { page?: number }) => {
       if (method === 'session.pages') {
         return Promise.resolve({
           pages: Array.from({ length: 3 }, () => ({ width: 612, height: 792, rotation: 0 })),
           labels: [],
         });
       }
-      if (method === 'text.layer') return Promise.resolve(TEXT_LAYER);
+      if (method === 'text.layer') {
+        if (hold !== undefined && params?.page === hold.page) {
+          return hold.release.then(() => TEXT_LAYER);
+        }
+        return Promise.resolve(TEXT_LAYER);
+      }
       return new Promise(() => {});
     }),
   };
@@ -59,9 +67,9 @@ async function flush(): Promise<void> {
   });
 }
 
-function render(tool: ViewTool): void {
+function render(tool: ViewTool, rpc: PageRpc = fakeRpc()): void {
   act(() => {
-    root.render(<DocumentView ref={handle} rpc={fakeRpc()} handle="h" tool={tool} />);
+    root.render(<DocumentView ref={handle} rpc={rpc} handle="h" tool={tool} />);
   });
 }
 
@@ -82,14 +90,19 @@ afterEach(() => {
   window.getSelection()?.removeAllRanges();
 });
 
-// jsdom has no layout: page 0 is a box at the origin, 800 by 1000 CSS px, so the points of the
-// layer (4/3 CSS px each at zoom 1) land on its lines.
-function pageZero(): HTMLElement {
-  const page = host.querySelector<HTMLElement>('.doc-page[data-page="0"]');
-  if (page === null) throw new Error('no page 0');
+// jsdom has no layout: page k is a box 800 by 1000 CSS px, the pages stacked one above the other, so
+// the points of the layer (4/3 CSS px each at zoom 1) land on its lines.
+function pageBox(index: number): HTMLElement {
+  const page = host.querySelector<HTMLElement>(`.doc-page[data-page="${index}"]`);
+  if (page === null) throw new Error(`no page ${index}`);
+  const top = index * 1000;
   page.getBoundingClientRect = () =>
-    ({ left: 0, top: 0, right: 800, bottom: 1000, width: 800, height: 1000 }) as DOMRect;
+    ({ left: 0, top, right: 800, bottom: top + 1000, width: 800, height: 1000 }) as DOMRect;
   return page;
+}
+
+function pageZero(): HTMLElement {
+  return pageBox(0);
 }
 
 function line(index: number): HTMLElement {
@@ -123,45 +136,124 @@ function nativeSelect(from: number, to: number): Selection {
   return selection;
 }
 
-// Copy as App wires it: the model's text first (selectedText), then the browser's selection.
-function copy(): ReturnType<typeof vi.fn> {
+// Copy as App wires it: the model's read first (selectedText), then the browser's selection when the
+// model is off, and the pages a loading read names are asked for.
+function copy(): { writeText: ReturnType<typeof vi.fn>; push: ReturnType<typeof vi.fn> } {
   const writeText = vi.fn(() => Promise.resolve());
-  const store = { push: vi.fn() } as unknown as ToastStore;
+  const push = vi.fn();
+  const store = { push } as unknown as ToastStore;
   copySelectedText({
     selection: window.getSelection(),
     lookup: (page) => handle.current?.cachedLines(page),
     clipboard: { writeText },
     store,
-    modelText: () => handle.current?.selectedText() ?? null,
+    model: () => handle.current?.selectedText() ?? { state: 'off' },
+    loadPages: (pages) => handle.current?.loadTextPages(pages) ?? Promise.resolve(),
   });
-  return writeText;
+  return { writeText, push };
+}
+
+// A drag from the start of page 0's first line to the end of the last line of page `last`.
+function dragTo(last: number, pointY: number): void {
+  pageZero();
+  pageBox(last);
+  pointer(line(0), 'pointerdown', 10 * (4 / 3) + 1, 20 * (4 / 3) + 1);
+  pointer(window, 'pointermove', 31 * (4 / 3), pointY);
+  pointer(window, 'pointerup', 31 * (4 / 3), pointY);
 }
 
 describe('DocumentView copy with the Select tool (W5.4)', () => {
   it('copies a drag made under Select, then the native selection once Hand is chosen', async () => {
-    pageZero();
     // A press on "a" (10, 20 pt) and a drag to the end of "d" (31, 52 pt), 4/3 CSS px per point.
-    pointer(line(0), 'pointerdown', 10 * (4 / 3) + 1, 20 * (4 / 3) + 1);
-    pointer(window, 'pointermove', 31 * (4 / 3), 52 * (4 / 3));
-    pointer(window, 'pointerup', 31 * (4 / 3), 52 * (4 / 3));
-    expect(handle.current?.selectedText()).toBe('ab\ncd');
+    dragTo(0, 52 * (4 / 3));
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: 'ab\ncd' });
 
     render('hand');
     await flush();
-    expect(handle.current?.selectedText()).toBeNull();
+    expect(handle.current?.selectedText()).toEqual({ state: 'off' });
     nativeSelect(0, 0);
-    expect(copy()).toHaveBeenCalledWith('ab');
+    expect(copy().writeText).toHaveBeenCalledWith('ab');
+  });
+
+  it('gives one mark area for page 0 after a drag (the selection Mark Text reads)', () => {
+    dragTo(0, 52 * (4 / 3));
+    const read = handle.current?.selectedAreas();
+    expect(read?.state).toBe('ready');
+    if (read?.state !== 'ready') return;
+    expect(read.value).toHaveLength(1);
+    expect(read.value[0]).toMatchObject({ page: 0, text: 'ab\ncd' });
   });
 
   it('copies the native selection, not a Select All left over after the tool changed', async () => {
     pageZero();
     act(() => handle.current?.selectPageText());
-    expect(handle.current?.selectedText()).toBe('ab\ncd');
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: 'ab\ncd' });
 
     render('hand');
     await flush();
-    expect(handle.current?.selectedText()).toBeNull();
+    expect(handle.current?.selectedText()).toEqual({ state: 'off' });
     nativeSelect(1, 1);
-    expect(copy()).toHaveBeenCalledWith('cd');
+    expect(copy().writeText).toHaveBeenCalledWith('cd');
+  });
+
+  it('Select All under Hand selects the page as a DOM range, and no model selection shows on return', async () => {
+    render('hand');
+    await flush();
+    act(() => handle.current?.selectPageText());
+    expect(copy().writeText).toHaveBeenCalledWith('ab\ncd');
+
+    render('select');
+    await flush();
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: '' });
+  });
+
+  it('says the text is still loading for a selection over a page whose text has not arrived', async () => {
+    // A drag from page 0 onto page 1, whose index is then dropped: a new RPC gives a new text layer
+    // cache, so the selection stays but page 1's text has to come again, and this RPC holds it.
+    dragTo(1, 1000 + 52 * (4 / 3));
+    await flush();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    render('select', fakeRpc({ page: 1, release: gate }));
+    await flush();
+    await flush();
+    expect(handle.current?.selectedText()).toEqual({ state: 'loading', pages: [1] });
+
+    const first = copy();
+    expect(first.writeText).not.toHaveBeenCalled();
+    expect(first.push).toHaveBeenCalledWith('info', EN['text.stillLoading']);
+
+    release();
+    await flush();
+    await flush();
+    const second = copy();
+    expect(second.writeText).toHaveBeenCalledWith('ab\ncd\nab\ncd');
+  });
+
+  it('drops a model selection when a page it covers changes revision (Undo, Redo, an edit)', async () => {
+    // The tab's scheduler is shared in through the scheduler prop, so the test moves a page's
+    // revision the way a change reply does (App calls noteRevisions with the reply's revisions).
+    const rpc = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        <DocumentView ref={handle} rpc={rpc} handle="h" tool="select" scheduler={scheduler} />,
+      );
+    });
+    await flush();
+    await flush();
+
+    dragTo(0, 52 * (4 / 3));
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: 'ab\ncd' });
+
+    act(() => {
+      scheduler.noteRevisions({ '0': 2 });
+    });
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: '' });
+    expect(handle.current?.selectedAreas()).toEqual({ state: 'ready', value: [] });
   });
 });

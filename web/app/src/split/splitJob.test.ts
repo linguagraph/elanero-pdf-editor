@@ -5,6 +5,7 @@ import { createToastStore } from '../feedback/toasts';
 import { ReplyShapeError } from '../rpc/shape';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import {
+  planSplit,
   readRunReply,
   runSplit,
   SplitCancelled,
@@ -74,20 +75,30 @@ function store() {
 
 describe('splitArgs', () => {
   it('sends every field the job takes, with the mode of the choice', () => {
-    expect(splitArgs({ mode: 'pages', pagesPerFile: 2 })).toEqual({
+    expect(splitArgs({ mode: 'pages', pagesPerFile: 2 }, { name: 'report', zip: false })).toEqual({
       mode: 'pages',
       pages_per_file: 2,
       ranges: [],
       max_bytes: 0,
+      name: 'report',
+      zip: false,
     });
-    expect(splitArgs({ mode: 'ranges', parts: [[0, 1], [4]] })).toEqual({
+    expect(
+      splitArgs({ mode: 'ranges', parts: [[0, 1], [4]] }, { name: 'report', zip: false }),
+    ).toEqual({
       mode: 'ranges',
       pages_per_file: 1,
       ranges: [[0, 1], [4]],
       max_bytes: 0,
+      name: 'report',
+      zip: false,
     });
-    expect(splitArgs({ mode: 'bookmarks' })).toMatchObject({ mode: 'bookmarks' });
-    expect(splitArgs({ mode: 'size', maxBytes: 500 })).toMatchObject({
+    expect(splitArgs({ mode: 'bookmarks' }, { name: 'report', zip: false })).toMatchObject({
+      mode: 'bookmarks',
+    });
+    expect(
+      splitArgs({ mode: 'size', maxBytes: 500 }, { name: 'report', zip: false }),
+    ).toMatchObject({
       mode: 'size',
       max_bytes: 500,
     });
@@ -100,10 +111,15 @@ describe('runSplit', () => {
     const worker = fakeWorker();
     const progress = store();
 
-    const files = await runSplit({ engine, startWorker: () => worker, progress }, 'doc-1', {
-      mode: 'ranges',
-      parts: [[0, 1, 2], [4]],
-    });
+    const files = await runSplit(
+      { engine, startWorker: () => worker, progress },
+      'doc-1',
+      {
+        mode: 'ranges',
+        parts: [[0, 1, 2], [4]],
+      },
+      { name: 'report', zip: false },
+    );
 
     expect(
       engine.call.mock.calls.map((call) => call[0]).filter((name) => name !== 'system.memory'),
@@ -142,6 +158,7 @@ describe('runSplit', () => {
       { engine: fakeEngine(), startWorker: () => fakeWorker(pending), progress },
       'doc-1',
       { mode: 'bookmarks' },
+      { name: 'report', zip: false },
     );
     await vi.waitFor(() => expect(progress.getState().job?.token).toBe('j1'));
     expect(progress.getState().job?.label).toBe('split');
@@ -153,10 +170,15 @@ describe('runSplit', () => {
     const engine = fakeEngine();
     const worker = fakeWorker(new Promise<CallResult>(() => undefined));
     const progress = store();
-    const running = runSplit({ engine, startWorker: () => worker, progress }, 'doc-1', {
-      mode: 'pages',
-      pagesPerFile: 1,
-    });
+    const running = runSplit(
+      { engine, startWorker: () => worker, progress },
+      'doc-1',
+      {
+        mode: 'pages',
+        pagesPerFile: 1,
+      },
+      { name: 'report', zip: false },
+    );
     await vi.waitFor(() => expect(progress.getState().job).toBeDefined());
 
     await progress.cancel();
@@ -177,9 +199,14 @@ describe('runSplit', () => {
     });
     const engine = fakeEngine();
     await expect(
-      runSplit({ engine, startWorker: () => fakeWorker(), progress }, 'doc-1', {
-        mode: 'bookmarks',
-      }),
+      runSplit(
+        { engine, startWorker: () => fakeWorker(), progress },
+        'doc-1',
+        {
+          mode: 'bookmarks',
+        },
+        { name: 'report', zip: false },
+      ),
     ).rejects.toMatchObject({ code: 'BUSY' });
     expect(engine.call).toHaveBeenLastCalledWith('jobs.abort', { handle: 'doc-1', token: 'j1' });
   });
@@ -199,6 +226,7 @@ describe('runSplit', () => {
         { engine, startWorker: () => fakeWorker({ reply: error, buffer: undefined }), progress },
         'doc-1',
         { mode: 'bookmarks' },
+        { name: 'report', zip: false },
       ),
     ).rejects.toMatchObject({ code: 'INVALID_ARGS' });
     expect(engine.call).toHaveBeenLastCalledWith('jobs.abort', { handle: 'doc-1', token: 'j1' });
@@ -250,5 +278,49 @@ describe('readRunReply', () => {
       events: [],
     });
     expect(() => readRunReply({ reply })).toThrow();
+  });
+});
+
+describe('planSplit', () => {
+  it('asks split.plan for the parts of the choice, with the document name, and returns them', async () => {
+    const parts = [{ name: 'report_1.pdf', first_page: 0, page_count: 2 }];
+    const call = vi.fn(async () => ({ parts }));
+    const engine = { call } as unknown as SplitEngine;
+
+    await expect(
+      planSplit(engine, 'doc-1', { mode: 'ranges', parts: [[0, 1], [4]] }, 'report'),
+    ).resolves.toEqual(parts);
+    expect(call).toHaveBeenCalledWith('split.plan', {
+      handle: 'doc-1',
+      mode: 'ranges',
+      pages_per_file: 1,
+      ranges: [[0, 1], [4]],
+      name: 'report',
+    });
+  });
+
+  it('makes no call for a size split, since its parts are sized only by writing them', async () => {
+    const call = vi.fn(async () => ({ parts: [] }));
+    const engine = { call } as unknown as SplitEngine;
+
+    await expect(
+      planSplit(engine, 'doc-1', { mode: 'size', maxBytes: 500 }, 'report'),
+    ).resolves.toEqual([]);
+    expect(call).not.toHaveBeenCalled();
+  });
+});
+
+describe('ZIP output', () => {
+  it('sends the document name and the zip flag to the job', async () => {
+    const engine = fakeEngine();
+    await runSplit(
+      { engine, startWorker: () => fakeWorker(), progress: store() },
+      'doc-1',
+      { mode: 'pages', pagesPerFile: 1 },
+      { name: 'report', zip: true },
+    );
+    expect(engine.call.mock.calls[0]?.[1]).toMatchObject({
+      args: { mode: 'pages', name: 'report', zip: true },
+    });
   });
 });

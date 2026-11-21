@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
 import { createJobProgressStore, type JobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import { SplitDialog, type SplitDialogProps } from './SplitDialog';
-import type { JobWorker, SplitEngine } from './splitJob';
+import type { JobWorker, SplitEngine, SplitPart } from './splitJob';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,8 +40,14 @@ function oneFileReply(name: string): CallResult {
   return { reply: JSON.stringify(reply), buffer: PDF_BYTES };
 }
 
-function fakeEngine() {
+// The parts split.plan reports for the preview. The default is one part.
+const ONE_PART = [{ name: 'report_1.pdf', first_page: 0, page_count: 3 }];
+
+function fakeEngine(
+  parts: readonly { name: string; first_page: number; page_count: number }[] = ONE_PART,
+) {
   const call = vi.fn(async (method: string) => {
+    if (method === 'split.plan') return { parts };
     if (method === 'jobs.prepare') {
       return {
         token: 'j1',
@@ -87,6 +93,7 @@ function render(
     onClose: vi.fn(),
     handle: 'doc-1',
     pageCount: 10,
+    name: 'report.pdf',
     startWorker: () => fakeWorker(),
     ...props,
   };
@@ -129,6 +136,23 @@ function typeInto(selector: string, value: string) {
   });
 }
 
+// The preview asks after a short pause (PREVIEW_DELAY_MS in SplitDialog.tsx); wait past it.
+const PREVIEW_WAIT_MS = 260;
+
+async function waitForPreview() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, PREVIEW_WAIT_MS));
+  });
+}
+
+function radioNamed(label: string): HTMLInputElement {
+  const radio = [...dialogElement().querySelectorAll('input[type="radio"]')].find(
+    (candidate) => candidate.closest('label')?.textContent === label,
+  ) as HTMLInputElement | undefined;
+  if (radio === undefined) throw new Error(`no radio ${label}`);
+  return radio;
+}
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -162,7 +186,9 @@ describe('SplitDialog', () => {
     await flush();
 
     expect(
-      call.mock.calls.map((entry) => entry[0]).filter((name) => name !== 'system.memory'),
+      call.mock.calls
+        .map((entry) => entry[0])
+        .filter((name) => name !== 'system.memory' && name !== 'split.plan'),
     ).toEqual(['jobs.prepare', 'jobs.apply']);
     const prepare = call.mock.calls[0] as unknown as [string, unknown] | undefined;
     expect(prepare?.[1]).toMatchObject({
@@ -175,7 +201,92 @@ describe('SplitDialog', () => {
     expect(link?.textContent).toBe(t('split.download', { name: 'part-1.pdf' }));
     expect(link?.getAttribute('download')).toBe('part-1.pdf');
     expect(link?.getAttribute('href')).toBe('blob:split-test');
-    expect(dialogElement().textContent).toContain(t('split.zipPending'));
+  });
+
+  it('shows the files the split makes, with their pages, after the preview', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+    chooseMode(t('split.mode.ranges'));
+    typeInto('input[type="text"]', '1-3, 5');
+    await waitForPreview();
+
+    expect(call).toHaveBeenCalledWith('split.plan', {
+      handle: 'doc-1',
+      mode: 'ranges',
+      pages_per_file: 1,
+      ranges: [[0, 1, 2], [4]],
+      name: 'report.pdf',
+    });
+    expect(dialogElement().textContent).toContain(tp('split.preview.heading', 1));
+    expect(dialogElement().textContent).toContain('report_1.pdf');
+  });
+
+  it('defaults to one ZIP above ten files, until the user picks an output', async () => {
+    const parts = Array.from({ length: 11 }, (_, index) => ({
+      name: `report_${index + 1}.pdf`,
+      first_page: index,
+      page_count: 1,
+    }));
+    const { call, engine } = fakeEngine(parts);
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+    await waitForPreview();
+
+    expect(radioNamed(t('split.output.zip')).checked).toBe(true);
+    chooseMode(t('split.output.files'));
+    act(() => findButton(t('split.submit')).click());
+    await flush();
+
+    const prepare = call.mock.calls.find((entry) => entry[0] === 'jobs.prepare') as
+      [string, { args: Record<string, unknown> }] | undefined;
+    expect(prepare?.[1].args).toMatchObject({ name: 'report.pdf', zip: false });
+  });
+
+  it('sends the ZIP option to the job, with the document name', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+    chooseMode(t('split.output.zip'));
+    act(() => findButton(t('split.submit')).click());
+    await flush();
+
+    const prepare = call.mock.calls.find((entry) => entry[0] === 'jobs.prepare') as
+      [string, { args: Record<string, unknown> }] | undefined;
+    expect(prepare?.[1].args).toMatchObject({ name: 'report.pdf', zip: true });
+  });
+
+  it('makes no preview call for a size split and says the sizes come after the split', async () => {
+    const { call, engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress });
+    chooseMode(t('split.mode.size'));
+    await waitForPreview();
+
+    expect(call.mock.calls.map((entry) => entry[0])).not.toContain('split.plan');
+    expect(dialogElement().textContent).toContain(t('split.preview.size'));
+  });
+
+  it('shows the size message when the job reports that the files are too large', async () => {
+    const { engine } = fakeEngine();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const error = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      id: 1,
+      ok: false,
+      error: { code: 'FILE_TOO_LARGE', message: 'too large', details: {} },
+      events: [],
+    });
+    render({
+      engine,
+      progress,
+      startWorker: () => fakeWorker({ reply: error, buffer: undefined }),
+    });
+    chooseMode(t('split.mode.bookmarks'));
+    act(() => findButton(t('split.submit')).click());
+    await flush();
+
+    expect(dialogElement().textContent).toContain(t('split.error.tooLarge', { size: '512 MB' }));
   });
 
   it('shows the running state and the job bar while the job runs', async () => {
@@ -213,5 +324,58 @@ describe('SplitDialog', () => {
 
     expect(dialogElement().textContent).toContain(t('split.error.pagesPerFile', { count: 10 }));
     expect(call).not.toHaveBeenCalled();
+  });
+
+  it('drops a stale preview reply that arrives after a newer one', async () => {
+    vi.useFakeTimers();
+    try {
+      // Each split.plan call stays pending until the test resolves it, so the test chooses the order
+      // the replies arrive in.
+      const plans: ((parts: readonly SplitPart[]) => void)[] = [];
+      const call = vi.fn((method: string) => {
+        if (method === 'split.plan') {
+          return new Promise<{ parts: readonly SplitPart[] }>((resolve) => {
+            plans.push((parts) => resolve({ parts }));
+          });
+        }
+        return Promise.resolve({ applied: false, changed: null, state: null });
+      });
+      const engine = { call } as unknown as SplitEngine;
+      const progress = createJobProgressStore({ toasts: createToastStore() });
+      render({ engine, progress });
+      chooseMode(t('split.mode.ranges'));
+
+      // Two changes, each past the preview delay, so two preview requests are in flight.
+      typeInto('input[type="text"]', '1-3, 5');
+      act(() => {
+        vi.advanceTimersByTime(PREVIEW_WAIT_MS);
+      });
+      typeInto('input[type="text"]', '1-4');
+      act(() => {
+        vi.advanceTimersByTime(PREVIEW_WAIT_MS);
+      });
+      expect(plans).toHaveLength(2);
+
+      const resolvePlan = (index: number, parts: readonly SplitPart[]) => {
+        const resolve = plans[index];
+        if (resolve === undefined) throw new Error(`no split.plan call ${index}`);
+        act(() => resolve(parts));
+      };
+      // The newer request answers first and is shown.
+      resolvePlan(1, [{ name: 'fresh_1.pdf', first_page: 0, page_count: 4 }]);
+      await flush();
+      expect(dialogElement().textContent).toContain('fresh_1.pdf');
+
+      // The older request answers last; its preview is dropped.
+      resolvePlan(0, [
+        { name: 'stale_1.pdf', first_page: 0, page_count: 3 },
+        { name: 'stale_2.pdf', first_page: 4, page_count: 1 },
+      ]);
+      await flush();
+      expect(dialogElement().textContent).toContain('fresh_1.pdf');
+      expect(dialogElement().textContent).not.toContain('stale_');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -129,6 +129,7 @@ async function runSplitJob(pdfBase64: string, name: string): Promise<SplitReport
       },
       opened.handle,
       { mode: 'pages', pagesPerFile: 1 },
+      { name, zip: false },
     );
     const decoder = new TextDecoder('latin1');
     return {
@@ -190,6 +191,7 @@ async function poolReuse(pdfBase64: string, name: string): Promise<PoolReuseRepo
         { engine, progress: createJobProgressStore(), startWorker: jobs.acquire },
         opened.handle,
         { mode: 'pages', pagesPerFile: 1 },
+        { name, zip: false },
       );
       files.push(found.length);
     }

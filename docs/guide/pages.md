@@ -39,7 +39,8 @@ The **Assemble** group:
 - **Replace Pages…** replaces pages of the open document with pages from another PDF.
 - **Split Document…** writes several files. Split **every** N pages, into **page ranges** (one file
   per range, separated by `;`), **at each top-level bookmark**, or into files of a **maximum file
-  size**. Choose the output folder and a file name prefix.
+  size**. Choose the output folder and a file name prefix. A part with the same name as an earlier
+  one gets " (2)", " (3)" and so on, so no part overwrites another.
 - **Combine Files into PDF…** joins several files into one. See below.
 
 ## Combine files

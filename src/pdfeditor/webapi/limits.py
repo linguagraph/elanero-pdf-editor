@@ -31,11 +31,20 @@ MAX_JSON_DEPTH = 256
 # Jobs (W1.1 section 7, W1.2 section 13). A job gets a copy of the document, so its bytes are
 # held to the same size as an open file; the worker runs one job at a time.
 MAX_JOB_BYTES = FILE_REFUSE_BYTES  # a document copy or a job result above this is refused
+# A split's parts, summed as they are written, are capped at half of MAX_JOB_BYTES: a ZIP is
+# built in one buffer while its parts are still in memory, so the output is held twice in the
+# 32-bit wasm heap, which also holds the document (W6.2 section 4).
+MAX_SPLIT_BYTES = MAX_JOB_BYTES // 2
 MAX_PREPARED_JOBS = 1  # prepared jobs (begun or waiting for their run) per engine worker
 
 # Undo snapshots live in the worker's memory file system (W1.1 section 7). Past this budget the
 # oldest snapshots are dropped and the undo history shortens (W2.3); nothing is refused.
 SNAPSHOT_BUDGET_BYTES = 512 * 1024 * 1024
+
+# Uploaded fonts (W6.9 slice 1). The bytes are held in the worker's heap more than once (the
+# buffer, the Python bytes, MuPDF's copy at embed time), so one file is bounded well below the
+# 1 GiB document ceiling. 50 MiB takes every single-weight font in common use, CJK included.
+MAX_FONT_BYTES = 50 * 1024**2
 
 # The engine heap (W1.1 section 7): the front end warns once the wasm linear memory passes this.
 # Linear memory only grows, so this is a high-water mark, and a warning is never an error.

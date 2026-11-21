@@ -95,15 +95,13 @@ ALL_CODES: tuple[str, ...] = (
     INTERNAL,
 )
 
-# Declared by W1.2 but not raised yet. Each is raised by a later group (fonts and translation
-# calls), so the tests check this list against the codes the code can raise and nothing else.
-# REFUSED, BUSY and STALE_OBJECT are raised by the actions calls (W3.5); STALE_JOB and CANCELLED
-# by the jobs calls (W3.7).
+# Declared by W1.2 but not raised yet. Each is raised by a later group (translation calls), so
+# the tests check this list against the codes the code can raise and nothing else. REFUSED, BUSY
+# and STALE_OBJECT are raised by the actions calls (W3.5); STALE_JOB and CANCELLED by the jobs
+# calls (W3.7); INVALID_FONT and FONT_NOT_EMBEDDABLE by fonts.validate (W6.9).
 UNUSED_CODES: frozenset[str] = frozenset(
     {
         IMAGE_TOO_LARGE,
-        INVALID_FONT,
-        FONT_NOT_EMBEDDABLE,
         TRANSLATION_OFFLINE,
         TRANSLATION_QUOTA,
         TRANSLATION_AUTH,

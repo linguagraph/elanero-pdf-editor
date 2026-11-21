@@ -351,3 +351,104 @@ def remove_off_page_text(doc: MuDocument) -> int:
         doc.mark_page_changed(index)
         total += count
     return total
+
+
+# -- form values ------------------------------------------------------------------------------
+def _kids_of(fz: pymupdf.Document, xref: int, key: str) -> list[int]:
+    """The references in an array key (direct or indirect) of an object."""
+    kind, value = fz.xref_get_key(xref, key)
+    if kind == "xref":  # an indirect array
+        value = fz.xref_object(int(value.split()[0]), compressed=True)
+    return [int(n) for n, _ in _REF.findall(value)]
+
+
+def _chain(fz: pymupdf.Document, xref: int) -> list[int]:
+    """The object and its ancestors up the ``/Parent`` chain, nearest first."""
+    chain = [xref]
+    for _ in range(32):  # field hierarchies are shallow; guards against a cycle
+        kind, value = fz.xref_get_key(chain[-1], "Parent")
+        if kind != "xref":
+            break
+        chain.append(int(value.split()[0]))
+    return chain
+
+
+def _inherited(fz: pymupdf.Document, xref: int, key: str) -> tuple[str, str]:
+    """A field attribute as a reader sees it: on the field, or on the nearest ancestor that has
+    it (``/FT`` and ``/V`` are inheritable). Returns ``("null", "")`` when no node has it."""
+    for node in _chain(fz, xref):
+        kind, value = fz.xref_get_key(node, key)
+        if kind != "null":
+            return kind, value
+    return "null", ""
+
+
+def _is_widget(fz: pymupdf.Document, xref: int) -> bool:
+    kind, value = fz.xref_get_key(xref, "Subtype")
+    return kind == "name" and value.lstrip("/") == "Widget"
+
+
+def _reset_widget(fz: pymupdf.Document, xref: int, field_type: str) -> None:
+    """Make one widget show the reset value. A button's ``/AS`` moves to the reset state (its
+    ``/V`` or ``/DV``, else Off) when its normal appearance has that state. A text or choice
+    widget drops its ``/AP``, which still draws the old text; the catalog's NeedAppearances
+    (set by the caller) makes a viewer rebuild it from the reset ``/V``."""
+    if field_type == "Btn":
+        kind, value = _inherited(fz, xref, "V")
+        state = value.lstrip("/") if kind == "name" else "Off"
+        if fz.xref_get_key(xref, f"AP/N/{state}")[0] == "null":
+            state = "Off"
+        fz.xref_set_key(xref, "AS", f"/{state}")
+    else:
+        fz.xref_set_key(xref, "AP", "null")
+
+
+def reset_form_values(fz: pymupdf.Document) -> int:
+    """Clear the value of every form field, however deep in the field hierarchy it sits.
+
+    MuPDF's ``scrub(reset_fields=True)`` resets widgets only, and on a field whose value lives
+    on a parent (the usual layout since PyMuPDF 2.1 writes a text field as a parent with a kid
+    widget) it leaves the value in place. So each field's ``/V`` is removed here, or set to its
+    ``/DV`` default where it has one, and the widgets under a cleared field are brought in line:
+    a button's ``/AS`` follows the new value and a text widget's ``/AP`` is dropped (see
+    ``_reset_widget``). Signature fields (``/FT /Sig``, inherited or not) are skipped entirely:
+    their ``/V`` is the signature, and clearing it would silently remove the signature.
+    Returns how many values were cleared.
+    """
+    catalog = fz.pdf_catalog()
+    kind, value = fz.xref_get_key(catalog, "AcroForm")
+    if kind == "xref":
+        owner, prefix = int(value.split()[0]), ""
+    elif kind == "dict":
+        owner, prefix = catalog, "AcroForm/"
+    else:
+        return 0
+    stack = _kids_of(fz, owner, prefix + "Fields")
+    seen: set[int] = set()
+    cleared_fields: set[int] = set()
+    cleared = 0
+    while stack:
+        xref = stack.pop()
+        if xref in seen:
+            continue
+        seen.add(xref)
+        stack.extend(_kids_of(fz, xref, "Kids"))
+        field_kind, field_type = _inherited(fz, xref, "FT")
+        if field_kind == "name" and field_type.lstrip("/") == "Sig":
+            continue
+        if fz.xref_get_key(xref, "V")[0] != "null":
+            # xref_get_key returns decoded text, so the default is written back as PDF syntax
+            default_kind, default = fz.xref_get_key(xref, "DV")
+            if default_kind in ("string", "unicode"):
+                fz.xref_set_key(xref, "V", pymupdf.get_pdf_str(default))
+            elif default_kind == "name":
+                fz.xref_set_key(xref, "V", f"/{default.lstrip('/')}")
+            else:
+                fz.xref_set_key(xref, "V", "null")
+            cleared += 1
+            cleared_fields.add(xref)
+        if _is_widget(fz, xref) and any(n in cleared_fields for n in _chain(fz, xref)):
+            _reset_widget(fz, xref, field_type.lstrip("/"))
+    if cleared:
+        fz.xref_set_key(owner, f"{prefix}NeedAppearances", "true")
+    return cleared

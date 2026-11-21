@@ -985,11 +985,16 @@ class MuDocument:
             metadata=options.metadata,
             redactions=False,  # applying marks is the separate, reviewed step
             remove_links=options.links,
-            reset_fields=options.form_data,
+            # scrub's reset_fields calls widget.reset() on every widget, which clears a
+            # signature's /V; reset_form_values does the reset and leaves signatures alone
+            reset_fields=False,
             reset_responses=options.comments,
             thumbnails=options.thumbnails,
             xml_metadata=options.xmp,
         )
+        if options.form_data:
+            # scrub() misses values held on a field's parent; see reset_form_values
+            scrub.reset_form_values(fz)
         catalog = fz.pdf_catalog()
         if options.javascript:
             # scrub() blanks script text but leaves the actions; remove the triggers themselves
