@@ -145,6 +145,42 @@ export async function runCompress(
   };
 }
 
+// One row of the space table: a part's stored bytes before and after the run.
+export interface AuditRow {
+  readonly key: SpaceCategoryKey;
+  readonly before: number;
+  readonly after: number;
+}
+
+// The table's rows from the two audits (both present, or no rows). A part is summed by key, since
+// two engine labels can both map to "other"; a part that is zero in both is left out. The rows are
+// the largest first, ties in SPACE_CATEGORY_KEYS order, and file overhead is always last: it is
+// what the parts do not account for, so it reads as the remainder. No total row: the headline has
+// the true sizes, and an audit total can differ from them (the design, section 2).
+export function auditRows(before: SpaceAudit | null, after: SpaceAudit | null): AuditRow[] {
+  if (before === null || after === null) return [];
+  const sums = new Map<SpaceCategoryKey, { before: number; after: number }>();
+  const add = (audit: SpaceAudit, side: 'before' | 'after') => {
+    for (const { key, size } of audit.categories) {
+      const sum = sums.get(key) ?? { before: 0, after: 0 };
+      sum[side] += size;
+      sums.set(key, sum);
+    }
+  };
+  add(before, 'before');
+  add(after, 'after');
+  const order = (key: SpaceCategoryKey) => SPACE_CATEGORY_KEYS.indexOf(key);
+  return [...sums]
+    .filter(([, sum]) => sum.before !== 0 || sum.after !== 0)
+    .map(([key, sum]) => ({ key, before: sum.before, after: sum.after }))
+    .sort((a, b) => {
+      if (a.key === 'file_overhead' || b.key === 'file_overhead') {
+        return Number(a.key === 'file_overhead') - Number(b.key === 'file_overhead');
+      }
+      return b.before - a.before || order(a.key) - order(b.key);
+    });
+}
+
 // The share of the original that is saved, in whole percent (0 when the copy is not smaller).
 export function savedPercent(before: number, after: number): number {
   if (before <= 0 || after >= before) return 0;

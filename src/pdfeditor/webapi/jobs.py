@@ -32,7 +32,13 @@ from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS, SnapshotCommand
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.jobs import JobContext, ProgressFn
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document, Engine, OptimizeOptions, PasswordRequired
+from pdfeditor.engine.base import (
+    Document,
+    Engine,
+    EngineError,
+    OptimizeOptions,
+    PasswordRequired,
+)
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
 from pdfeditor.model.metadata import EncryptionMethod, SpaceUsage
 from pdfeditor.services.assembly import (
@@ -263,6 +269,18 @@ def _audit_value(usage: SpaceUsage) -> dto.AuditValue:
     )
 
 
+def _audit_or_none(document: Document) -> dto.AuditValue | None:
+    """The space audit, or None when it fails: the audit is a display aid, and the reduced copy is
+    what the user asked for, so a failed audit must not fail the job (the dialog shows no table)."""
+    try:
+        return _audit_value(space_audit(document))
+    except EngineError:
+        logger.warning(
+            "space audit failed; the reduce result is returned without it", exc_info=True
+        )
+        return None
+
+
 def _shifted(progress: ProgressFn) -> ProgressFn:
     """The reduce's own steps (of 3, linearize off on the web), after the audit-before step."""
 
@@ -290,7 +308,7 @@ def _run_reduce(
         # One job, one progress bar: 0 audit before, 1 to 4 the reduce, 4 audit after, 5 done.
         ctx.progress(0, _AUDITED_STEPS)
         with owner.lock:
-            audit_before = _audit_value(space_audit(owner.document))
+            audit_before = _audit_or_none(owner.document)
         ctx.token.check()
         with owner.lock:
             result = reduce_size(
@@ -299,11 +317,22 @@ def _run_reduce(
         ctx.progress(4, _AUDITED_STEPS)
         ctx.token.check()
         with owner.lock:
-            audited = owner.engine.open(result.data, None)
+            # The reopen is part of the audit: if MuPDF cannot read the reduced bytes back, the
+            # reduced file is still the result, and only the after-audit is dropped.
             try:
-                audit_after = _audit_value(space_audit(audited))
-            finally:
-                audited.close()
+                audited = owner.engine.open(result.data, None)
+            except EngineError:
+                logger.warning(
+                    "the reduced copy cannot be reopened; the reduce result is returned "
+                    "without the audit after",
+                    exc_info=True,
+                )
+                audit_after = None
+            else:
+                try:
+                    audit_after = _audit_or_none(audited)
+                finally:
+                    audited.close()
         ctx.progress(_AUDITED_STEPS, _AUDITED_STEPS)
     return JobOutput(
         files=(dto.FileDto(name="reduced.pdf", mime="application/pdf", data=result.data),),

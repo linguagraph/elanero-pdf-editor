@@ -45,12 +45,21 @@ bar and **Cancel**. The result shows the size before and after, and **Download r
 the copy. If the preset does not make the file smaller, the dialog says so and offers no download:
 keep the original.
 
+The result also shows a table of the space each part of the file took before and after
+(images, fonts, page content and so on) and how much each part changed, for the settings that ran.
+The parts need not add up to the file sizes, because each part is measured object by object. The
+table is shown when the copy is not smaller too. Changing a setting clears the result, so the table
+and the download always match the settings shown.
+
 ### See what takes up space
 
 **Tools ▸ Space Usage…** shows what the file is made of: the total size,
 and the space taken by each category, such as images, fonts, page content, comments and forms,
 tags, attachments and metadata. Use it to decide which **Reduce Size** settings will help most. It
 only reads the file; it changes nothing.
+
+On the web, the space by part is in the **Reduce File Size** result (see above) until this command is
+available there.
 
 ## Compare two versions
 
