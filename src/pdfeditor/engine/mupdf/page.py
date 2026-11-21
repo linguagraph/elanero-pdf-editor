@@ -45,6 +45,9 @@ _LINK_KINDS = {
     pymupdf.LINK_NAMED: LinkKind.NAMED,
 }
 
+# A detected table in MuPDF's unrotated space: its box and its cell boxes, row by row.
+_TableGrid = tuple[pymupdf.Rect, list[list[pymupdf.Rect | None]]]
+
 
 class MuPage:
     def __init__(self, doc: MuDocument, index: int) -> None:
@@ -363,21 +366,53 @@ class MuPage:
 
     def find_tables(self) -> list[TableData]:
         # MuPDF prints a hint about an optional layout package; keep the console clean.
+        m = self._vis_matrix()
         with contextlib.redirect_stdout(io.StringIO()):
-            found = self.fz.find_tables()
-        # find_tables already reports visible (rotated) coordinates
+            tables = self._find_tables_unrotated()
+        # the finder and the cell text work in MuPDF's unrotated space; only the boxes shown to
+        # the caller are converted to the visible (rotated) space
         return [
             TableData(
                 self.index,
-                cv.rect(t.bbox),
-                tuple(tuple(row) for row in t.extract()),
+                self._vrect(bbox, m),
                 tuple(
-                    tuple(cv.rect(c) if c is not None else None for c in row.cells)
-                    for row in t.rows
+                    tuple(self._cell_text(c) if c is not None else None for c in row)
+                    for row in rows
+                ),
+                tuple(
+                    tuple(self._vrect(c, m) if c is not None else None for c in row) for row in rows
                 ),
             )
-            for t in found.tables
+            for bbox, rows in tables
         ]
+
+    def _find_tables_unrotated(self) -> list[_TableGrid]:
+        """Each table as (bbox, cell rows) in unrotated page space.
+
+        MuPDF's table finder is reliable only on an upright page: on /Rotate 90 and 270 it finds
+        nothing or a wrong grid, and on 180 it lists the rows and columns in reverse. So the page
+        is copied and the copy is turned upright (its coordinates are the unrotated ones), and
+        the finder runs on that copy.
+        """
+        page = self.fz
+        if not page.rotation:
+            found = page.find_tables()
+            return [(t.bbox, [list(row.cells) for row in t.rows]) for t in found.tables]
+        copy = pymupdf.open()
+        try:
+            copy.insert_pdf(page.parent, from_page=self.index, to_page=self.index)
+            copy[0].set_rotation(0)
+            found = copy[0].find_tables()
+            return [
+                (pymupdf.Rect(t.bbox), [list(row.cells) for row in t.rows]) for t in found.tables
+            ]
+        finally:
+            copy.close()
+
+    def _cell_text(self, cell: pymupdf.Rect) -> str:
+        # Table.extract() splits numbers with separators ("1,440.00" came out as "1 440 00\n, .")
+        # on PyMuPDF 2.1; the text inside the cell's own unrotated rectangle reads correctly.
+        return str(self.fz.get_text("text", clip=cell)).strip()
 
     def image_areas(self) -> list[Rect]:
         m = self._vis_matrix()

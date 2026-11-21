@@ -188,10 +188,23 @@ def _copied_form_fields_pikepdf(data: bytes) -> None:
     import pikepdf
 
     with pikepdf.open(io.BytesIO(data)) as pdf:
-        names = [str(f.T) for f in pdf.Root.AcroForm.Fields]
-        assert len(names) == 2 and len(set(names)) == 2 and names[0] == "name"
+        fields = pdf.Root.AcroForm.Fields
         assert [len(p.obj.Annots) for p in pdf.pages] == [1, 1]
         assert pdf.pages[0].obj.Annots[0].objgen != pdf.pages[1].obj.Annots[0].objgen
+        # PyMuPDF 1.28 writes a text field as one object, so the copy is a second field named
+        # after the first; PyMuPDF 2.1 writes a parent field with a kid widget, so the copy is
+        # a second kid of that field (the same field, as the copy code's docstring describes)
+        if len(fields) == 2:
+            names = [str(f.T) for f in fields]
+            assert len(set(names)) == 2 and names[0] == "name"
+        else:
+            assert len(fields) == 1 and str(fields[0].T) == "name"
+            kids = list(fields[0].Kids)
+            assert len(kids) == 2
+            assert kids[0].objgen != kids[1].objgen
+            assert all(str(k.get("/Subtype")) == "/Widget" for k in kids)
+            page_two = pdf.pages[1].obj.Annots[0].objgen
+            assert page_two in [k.objgen for k in kids]
 
 
 @host_check("copied_form_page_pdfium")
@@ -504,6 +517,18 @@ def _redact_rects_pikepdf(data: bytes, page: int, count: int, rect: list[float])
             _approx([float(v) for v in mark.Rect], rect)
 
 
+def _field_attr(node: Any, key: str, default: Any = None) -> Any:
+    """A field attribute as a reader sees it: on the widget, or inherited from its parent field
+    (PyMuPDF 2.1 writes a text field as a parent with a kid widget, and /T and /V sit there)."""
+    for _ in range(32):  # field hierarchies are shallow; guards against a cycle
+        if key in node:
+            return node[key]
+        if "/Parent" not in node:
+            break
+        node = node.Parent
+    return default
+
+
 @host_check("widget_named_pikepdf")
 def _widget_named_pikepdf(data: bytes, page: int, field: str, value: str) -> None:
     """Exactly one widget on the page is named ``field`` and holds ``value``."""
@@ -513,10 +538,10 @@ def _widget_named_pikepdf(data: bytes, page: int, field: str, value: str) -> Non
         widgets = [
             a
             for a in pdf.pages[page].obj.get(pikepdf.Name.Annots, [])
-            if a.get("/Subtype") == pikepdf.Name.Widget and str(a.get("/T", "")) == field
+            if a.get("/Subtype") == pikepdf.Name.Widget and str(_field_attr(a, "/T", "")) == field
         ]
         assert len(widgets) == 1, field
-        assert str(widgets[0].get("/V", "")) == value
+        assert str(_field_attr(widgets[0], "/V", "")) == value
 
 
 @host_check("no_annots_pikepdf")
@@ -537,7 +562,7 @@ def _signed_form_pikepdf(data: bytes, page: int, field: str, flags: int) -> None
         assert int(pdf.Root.AcroForm.SigFlags) == flags
         annots = list(pdf.pages[page].obj.get(pikepdf.Name.Annots, []))
         assert annots and all(str(a.get("/Subtype")) == "/Widget" for a in annots)
-        assert any(str(a.get("/T")) == field for a in annots)
+        assert any(str(_field_attr(a, "/T")) == field for a in annots)
 
 
 @host_check("widget_count_pikepdf")
@@ -1076,8 +1101,9 @@ def _form_fields_pikepdf(data: bytes, fields: dict[str, str]) -> None:
 
     with pikepdf.open(io.BytesIO(data)) as pdf:
         values = {str(f.T): str(f.get("/V", "")) for f in pdf.Root.AcroForm.Fields}
+        # a widget may carry no /T of its own: PyMuPDF 2.1 names the parent field instead
         widgets = {
-            str(a.get("/T", ""))
+            str(a.get("/T", a.get("/Parent", {}).get("/T", "")))
             for p in pdf.pages
             for a in p.get("/Annots", [])
             if a.get("/Subtype") == "/Widget"
