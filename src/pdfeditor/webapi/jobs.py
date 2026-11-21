@@ -309,11 +309,22 @@ def _run_reduce(
         ctx.progress(4, _AUDITED_STEPS)
         ctx.token.check()
         with owner.lock:
-            audited = owner.engine.open(result.data, None)
+            # The reopen is part of the audit: if MuPDF cannot read the reduced bytes back, the
+            # reduced file is still the result, and only the after-audit is dropped.
             try:
-                audit_after = _audit_or_none(audited)
-            finally:
-                audited.close()
+                audited = owner.engine.open(result.data, None)
+            except EngineError:
+                logger.warning(
+                    "the reduced copy cannot be reopened; the reduce result is returned "
+                    "without the audit after",
+                    exc_info=True,
+                )
+                audit_after = None
+            else:
+                try:
+                    audit_after = _audit_or_none(audited)
+                finally:
+                    audited.close()
         ctx.progress(_AUDITED_STEPS, _AUDITED_STEPS)
     return JobOutput(
         files=(dto.FileDto(name="reduced.pdf", mime="application/pdf", data=result.data),),
