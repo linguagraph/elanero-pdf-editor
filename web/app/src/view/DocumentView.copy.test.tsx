@@ -7,6 +7,7 @@ import { EN } from '../i18n/en';
 import { copySelectedText } from '../text/copy';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { DocumentView, type DocumentViewHandle } from './DocumentView';
+import { RenderScheduler } from './renderScheduler';
 import type { ViewTool } from './viewTool';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -229,5 +230,30 @@ describe('DocumentView copy with the Select tool (W5.4)', () => {
     await flush();
     const second = copy();
     expect(second.writeText).toHaveBeenCalledWith('ab\ncd\nab\ncd');
+  });
+
+  it('drops a model selection when a page it covers changes revision (Undo, Redo, an edit)', async () => {
+    // The tab's scheduler is shared in through the scheduler prop, so the test moves a page's
+    // revision the way a change reply does (App calls noteRevisions with the reply's revisions).
+    const rpc = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        <DocumentView ref={handle} rpc={rpc} handle="h" tool="select" scheduler={scheduler} />,
+      );
+    });
+    await flush();
+    await flush();
+
+    dragTo(0, 52 * (4 / 3));
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: 'ab\ncd' });
+
+    act(() => {
+      scheduler.noteRevisions({ '0': 2 });
+    });
+    expect(handle.current?.selectedText()).toEqual({ state: 'ready', value: '' });
+    expect(handle.current?.selectedAreas()).toEqual({ state: 'ready', value: [] });
   });
 });
