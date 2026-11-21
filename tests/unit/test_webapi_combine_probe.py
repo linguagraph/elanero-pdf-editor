@@ -144,6 +144,7 @@ def test_a_password_one_character_over_the_bound_is_invalid_args(fixture_pdf: An
     assert err["details"] == {"path": "params.password"}
 
 
+@pytest.mark.desktop_only  # starts a thread to probe the lock; Pyodide has no threads
 def test_the_call_keeps_nothing_and_leaves_the_engine_lock_free(fixture_pdf: Any) -> None:
     before = len(REGISTRY)
     data = Path(fixture_pdf("text_multipage")).read_bytes()
