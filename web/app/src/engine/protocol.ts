@@ -31,6 +31,9 @@ export interface ReplyMessage {
   // One buffer (the engine) or a list in $bin order (a job worker).
   buffer?: ArrayBuffer;
   buffers?: ArrayBuffer[];
+  // A page drawn into an ImageBitmap in the worker (W5.1b S5). Set only for render replies; the
+  // reply's pixels are then an empty buffer and its format is 'bitmap'. Keep both sides in step.
+  bitmap?: ImageBitmap;
 }
 
 export interface ErrorMessage {

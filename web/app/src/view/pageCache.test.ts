@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { type Mock, describe, expect, it, vi } from 'vitest';
 import { type CachedPage, PageCache, pageCacheKey } from './pageCache';
 
 function page(bytes: number): CachedPage {
@@ -109,5 +109,72 @@ describe('PageCache budget and pins (W1.4 section 6)', () => {
     const tile10 = pageCacheKey({ ...base, tileX: 1, tileY: 0 });
     expect(tile00).not.toBe(pageCacheKey(base));
     expect(tile00).not.toBe(tile10);
+  });
+});
+
+// A bitmap entry as the scheduler stores one (W5.1b S5): an empty buffer and the bitmap beside it.
+function bitmapPage(width: number, height: number): { item: CachedPage; close: Mock } {
+  const close = vi.fn();
+  const bitmap = { close, width, height } as unknown as ImageBitmap;
+  return { item: { width, height, pixels: new ArrayBuffer(0), bitmap }, close };
+}
+
+describe('PageCache bitmaps (W5.1b S5)', () => {
+  it('counts a bitmap at width times height times 4 bytes, not the empty buffer', () => {
+    const cache = new PageCache(10_000);
+    const { item } = bitmapPage(10, 5);
+    cache.set('a', item);
+    expect(cache.byteCount).toBe(200);
+    expect(cache.get('a')).toBe(item);
+  });
+
+  it('closes an evicted bitmap, and keeps the ones still cached', () => {
+    const cache = new PageCache(300);
+    const first = bitmapPage(10, 5); // 200 bytes
+    const second = bitmapPage(5, 5); // 100 bytes
+    cache.set('first', first.item);
+    cache.set('second', second.item);
+    cache.set('third', page(100)); // evicts 'first', the least recently used
+    expect(first.close).toHaveBeenCalledTimes(1);
+    expect(second.close).not.toHaveBeenCalled();
+  });
+
+  it('closes the bitmap a replacement drops', () => {
+    const cache = new PageCache(1000);
+    const old = bitmapPage(2, 2);
+    cache.set('a', old.item);
+    cache.set('a', page(100));
+    expect(old.close).toHaveBeenCalledTimes(1);
+    expect(cache.byteCount).toBe(100);
+  });
+
+  it('closes a bitmap the cache does not keep because it exceeds the budget', () => {
+    const cache = new PageCache(100);
+    const big = bitmapPage(10, 10); // 400 bytes
+    cache.set('big', big.item);
+    expect(cache.has('big')).toBe(false);
+    expect(big.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes every bitmap on clear and on delete', () => {
+    const cache = new PageCache(1000);
+    const a = bitmapPage(2, 2);
+    const b = bitmapPage(2, 2);
+    cache.set('a', a.item);
+    cache.set('b', b.item);
+    cache.delete('a');
+    expect(a.close).toHaveBeenCalledTimes(1);
+    cache.clear();
+    expect(b.close).toHaveBeenCalledTimes(1);
+    expect(cache.byteCount).toBe(0);
+  });
+
+  it('leaves an ArrayBuffer page as it was: counted by its pixels, nothing to close', () => {
+    const cache = new PageCache(1000);
+    const item = page(100);
+    cache.set('a', item);
+    expect(cache.byteCount).toBe(100);
+    cache.delete('a');
+    expect(cache.byteCount).toBe(0);
   });
 });

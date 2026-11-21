@@ -7,6 +7,7 @@ import { engineLoad, type EngineLoadStore } from '../feedback/engineLoad';
 import { notResponding } from '../feedback/notResponding';
 import {
   type CallOptions,
+  type CallValue,
   createRpcClient,
   type RpcClient,
   type RpcEventListener,
@@ -78,7 +79,7 @@ function observed(client: RpcClient, report: (error: unknown) => void): EngineCl
     method: M,
     params: Methods[M]['params'],
     options?: CallOptions,
-  ): Promise<Methods[M]['result']> =>
+  ): Promise<CallValue<M>> =>
     client.call(method, params, options).catch((error: unknown) => {
       report(error);
       throw error;
@@ -252,7 +253,7 @@ export interface PageRpc {
   >(
     method: M,
     params: Methods[M]['params'],
-  ): Promise<Methods[M]['result']>;
+  ): Promise<CallValue<M>>;
   // Each slice of a chunked call (text.search, W5.4), as RpcClient.chunked gives them.
   chunked<M extends 'text.search'>(
     method: M,

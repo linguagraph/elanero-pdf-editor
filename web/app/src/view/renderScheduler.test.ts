@@ -221,3 +221,43 @@ describe('RenderScheduler tiles and prefetch (W5.1b)', () => {
     expect(cacheBudgetBytes(2)).toBeLessThan(cacheBudgetBytes(16));
   });
 });
+
+describe('RenderScheduler bitmap replies (W5.1b S5)', () => {
+  // The worker's bitmap reply: an empty buffer, format 'bitmap', and the bitmap beside it.
+  function bitmapReply(bitmap: ImageBitmap, revision = 0): Reply {
+    return Object.assign(reply(revision), {
+      width: 4,
+      height: 2,
+      format: 'bitmap',
+      pixels: new ArrayBuffer(0),
+      bitmap,
+    });
+  }
+
+  it('caches the bitmap, not the empty pixels, and counts its decoded bytes', async () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    scheduler.plan('page', plan([0], 1000));
+    const bitmap = { close: vi.fn(), width: 4, height: 2 } as unknown as ImageBitmap;
+    renders[0]?.resolve(bitmapReply(bitmap));
+    await Promise.resolve();
+    await Promise.resolve();
+    const cached = scheduler.cache.get(scheduler.cacheKeyOf('page', 0, 1000));
+    expect(cached?.bitmap).toBe(bitmap);
+    expect(cached?.pixels.byteLength).toBe(0);
+    expect(scheduler.cache.byteCount).toBe(4 * 2 * 4);
+    expect(bitmap.close).not.toHaveBeenCalled();
+  });
+
+  it('closes the bitmap of a reply for a page that changed meanwhile', async () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    scheduler.plan('page', plan([0], 1000));
+    const bitmap = { close: vi.fn(), width: 4, height: 2 } as unknown as ImageBitmap;
+    renders[0]?.resolve(bitmapReply(bitmap, 7));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+    expect(scheduler.cache.size).toBe(0);
+  });
+});

@@ -638,3 +638,64 @@ describe('RpcClient', () => {
     });
   });
 });
+
+// A page the worker drew into an ImageBitmap (W5.1b S5): the reply names format 'bitmap' with an
+// empty pixel buffer, and the bitmap travels beside it.
+describe('RpcClient render bitmaps', () => {
+  const PAGE = {
+    handle: 'h',
+    page: 0,
+    revision: 4,
+    scale_milli: 1000,
+    rotation: 0,
+    annotations: false,
+  };
+  const bitmapResult = (format: string) => ({
+    width: 2,
+    height: 1,
+    revision: 4,
+    format,
+    pixels: { $bin: 0 },
+  });
+
+  function fakeBitmap(): ImageBitmap {
+    return { close: vi.fn(), width: 2, height: 1 } as unknown as ImageBitmap;
+  }
+
+  it('hands the worker bitmap to the caller, with the reply pixels empty', async () => {
+    const worker = new FakeWorker();
+    const client = createRpcClient(worker);
+    const bitmap = fakeBitmap();
+    worker.respond = (envelope) => ({
+      ...ok(envelope, bitmapResult('bitmap'), new ArrayBuffer(0)),
+      bitmap,
+    });
+
+    const image = await client.call('render.page', PAGE);
+
+    expect(image.bitmap).toBe(bitmap);
+    expect(image.format).toBe('bitmap');
+    expect(image.pixels.byteLength).toBe(0);
+    expect(bitmap.close).not.toHaveBeenCalled();
+  });
+
+  it('rejects a bitmap that comes with a non-render reply and closes it', async () => {
+    const worker = new FakeWorker();
+    const client = createRpcClient(worker);
+    const bitmap = fakeBitmap();
+    worker.respond = (envelope) => ({ ...ok(envelope, HELLO), bitmap });
+
+    await expect(client.call('hello', {})).rejects.toMatchObject({ code: 'INTERNAL' });
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a bitmap reply that arrives without its bitmap', async () => {
+    const worker = new FakeWorker();
+    const client = createRpcClient(worker);
+    worker.respond = (envelope) => ok(envelope, bitmapResult('bitmap'), new ArrayBuffer(0));
+
+    await expect(
+      client.call('render.tile', { ...PAGE, x: 0, y: 0 } as never),
+    ).rejects.toMatchObject({ code: 'INTERNAL' });
+  });
+});
