@@ -7,7 +7,7 @@ import { createToastStore } from '../feedback/toasts';
 import { t, tp } from '../i18n/t';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import { SplitDialog, type SplitDialogProps } from './SplitDialog';
-import type { JobWorker, SplitEngine } from './splitJob';
+import type { JobWorker, SplitEngine, SplitPart } from './splitJob';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -137,9 +137,11 @@ function typeInto(selector: string, value: string) {
 }
 
 // The preview asks after a short pause (PREVIEW_DELAY_MS in SplitDialog.tsx); wait past it.
+const PREVIEW_WAIT_MS = 260;
+
 async function waitForPreview() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 260));
+    await new Promise((resolve) => setTimeout(resolve, PREVIEW_WAIT_MS));
   });
 }
 
@@ -322,5 +324,58 @@ describe('SplitDialog', () => {
 
     expect(dialogElement().textContent).toContain(t('split.error.pagesPerFile', { count: 10 }));
     expect(call).not.toHaveBeenCalled();
+  });
+
+  it('drops a stale preview reply that arrives after a newer one', async () => {
+    vi.useFakeTimers();
+    try {
+      // Each split.plan call stays pending until the test resolves it, so the test chooses the order
+      // the replies arrive in.
+      const plans: ((parts: readonly SplitPart[]) => void)[] = [];
+      const call = vi.fn((method: string) => {
+        if (method === 'split.plan') {
+          return new Promise<{ parts: readonly SplitPart[] }>((resolve) => {
+            plans.push((parts) => resolve({ parts }));
+          });
+        }
+        return Promise.resolve({ applied: false, changed: null, state: null });
+      });
+      const engine = { call } as unknown as SplitEngine;
+      const progress = createJobProgressStore({ toasts: createToastStore() });
+      render({ engine, progress });
+      chooseMode(t('split.mode.ranges'));
+
+      // Two changes, each past the preview delay, so two preview requests are in flight.
+      typeInto('input[type="text"]', '1-3, 5');
+      act(() => {
+        vi.advanceTimersByTime(PREVIEW_WAIT_MS);
+      });
+      typeInto('input[type="text"]', '1-4');
+      act(() => {
+        vi.advanceTimersByTime(PREVIEW_WAIT_MS);
+      });
+      expect(plans).toHaveLength(2);
+
+      const resolvePlan = (index: number, parts: readonly SplitPart[]) => {
+        const resolve = plans[index];
+        if (resolve === undefined) throw new Error(`no split.plan call ${index}`);
+        act(() => resolve(parts));
+      };
+      // The newer request answers first and is shown.
+      resolvePlan(1, [{ name: 'fresh_1.pdf', first_page: 0, page_count: 4 }]);
+      await flush();
+      expect(dialogElement().textContent).toContain('fresh_1.pdf');
+
+      // The older request answers last; its preview is dropped.
+      resolvePlan(0, [
+        { name: 'stale_1.pdf', first_page: 0, page_count: 3 },
+        { name: 'stale_2.pdf', first_page: 4, page_count: 1 },
+      ]);
+      await flush();
+      expect(dialogElement().textContent).toContain('fresh_1.pdf');
+      expect(dialogElement().textContent).not.toContain('stale_');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
