@@ -123,12 +123,17 @@ describe('LinkConfirmDialog', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('Escape does not open anything', async () => {
+  it('Escape closes the dialog without opening anything', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    await render(WEB);
+    const onClose = vi.fn();
+    await render(WEB, onClose);
+    // The key goes to the focused element, as a real keypress does, and bubbles up to the modal.
     act(() => {
-      dialog()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
     });
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(open).not.toHaveBeenCalled();
   });
 
