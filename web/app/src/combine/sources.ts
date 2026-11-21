@@ -26,12 +26,23 @@ export interface SourceItem {
   readonly id: number;
   readonly name: string;
   readonly file: File;
+  // The Pages box of a PDF row, as typed: "" or "all" means every page. Images never use it.
+  readonly pages: string;
+}
+
+// The lower-cased suffix of a file name, with its dot, or "" when it has none.
+function suffixOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.slice(dot).toLowerCase();
 }
 
 export function isSupportedSourceName(name: string): boolean {
-  const dot = name.lastIndexOf('.');
-  if (dot < 0) return false;
-  return SUPPORTED_SUFFIXES.includes(name.slice(dot).toLowerCase());
+  return SUPPORTED_SUFFIXES.includes(suffixOf(name));
+}
+
+// An image file, which has no page ranges. The name decides, as the engine's suffix check does.
+export function isImageSourceName(name: string): boolean {
+  return IMAGE_SUFFIXES.includes(suffixOf(name));
 }
 
 // Appends the supported files, in the order given. Unsupported files are skipped and returned by
@@ -49,7 +60,7 @@ export function addSources(
       rejected.push(file.name);
       continue;
     }
-    next.push({ id, name: file.name, file });
+    next.push({ id, name: file.name, file, pages: '' });
     id += 1;
   }
   return { items: next, rejected };
@@ -67,6 +78,15 @@ export function moveSource(
   const [moved] = next.splice(index, 1);
   if (moved !== undefined) next.splice(to, 0, moved);
   return next;
+}
+
+// Sets the Pages box of one row. The other rows, and their boxes, are left as they are.
+export function setSourcePages(
+  items: readonly SourceItem[],
+  id: number,
+  pages: string,
+): readonly SourceItem[] {
+  return items.map((item) => (item.id === id ? { ...item, pages } : item));
 }
 
 export function removeSource(items: readonly SourceItem[], index: number): readonly SourceItem[] {

@@ -6,7 +6,7 @@ import { createToastStore } from '../feedback/toasts';
 import { MAX_FILE_BYTES } from '../documents/openFile';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
-import { runCombine } from './run';
+import { rangeProblems, runCombine } from './run';
 import type { SourceItem } from './sources';
 
 // A job worker whose call waits for the test to answer it, so progress can be seen mid-job.
@@ -49,7 +49,7 @@ class PendingWorker implements WorkerClient {
 }
 
 function item(id: number, name: string, data = 'x'): SourceItem {
-  return { id, name, file: new File([data], name, { type: 'application/pdf' }) };
+  return { id, name, file: new File([data], name, { type: 'application/pdf' }), pages: '' };
 }
 
 function progress(done: number, total: number): Notice {
@@ -107,6 +107,7 @@ describe('runCombine', () => {
     const huge = {
       id: 2,
       name: 'huge.pdf',
+      pages: '',
       file: { size: MAX_FILE_BYTES + 1, name: 'huge.pdf' } as unknown as File,
     };
 
@@ -203,5 +204,81 @@ describe('runCombine', () => {
     expect(outcome.status).toBe('failed');
     const [toast] = toasts.getState().visible;
     expect(toast?.kind).toBe('error');
+  });
+});
+
+describe('runCombine page ranges', () => {
+  it('refuses a Pages box that breaks the rule before any job starts', async () => {
+    const { startWorker, deps } = setup();
+    const broken = { ...item(1, 'a.pdf'), pages: '3-2' };
+
+    const outcome = await runCombine([broken, item(2, 'b.pdf')], deps);
+
+    expect(outcome).toEqual({
+      status: 'rangeError',
+      problem: { index: 0, kind: 'invalid', item: '3-2', count: null },
+    });
+    expect(startWorker).not.toHaveBeenCalled();
+  });
+
+  it('ignores the Pages box of an image row and of a PDF row left blank', () => {
+    const image = { ...item(1, 'a.png'), pages: 'nonsense' };
+    const blank = { ...item(2, 'b.pdf'), pages: '   ' };
+
+    expect(rangeProblems([image, blank])).toEqual([]);
+  });
+
+  it('sends the typed ranges for PDF rows that have some, and nothing for the others', async () => {
+    const { worker, deps } = setup();
+    const ranged = { ...item(1, 'a.pdf'), pages: '2-3' };
+
+    const running = runCombine([ranged, item(2, 'b.pdf'), item(3, 'c.png')], deps);
+    await settle();
+    worker.answer(okReply(new Uint8Array([1]).buffer));
+    await running;
+
+    const request = JSON.parse(worker.requests[0] ?? '{}') as {
+      params: { args: { sources: Record<string, unknown>[] } };
+    };
+    const [first, second, third] = request.params.args.sources;
+    expect(first).toEqual({ name: 'a.pdf', data: { $bin: 0 }, ranges: '2-3' });
+    expect(second).toEqual({ name: 'b.pdf', data: { $bin: 1 } });
+    expect(third).toEqual({ name: 'c.png', data: { $bin: 2 } });
+  });
+
+  it('a page_range refusal from the job is a row error with no toast', async () => {
+    const { toasts, worker, deps } = setup();
+    const ranged = { ...item(2, 'b.pdf'), pages: '1' };
+
+    const running = runCombine([item(1, 'a.pdf'), ranged], deps);
+    await settle();
+    worker.fail(
+      new RpcError('INVALID_ARGS', 'args.sources[1].ranges: outside', {
+        path: 'args.sources[1].ranges',
+        reason: 'page_range',
+        kind: 'out_of_range',
+        item: '9',
+        page_count: 3,
+      }),
+    );
+    const outcome = await running;
+
+    expect(outcome).toEqual({
+      status: 'rangeError',
+      problem: { index: 1, kind: 'out_of_range', item: '9', count: 3 },
+    });
+    expect(toasts.getState().visible).toEqual([]);
+  });
+
+  it('another INVALID_ARGS still shows an error toast', async () => {
+    const { toasts, worker, deps } = setup();
+
+    const running = runCombine([item(1, 'a.pdf'), item(2, 'b.pdf')], deps);
+    await settle();
+    worker.fail(new RpcError('INVALID_ARGS', 'args.sources: no sources', { path: 'args.sources' }));
+    const outcome = await running;
+
+    expect(outcome.status).toBe('failed');
+    expect(toasts.getState().visible[0]?.kind).toBe('error');
   });
 });
