@@ -313,12 +313,14 @@ describe('bookmarks editing (W5.2 S2)', () => {
   });
 
   it('leaves Alt+Arrow alone, so the app Back and Forward keys still work', async () => {
-    const { rpc, call } = editableRpc(outline);
+    // The child is an outdent target (Alt+Shift+Left would move it), so a missing Shift check
+    // would send an edit here.
+    const { rpc, call } = editableRpc([entry('Part', 1, 0, true), entry('Child', 2, 1)]);
     openPanel('bookmarks');
-    await mount(9, rpc);
-    const event = await press(item('Part Two'), { key: 'ArrowLeft', altKey: true });
+    await mount(14, rpc);
+    const event = await press(item('Child'), { key: 'ArrowLeft', altKey: true });
     expect(event.defaultPrevented).toBe(false);
-    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
   });
 
   it('a read-only outline still takes the edit keys, so the Edit tool does not see them', async () => {
