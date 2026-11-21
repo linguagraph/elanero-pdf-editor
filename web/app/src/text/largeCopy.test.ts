@@ -336,4 +336,30 @@ describe('copyLarge', () => {
     expect(secondWrite).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(store.push).toHaveBeenCalledWith('success', EN['copy.done']));
   });
+
+  it('reports a change that lands after the last slice as changed, not done', async () => {
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+    let fire: (reason: 'changed' | 'closed') => void = () => undefined;
+    // The loop breaks after the last slice, which runs this generator's finally: the change lands
+    // after the text is read and before the copy's handler runs, with the result still 'text'.
+    const rpc = {
+      async *chunked() {
+        try {
+          yield { text: 'ab', pages_done: 1, total: 1, done: true, cursor: null };
+        } finally {
+          fire('changed');
+        }
+      },
+    } as unknown as Pick<PageRpc, 'chunked'>;
+    const write = vi.fn(() => Promise.resolve());
+    const store = fakeStore();
+    copyLarge(
+      { rpc, handle: 'h', clipboard: { write, writeText: vi.fn() } as never, store },
+      plan((listener) => {
+        fire = listener;
+      }),
+    );
+    await vi.waitFor(() => expect(store.push).toHaveBeenCalledWith('info', EN['copy.changed']));
+    expect(store.push).not.toHaveBeenCalledWith('success', EN['copy.done']);
+  });
 });

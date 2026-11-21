@@ -280,7 +280,9 @@ export function copyLarge(deps: LargeCopyDeps, plan: EnginePlan): void {
   void Promise.all([result, written, blob.catch(() => null)]).then(
     ([res, write, data]) => {
       settle();
-      if (res.kind !== 'text') return reportStopped(store, res, changed, refused);
+      // A change that landed after the last slice, but before this handler, still makes the text
+      // stale: it is reported as changed, and no payload is kept for a later press.
+      if (changed || res.kind !== 'text') return reportStopped(store, res, changed, refused);
       if (res.parts.length === 0) return store.push('info', t('copy.nothingSelected'));
       if (write.ok) return store.push('success', t('copy.done'));
       if (isNotAllowed(write.error) && data !== null) {
