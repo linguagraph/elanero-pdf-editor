@@ -1136,8 +1136,11 @@ export function App({
             onViewChange={onViewChange}
             startWorker={jobs.acquire}
             tool={viewTool}
-            onToolChange={(tool) => {
-              if (activeId !== null) setViewTool(activeId, tool);
+            tabId={activeId}
+            onToolChange={(tool, tabId) => {
+              // A shape add names the tab it drew on; the other resets are for the tab shown now.
+              const target = tabId ?? activeId;
+              if (target !== null) setViewTool(target, tool);
             }}
             onCropBoxEnd={crop.boxEnded}
             onCommentToolChange={setCommentToolState}

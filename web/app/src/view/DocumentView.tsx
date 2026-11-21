@@ -169,9 +169,12 @@ export interface DocumentViewProps {
   readonly redaction?: RedactionController;
   // The view tool (W4.10): Hand pans with a drag. The app keeps it per tab; Select when absent.
   readonly tool?: ViewTool;
+  // The tab this view shows (W6.7b). A shape add that settles later hands it back with the reset
+  // to Select, so the reset lands on the tab that drew the shape, not on the tab now shown.
+  readonly tabId?: number | null;
   // Called when the view itself asks for another tool: a comment or mark tool chosen here sets it
-  // back to Select, so the two never read as on together.
-  readonly onToolChange?: (tool: ViewTool) => void;
+  // back to Select, so the two never read as on together. A shape add passes the tab it drew on.
+  readonly onToolChange?: (tool: ViewTool, tabId?: number | null) => void;
   // The crop box tool (W4.11 S5) reports the box it drew, as margins on its page (1-based), or null
   // when Esc ends the tool with no box. The app ends the tool and reopens the crop dialog.
   readonly onCropBoxEnd?: (drawn: DrawnCrop | null) => void;
@@ -245,6 +248,7 @@ export function DocumentView({
   startWorker,
   redaction,
   tool = 'select',
+  tabId = null,
   onToolChange,
   onCropBoxEnd,
   onCommentToolChange,
@@ -902,8 +906,10 @@ export function DocumentView({
       noteShapeTooSmall();
       return;
     }
+    // The tab is read now, before the add starts: the user may switch tabs while it is in flight.
+    const drawnOn = tabId;
     void addShape(shapeDeps, page, spec).then((added) => {
-      if (added) onToolChange?.('select');
+      if (added) onToolChange?.('select', drawnOn);
     });
   };
 
