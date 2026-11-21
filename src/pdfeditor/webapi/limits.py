@@ -31,6 +31,10 @@ MAX_JSON_DEPTH = 256
 # Jobs (W1.1 section 7, W1.2 section 13). A job gets a copy of the document, so its bytes are
 # held to the same size as an open file; the worker runs one job at a time.
 MAX_JOB_BYTES = FILE_REFUSE_BYTES  # a document copy or a job result above this is refused
+# A split's parts, summed as they are written, are capped at half of MAX_JOB_BYTES: a ZIP is
+# built in one buffer while its parts are still in memory, so the output is held twice in the
+# 32-bit wasm heap, which also holds the document (W6.2 section 4).
+MAX_SPLIT_BYTES = MAX_JOB_BYTES // 2
 MAX_PREPARED_JOBS = 1  # prepared jobs (begun or waiting for their run) per engine worker
 
 # Undo snapshots live in the worker's memory file system (W1.1 section 7). Past this budget the

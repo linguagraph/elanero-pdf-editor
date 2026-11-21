@@ -173,6 +173,17 @@ def outline_irregular() -> None:
     _save(doc, "outline_irregular.pdf")
 
 
+def outline_unsorted() -> None:
+    # Top-level bookmarks whose titles are not in alphabetical order, and one title twice: a split
+    # by bookmarks must keep document order and give the two "Appendix" parts their own names.
+    doc = pymupdf.open()
+    for i in range(4):
+        page = doc.new_page(width=A4.width, height=A4.height)
+        page.insert_text((72, 72), f"Page {i + 1}", fontsize=16)
+    doc.set_toc([[1, "Intro", 1], [1, "Zebra", 2], [1, "Appendix", 3], [1, "Appendix", 4]])
+    _save(doc, "outline_unsorted.pdf")
+
+
 def page_labels() -> None:
     # Eight pages with four rules: roman, decimal with a prefix, prefix only, and alphabetic
     # past Z (MuPDF's own numbering after Z is what the web shows too).
@@ -1299,6 +1310,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "annotations_unnamed": annotations_unnamed,
     "outline": outline,
     "outline_irregular": outline_irregular,
+    "outline_unsorted": outline_unsorted,
     "page_labels": page_labels,
     "encrypted": encrypted,
     "hybrid_xref": hybrid_xref,

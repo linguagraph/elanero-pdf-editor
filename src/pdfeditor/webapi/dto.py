@@ -830,6 +830,29 @@ class SplitArgs:
     pages_per_file: int = 1  # mode "pages"
     ranges: tuple[tuple[int, ...], ...] = ()  # mode "ranges": the 0-based pages of each part
     max_bytes: int = 0  # mode "size": the largest part, in bytes
+    name: str = ""  # the document's display name: the stem of the part names
+    zip: bool = False  # one ZIP of the parts instead of one file per part
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitPlanParams:
+    handle: str
+    mode: SplitMode  # "size" is refused: its parts are sized only by writing them
+    pages_per_file: int = 1
+    ranges: tuple[tuple[int, ...], ...] = ()
+    name: str = ""
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitPartDto:
+    name: str  # the file name, as the split job writes it
+    first_page: int  # 0-based: the part's first page (a range's pages may skip some)
+    page_count: int
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitPlanResult:
+    parts: tuple[SplitPartDto, ...]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

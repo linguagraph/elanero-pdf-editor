@@ -93,6 +93,7 @@ METHODS: dict[str, Method] = {
     "save.mark_saved": Method(dto.HandleParams, save.mark_saved),
     "save.autosave_bytes": Method(dto.HandleParams, save.autosave_bytes),
     "system.memory": Method(dto.Empty, memory.system_memory),
+    "split.plan": Method(dto.SplitPlanParams, jobs.split_plan),
     "jobs.prepare": Method(dto.JobPrepareParams, jobs.prepare, takes_buffers=True),
     "jobs.apply": Method(dto.JobApplyParams, jobs.apply),
     "jobs.abort": Method(dto.JobAbortParams, jobs.abort),
