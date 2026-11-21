@@ -406,6 +406,33 @@ def test_a_failed_audit_still_returns_the_reduced_file_with_null_audits(
     assert "space audit failed" in caplog.text
 
 
+def test_a_failed_after_audit_keeps_the_before_audit(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The before-audit succeeds and the after-audit fails: the outcome carries the before-audit,
+    # the after-audit is None, and the reduced file is still returned.
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = {"preset": "screen", "audit": True}
+    _, copy = prepare(handle, "reduce_size", args)
+    real_audit = jobs.space_audit
+    calls: list[int] = []
+
+    def audit_then_fail(*a: Any, **k: Any) -> Any:
+        calls.append(1)
+        if len(calls) == 1:
+            return real_audit(*a, **k)
+        raise EngineError("after-audit broke")
+
+    monkeypatch.setattr(jobs, "space_audit", audit_then_fail)
+    reply, out = run_job("reduce_size", args, copy)
+    value = ok(reply)["value"]
+    assert value["audit_before"] is not None
+    assert value["audit_before"]["total"] > 0
+    assert value["audit_after"] is None
+    assert value["before"] > 0 and value["after"] > 0
+    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+
+
 def test_a_reduced_copy_that_cannot_be_reopened_still_returns_the_file(
     web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
