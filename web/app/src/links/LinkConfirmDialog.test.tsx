@@ -139,6 +139,11 @@ describe('LinkConfirmDialog', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const onClose = vi.fn();
     await render(WEB, onClose);
+    // The overlay takes focus after a tick; a key sent before that would miss the modal.
+    const cancel = button(t('links.confirm.cancel'));
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(cancel);
+    });
     // The key goes to the focused element, as a real keypress does, and bubbles up to the modal.
     act(() => {
       document.activeElement?.dispatchEvent(
