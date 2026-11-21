@@ -58,6 +58,11 @@ Image**). To save a picture to a file, select it and click **Objects ▸ Export*
 **Shapes ▸ Rectangle**, **Ellipse** and **Line** draw shapes into the page content. Drag on the page
 to draw; a shape stays in the page content, so it prints and displays like the rest of the page.
 
+Click instead of dragging for a default-size shape (120 by 80 points). With the keyboard, Tab to the
+page and press Enter for a default-size shape in the middle of the page; Esc stops the tool. The
+tool turns off after one shape. In the web version, a shape is always a black 1.5-point outline with
+no fill, and Undo removes it in one step.
+
 Do not confuse these with the **Drawing** comments on the **Comment** tab, which are review marks
 that sit on top of the page. See [Comments and review](comments.md).
 
@@ -88,6 +93,8 @@ so its text can be changed. To turn this off, clear **Recognize text when editin
 - Results depend on the source document. Text in unusual fonts, text inside pictures and text in
   complex layouts can't always be edited cleanly.
 - Existing images have no rotation handle in the interface.
+- On a page that is both rotated and cropped, a new shape can appear offset from where you drew it,
+  by the crop box's offset. This is a known engine issue, to be fixed separately.
 - Text added as a comment (a FreeText annotation) uses standard fonts.
 - Elanero does not create or edit interactive form fields. Existing forms still display and are
   kept when you save.

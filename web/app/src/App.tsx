@@ -69,8 +69,8 @@ import { type DocumentViewHandle, type DocumentViewState, DocumentView } from '.
 import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
-import { setViewTool, useViewTool } from './view/viewTool';
-import { acceptSignedEdit, requestEditTool } from './edit/editTool';
+import { setViewTool, type ShapeTool, useViewTool } from './view/viewTool';
+import { acceptSignedEdit, type EditTool, requestEditTool } from './edit/editTool';
 import { SignedWarningDialog } from './edit/signedWarning';
 import { CommentsPanel } from './comments/panel/CommentsPanel';
 import { CommentsController } from './comments/panel/controller';
@@ -218,8 +218,11 @@ export function App({
   const docs = useDocuments(engine);
   // The crop dialog's session (W4.11 S5): the form kept across Draw on page and Esc, and the box
   // drawn on a page, if any. A change of tab clears it and leaves the crop box tool.
-  // The tab whose Edit tool waits for the signed-document warning (W6.7a S4), or null.
-  const [signedEditAsk, setSignedEditAsk] = useState<number | null>(null);
+  // The tab, and the tool, whose Edit or shape tool waits for the signed-document warning (W6.7a
+  // S4, W6.7b), or null.
+  const [signedEditAsk, setSignedEditAsk] = useState<{ tabId: number; tool: EditTool } | null>(
+    null,
+  );
   const crop = useCropSession(
     docs.tabs.activeId,
     docs.tabs.tabs.map((tab) => tab.id),
@@ -560,6 +563,17 @@ export function App({
       });
     }
   };
+  // A shape tool toggles like the Edit tool: a second press returns to Select. A signed document
+  // asks once per tab first, as the Edit tool does (W6.7b).
+  const toggleShapeTool = (tool: ShapeTool) => {
+    if (activeId === null) return;
+    if (viewTool === tool) {
+      setViewTool(activeId, 'select');
+      return;
+    }
+    if (!requestEditTool(activeId, activeTab?.signed ?? false, tool))
+      setSignedEditAsk({ tabId: activeId, tool });
+  };
   const handlers: CommandHandlers = {
     ...baseHandlers,
     ...(documentShown
@@ -646,8 +660,13 @@ export function App({
           // Edit Text & Images (W6.7a S4) turns the Edit tool on; a signed document asks once per tab.
           'edit-text-images': () => {
             if (activeId === null) return;
-            if (!requestEditTool(activeId, activeTab?.signed ?? false)) setSignedEditAsk(activeId);
+            if (!requestEditTool(activeId, activeTab?.signed ?? false))
+              setSignedEditAsk({ tabId: activeId, tool: 'edit' });
           },
+          // The shape tools (W6.7b) draw one shape each, then return to Select.
+          'add-rectangle': () => toggleShapeTool('shape-rectangle'),
+          'add-ellipse': () => toggleShapeTool('shape-ellipse'),
+          'add-line': () => toggleShapeTool('shape-line'),
           // Delete Objects (W6.7a S5) deletes the Edit tool's selection; with none, nothing happens.
           'delete-selected-objects': () => viewRef.current?.deleteEditSelection(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
@@ -1086,7 +1105,7 @@ export function App({
       <SignedWarningDialog
         isOpen={signedEditAsk !== null}
         onAccept={() => {
-          if (signedEditAsk !== null) acceptSignedEdit(signedEditAsk);
+          if (signedEditAsk !== null) acceptSignedEdit(signedEditAsk.tabId, signedEditAsk.tool);
           setSignedEditAsk(null);
         }}
         onCancel={() => setSignedEditAsk(null)}
@@ -1123,8 +1142,11 @@ export function App({
             onViewChange={onViewChange}
             startWorker={jobs.acquire}
             tool={viewTool}
-            onToolChange={(tool) => {
-              if (activeId !== null) setViewTool(activeId, tool);
+            tabId={activeId}
+            onToolChange={(tool, tabId) => {
+              // A shape add names the tab it drew on; the other resets are for the tab shown now.
+              const target = tabId ?? activeId;
+              if (target !== null) setViewTool(target, tool);
             }}
             onCropBoxEnd={crop.boxEnded}
             onCommentToolChange={setCommentToolState}

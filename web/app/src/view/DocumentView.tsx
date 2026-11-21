@@ -58,7 +58,7 @@ import { PageTextLayer } from '../text/PageTextLayer';
 import { useTextSelection } from '../text/useTextSelection';
 import { textLayerPassive } from '../text/textLayerPassive';
 import { useHandPan } from './useHandPan';
-import type { ViewTool } from './viewTool';
+import { isShapeTool, type ViewTool } from './viewTool';
 import { CropLayer } from '../crop/CropLayer';
 import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
@@ -77,6 +77,8 @@ import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
 import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
+import { ShapeLayer } from '../edit/ShapeLayer';
+import { addShape, noteShapeTooSmall, type ShapeSpec, SHAPE_KIND } from '../edit/shapes';
 import { CachedCanvas } from './pixels';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
@@ -182,9 +184,12 @@ export interface DocumentViewProps {
   readonly redaction?: RedactionController;
   // The view tool (W4.10): Hand pans with a drag. The app keeps it per tab; Select when absent.
   readonly tool?: ViewTool;
+  // The tab this view shows (W6.7b). A shape add that settles later hands it back with the reset
+  // to Select, so the reset lands on the tab that drew the shape, not on the tab now shown.
+  readonly tabId?: number | null;
   // Called when the view itself asks for another tool: a comment or mark tool chosen here sets it
-  // back to Select, so the two never read as on together.
-  readonly onToolChange?: (tool: ViewTool) => void;
+  // back to Select, so the two never read as on together. A shape add passes the tab it drew on.
+  readonly onToolChange?: (tool: ViewTool, tabId?: number | null) => void;
   // The crop box tool (W4.11 S5) reports the box it drew, as margins on its page (1-based), or null
   // when Esc ends the tool with no box. The app ends the tool and reopens the crop dialog.
   readonly onCropBoxEnd?: (drawn: DrawnCrop | null) => void;
@@ -258,6 +263,7 @@ export function DocumentView({
   startWorker,
   redaction,
   tool = 'select',
+  tabId = null,
   onToolChange,
   onCropBoxEnd,
   onCommentToolChange,
@@ -289,6 +295,8 @@ export function DocumentView({
   const zoomRef = useRef(manualZoom);
   // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
   const pageFieldRef = useRef<HTMLInputElement>(null);
+  // A shape add in flight (W6.7b): a second gesture or Enter is ignored until it settles.
+  const shapeInFlight = useRef(false);
   const wheelPending = useRef(0);
   // The fraction of a pixel the scaled scroll still owes the spacer (one scroller per view), carried
   // from one wheel or key event to the next so small deltas are not lost (W5.1a S4 fix).
@@ -973,6 +981,24 @@ export function DocumentView({
   const place = (page: number, rect: PageRect, text: string) => {
     if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
   };
+  // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
+  // shape per choice). A failure keeps the tool on so the user can retry. While an add is in
+  // flight, a further gesture or Enter does nothing, so a double Enter adds one shape.
+  const shapeDeps = { rpc, handle, cache: editObjects, scheduler };
+  const drawShape = (page: number, spec: ShapeSpec | null) => {
+    if (shapeInFlight.current) return;
+    if (spec === null) {
+      noteShapeTooSmall();
+      return;
+    }
+    // The tab is read now, before the add starts: the user may switch tabs while it is in flight.
+    const drawnOn = tabId;
+    shapeInFlight.current = true;
+    void addShape(shapeDeps, page, spec).then((added) => {
+      shapeInFlight.current = false;
+      if (added) onToolChange?.('select', drawnOn);
+    });
+  };
 
   return (
     <section
@@ -1150,6 +1176,17 @@ export function DocumentView({
                         selection={editSelection}
                         onSelect={setEditSelection}
                         onCommit={commitChange}
+                      />
+                    ) : null}
+                    {isShapeTool(tool) && sizes !== null ? (
+                      <ShapeLayer
+                        kind={SHAPE_KIND[tool]}
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        focusable={box.index === currentPage}
+                        onDraw={(spec) => drawShape(box.index, spec)}
+                        onStop={() => onToolChange?.('select')}
                       />
                     ) : null}
                     {tool === 'cropBox' && sizes !== null ? (
