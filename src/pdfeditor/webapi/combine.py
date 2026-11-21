@@ -60,7 +60,7 @@ def probe(params: dto.CombineProbeParams) -> dto.CombineProbeResult:
             if pages == 0:
                 raise RpcFailure(OPEN_FAILED, "the file has no readable pages", {"pages": 0})
             encrypted = document.info().encryption is not EncryptionMethod.NONE
-            needed = encrypted and (params.password is None or _needs_password(engine, params))
+            needed = encrypted and params.password is not None and _needs_password(engine, params)
         finally:
             document.close()
     return dto.CombineProbeResult(page_count=pages, encrypted=encrypted, needed_password=needed)

@@ -58,12 +58,12 @@ def test_an_unencrypted_pdf_probed_with_a_password_does_not_need_it(fixture_pdf:
     assert result["encrypted"] is False
 
 
-def test_an_encrypted_pdf_that_opens_without_a_password_says_it_is_needed(
+def test_an_encrypted_pdf_that_opens_without_a_password_is_not_needed_when_none_is_sent(
     fixture_pdf: Any,
 ) -> None:
     data = Path(fixture_pdf("encrypted_owner_only")).read_bytes()
     result = ok(_probe("encrypted_owner_only.pdf", data))
-    assert result == {"page_count": 1, "encrypted": True, "needed_password": True}
+    assert result == {"page_count": 1, "encrypted": True, "needed_password": False}
 
 
 def test_an_encrypted_pdf_that_opens_without_a_password_is_not_needed_with_one(
