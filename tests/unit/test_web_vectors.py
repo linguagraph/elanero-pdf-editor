@@ -64,3 +64,12 @@ def test_a_surrogate_pair_layer_counts_code_points(vectors: dict[str, Any]) -> N
     text = vectors["layers"]["synthetic"]["text"]
     assert text == "a\U0001f600b\nc d"
     assert len(text) == 7  # code points, not UTF-16 units
+
+
+def test_the_page_range_vectors_cover_each_error_kind_and_both_separators() -> None:
+    doc = json.loads(make_web_vectors.PAGE_RANGES_OUTPUT.read_text(encoding="utf-8"))
+    kinds = {c["expect"]["error"]["kind"] for c in doc["cases"] if "error" in c["expect"]}
+    assert kinds == {"invalid", "out_of_range", "empty"}
+    texts = [c["text"] for c in doc["cases"]]
+    assert any(";" in text for text in texts)
+    assert any("," in text for text in texts)

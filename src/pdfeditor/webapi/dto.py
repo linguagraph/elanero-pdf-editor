@@ -895,6 +895,7 @@ class MergeSourceArgs:
     name: str  # the file name with its extension: the extension decides PDF or image
     data: bytes
     pages: tuple[int, ...] | None = None  # 0-based; None: every page (PDF sources only)
+    ranges: str | None = None  # the page-range rule, 1-based text (PDF sources only)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -936,6 +937,11 @@ class PrintArgs:
     pages: tuple[int, ...] | None = None  # 0-based; None: every page
     dpi: int = 150  # 150 (default) or 300 (W1.4 section 11)
     annotations: bool = True  # include the comments
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PrintValue:
+    pages: int  # the pages printed; the pages themselves came as partial notices (W6.5)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

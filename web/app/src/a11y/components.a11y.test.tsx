@@ -15,8 +15,10 @@ import { PrintDialog } from '../print/PrintDialog';
 import { PreferencesDialog } from '../prefs/PreferencesDialog';
 import { CombineDialog } from '../combine/CombineDialog';
 import { CompressDialog } from '../compress/CompressDialog';
+import { SpaceAuditTable } from '../compress/SpaceAuditTable';
 import { CommentsExportDialog } from '../commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from '../commentsImport/CommentsImportDialog';
+import { LinkConfirmDialog } from '../links/LinkConfirmDialog';
 import { ExportDialog } from '../export/ExportDialog';
 import { FlattenDialog } from '../flatten/FlattenDialog';
 import { runAxe } from '../test/axe';
@@ -208,6 +210,20 @@ describe('dialogs that open on an engine session (W8.5 S1)', () => {
     await expectAccessible();
   });
 
+  it('space audit table in the compress result', async () => {
+    render(
+      <SpaceAuditTable
+        settings="Balanced (ebook)"
+        rows={[
+          { key: 'images', before: 1048576, after: 204800 },
+          { key: 'page_content', before: 122880, after: 122880 },
+          { key: 'file_overhead', before: 2048, after: 1024 },
+        ]}
+      />,
+    );
+    await expectAccessible(document.body);
+  });
+
   it('flatten dialog', async () => {
     render(
       <FlattenDialog
@@ -237,6 +253,21 @@ describe('dialogs that open on an engine session (W8.5 S1)', () => {
 
   it('comments import dialog', async () => {
     render(<CommentsImportDialog isOpen onClose={() => undefined} engine={engine} handle="h1" />);
+    await expectAccessible();
+  });
+
+  it('link confirm dialog (W5.3)', async () => {
+    render(
+      <LinkConfirmDialog
+        target={{
+          action: 'confirm',
+          href: 'https://example.org/',
+          scheme: 'https:',
+          host: 'example.org',
+        }}
+        onClose={() => undefined}
+      />,
+    );
     await expectAccessible();
   });
 });

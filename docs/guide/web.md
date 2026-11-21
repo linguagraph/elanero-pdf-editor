@@ -129,10 +129,15 @@ is reloaded until you press it.
 - **Copy and Select All.** Drag over the text of a page to select it, then choose **Copy** in the
   Home tab's Tools group or press **Ctrl+C**: the selected text goes to the clipboard, with a line
   break where each line ends and between pages. **Select All** (Ctrl+A, also in the Home tab) selects
-  the text of the page at the top of the view. Copy says so when nothing is selected, and when the
-  selection is too large to copy at once (about 50 MB of text). A scanned page has no text to copy.
-  Copy can also say that the text of a selected page is still loading: try again in a moment. With
-  **Hand** chosen, Copy and Select All use the browser's own selection instead.
+  the text of the whole document, as on the desktop, and says how many pages it selected. Copy then
+  copies all of it. When the text is long, the web version reads it in steps: a progress bar shows
+  how far it has got, and **Cancel** stops it without changing the clipboard. If you change the
+  document while it copies, Copy stops and asks you to copy again. If your browser can't copy the
+  text in one step, Copy tells you when the text is ready: press **Copy** again. Copy says so when
+  nothing is selected, and when the selection is too large to copy at once (about 50 MB of text). A
+  scanned page has no text to copy. Copy can also say that the text of a selected page is still
+  loading: try again in a moment. With **Hand** chosen, Copy and Select All use the browser's own
+  selection instead, and Select All selects only the page at the top.
 - **Keyboard shortcuts.** A few web keys work so far: **Ctrl+C** (Copy) and **Ctrl+A** (Select All), **Alt+Left** and **Alt+Right** go back and
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
@@ -222,7 +227,7 @@ is reloaded until you press it.
   includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
 - **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you selected with the Select tool
   (a drag, or Select All) as redaction marks: one mark per page the selection covers, all in one undo
-  step. It only marks. Nothing is
+  step. It works on a selection of up to 300 pages. It only marks. Nothing is
   removed until you apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text
   selected, the command asks you to select some first. A mark keeps the selected text in its note until
   the mark is applied, and applying the marks removes that text from the file.
@@ -253,9 +258,11 @@ is reloaded until you press it.
   and you can type a label into the page field to go to that page.
 - **Links.** Click or tap a link in the document, or Tab to it and press Enter, to jump to the page
   it names; the jump is recorded, so Back returns to where you were. A link to a page one page away
-  or on the same page is not recorded in Back. Links to web addresses, email, other files and
-  programs, and any other kind of link do not open in the web version: a short message says so, and
-  nothing is opened.
+  or on the same page is not recorded in Back. Web and email links ask first: a dialog shows the
+  site name and the full address, and nothing opens until you choose **Open link** (Cancel is the
+  default). Only web (`http` and `https`) and email (`mailto`) links open; a link to any other
+  scheme is blocked with a short message. Links to other files and programs, and any other kind of
+  link, do not work in the web version: a short message says so, and nothing is opened.
 
 ## Split a document
 
@@ -315,6 +322,23 @@ an encrypted document keeps the password. When Save refuses a signed document, i
 Writing back to the original file in place needs the browser's File System Access API, and is not
 available yet.
 
+## Printing
+
+**Print** (Ctrl+P, or the Home tab's File group) opens the print dialog. Choose the
+pages: all pages, the current page, or a range such as `1-3, 5`. Then choose the resolution, 150 dpi
+(faster) or 300 dpi (sharper), and whether to include comments, and press **Print**.
+
+- The web version prints each page as an image, not as vector text, so the printed text is as sharp
+  as the chosen resolution.
+- Printing runs as a job, with its percentage on the job bar. The pages are made one at a time, and
+  the browser's print dialog opens once all of them are ready. **Cancel** on the job bar stops the job
+  and discards the pages made so far. Nothing in the document changes.
+- A print of more than 200 pages asks you to confirm first. Every page is held in memory until the
+  browser's print dialog opens, so a long print can slow the tab down. To print less at once, print
+  a page range, or choose 150 dpi. **Back** returns to the dialog with your choices kept.
+- The dialog and the browser's print dialog are separate: after you press Print, use the browser's
+  own options (paper size, copies, the printer) in its dialog.
+
 ## Where your data is stored
 
 - **Your documents** are held in the memory of the browser tab while they are open. While a document
@@ -353,8 +377,8 @@ full policy, with what the desktop app stores, is in the
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; style fixed to a black 1.5-point outline |
 | Edit the words of a paragraph, add text or images | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
-| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; combine shows a progress bar, and Cancel stops the job; split offers the parts as separate downloads or as one ZIP file) |
-| Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
+| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file and shows a progress bar, and Cancel stops the job; split offers the parts as separate downloads or as one ZIP file) |
+| Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
 | Bookmarks: add, rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; drag and drop is not available yet) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
@@ -365,7 +389,7 @@ full policy, with what the desktop app stores, is in the
 | Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change) |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
-| Web and email links | Yes | Coming soon |
+| Web and email links | Yes | Yes: web and email links ask first, and show the full address |
 | Other comments, stamps, watermarks | Yes | Coming soon |
 | Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |

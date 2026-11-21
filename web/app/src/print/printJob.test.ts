@@ -32,7 +32,7 @@ function filesReply(names: string[]): string {
       require_full_save: false,
       document: null,
       files: names.map((name) => ({ name, mime: 'image/png', data: { $bin: 0 } })),
-      value: null,
+      value: { pages: names.length },
       name: '',
     },
     events: [],

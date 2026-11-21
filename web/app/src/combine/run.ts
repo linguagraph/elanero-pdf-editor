@@ -6,12 +6,23 @@ import type { WorkerClient } from '../engine/start';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
 import type { JobProgressStore } from '../feedback/jobRun';
+import { parsePageRanges, type PageRangeKind } from '../pages/pageRanges';
 import { runMergeJob } from './merge';
-import { MIN_SOURCES, type SourceItem } from './sources';
+import { isImageSourceName, MIN_SOURCES, type SourceItem } from './sources';
+
+// A row whose Pages text does not fit. index is the row's place in the list; count is the file's
+// page count when the job knew it (out_of_range only), else null.
+export interface RangeProblem {
+  readonly index: number;
+  readonly kind: PageRangeKind;
+  readonly item: string;
+  readonly count: number | null;
+}
 
 export type CombineOutcome =
   | { readonly status: 'done'; readonly name: string; readonly bytes: ArrayBuffer }
   | { readonly status: 'refused'; readonly message: string }
+  | { readonly status: 'rangeError'; readonly problem: RangeProblem }
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly error: RpcError };
 
@@ -39,14 +50,49 @@ export function checkSources(items: readonly SourceItem[]): string | null {
   return null;
 }
 
+// Every PDF row whose Pages text is not blank and does not fit the page-range rule, checked in
+// syntax mode (the page count is not known until the job opens the file). Empty when all fit.
+export function rangeProblems(items: readonly SourceItem[]): readonly RangeProblem[] {
+  const problems: RangeProblem[] = [];
+  items.forEach((item, index) => {
+    if (isImageSourceName(item.name) || item.pages.trim() === '') return;
+    const result = parsePageRanges(item.pages, null);
+    if (!result.ok) {
+      problems.push({ index, kind: result.error.kind, item: result.error.item, count: null });
+    }
+  });
+  return problems;
+}
+
+const RANGE_KINDS: readonly string[] = ['invalid', 'out_of_range', 'empty'];
+const SOURCE_RANGE_PATH = /^args\.sources\[(\d+)\]\.ranges$/;
+
+// The job's page_range refusal as a row problem, or null when the error is anything else.
+function rangeProblemOf(error: RpcError): RangeProblem | null {
+  const details = error.details;
+  if (error.code !== 'INVALID_ARGS' || details.reason !== 'page_range') return null;
+  const match = typeof details.path === 'string' ? SOURCE_RANGE_PATH.exec(details.path) : null;
+  if (match === null || match[1] === undefined) return null;
+  if (typeof details.kind !== 'string' || !RANGE_KINDS.includes(details.kind)) return null;
+  return {
+    index: Number(match[1]),
+    kind: details.kind as PageRangeKind,
+    item: typeof details.item === 'string' ? details.item : '',
+    count: typeof details.page_count === 'number' ? details.page_count : null,
+  };
+}
+
 // Runs the combine. The job's token is local (merge has no prepare); the store shows the bar, and
-// finish reports the outcome, with an error toast when the job fails.
+// finish reports the outcome, with an error toast when the job fails. A bad Pages box is reported
+// as rangeError with no toast: the dialog shows it on the row.
 export async function runCombine(
   items: readonly SourceItem[],
   deps: CombineDeps,
 ): Promise<CombineOutcome> {
   const refusal = checkSources(items);
   if (refusal !== null) return { status: 'refused', message: refusal };
+  const [first] = rangeProblems(items);
+  if (first !== undefined) return { status: 'rangeError', problem: first };
 
   const worker = deps.startWorker();
   const token = `merge-${nextToken++}`;
@@ -62,7 +108,13 @@ export async function runCombine(
 
   try {
     const sources = await Promise.all(
-      items.map(async (item) => ({ name: item.name, data: await item.file.arrayBuffer() })),
+      items.map(async (item) => {
+        const data = await item.file.arrayBuffer();
+        const typed = isImageSourceName(item.name) || item.pages.trim() === '' ? null : item.pages;
+        return typed === null
+          ? { name: item.name, data }
+          : { name: item.name, data, ranges: typed };
+      }),
     );
     const output = await runMergeJob(worker, sources, (percent) => {
       deps.store.progress(token, percent);
@@ -72,6 +124,11 @@ export async function runCombine(
   } catch (error) {
     if (cancelled) return { status: 'cancelled' };
     const rpcError = asRpcError(error);
+    const problem = rangeProblemOf(rpcError);
+    if (problem !== null) {
+      deps.store.finish(token, { ok: false, error: rpcError, quiet: true });
+      return { status: 'rangeError', problem };
+    }
     deps.store.finish(token, { ok: false, error: rpcError });
     return { status: 'failed', error: rpcError };
   } finally {

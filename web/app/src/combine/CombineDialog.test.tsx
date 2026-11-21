@@ -5,7 +5,7 @@ import type { CallResult, Notice } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { CombineDialog } from './CombineDialog';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -248,5 +248,124 @@ describe('CombineDialog', () => {
     });
 
     expect(download).toHaveBeenCalledWith('report.pdf', output);
+  });
+});
+
+// Types into a Pages box the way the user does: the value, then an input event.
+function typeInto(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  act(() => {
+    setter?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function pagesBoxes(): HTMLInputElement[] {
+  return [...document.querySelectorAll<HTMLInputElement>('.combine-pages input')];
+}
+
+// A job worker that refuses the job with a page_range error on the given source index.
+function rangeRefusingWorker(index: number, pageCount: number): WorkerClient {
+  return {
+    call: (): Promise<CallResult> =>
+      Promise.resolve({
+        reply: JSON.stringify({
+          v: 1,
+          id: 1,
+          ok: false,
+          error: {
+            code: 'INVALID_ARGS',
+            message: 'a range does not fit',
+            details: {
+              path: `args.sources[${index}].ranges`,
+              reason: 'page_range',
+              kind: 'out_of_range',
+              item: '9',
+              page_count: pageCount,
+            },
+          },
+          events: [],
+        }),
+      }),
+    onStage: () => () => undefined,
+    terminate: vi.fn(),
+  };
+}
+
+describe('CombineDialog page ranges', () => {
+  it('gives a Pages box to PDF rows only and says Image for the rest', () => {
+    render({});
+    pick('a.pdf', 'b.png');
+
+    expect(pagesBoxes()).toHaveLength(1);
+    expect(pagesBoxes()[0]?.getAttribute('aria-label')).toBe(
+      t('combine.pages.labelFor', { name: 'a.pdf' }),
+    );
+    expect(document.querySelector('.combine-pages-image')?.textContent).toBe(t('combine.image'));
+  });
+
+  it('marks a box that does not fit when it loses focus, and clears the mark when edited', () => {
+    render({});
+    pick('a.pdf');
+    const box = pagesBoxes()[0];
+    if (box === undefined) throw new Error('no Pages box');
+
+    typeInto(box, '3-2');
+    act(() => {
+      box.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    const error = document.getElementById(box.getAttribute('aria-describedby') ?? '');
+    expect(error?.textContent).toBe(t('combine.error.ranges.invalid', { item: '3-2' }));
+
+    typeInto(box, '3-20');
+    expect(box.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('refuses a bad box before any job starts and focuses it', async () => {
+    const startWorker = vi.fn(() => mergingWorker(new ArrayBuffer(0)));
+    render({ startWorker });
+    pick('a.pdf', 'b.pdf');
+    const box = pagesBoxes()[1];
+    if (box === undefined) throw new Error('no Pages box');
+    typeInto(box, 'x');
+
+    await act(async () => {
+      buttonNamed(t('combine.button')).click();
+    });
+
+    expect(startWorker).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      t('combine.error.ranges.summary'),
+    );
+    expect(document.activeElement).toBe(box);
+  });
+
+  it("shows the job's out_of_range on its own row, also after a reorder", async () => {
+    render({ startWorker: () => rangeRefusingWorker(1, 3) });
+    pick('a.pdf', 'b.pdf');
+    const box = pagesBoxes()[1];
+    if (box === undefined) throw new Error('no Pages box');
+    typeInto(box, '9');
+
+    await act(async () => {
+      buttonNamed(t('combine.button')).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const message = tp('combine.error.ranges.outOfRange', 3, { item: '9', name: 'b.pdf' });
+    const rowOf = (name: string): Element | undefined =>
+      [...document.querySelectorAll('.combine-row')].find(
+        (row) => row.querySelector('.combine-name')?.textContent === name,
+      );
+    expect(rowOf('b.pdf')?.textContent).toContain(message);
+    expect(rowOf('a.pdf')?.textContent).not.toContain(message);
+
+    act(() => {
+      const moveUp = rowOf('b.pdf')?.querySelectorAll('button')[0];
+      moveUp?.click();
+    });
+    expect(rowOf('b.pdf')?.textContent).toContain(message);
   });
 });

@@ -21,8 +21,24 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
 
 const BYTES = new Uint8Array([37, 80, 68, 70]).buffer;
 
+// The wire form of an audit (AuditValue): the total and the categories by key, with the engine's
+// English name that the dialog does not read.
+interface AuditJson {
+  total: number;
+  categories: { key: string; name: string; size: number }[];
+}
+
+function auditJson(sizes: Record<string, number>): AuditJson {
+  const categories = Object.entries(sizes).map(([key, size]) => ({ key, name: key, size }));
+  return { total: categories.reduce((sum, item) => sum + item.size, 0), categories };
+}
+
 // A job reply for reduce_size: one reduced.pdf and the sizes the job reports (ReduceSizeValue).
-function reduceReply(before: number, after: number): CallResult {
+function reduceReply(
+  before: number,
+  after: number,
+  audits: { before: AuditJson; after: AuditJson } | null = null,
+): CallResult {
   const reply = {
     v: PROTOCOL_VERSION,
     id: 1,
@@ -33,7 +49,13 @@ function reduceReply(before: number, after: number): CallResult {
       require_full_save: false,
       document: null,
       files: [{ name: 'reduced.pdf', mime: 'application/pdf', data: { $bin: 0 } }],
-      value: { before, after, notes: [], audit_before: null, audit_after: null },
+      value: {
+        before,
+        after,
+        notes: [],
+        audit_before: audits?.before ?? null,
+        audit_after: audits?.after ?? null,
+      },
       name: '',
     },
     events: [],
@@ -408,7 +430,7 @@ describe('CompressDialog custom settings', () => {
 
     submit();
     await flush();
-    expect(prepareArgs(call)).toEqual({ preset: 'print', audit: false });
+    expect(prepareArgs(call)).toEqual({ preset: 'print', audit: true });
   });
 
   it('editing a field makes the settings Custom and sends the values as options', async () => {
@@ -427,7 +449,7 @@ describe('CompressDialog custom settings', () => {
     await flush();
     expect(prepareArgs(call)).toEqual({
       preset: 'custom',
-      audit: false,
+      audit: true,
       options: {
         image_dpi: 150,
         jpeg_quality: 40,
@@ -508,5 +530,123 @@ describe('CompressDialog custom settings', () => {
     await flush();
     expect(field(t('compress.field.dpi')).disabled).toBe(true);
     expect(field(t('compress.field.quality')).disabled).toBe(true);
+  });
+});
+
+// The space table in the result (W6.4): the audits come from the same job as the sizes.
+const KB = 1024;
+const AUDIT_BEFORE = auditJson({
+  images: 1024 * KB,
+  fonts: 400 * KB,
+  page_content: 120 * KB,
+  comments_forms: 0,
+  file_overhead: 2 * KB,
+});
+const AUDIT_AFTER = auditJson({
+  images: 200 * KB,
+  fonts: 96 * KB,
+  page_content: 120 * KB,
+  comments_forms: 0,
+  file_overhead: 1 * KB,
+});
+
+function auditTable(): HTMLTableElement | null {
+  return document.body.querySelector<HTMLTableElement>('table.compress-audit-table');
+}
+
+function rowHeaders(): string[] {
+  return [...document.body.querySelectorAll('table.compress-audit-table tbody th')].map(
+    (cell) => cell.textContent ?? '',
+  );
+}
+
+async function runWith(
+  before: number,
+  after: number,
+  audits: { before: AuditJson; after: AuditJson } | null,
+  settingsChoice?: string,
+) {
+  const { engine } = fakeEngine();
+  const job = deferredWorker();
+  const progress = createJobProgressStore({ toasts: createToastStore() });
+  render({ engine, progress, startWorker: () => job.worker });
+  if (settingsChoice !== undefined) choose(settingsChoice);
+  submit();
+  await flush();
+  await act(async () => job.finish(reduceReply(before, after, audits)));
+  await flush();
+  return job;
+}
+
+describe('CompressDialog space audit', () => {
+  it('shows the table with a caption naming the preset, the headers and the rows that changed', async () => {
+    await runWith(2_000_000, 500_000, { before: AUDIT_BEFORE, after: AUDIT_AFTER });
+
+    const table = auditTable();
+    expect(table).not.toBeNull();
+    expect(table?.querySelector('caption')?.textContent).toBe(
+      t('compress.audit.caption', { settings: t('compress.preset.ebook') }),
+    );
+    const headers = [...(table?.querySelectorAll('thead th') ?? [])].map(
+      (cell) => cell.textContent,
+    );
+    expect(headers).toEqual([
+      t('compress.audit.part'),
+      t('compress.audit.before'),
+      t('compress.audit.after'),
+      t('compress.audit.change'),
+    ]);
+    // Zero rows are hidden (comments and forms); file overhead is always the last row.
+    expect(rowHeaders()).toEqual([
+      t('space.category.images'),
+      t('space.category.fonts'),
+      t('space.category.page_content'),
+      t('space.category.file_overhead'),
+    ]);
+    const images = table?.querySelector('tbody tr');
+    expect(images?.textContent).toContain(t('compress.audit.less', { size: '824.0 KB' }));
+    const pageContent = [...(table?.querySelectorAll('tbody tr') ?? [])][2];
+    expect(pageContent?.textContent).toContain(t('compress.audit.same'));
+    const note = document.getElementById(table?.getAttribute('aria-describedby') ?? '');
+    expect(note?.textContent).toBe(t('compress.audit.note'));
+  });
+
+  it('shows the table in the not-smaller case, with no download', async () => {
+    const onClose = vi.fn();
+    const { engine } = fakeEngine();
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    render({ engine, progress, onClose, startWorker: () => job.worker });
+    choose(t('compress.preset.custom'));
+    submit();
+    await flush();
+    await act(async () =>
+      job.finish(reduceReply(1000, 1200, { before: AUDIT_BEFORE, after: AUDIT_AFTER })),
+    );
+    await flush();
+
+    expect(document.body.querySelector('a.compress-download')).toBeNull();
+    expect(auditTable()).not.toBeNull();
+    expect(auditTable()?.querySelector('caption')?.textContent).toBe(
+      t('compress.audit.caption', { settings: t('compress.preset.custom') }),
+    );
+  });
+
+  it('clears the result, its table and its download when a setting changes', async () => {
+    await runWith(2_000_000, 500_000, { before: AUDIT_BEFORE, after: AUDIT_AFTER });
+    expect(document.body.querySelector('a.compress-download')).not.toBeNull();
+
+    choose(t('compress.preset.screen'));
+
+    expect(auditTable()).toBeNull();
+    expect(document.body.querySelector('a.compress-download')).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:compress-test');
+  });
+
+  it('shows the result without a table when the reply has no audits', async () => {
+    await runWith(2_000_000, 500_000, null);
+
+    expect(auditTable()).toBeNull();
+    expect(document.body.querySelector('a.compress-download')).not.toBeNull();
   });
 });

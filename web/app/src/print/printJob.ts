@@ -91,7 +91,9 @@ export async function runPrintJob(options: PrintJobOptions): Promise<void> {
       throw new RpcError('INTERNAL', 'printing is not available in this build');
     }
     worker = options.startWorker();
-    files = await runPrintWorker(worker, args, prepared.document);
+    files = await runPrintWorker(worker, args, prepared.document, (percent) =>
+      store.progress(prepared.token, percent),
+    );
   } catch (error) {
     store.finish(prepared.token, { ok: false, error });
     return;
