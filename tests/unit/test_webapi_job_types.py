@@ -17,24 +17,27 @@ import re
 import zipfile
 from collections.abc import Iterator
 from dataclasses import replace
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from PIL import Image
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine import mupdf as mupdf_engine
 from pdfeditor.model import platform as model_platform
 from pdfeditor.services.export.fonts import program_fs_type
-from pdfeditor.webapi import dispatch, jobs, jobworker, limits
+from pdfeditor.webapi import dispatch, dto, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
     CANCELLED,
     FILE_TOO_LARGE,
     INVALID_ARGS,
     NOT_SUPPORTED,
     RENDER_TOO_LARGE,
+    RpcFailure,
 )
-from pdfeditor.webapi.platform import configure_web
+from pdfeditor.webapi.platform import WEB_SNAPSHOT_BUDGET, configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.hostcheck import record
 
@@ -604,14 +607,24 @@ def test_print_partials_stop_at_the_byte_cap(
     handle = open_data(text_fixture(fixture_pdf), "text.pdf")
     args = {"pages": [0, 1]}
     _, copy = prepare(handle, "print_pages", args)
-    # The copy itself is under the cap; the first page's bytes take the job over it.
-    monkeypatch.setattr(limits, "MAX_JOB_BYTES", len(copy))
-    received: list[dict[str, Any]] = []
-    reply, _ = run_on_copy(
-        "print_pages", args, copy, partial=lambda notice, _out: received.append(notice)
+    # A one-byte cap, so the first page's PNG takes the job over it whatever the sizes are. The
+    # job function runs directly, since jobworker would refuse the copy itself against the same cap.
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", 1)
+    session = DocumentSession.open(copy, None, snapshot_budget=WEB_SNAPSHOT_BUDGET)
+    reported: list[dto.FileDto] = []
+    ctx = SimpleNamespace(
+        token=CancelToken(),
+        report=reported.append,
+        progress=lambda done, total: None,
     )
-    assert error(reply)["code"] == FILE_TOO_LARGE
-    assert received == []
+    try:
+        with pytest.raises(RpcFailure) as failure:
+            jobs._run_print(session, dto.PrintArgs(pages=(0, 1)), cast(Any, ctx))
+    finally:
+        session.close()
+    assert failure.value.code == FILE_TOO_LARGE
+    # The cap is checked before a page is reported, so no partial went out.
+    assert reported == []
 
 
 def test_print_pages_can_be_cancelled_before_it_starts(web: None, fixture_pdf: Any) -> None:
