@@ -13,13 +13,14 @@ import pytest
 
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
-from pdfeditor.webapi import combine, limits
+from pdfeditor.webapi import combine, dto, limits
 from pdfeditor.webapi.errors import (
     FILE_TOO_LARGE,
     INVALID_ARGS,
     OPEN_FAILED,
     PASSWORD_REQUIRED,
     WRONG_PASSWORD,
+    RpcFailure,
 )
 from pdfeditor.webapi.registry import REGISTRY
 from tests.unit.test_webapi_jobs import call, call_raw, error, ok
@@ -129,6 +130,20 @@ def test_an_over_long_password_is_invalid_args_and_not_echoed(fixture_pdf: Any) 
     assert "pw-Zq7" not in str(reply)
 
 
+def test_a_password_of_exactly_the_bound_is_accepted(fixture_pdf: Any) -> None:
+    # An unencrypted file opens whatever the password, so a password at the bound is not refused.
+    data = Path(fixture_pdf("text_multipage")).read_bytes()
+    result = ok(_probe("text_multipage.pdf", data, "p" * combine.MAX_PASSWORD_CHARS))
+    assert result["needed_password"] is False
+
+
+def test_a_password_one_character_over_the_bound_is_invalid_args(fixture_pdf: Any) -> None:
+    data = Path(fixture_pdf("text_multipage")).read_bytes()
+    err = error(_probe("text_multipage.pdf", data, "p" * (combine.MAX_PASSWORD_CHARS + 1)))
+    assert err["code"] == INVALID_ARGS
+    assert err["details"] == {"path": "params.password"}
+
+
 def test_the_call_keeps_nothing_and_leaves_the_engine_lock_free(fixture_pdf: Any) -> None:
     before = len(REGISTRY)
     data = Path(fixture_pdf("text_multipage")).read_bytes()
@@ -160,3 +175,86 @@ def test_no_password_reaches_a_log_record_or_a_reply(
     assert error(reply)["code"] == WRONG_PASSWORD
     assert secret not in str(reply)
     assert all(secret not in record.getMessage() for record in caplog.records)
+
+
+def test_the_password_required_reply_and_logs_carry_no_password(
+    fixture_pdf: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    # No password is sent here, so there is no secret to leak; the check guards that this
+    # error path adds nothing password-shaped to the reply or to the log.
+    caplog.set_level(logging.DEBUG)
+    data = Path(fixture_pdf("encrypted")).read_bytes()
+    reply, _ = call_raw("combine.probe", {"name": "encrypted.pdf", "data": {"$bin": 0}}, [data])
+    assert error(reply)["code"] == PASSWORD_REQUIRED
+    assert "password" not in str(error(reply)["details"]).lower()
+    assert all("password" not in record.getMessage().lower() for record in caplog.records)
+
+
+class _SpyEngine:
+    """Wraps the real engine and records what each open was given."""
+
+    def __init__(self, inner: Any) -> None:
+        self.inner = inner
+        self.opened: list[object] = []
+
+    def open(self, source: object, password: str | None = None) -> Any:
+        self.opened.append(source)
+        return self.inner.open(source, password)
+
+
+def test_the_document_is_opened_from_bytes_not_a_path(
+    fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spy = _SpyEngine(get_engine(DEFAULT_ENGINE))
+    monkeypatch.setattr(combine, "get_engine", lambda name: spy)
+    data = Path(fixture_pdf("text_multipage")).read_bytes()
+    ok(_probe("text_multipage.pdf", data))
+    assert len(spy.opened) == 1
+    assert isinstance(spy.opened[0], bytes)
+    assert spy.opened[0] == data
+
+
+class _FakeDocument:
+    def __init__(self, pages: int | BaseException) -> None:
+        self._pages = pages
+        self.closed = False
+
+    @property
+    def page_count(self) -> int:
+        if isinstance(self._pages, BaseException):
+            raise self._pages
+        return self._pages
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeEngine:
+    def __init__(self, document: _FakeDocument) -> None:
+        self.document = document
+
+    def open(self, source: object, password: str | None = None) -> _FakeDocument:
+        return self.document
+
+
+def test_the_document_is_closed_when_reading_its_pages_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _FakeDocument(RuntimeError("engine blew up"))
+    monkeypatch.setattr(combine, "get_engine", lambda name: _FakeEngine(document))
+    params = dto.CombineProbeParams(name="x.pdf", data=b"%PDF-1.4")
+    with pytest.raises(RuntimeError, match="engine blew up"):
+        combine.probe(params)
+    assert document.closed is True
+
+
+def test_the_document_is_closed_on_the_zero_page_open_failed_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _FakeDocument(0)
+    monkeypatch.setattr(combine, "get_engine", lambda name: _FakeEngine(document))
+    params = dto.CombineProbeParams(name="x.pdf", data=b"%PDF-1.4")
+    with pytest.raises(RpcFailure) as failure:
+        combine.probe(params)
+    assert failure.value.code == OPEN_FAILED
+    assert document.closed is True
