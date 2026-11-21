@@ -869,6 +869,25 @@ export const EN = {
   'bookmarks.loadFailed': 'The bookmarks could not be read. Try opening the file again.',
   'bookmarks.expand': 'Expand {title}',
   'bookmarks.collapse': 'Collapse {title}',
+  'bookmarks.actions': 'Bookmark actions',
+  'bookmarks.rename': 'Rename',
+  'bookmarks.rename.label': 'Bookmark title',
+  'bookmarks.delete': 'Delete',
+  'bookmarks.moveUp': 'Move Up',
+  'bookmarks.moveDown': 'Move Down',
+  'bookmarks.indent': 'Indent',
+  'bookmarks.outdent': 'Outdent',
+  'bookmarks.setDestination': 'Set to Current Page',
+  'bookmarks.renamed': 'Bookmark renamed.',
+  'bookmarks.deleted': {
+    one: 'Deleted "{title}" and {count} nested bookmark.',
+    other: 'Deleted "{title}" and {count} nested bookmarks.',
+  },
+  'bookmarks.deletedOne': 'Deleted "{title}".',
+  'bookmarks.moved': 'Moved "{title}" to level {level}, position {position} of {count}.',
+  'bookmarks.destinationSet': 'Bookmark now goes to page {page}.',
+  'bookmarks.stale': 'The bookmarks had changed, so nothing was edited. They have been read again.',
+  'bookmarks.editFailed': 'The bookmark could not be changed. Try again.',
 
   // Page organizer side panel (W6.1). Rotate and delete reuse the command labels; the undo labels
   // are the engine's, shown in English in v1.
@@ -980,6 +999,7 @@ export const EN = {
     'The margins would leave less than 1 pt of a page. Enter smaller margins.',
   'error.REFUSED.invalidMargins': 'A margin cannot be negative.',
   'error.REFUSED.invalidPages': 'One of the chosen pages is not in this document.',
+  'error.REFUSED.outlineTooDeep': 'Bookmarks cannot be nested more than 32 levels deep.',
   'error.BUSY': 'Wait for the current task to finish, then try again.',
   'error.NOT_SUPPORTED': 'This is not available in the web version.',
   'error.STALE_OBJECT': 'The page changed since you last looked. Try again.',

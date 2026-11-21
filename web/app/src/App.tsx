@@ -752,10 +752,13 @@ export function App({
           activeId !== null &&
           session !== null ? (
           <BookmarksPanel
-            key={`bookmarks-${structureRevision}`}
+            key={`bookmarks-${activeId}`}
             rpc={session.rpc}
             handle={session.handle}
             tabId={activeId}
+            currentPage={viewState.page - 1}
+            revision={structureRevision}
+            onHistoryStep={onHistoryStep}
             onSelect={goTo}
             onClose={() => closePanel('left')}
           />
