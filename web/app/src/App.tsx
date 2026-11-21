@@ -808,10 +808,7 @@ export function App({
             onSelect={onLinkGoTo}
             location={() => viewRef.current?.location() ?? null}
             labels={viewState.labels}
-            selectedText={() => {
-              const read = viewRef.current?.selectedText();
-              return read?.state === 'ready' ? read.value : null;
-            }}
+            selectedText={() => viewRef.current?.selectedText() ?? null}
             onClose={() => closePanel('left')}
           />
         ) : documentShown &&

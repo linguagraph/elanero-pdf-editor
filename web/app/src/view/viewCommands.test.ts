@@ -54,6 +54,7 @@ function fakeView(): DocumentViewHandle {
     copyPlan: vi.fn(() => ({ kind: 'off' }) as const),
     selectedPageSpan: vi.fn(() => 0),
     selectedAreas: vi.fn(() => ({ state: 'off' }) as const),
+    selectedText: vi.fn(() => ''),
     clearTextSelection: vi.fn(),
     loadTextPages: vi.fn(() => Promise.resolve()),
     revealRect: vi.fn(),
