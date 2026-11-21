@@ -340,9 +340,13 @@ export function viewLocation(
   const box = boxes.find((candidate) => candidate.index === page);
   if (box === undefined) return null;
   const px = sceneTop - box.top;
+  // NaN and infinite scroll positions are not places: NaN fails every comparison below, and an
+  // infinite offset would clamp to the page height instead of naming no place at all.
+  if (!Number.isFinite(px)) return null;
   if (px <= 0 || box.height <= 0) return { page, top: null };
   const pt = Math.min(heightPt, (px / box.height) * heightPt);
   const top = Math.round(pt * 100) / 100;
+  if (!Number.isFinite(top)) return null;
   // Under a point is the page top: a jump lands a little above the page's own top, so a reader who
   // just went to a page gets the page top back.
   return { page, top: top < 1 ? null : top };

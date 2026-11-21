@@ -38,6 +38,11 @@ describe('viewLocation', () => {
     expect(viewLocation(BOXES, HEIGHT_PT, 9, 100)).toBeNull();
   });
 
+  it('is null for a scroll position that is not a number or not finite', () => {
+    expect(viewLocation(BOXES, HEIGHT_PT, 1, Number.NaN)).toBeNull();
+    expect(viewLocation(BOXES, HEIGHT_PT, 1, Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
   it('rounds to 0.01 point', () => {
     const top = viewLocation(BOXES, HEIGHT_PT, 0, 123.456)?.top;
     // 123.456 px of 1000 px is 0.123456 of 800 pt: 98.7648, which rounds to 98.76.
