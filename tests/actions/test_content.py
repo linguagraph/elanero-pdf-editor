@@ -6,6 +6,7 @@ and render in pypdfium2 (independent implementations), not only in MuPDF.
 from __future__ import annotations
 
 import io
+import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -225,6 +226,15 @@ REFUSED_SHAPES = [
     pytest.param(ShapeSpec(ShapeKind.ELLIPSE, Rect(200, 500, 100, 560)), id="flipped_box"),
     pytest.param(
         ShapeSpec(ShapeKind.LINE, start=Point(100, 600), end=Point(100, 600)), id="point_line"
+    ),
+    pytest.param(ShapeSpec(ShapeKind.RECTANGLE, Rect(math.nan, 500, 200, 560)), id="nan_box"),
+    pytest.param(ShapeSpec(ShapeKind.ELLIPSE, Rect(100, 500, math.inf, 560)), id="inf_box"),
+    pytest.param(
+        ShapeSpec(ShapeKind.LINE, start=Point(100, math.nan), end=Point(300, 600)), id="nan_line"
+    ),
+    pytest.param(
+        ShapeSpec(ShapeKind.LINE, start=Point(100, 600), end=Point(-math.inf, 600)),
+        id="inf_line",
     ),
 ]
 
