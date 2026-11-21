@@ -55,3 +55,9 @@
 .combine-message {
   margin: 0;
 }
+
+.combine-status {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

@@ -64,7 +64,9 @@ export async function runCombine(
     const sources = await Promise.all(
       items.map(async (item) => ({ name: item.name, data: await item.file.arrayBuffer() })),
     );
-    const output = await runMergeJob(worker, sources);
+    const output = await runMergeJob(worker, sources, (percent) => {
+      deps.store.progress(token, percent);
+    });
     deps.store.finish(token, { ok: true });
     return { status: 'done', name: output.name, bytes: output.bytes };
   } catch (error) {
