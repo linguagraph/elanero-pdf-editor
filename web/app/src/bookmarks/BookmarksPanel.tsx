@@ -4,7 +4,7 @@
 // deletes, moves and re-targets entries, by keys (F2, Delete, Alt+Shift+Arrow) or a toolbar of text
 // buttons. Each edit is one engine action with an Undo toast; the outline then reloads.
 // Adding bookmarks comes later (S3).
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
@@ -162,6 +162,14 @@ function RenameField({
     ref.current?.focus();
     ref.current?.select();
   }, []);
+  // Unmounting (the outline was replaced under the field) ends it without an edit. Runs before the
+  // input leaves the DOM, so a blur from the removal cannot send a rename for a row that is gone.
+  useLayoutEffect(
+    () => () => {
+      settled.current = true;
+    },
+    [],
+  );
   const finish = (value: string | null, refocus: boolean) => {
     if (settled.current) return;
     settled.current = true;
@@ -244,6 +252,8 @@ function BookmarkTree({
         setExpanded(expandedOf(tabId, key) ?? initialExpanded(reply.entries));
         setEditable(canWrite);
         setEntries(reply.entries);
+        // A rename field open on the replaced outline would point at a stale row: close it.
+        setEditing(null);
         releaseEdit();
       })
       .catch(() => {

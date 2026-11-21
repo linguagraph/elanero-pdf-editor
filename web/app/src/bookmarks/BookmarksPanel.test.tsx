@@ -66,10 +66,12 @@ function Harness({
   tabId,
   rpc,
   onSelect,
+  revision = 0,
 }: {
   tabId: number;
   rpc: PageRpc;
   onSelect: (index: number) => void;
+  revision?: number;
 }) {
   const open = useOpenPanel('left') === 'bookmarks';
   let panel: ReactNode = null;
@@ -80,7 +82,7 @@ function Harness({
         handle="h"
         tabId={tabId}
         currentPage={0}
-        revision={0}
+        revision={revision}
         onHistoryStep={() => undefined}
         onSelect={onSelect}
         onClose={() => closePanel('left')}
@@ -357,6 +359,20 @@ describe('bookmarks editing (W5.2 S2)', () => {
     const field = host.querySelector<HTMLInputElement>('input.bookmarks-rename');
     if (field === null) throw new Error('no rename field');
     await press(field, { key: 'Escape' });
+    expect(host.querySelector('input.bookmarks-rename')).toBeNull();
+    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+  });
+
+  it('closes an open rename when a reload replaces the outline under it', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(13, rpc);
+    await press(item('Part Two'), { key: 'F2' });
+    expect(host.querySelector('input.bookmarks-rename')).not.toBeNull();
+    act(() => {
+      root.render(<Harness tabId={13} rpc={rpc} onSelect={vi.fn()} revision={1} />);
+    });
+    await flush();
     expect(host.querySelector('input.bookmarks-rename')).toBeNull();
     expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
   });
