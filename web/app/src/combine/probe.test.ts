@@ -196,3 +196,9 @@ describe('ProbeQueue', () => {
     expect(calls[1]?.name).toBe('a.pdf');
   });
 });
+
+describe('the probe size limit', () => {
+  it('is the same 64 MiB the engine checks (webapi/limits.py MAX_PROBE_BYTES)', () => {
+    expect(PROBE_MAX_BYTES).toBe(64 * 1024 * 1024);
+  });
+});
