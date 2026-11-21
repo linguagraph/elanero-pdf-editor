@@ -91,6 +91,7 @@ def test_getting_a_page_loads_and_evicts_nothing(
         doc.close()
 
 
+@pytest.mark.desktop_only  # needs pikepdf and pypdfium2, which the Pyodide run does not have
 def test_edit_after_eviction_saves_and_reads_back(long_pdf: Path, tmp_path: Path) -> None:
     pikepdf = pytest.importorskip("pikepdf")
     pdfium = pytest.importorskip("pypdfium2")
