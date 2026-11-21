@@ -217,9 +217,19 @@ function BookmarkTree({
   const pendingFocus = useRef<{ index: number | null } | null>(null);
   // A synchronous guard: a second key or click before the state updates must not send a second edit.
   const busyRef = useRef(false);
+  // Set by an edit that changed the outline: busy then lasts until the reload has applied the new
+  // entries, so a key pressed in between cannot plan against the outline the edit replaced.
+  const reloadPending = useRef(false);
 
   useEffect(() => {
     let active = true;
+    // Ends the edit's busy state once its reload has settled (applied or failed).
+    const releaseEdit = () => {
+      if (!reloadPending.current) return;
+      reloadPending.current = false;
+      busyRef.current = false;
+      setBusy(false);
+    };
     // A failed capability read counts as read-only: the toolbar and the edit keys stay off.
     const writable = rpc.call('session.capabilities', { handle }).then(
       (reply) => reply.engine.outline_write === true,
@@ -234,9 +244,12 @@ function BookmarkTree({
         setExpanded(expandedOf(tabId, key) ?? initialExpanded(reply.entries));
         setEditable(canWrite);
         setEntries(reply.entries);
+        releaseEdit();
       })
       .catch(() => {
-        if (active) setLoadFailed(true);
+        if (!active) return;
+        setLoadFailed(true);
+        releaseEdit();
       });
     return () => {
       active = false;
@@ -319,7 +332,7 @@ function BookmarkTree({
     setBusy(true);
     // Saved before the edit, so an Undo finds the expansion this outline had.
     setExpandedOf(tabId, fingerprintOf(entries), new Set(expanded));
-    let outcome: BookmarkEditOutcome;
+    let outcome: BookmarkEditOutcome = 'failed';
     try {
       outcome = await runBookmarkEdit(
         { rpc, handle, onHistoryStep },
@@ -328,15 +341,21 @@ function BookmarkTree({
         plan.text,
       );
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      // A reload follows an edit that went through or found the outline stale; the reload effect
+      // ends the busy state once it has applied the entries.
+      if (outcome !== 'done' && outcome !== 'stale') {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
     if (outcome === 'done') {
       setExpandedOf(tabId, fingerprintOf(plan.next), new Set(plan.nextExpanded));
       pendingFocus.current = { index: plan.focus };
+      reloadPending.current = true;
       setReloadToken((value) => value + 1);
     } else if (outcome === 'stale') {
       pendingFocus.current = { index: activeIndex ?? 0 };
+      reloadPending.current = true;
       setReloadToken((value) => value + 1);
     }
   };

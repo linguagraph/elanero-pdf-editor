@@ -360,4 +360,47 @@ describe('bookmarks editing (W5.2 S2)', () => {
     expect(host.querySelector('input.bookmarks-rename')).toBeNull();
     expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
   });
+
+  it('ignores an edit key while the reload after an edit is still running', async () => {
+    const reload: { resolve?: (value: { entries: OutlineEntry[] }) => void } = {};
+    let outlineReads = 0;
+    const call = vi.fn((method: string) => {
+      if (method === 'session.outline') {
+        outlineReads += 1;
+        if (outlineReads === 1) return Promise.resolve({ entries: outline });
+        // The reload after the edit waits until the test resolves it.
+        return new Promise((resolve) => {
+          reload.resolve = resolve;
+        });
+      }
+      if (method === 'session.capabilities') {
+        return Promise.resolve({ engine: { outline_write: true }, platform: {} });
+      }
+      if (method === 'actions.run') {
+        return Promise.resolve({
+          label: 'Move Bookmark',
+          executed: true,
+          value: null,
+          changed: null,
+          state: { history: 1 },
+        });
+      }
+      return Promise.reject(new Error(`unexpected call ${method}`));
+    });
+    const rpc = { call } as unknown as PageRpc;
+    const runs = () => call.mock.calls.filter(([method]) => method === 'actions.run');
+    openPanel('bookmarks');
+    await mount(12, rpc);
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(runs()).toHaveLength(1);
+    // The outline is still the one the edit replaced, so a second move is ignored.
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(runs()).toHaveLength(1);
+    await act(async () => {
+      reload.resolve?.({ entries: outline });
+    });
+    await flush();
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(runs()).toHaveLength(2);
+  });
 });
