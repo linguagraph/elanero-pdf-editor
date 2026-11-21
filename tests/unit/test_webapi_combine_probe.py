@@ -50,6 +50,30 @@ def test_an_unencrypted_pdf_gives_its_page_count(fixture_pdf: Any) -> None:
     }
 
 
+def test_an_unencrypted_pdf_probed_with_a_password_does_not_need_it(fixture_pdf: Any) -> None:
+    data = Path(fixture_pdf("text_multipage")).read_bytes()
+    result = ok(_probe("text_multipage.pdf", data, "unused"))
+    assert result["needed_password"] is False
+    assert result["encrypted"] is False
+
+
+def test_an_encrypted_pdf_that_opens_without_a_password_says_it_is_needed(
+    fixture_pdf: Any,
+) -> None:
+    data = Path(fixture_pdf("encrypted_owner_only")).read_bytes()
+    result = ok(_probe("encrypted_owner_only.pdf", data))
+    assert result == {"page_count": 1, "encrypted": True, "needed_password": True}
+
+
+def test_an_encrypted_pdf_that_opens_without_a_password_is_not_needed_with_one(
+    fixture_pdf: Any,
+) -> None:
+    data = Path(fixture_pdf("encrypted_owner_only")).read_bytes()
+    result = ok(_probe("encrypted_owner_only.pdf", data, "anything"))
+    assert result["needed_password"] is False
+    assert result["encrypted"] is True
+
+
 def test_an_encrypted_pdf_without_a_password_is_password_required(fixture_pdf: Any) -> None:
     data = Path(fixture_pdf("encrypted")).read_bytes()
     err = error(_probe("encrypted.pdf", data))

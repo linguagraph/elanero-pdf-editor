@@ -60,13 +60,24 @@ def probe(params: dto.CombineProbeParams) -> dto.CombineProbeResult:
             if pages == 0:
                 raise RpcFailure(OPEN_FAILED, "the file has no readable pages", {"pages": 0})
             encrypted = document.info().encryption is not EncryptionMethod.NONE
+            needed = encrypted and (params.password is None or _needs_password(engine, params))
         finally:
             document.close()
-    return dto.CombineProbeResult(
-        page_count=pages,
-        encrypted=encrypted,
-        needed_password=params.password is not None,
-    )
+    return dto.CombineProbeResult(page_count=pages, encrypted=encrypted, needed_password=needed)
+
+
+def _needs_password(engine: Engine, params: dto.CombineProbeParams) -> bool:
+    """Whether the file will not open without a password, asked of a second open with none. The
+    caller holds the lock. Only an encrypted file that was opened with a password gets here: the
+    password was sent, so it may have been needed or not."""
+    try:
+        document = engine.open(params.data, None)
+    except PasswordRequired:
+        return True
+    except EngineError:
+        return False
+    document.close()
+    return False
 
 
 def _check_name(name: str) -> None:
