@@ -246,9 +246,11 @@ is reloaded until you press it.
   and you can type a label into the page field to go to that page.
 - **Links.** Click or tap a link in the document, or Tab to it and press Enter, to jump to the page
   it names; the jump is recorded, so Back returns to where you were. A link to a page one page away
-  or on the same page is not recorded in Back. Links to web addresses, email, other files and
-  programs, and any other kind of link do not open in the web version: a short message says so, and
-  nothing is opened.
+  or on the same page is not recorded in Back. Web and email links ask first: a dialog shows the
+  site name and the full address, and nothing opens until you choose **Open link** (Cancel is the
+  default). Only web (`http` and `https`) and email (`mailto`) links open; a link to any other
+  scheme is blocked with a short message. Links to other files and programs, and any other kind of
+  link, do not work in the web version: a short message says so, and nothing is opened.
 
 ## Split a document
 
@@ -346,7 +348,7 @@ full policy, with what the desktop app stores, is in the
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; style fixed to a black 1.5-point outline |
 | Edit the words of a paragraph, add text or images | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
-| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; combine shows a progress bar, and Cancel stops the job; split offers the parts as separate downloads or as one ZIP file) |
+| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file and shows a progress bar, and Cancel stops the job; split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
 | Bookmarks: rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; adding bookmarks is coming soon) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
@@ -358,7 +360,7 @@ full policy, with what the desktop app stores, is in the
 | Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change) |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
-| Web and email links | Yes | Coming soon |
+| Web and email links | Yes | Yes: web and email links ask first, and show the full address |
 | Other comments, stamps, watermarks | Yes | Coming soon |
 | Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |

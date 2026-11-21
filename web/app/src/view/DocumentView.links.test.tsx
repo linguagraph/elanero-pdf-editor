@@ -8,6 +8,14 @@ import { CSS_PX_PER_POINT } from './zoom';
 import { DocumentView } from './DocumentView';
 import type { ViewTool } from './viewTool';
 
+// jsdom has no CSS.escape, and react-aria calls it when a modal opens (see layout.test.tsx).
+if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'function') {
+  Object.defineProperty(globalThis, 'CSS', {
+    configurable: true,
+    value: { escape: (value: string) => value.replace(/[^\w-]/g, (c) => `\\${c}`) },
+  });
+}
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Page 1 has two links: a goto to page 3 that gives a top, and a web link (not followed yet).
@@ -163,13 +171,40 @@ describe('DocumentView links (W5.3)', () => {
     expect(element.scrollTop).toBeGreaterThan(0);
   });
 
-  it('a web link is not followed yet: the view says so and asks for nothing', async () => {
+  it('a web link asks first: the dialog opens and nothing opens until Open', async () => {
     const onLinkGoTo = vi.fn();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
     await mount('select', { onLinkGoTo });
     scroller();
     tap(link(1));
     expect(onLinkGoTo).not.toHaveBeenCalled();
-    expect(host.querySelector('.doc-link-notice')?.textContent).toBe(t('links.notice.unsupported'));
+    expect(open).not.toHaveBeenCalled();
+    expect(document.querySelector('.overlay-dialog')?.textContent).toContain(
+      'https://example.org/',
+    );
+    open.mockRestore();
+  });
+
+  it('a blocked link shows its notice with the scheme and opens nothing', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    act(() => {
+      root.render(
+        <DocumentView
+          rpc={fakeRpc([{ ...PAGE_ONE_LINKS[1]!, uri: 'javascript:alert(1)' }])}
+          handle="h"
+          tool="select"
+        />,
+      );
+    });
+    await flush();
+    scroller();
+    tap(link(0));
+    expect(document.querySelector('.overlay-dialog')).toBeNull();
+    expect(host.querySelector('.doc-link-notice')?.textContent).toBe(
+      t('links.notice.blocked', { scheme: 'javascript' }),
+    );
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 
   it('without an app handler the view scrolls itself to the target top', async () => {

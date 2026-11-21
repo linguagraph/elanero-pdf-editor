@@ -97,19 +97,50 @@ describe('PageLinkLayer', () => {
     await render(cacheAt(1), { labels: ['i', 'iv'] });
     const names = spans().map((span) => span.getAttribute('aria-label'));
     // In reading order: the goto to page 2 (label iv), the goto to page 1 (label i), the goto with
-    // no page, then the uri, which is unsupported until its change lands.
+    // no page, then the web link, which names its host.
     expect(names).toEqual([
       t('links.goTo', { label: 'iv' }),
       t('links.goTo', { label: 'i' }),
       t('links.noTarget'),
-      t('links.unsupported'),
+      t('links.web', { address: 'example.org' }),
     ]);
+  });
+
+  it('names a mail link by its address, without a long ?body= query', async () => {
+    const body = 'x'.repeat(400);
+    const mail: LinkDto = {
+      rect: { x0: 72, y0: 100, x1: 150, y1: 114 },
+      kind: 'uri',
+      page: null,
+      top: null,
+      uri: `mailto:a@example.org?subject=Hi&body=${body}`,
+    };
+    await render(cacheAt(1, [mail]));
+    const name = spans()[0]?.getAttribute('aria-label');
+    expect(name).toBe(t('links.web', { address: 'a@example.org' }));
+    expect(name).not.toContain('body');
+  });
+
+  it('gives a mail link a hover title of its address, without the ?body= query', async () => {
+    const mail: LinkDto = {
+      rect: { x0: 72, y0: 100, x1: 150, y1: 114 },
+      kind: 'uri',
+      page: null,
+      top: null,
+      uri: `mailto:a@example.org?subject=Hi&body=${'x'.repeat(400)}`,
+    };
+    await render(cacheAt(1, [mail]));
+    const title = spans()[0]?.title;
+    expect(title).toBe('a@example.org');
+    expect(title).not.toContain('body');
   });
 
   it('gives a page title on hover for a goto link only', async () => {
     await render(cacheAt(1), { labels: ['i', 'iv'] });
     expect(spans()[0]?.title).toBe(t('links.title.page', { label: 'iv' }));
-    expect(spans()[3]?.title).toBe('');
+    // A web link's title is its address; a link with no target has none.
+    expect(spans()[3]?.title).toBe('https://example.org/');
+    expect(spans()[2]?.title).toBe('');
   });
 
   it('follows the link on Enter and not on Space', async () => {

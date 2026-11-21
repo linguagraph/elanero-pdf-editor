@@ -655,6 +655,21 @@ export const EN = {
   'combine.running': 'Combining the files. The progress bar shows how far it has got.',
   'combine.done': 'Your combined file is ready.',
   'combine.download': 'Download {name}',
+  'combine.image': 'Image',
+  'combine.pages.label': 'Pages',
+  'combine.pages.labelFor': 'Pages of {name}',
+  'combine.pages.placeholder': 'All',
+  'combine.pages.hint':
+    'To use only some pages of a PDF, type them in its Pages box, for example 1-3, 5, 8-. Leave it empty for all pages.',
+  'combine.error.ranges.invalid':
+    '"{item}" is not a page range. Use page numbers and dashes, for example 1-3, 5, 8-.',
+  'combine.error.ranges.empty': 'Choose at least one page, or leave the box empty for all pages.',
+  'combine.error.ranges.outOfRange': {
+    one: '"{item}" is outside {name}, which has {count} page.',
+    other: '"{item}" is outside {name}, which has {count} pages.',
+  },
+  'combine.error.ranges.summary':
+    "Some page ranges can't be used. Fix the ones marked, then combine again.",
 
   // Print dialog (W6.5, W1.6 section 5).
   'print.title': 'Print',
@@ -758,6 +773,18 @@ export const EN = {
   'links.title.page': 'Page {label}',
   'links.notice.noTarget': 'This link does not lead to a page in this document.',
   'links.notice.unsupported': 'This kind of link does not work in the web version.',
+  'links.notice.blocked': 'This link was not opened: "{scheme}" links are blocked.',
+  'links.notice.malformed': 'This link was not opened: its address is not valid.',
+  'links.web': 'Link to {address}',
+  'links.invalid': 'Link (address not valid)',
+  'links.confirm.title': 'Open link?',
+  'links.confirm.web': 'This document wants to open a page on {host}.',
+  'links.confirm.mail': 'This document wants to start an email.',
+  'links.confirm.address': 'Full address',
+  'links.confirm.warning':
+    'Links in a document can lead anywhere. Open it only if you trust this document.',
+  'links.confirm.open': 'Open link',
+  'links.confirm.cancel': 'Cancel',
   'pill.label': 'Page and zoom controls',
   'pill.previousPage': 'Previous page',
   'pill.nextPage': 'Next page',
