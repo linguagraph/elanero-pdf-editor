@@ -96,6 +96,10 @@ test.describe('engine staged', () => {
     expect(await lineTexts(pageLines(page, 0))).toContain('Page 1 heading');
     await page.locator('[data-page="0"]').click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Control+A');
+    // Select All reads the last page's text before it reports, so Copy waits for that toast.
+    await expect(
+      page.getByText('Selected the text of all 5 pages.', { exact: true }),
+    ).toBeVisible();
     await page.keyboard.press('Control+C');
 
     await expect(page.getByText('Copied to clipboard.', { exact: true })).toBeVisible();
