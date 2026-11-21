@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ERROR_CODES } from '../rpc/generated';
 import { EN, type AnyMessageId } from './en';
-import { formatDate, formatNumber } from './format';
+import { formatDate, formatDecimal, formatNumber } from './format';
 import { createTranslator, setLocale, t, tp } from './t';
 
 const ids = Object.keys(EN) as AnyMessageId[];
@@ -196,5 +196,13 @@ describe('locale-aware formatting', () => {
     );
     setLocale('en', {});
     expect(formatNumber(1234)).toBe('1,234');
+  });
+
+  it('formats a fixed number of decimals with the locale separator', () => {
+    expect(formatDecimal(1.5, 1)).toBe('1.5');
+    expect(formatDecimal(2, 1)).toBe('2.0');
+    setLocale('de', {});
+    expect(formatDecimal(1.5, 1)).toBe('1,5');
+    setLocale('en', {});
   });
 });

@@ -6,6 +6,7 @@ import type { FileJobEngine, JobWorker } from '../files/fileJob';
 import { PROTOCOL_VERSION, REDUCE_PRESETS } from '../rpc/generated';
 import { ReplyShapeError } from '../rpc/shape';
 import {
+  auditRows,
   isSmaller,
   presetSettings,
   readAudit,
@@ -188,5 +189,65 @@ describe('readAudit', () => {
   it('rejects a size that is not an integer', () => {
     const bad = { total: 1, categories: [{ key: 'images', name: 'Images', size: 1.5 }] };
     expect(() => readAudit(bad, 'value.audit_before')).toThrow(ReplyShapeError);
+  });
+});
+
+describe('auditRows', () => {
+  const audit = (categories: [string, number][]) =>
+    ({
+      total: categories.reduce((sum, [, size]) => sum + size, 0),
+      categories: categories.map(([key, size]) => ({ key, size })),
+    }) as Parameters<typeof auditRows>[0] & object;
+
+  it('gives no rows when either audit is missing', () => {
+    expect(auditRows(null, null)).toEqual([]);
+    expect(auditRows(audit([['images', 5]]), null)).toEqual([]);
+  });
+
+  it('drops rows that are zero in both, sorts by the before size and keeps file overhead last', () => {
+    const rows = auditRows(
+      audit([
+        ['file_overhead', 900],
+        ['fonts', 100],
+        ['images', 50],
+        ['tags', 0],
+      ]),
+      audit([
+        ['file_overhead', 10],
+        ['fonts', 300],
+        ['images', 50],
+        ['tags', 0],
+      ]),
+    );
+    expect(rows).toEqual([
+      { key: 'fonts', before: 100, after: 300 },
+      { key: 'images', before: 50, after: 50 },
+      { key: 'file_overhead', before: 900, after: 10 },
+    ]);
+  });
+
+  it('sums two engine labels that map to the same key', () => {
+    const rows = auditRows(
+      audit([
+        ['other', 30],
+        ['other', 20],
+      ]),
+      audit([['other', 5]]),
+    );
+    expect(rows).toEqual([{ key: 'other', before: 50, after: 5 }]);
+  });
+
+  it('breaks a tie in before size by the category order', () => {
+    const rows = auditRows(
+      audit([
+        ['tags', 10],
+        ['images', 10],
+      ]),
+      audit([
+        ['tags', 10],
+        ['images', 10],
+      ]),
+    );
+    expect(rows.map((row) => row.key)).toEqual(['images', 'tags']);
   });
 });

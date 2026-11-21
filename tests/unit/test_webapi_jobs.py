@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.engine.base import EngineError
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
@@ -381,6 +382,27 @@ def test_without_the_audit_the_values_are_null_and_the_steps_are_three(
     assert value["audit_before"] is None
     assert value["audit_after"] is None
     assert {notice["data"]["total"] for notice in notices} == {3}
+
+
+def test_a_failed_audit_still_returns_the_reduced_file_with_null_audits(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = {"preset": "screen", "audit": True}
+    _, copy = prepare(handle, "reduce_size", args)
+
+    def audit_fails(*_: Any, **__: Any) -> Any:
+        raise EngineError("audit broke")
+
+    monkeypatch.setattr(jobs, "space_audit", audit_fails)
+    with caplog.at_level("WARNING", logger="pdfeditor.webapi.jobs"):
+        reply, out = run_job("reduce_size", args, copy)
+    value = ok(reply)["value"]
+    assert value["audit_before"] is None
+    assert value["audit_after"] is None
+    assert value["before"] > 0 and value["after"] > 0  # the reduce itself ran
+    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+    assert "space audit failed" in caplog.text
 
 
 def test_a_cancel_before_the_after_audit_stops_the_job(
