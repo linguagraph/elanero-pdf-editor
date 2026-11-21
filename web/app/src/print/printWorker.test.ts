@@ -72,6 +72,38 @@ describe('runPrintWorker', () => {
     expect(files[1]?.data).toBe(buffers[1]);
     expect(files[2]?.data).toBe(buffers[2]);
   });
+
+  it('fails naming the page when its $bin marker points past the buffers', async () => {
+    // Three buffers, but the page's marker says $bin 5: the reply does not carry that page.
+    const reply = JSON.stringify({
+      v: 1,
+      id: 1,
+      ok: true,
+      result: {
+        kind: 'files',
+        label: '',
+        require_full_save: false,
+        document: null,
+        files: [{ name: 'page-06.png', mime: 'image/png', data: { $bin: 5 } }],
+        value: { pages: 1 },
+        name: '',
+      },
+      events: [],
+    });
+    const worker = workerReplying(reply, [pageBytes(1), pageBytes(2), pageBytes(3)]);
+
+    await expect(
+      runPrintWorker(worker, { dpi: 150, annotations: false, pages: [5] }, DOC),
+    ).rejects.toThrow('the print job replied badly: page page-06.png is not in the reply');
+  });
+
+  it('fails naming the page when the reply carries no buffers at all', async () => {
+    const worker = workerReplying(threePageReply(), []);
+
+    await expect(
+      runPrintWorker(worker, { dpi: 150, annotations: false, pages: [0, 1, 2] }, DOC),
+    ).rejects.toThrow('the print job replied badly: page page-01.png is not in the reply');
+  });
 });
 
 describe('runPrintJob with a multi-page job', () => {
