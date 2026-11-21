@@ -27,9 +27,9 @@ function fakeRpc(pageCount: number, labels: readonly string[] = []) {
         }));
         return Promise.resolve({ pages, labels: [...labels] });
       }
-      // The text layers (W5.4) and the redaction list (W7.4b) are asked for but never answered
+      // The text layers (W5.4), the redaction list (W7.4b) and the page links (W5.3) are asked for but never answered
       // here: they are not renders.
-      if (method === 'text.layer' || method === 'redaction.list') {
+      if (method === 'text.layer' || method === 'redaction.list' || method === 'session.links') {
         return new Promise(() => undefined);
       }
       return new Promise((resolve) => {
@@ -229,7 +229,7 @@ function scriptedRpc(answer: (attempt: number) => Promise<unknown>) {
     }
     // The text layer and the redaction list are not renders: they are never answered here and do
     // not use up an attempt.
-    if (method === 'text.layer' || method === 'redaction.list') {
+    if (method === 'text.layer' || method === 'redaction.list' || method === 'session.links') {
       return new Promise(() => undefined);
     }
     const attempt = attempts;
@@ -540,7 +540,7 @@ function fakeSizedRpc(sizes: { width: number; height: number }[]) {
           labels: [],
         });
       }
-      if (method === 'text.layer' || method === 'redaction.list') {
+      if (method === 'text.layer' || method === 'redaction.list' || method === 'session.links') {
         return new Promise(() => undefined);
       }
       calls.push({ method, params: params as Record<string, unknown> });

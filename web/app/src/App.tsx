@@ -486,6 +486,12 @@ export function App({
     if (activeId !== null) recordTabJump(activeId, viewState.page - 1, index);
     viewRef.current?.scrollToPage(index);
   };
+  // A link to a page of this document (W5.3) is a jump like any other: it lands at the link's
+  // target and is recorded in the tab's history.
+  const onLinkGoTo = (index: number, top: number | null) => {
+    if (activeId !== null) recordTabJump(activeId, viewState.page - 1, index);
+    viewRef.current?.scrollToPage(index, top ?? undefined);
+  };
   const stepBack = (direction: -1 | 1) => {
     if (activeId === null) return;
     const page = stepTabHistory(activeId, direction);
@@ -1122,6 +1128,7 @@ export function App({
             }}
             onCropBoxEnd={crop.boxEnded}
             onCommentToolChange={setCommentToolState}
+            onLinkGoTo={onLinkGoTo}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }
