@@ -1,22 +1,26 @@
-// The combine dialog (W6.3, R6, W1.6 section 5): the sources in order, the output name, and the
-// Combine button. The job runs on its own job worker through runCombine; the progress bar and
-// Cancel are the app's job bar (JobProgressHost), and the result is offered as a download.
-import { useRef, useState, type DragEvent } from 'react';
+// The combine dialog (W6.3, R6, W1.6 section 5): the sources in order, each PDF's Pages box, the
+// output name, and the Combine button. The job runs on its own job worker through runCombine; the
+// progress bar and Cancel are the app's job bar (JobProgressHost), and the result is offered as a
+// download. A Pages box that does not fit is shown on its row, and focus moves to the first one.
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Button } from 'react-aria-components';
 import { startJobWorker, type WorkerClient } from '../engine/start';
 import { jobWorkerBootOptions } from '../engine/bootOptions';
-import { t } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import { jobProgress, type JobProgressStore } from '../feedback/jobRun';
 import { downloadBytes } from '../files/downloads';
 import { Overlay } from '../layout/Overlay';
-import { runCombine } from './run';
+import { parsePageRanges, type PageRangeKind } from '../pages/pageRanges';
+import { rangeProblems, runCombine, type RangeProblem } from './run';
 import {
   ACCEPT,
   addSources,
   DEFAULT_OUTPUT_NAME,
+  isImageSourceName,
   moveSource,
   outputFileName,
   removeSource,
+  setSourcePages,
   type SourceItem,
 } from './sources';
 import './combine.css';
@@ -39,6 +43,54 @@ interface Result {
   readonly bytes: ArrayBuffer;
 }
 
+// What is wrong with one row's Pages box. Kept by the row's id, so a reorder keeps it.
+interface RowError {
+  readonly kind: PageRangeKind;
+  readonly item: string;
+  readonly count: number | null;
+}
+
+function rangeMessage(error: RowError, name: string): string {
+  switch (error.kind) {
+    case 'empty':
+      return t('combine.error.ranges.empty');
+    case 'invalid':
+      return t('combine.error.ranges.invalid', { item: error.item });
+    case 'out_of_range':
+      return tp('combine.error.ranges.outOfRange', error.count ?? 0, {
+        item: error.item,
+        name,
+      });
+  }
+}
+
+// The errors of the given problems, keyed by the id of the row each one is on.
+function errorsFor(
+  items: readonly SourceItem[],
+  problems: readonly RangeProblem[],
+): ReadonlyMap<number, RowError> {
+  const errors = new Map<number, RowError>();
+  for (const problem of problems) {
+    const id = items[problem.index]?.id;
+    if (id !== undefined) {
+      errors.set(id, { kind: problem.kind, item: problem.item, count: problem.count });
+    }
+  }
+  return errors;
+}
+
+// The errors with one row's error set, or cleared when error is null. A new map: React state.
+function withError(
+  errors: ReadonlyMap<number, RowError>,
+  id: number,
+  error: RowError | null,
+): ReadonlyMap<number, RowError> {
+  const next = new Map(errors);
+  if (error === null) next.delete(id);
+  else next.set(id, error);
+  return next;
+}
+
 export function CombineDialog({
   isOpen,
   onClose,
@@ -51,8 +103,18 @@ export function CombineDialog({
   const [message, setMessage] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('editing');
   const [result, setResult] = useState<Result | null>(null);
+  const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, RowError>>(new Map());
   const nextId = useRef(1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fieldRefs = useRef(new Map<number, HTMLInputElement>());
+  const focusId = useRef<number | null>(null);
+
+  // Focus moves after the render that enables the field: a disabled box cannot take it.
+  useEffect(() => {
+    if (focusId.current === null) return;
+    fieldRefs.current.get(focusId.current)?.focus();
+    focusId.current = null;
+  });
 
   const addFiles = (files: readonly File[]): void => {
     if (files.length === 0) return;
@@ -72,9 +134,31 @@ export function CombineDialog({
     addFiles(Array.from(event.dataTransfer.files));
   };
 
+  // Shows the problems on their rows, names the summary, and focuses the first bad box.
+  const showProblems = (problems: readonly RangeProblem[]): void => {
+    const errors = errorsFor(items, problems);
+    setRowErrors(errors);
+    setMessage(t('combine.error.ranges.summary'));
+    const first = items.find((item) => errors.has(item.id));
+    focusId.current = first?.id ?? null;
+  };
+
+  // The Pages box of one row is checked when it loses focus, not on every key (3-2 on the way
+  // to 3-20 must not flash an error).
+  const checkField = (id: number, text: string): void => {
+    const checked = parsePageRanges(text, null);
+    const error = checked.ok ? null : { ...checked.error, count: null };
+    setRowErrors((errors) => withError(errors, id, error));
+  };
+
   const combine = async (): Promise<void> => {
     if (phase === 'working') return;
     setMessage(null);
+    const problems = rangeProblems(items);
+    if (problems.length > 0) {
+      showProblems(problems);
+      return;
+    }
     setPhase('working');
     const outcome = await runCombine(items, { store, startWorker });
     if (outcome.status === 'done') {
@@ -82,6 +166,7 @@ export function CombineDialog({
       setPhase('done');
       return;
     }
+    if (outcome.status === 'rangeError') showProblems([outcome.problem]);
     if (outcome.status === 'refused') setMessage(outcome.message);
     setPhase('editing');
   };
@@ -95,6 +180,7 @@ export function CombineDialog({
     <Overlay isOpen={isOpen} onClose={requestClose} title={t('combine.title')}>
       <div className="combine" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
         <p className="combine-hint">{t('combine.dropHint')}</p>
+        <p className="combine-hint">{t('combine.pages.hint')}</p>
         <div>
           <Button
             className="combine-button"
@@ -121,32 +207,74 @@ export function CombineDialog({
           <p className="combine-empty">{t('combine.empty')}</p>
         ) : (
           <ol className="combine-list">
-            {items.map((item, index) => (
-              <li key={item.id} className="combine-row">
-                <span className="combine-name">{item.name}</span>
-                <Button
-                  className="combine-button"
-                  isDisabled={index === 0 || phase === 'working'}
-                  onPress={() => setItems(moveSource(items, index, -1))}
+            {items.map((item, index) => {
+              const error = rowErrors.get(item.id);
+              const errorId = `combine-pages-error-${item.id}`;
+              return (
+                <li
+                  key={item.id}
+                  className={error === undefined ? 'combine-row' : 'combine-row combine-row--error'}
                 >
-                  {t('combine.moveUp')}
-                </Button>
-                <Button
-                  className="combine-button"
-                  isDisabled={index === items.length - 1 || phase === 'working'}
-                  onPress={() => setItems(moveSource(items, index, 1))}
-                >
-                  {t('combine.moveDown')}
-                </Button>
-                <Button
-                  className="combine-button"
-                  isDisabled={phase === 'working'}
-                  onPress={() => setItems(removeSource(items, index))}
-                >
-                  {t('combine.remove')}
-                </Button>
-              </li>
-            ))}
+                  <span className="combine-name">{item.name}</span>
+                  {isImageSourceName(item.name) ? (
+                    <span className="combine-pages-image">{t('combine.image')}</span>
+                  ) : (
+                    <label className="combine-pages">
+                      <span>{t('combine.pages.label')}</span>
+                      <input
+                        type="text"
+                        value={item.pages}
+                        maxLength={2000}
+                        inputMode="text"
+                        spellCheck={false}
+                        placeholder={t('combine.pages.placeholder')}
+                        aria-label={t('combine.pages.labelFor', { name: item.name })}
+                        aria-invalid={error === undefined ? undefined : true}
+                        aria-describedby={error === undefined ? undefined : errorId}
+                        disabled={phase === 'working'}
+                        ref={(element) => {
+                          if (element) fieldRefs.current.set(item.id, element);
+                          else fieldRefs.current.delete(item.id);
+                        }}
+                        onChange={(event) => {
+                          setItems(setSourcePages(items, item.id, event.currentTarget.value));
+                          if (error !== undefined) {
+                            setRowErrors((errors) => withError(errors, item.id, null));
+                          }
+                        }}
+                        onBlur={(event) => checkField(item.id, event.currentTarget.value)}
+                      />
+                    </label>
+                  )}
+                  <Button
+                    className="combine-button"
+                    isDisabled={index === 0 || phase === 'working'}
+                    onPress={() => setItems(moveSource(items, index, -1))}
+                  >
+                    {t('combine.moveUp')}
+                  </Button>
+                  <Button
+                    className="combine-button"
+                    isDisabled={index === items.length - 1 || phase === 'working'}
+                    onPress={() => setItems(moveSource(items, index, 1))}
+                  >
+                    {t('combine.moveDown')}
+                  </Button>
+                  <Button
+                    className="combine-button"
+                    isDisabled={phase === 'working'}
+                    onPress={() => setItems(removeSource(items, index))}
+                  >
+                    {t('combine.remove')}
+                  </Button>
+                  {error === undefined ? null : (
+                    <p id={errorId} className="combine-pages-error">
+                      {rangeMessage(error, item.name)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         )}
         <label className="combine-output">

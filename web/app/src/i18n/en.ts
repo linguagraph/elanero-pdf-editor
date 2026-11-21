@@ -654,6 +654,21 @@ export const EN = {
   'combine.busy': 'Another task is running. Wait for it to finish, then combine again.',
   'combine.done': 'Your combined file is ready.',
   'combine.download': 'Download {name}',
+  'combine.image': 'Image',
+  'combine.pages.label': 'Pages',
+  'combine.pages.labelFor': 'Pages of {name}',
+  'combine.pages.placeholder': 'All',
+  'combine.pages.hint':
+    'To use only some pages of a PDF, type them in its Pages box, for example 1-3, 5, 8-. Leave it empty for all pages.',
+  'combine.error.ranges.invalid':
+    '"{item}" is not a page range. Use page numbers and dashes, for example 1-3, 5, 8-.',
+  'combine.error.ranges.empty': 'Choose at least one page, or leave the box empty for all pages.',
+  'combine.error.ranges.outOfRange': {
+    one: '"{item}" is outside {name}, which has {count} page.',
+    other: '"{item}" is outside {name}, which has {count} pages.',
+  },
+  'combine.error.ranges.summary':
+    "Some page ranges can't be used. Fix the ones marked, then combine again.",
 
   // Print dialog (W6.5, W1.6 section 5).
   'print.title': 'Print',

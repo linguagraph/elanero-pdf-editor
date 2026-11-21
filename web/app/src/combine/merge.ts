@@ -9,6 +9,8 @@ import type { WorkerClient } from '../engine/start';
 export interface MergeSourceBytes {
   readonly name: string;
   readonly data: ArrayBuffer;
+  // The Pages text of a PDF row, as typed. Left out (every page) when the row has none.
+  readonly ranges?: string;
 }
 
 export interface MergeOutput {
@@ -51,7 +53,12 @@ export async function runMergeJob(
   const args = {
     sources: sources.map((source) => {
       buffers.push(source.data);
-      return { name: source.name, data: { $bin: buffers.length - 1 } };
+      const entry: { name: string; data: { $bin: number }; ranges?: string } = {
+        name: source.name,
+        data: { $bin: buffers.length - 1 },
+      };
+      if (source.ranges !== undefined) entry.ranges = source.ranges;
+      return entry;
     }),
     bookmarks: true,
   };

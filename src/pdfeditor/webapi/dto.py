@@ -892,6 +892,7 @@ class MergeSourceArgs:
     name: str  # the file name with its extension: the extension decides PDF or image
     data: bytes
     pages: tuple[int, ...] | None = None  # 0-based; None: every page (PDF sources only)
+    ranges: str | None = None  # the page-range rule, 1-based text (PDF sources only)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
