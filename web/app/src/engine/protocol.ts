@@ -41,11 +41,13 @@ export interface ErrorMessage {
   error: { message: string; stage?: FailedStage };
 }
 
-// worker -> main: a notice of a call still running (a job's progress). The id is the call's.
+// worker -> main: a notice of a call still running (a job's progress, or a partial result). The id
+// is the call's. A partial notice carries its one buffer; it is transferred, not copied.
 export interface NoticeMessage {
   kind: 'notice';
   id: number;
   notice: Record<string, unknown>;
+  buffer?: ArrayBuffer;
 }
 
 export type WorkerOutbound = StageMessage | ReplyMessage | ErrorMessage | NoticeMessage;

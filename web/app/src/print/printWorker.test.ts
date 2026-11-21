@@ -6,6 +6,7 @@ import { createToastStore } from '../feedback/toasts';
 import type { PrintRpc } from './printJob';
 import { runPrintJob } from './printJob';
 import { runPrintWorker } from './printWorker';
+import { t } from '../i18n/t';
 
 const DOC = new Uint8Array([1, 2, 3]).buffer;
 
@@ -130,5 +131,100 @@ describe('runPrintJob with a multi-page job', () => {
     expect(files.map((file) => file.name)).toEqual(['page-01.png', 'page-02.png', 'page-03.png']);
     expect(files.map((file) => file.data)).toEqual(buffers);
     expect(new Set(files.map((file) => file.data)).size).toBe(3);
+  });
+});
+
+// A job worker that sends the given notices, in order, before its reply.
+function streamingWorker(
+  notices: ReadonlyArray<readonly [Record<string, unknown>, ArrayBuffer?]>,
+  reply: string,
+): WorkerClient {
+  return {
+    call: async (_request, _buffers, onNotice) => {
+      for (const [notice, buffer] of notices) onNotice?.(notice, buffer);
+      return { reply };
+    },
+    onStage: () => () => undefined,
+    terminate: vi.fn(),
+  };
+}
+
+function partial(index: number, name = `page-0${index + 1}.png`) {
+  return {
+    notice: 'partial',
+    id: 1,
+    data: { index, name, mime: 'image/png', data: { $bin: 0 } },
+  };
+}
+
+function replyWithPages(pages: number): string {
+  return JSON.stringify({
+    v: 1,
+    id: 1,
+    ok: true,
+    result: {
+      kind: 'files',
+      label: '',
+      require_full_save: false,
+      document: null,
+      files: [],
+      value: { pages },
+      name: '',
+    },
+    events: [],
+  });
+}
+
+describe('runPrintWorker with partial notices', () => {
+  it('collects the pages in order and reports the progress notices', async () => {
+    const onProgress = vi.fn();
+    const worker = streamingWorker(
+      [
+        [{ notice: 'progress', id: 1, data: { done: 1, total: 3, status: '' } }],
+        [partial(0), pageBytes(1)],
+        [{ notice: 'progress', id: 1, data: { done: 2, total: 3, status: '' } }],
+        [partial(1), pageBytes(2)],
+        [partial(2), pageBytes(3)],
+      ],
+      replyWithPages(3),
+    );
+
+    const files = await runPrintWorker(
+      worker,
+      { dpi: 150, annotations: true, pages: [0, 1, 2] },
+      DOC,
+      onProgress,
+    );
+
+    expect(files.map((file) => file.name)).toEqual(['page-01.png', 'page-02.png', 'page-03.png']);
+    expect(files[2]?.data).toEqual(pageBytes(3));
+    expect(onProgress.mock.calls.map((call) => call[0])).toEqual([33, 67]);
+  });
+
+  it('fails when a page arrives out of order', async () => {
+    const worker = streamingWorker([[partial(1), pageBytes(1)]], replyWithPages(1));
+    await expect(runPrintWorker(worker, { dpi: 150, annotations: true }, DOC)).rejects.toThrow(
+      'page 1 arrived out of order',
+    );
+  });
+
+  it('fails when a page has no bytes', async () => {
+    const worker = streamingWorker([[partial(0)]], replyWithPages(1));
+    await expect(runPrintWorker(worker, { dpi: 150, annotations: true }, DOC)).rejects.toThrow(
+      'has no bytes',
+    );
+  });
+
+  it('fails rather than print a short document when a partial was dropped', async () => {
+    const worker = streamingWorker(
+      [
+        [partial(0), pageBytes(1)],
+        [partial(1), pageBytes(2)],
+      ],
+      replyWithPages(3),
+    );
+    await expect(runPrintWorker(worker, { dpi: 150, annotations: true }, DOC)).rejects.toThrow(
+      t('print.mismatch'),
+    );
   });
 });

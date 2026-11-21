@@ -1,7 +1,9 @@
 // The print dialog (W6.5, W1.6 section 5): the page range, the resolution, the comments option and
-// the Print button. Print refuses an empty or invalid range before any job starts, then closes the
-// dialog and runs the job; its progress bar and Cancel are the app's job bar.
-import { useState } from 'react';
+// the Print button. Print refuses an empty or invalid range before any job starts. Above 200 pages
+// it asks first (W6.5 section 3.5): the same dialog shows the question, Back returns to the form
+// with its values kept. Then the dialog closes and the job runs; its progress bar and Cancel are
+// the app's job bar.
+import { useEffect, useRef, useState } from 'react';
 import type { WorkerClient } from '../engine/start';
 import { Overlay } from '../layout/Overlay';
 import { t, tp } from '../i18n/t';
@@ -36,17 +38,35 @@ export function PrintDialog({
   const [dpi, setDpi] = useState<150 | 300>(150);
   const [comments, setComments] = useState(true);
   const [invalid, setInvalid] = useState(false);
+  // True while the question above 200 pages is shown in place of the form.
+  const [confirming, setConfirming] = useState(false);
+  // Set by Back, so the focus returns to the scope the user had chosen.
+  const returning = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const continueRef = useRef<HTMLButtonElement>(null);
 
   const resolved = resolvePrintPages(scope, rangeText, pageCount, currentPage);
   const selected = resolved.ok ? (resolved.pages?.length ?? pageCount) : 0;
 
-  const submit = (): void => {
-    if (!resolved.ok) {
-      setInvalid(true);
-      return;
+  // The question takes the focus when it opens, and Back puts it on the scope the user had chosen.
+  useEffect(() => {
+    if (confirming) {
+      continueRef.current?.focus();
+    } else if (returning.current) {
+      returning.current = false;
+      const target =
+        scope === 'range'
+          ? formRef.current?.querySelector<HTMLInputElement>('.print-range')
+          : formRef.current?.querySelector<HTMLInputElement>(
+              `input[name="print-scope"][value="${scope}"]`,
+            );
+      target?.focus();
     }
-    if (session === null) return;
-    setInvalid(false);
+  }, [confirming, scope]);
+
+  const start = (): void => {
+    if (session === null || !resolved.ok) return;
+    setConfirming(false);
     onClose();
     void runPrintJob({
       rpc: session.rpc,
@@ -58,9 +78,49 @@ export function PrintDialog({
     });
   };
 
+  const submit = (): void => {
+    if (!resolved.ok) {
+      setInvalid(true);
+      return;
+    }
+    if (session === null) return;
+    setInvalid(false);
+    if (selected > LARGE_PRINT_PAGES) {
+      setConfirming(true);
+      return;
+    }
+    start();
+  };
+
+  // Escape, and the close button, go back to the form while the question is up; they close only
+  // from the form.
+  const back = (): void => {
+    returning.current = true;
+    setConfirming(false);
+  };
+  const close = (): void => {
+    if (confirming) back();
+    else onClose();
+  };
+
   return (
-    <Overlay isOpen={isOpen} onClose={onClose} title={t('print.title')}>
+    <Overlay isOpen={isOpen} onClose={close} title={t('print.title')}>
+      {confirming ? (
+        <div className="print-confirm">
+          <p>{tp('print.large.confirm', selected, { dpi })}</p>
+          <div className="overlay-actions">
+            <button type="button" onClick={back}>
+              {t('print.large.back')}
+            </button>
+            <button ref={continueRef} type="button" onClick={start}>
+              {tp('print.large.continue', selected)}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <form
+        ref={formRef}
+        hidden={confirming}
         className="print-form"
         onSubmit={(event) => {
           event.preventDefault();

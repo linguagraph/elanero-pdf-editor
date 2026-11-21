@@ -155,4 +155,88 @@ describe('PrintDialog', () => {
     render(250, rpcStub().rpc);
     expect(document.body.textContent).toContain(tp('print.large', 250));
   });
+
+  it('prints 200 pages at once, with no question', () => {
+    const { call, rpc } = rpcStub();
+    render(200, rpc);
+    act(() => {
+      printButton().click();
+    });
+    expect(call).toHaveBeenCalledWith('jobs.prepare', expect.anything());
+    expect(document.body.textContent).not.toContain(tp('print.large.confirm', 200, { dpi: 150 }));
+  });
+
+  it('asks before printing 201 pages, and Back keeps the form with its values', () => {
+    const { call, rpc } = rpcStub();
+    render(201, rpc);
+    act(() => {
+      printButton().click();
+    });
+    expect(call).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(tp('print.large.confirm', 201, { dpi: 150 }));
+    act(() => {
+      [...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find((b) => b.textContent === t('print.large.back'))!
+        .click();
+    });
+    expect(call).not.toHaveBeenCalled();
+    expect(radio('all').checked).toBe(true);
+  });
+
+  it('starts the job when the question is confirmed, with the page count and dpi in the copy', () => {
+    const { call, rpc } = rpcStub();
+    render(201, rpc);
+    act(() => {
+      printButton().click();
+    });
+    expect(document.body.textContent).toContain(tp('print.large.confirm', 201, { dpi: 150 }));
+    act(() => {
+      [...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find((b) => b.textContent === tp('print.large.continue', 201))!
+        .click();
+    });
+    expect(call).toHaveBeenCalledWith('jobs.prepare', expect.anything());
+  });
+
+  it('names 300 dpi in the question for a 201-page print', () => {
+    render(201, rpcStub().rpc);
+    const dpi = document.querySelector<HTMLSelectElement>('select')!;
+    act(() => {
+      dpi.value = '300';
+      dpi.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => {
+      printButton().click();
+    });
+    expect(document.body.textContent).toContain(tp('print.large.confirm', 201, { dpi: 300 }));
+  });
+
+  it('does not ask for a range of 200 pages out of 300', () => {
+    const { call, rpc } = rpcStub();
+    render(300, rpc);
+    act(() => {
+      radio('range').click();
+    });
+    typeText(document.querySelector<HTMLInputElement>('.print-range')!, '1-200');
+    act(() => {
+      printButton().click();
+    });
+    expect(call).toHaveBeenCalledWith('jobs.prepare', expect.anything());
+  });
+
+  it('goes back to the form on Escape while the question is up, without closing', () => {
+    const { call, rpc } = rpcStub();
+    const { onClose } = render(201, rpc);
+    act(() => {
+      printButton().click();
+    });
+    act(() => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalled();
+    expect(printButton()).toBeDefined();
+  });
 });

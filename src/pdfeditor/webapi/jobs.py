@@ -724,7 +724,10 @@ def _convert_print(data: object, buffers: BufferTable) -> dto.PrintArgs:
 
 def _run_print(session: DocumentSession | None, args: dto.PrintArgs, ctx: JobContext) -> JobOutput:
     owner = _session(session)
-    files: list[dto.FileDto] = []
+    # Each page goes out as a partial notice as soon as it is rendered (W6.5 section 3.1), so the
+    # engine holds one page at a time and the reply carries none. The byte cap that the final
+    # reply used to get is kept here, over the pages as they go.
+    sent = 0
     with owner.lock, tempfile.TemporaryDirectory() as folder:
         doc = owner.document
         pages = _pages_arg(args.pages, doc.page_count, "args.pages")
@@ -737,15 +740,19 @@ def _run_print(session: DocumentSession | None, args: dto.PrintArgs, ctx: JobCon
         for n, index in enumerate(pages):
             ctx.token.check()
             export_pages(doc, [index], target, options, token=ctx.token)
-            files.append(
-                dto.FileDto(
-                    name=f"page-{index + 1:0{width}d}.png",
-                    mime="image/png",
-                    data=target.read_bytes(),
+            data = target.read_bytes()
+            sent += len(data)
+            if sent > limits.MAX_JOB_BYTES:
+                raise RpcFailure(
+                    FILE_TOO_LARGE,
+                    "the pages are too large for a job",
+                    {"max_bytes": limits.MAX_JOB_BYTES, "size": sent},
                 )
+            ctx.report(
+                dto.FileDto(name=f"page-{index + 1:0{width}d}.png", mime="image/png", data=data)
             )
             ctx.progress(n + 1, len(pages))
-    return JobOutput(files=tuple(files))
+    return JobOutput(value=dto.PrintValue(pages=len(pages)))
 
 
 def _convert_extract_images(data: object, buffers: BufferTable) -> dto.ExtractImagesArgs:
