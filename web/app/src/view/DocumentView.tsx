@@ -60,7 +60,8 @@ import { useTextSelection } from '../text/useTextSelection';
 import { linksActive, textLayerPassive } from '../text/textLayerPassive';
 import { LinkCache } from '../links/linkCache';
 import { PageLinkLayer } from '../links/PageLinkLayer';
-import { classifyLink, type LinkNotice } from '../links/linkTarget';
+import { LinkConfirmDialog } from '../links/LinkConfirmDialog';
+import { classifyLink, type LinkConfirm, type LinkNotice } from '../links/linkTarget';
 import { isTap, type LinkPress } from '../links/linkTap';
 import type { LinkDto } from '../rpc/generated';
 import { useHandPan } from './useHandPan';
@@ -214,7 +215,20 @@ const LINK_NOTICE_MS = 8000;
 const LINK_NOTICE_KEYS = {
   noTarget: 'links.notice.noTarget',
   unsupported: 'links.notice.unsupported',
+  malformed: 'links.notice.malformed',
 } as const;
+
+// The text of a notice from a link. A blocked link names its scheme, as plain text.
+function linkNoticeText(notice: LinkNoticeState): string {
+  if (notice.notice === 'blocked')
+    return t('links.notice.blocked', { scheme: notice.scheme ?? '' });
+  return t(LINK_NOTICE_KEYS[notice.notice]);
+}
+
+interface LinkNoticeState {
+  readonly notice: LinkNotice;
+  readonly scheme?: string;
+}
 
 // The link under a press, with its page and its index in that page's sorted list (W5.3). Null when
 // the press is not a primary press on a link.
@@ -471,7 +485,9 @@ export function DocumentView({
   // The links of each page (W5.3), one cache per document, like the text layers. A press on a link
   // is kept from its pointer-down until the release decides whether it was a tap.
   const linkLists = useMemo(() => new LinkCache(rpc, handle), [rpc, handle]);
-  const [linkNotice, setLinkNotice] = useState<{ readonly notice: LinkNotice } | null>(null);
+  const [linkNotice, setLinkNotice] = useState<LinkNoticeState | null>(null);
+  // The web or mail link waiting for the reader's confirmation (W5.3); null when no dialog is open.
+  const [linkConfirm, setLinkConfirm] = useState<LinkConfirm | null>(null);
   const linkPress = useRef<LinkPress | null>(null);
   useEffect(() => {
     if (linkNotice === null) return;
@@ -736,10 +752,14 @@ export function DocumentView({
     (link: LinkDto) => {
       const action = classifyLink(link);
       if (action.action === 'notice') {
-        setLinkNotice({ notice: action.notice });
+        setLinkNotice({ notice: action.notice, scheme: action.scheme });
         return;
       }
       setLinkNotice(null);
+      if (action.action === 'confirm') {
+        setLinkConfirm(action);
+        return;
+      }
       if (onLinkGoTo !== undefined) onLinkGoTo(action.page, action.top);
       else scrollToPage(action.page, action.top ?? undefined);
     },
@@ -1145,9 +1165,10 @@ export function DocumentView({
       </div>
       {linkNotice === null ? null : (
         <p role="status" className="doc-link-notice">
-          {t(LINK_NOTICE_KEYS[linkNotice.notice])}
+          {linkNoticeText(linkNotice)}
         </p>
       )}
+      <LinkConfirmDialog target={linkConfirm} onClose={() => setLinkConfirm(null)} />
       {sizes === null ? (
         <p role="status" className="doc-view-status">
           {t('view.loading')}
