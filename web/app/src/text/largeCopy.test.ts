@@ -292,4 +292,48 @@ describe('copyLarge', () => {
     ready.run();
     expect(writeText).toHaveBeenCalledWith('ab\ncd');
   });
+
+  it('a ClipboardItem that throws keeps the text for the next press, and a later copy still starts', async () => {
+    // A browser that throws at once (not a refusal): the first copy must not leave `running` set.
+    class ThrowingClipboardItem {
+      constructor() {
+        throw new TypeError('ClipboardItem is not supported here');
+      }
+    }
+    vi.stubGlobal('ClipboardItem', ThrowingClipboardItem);
+    const first = slicesRpc([slice('ab', 1, 1, true)]);
+    const firstWrite = vi.fn(() => Promise.resolve());
+    const store = fakeStore();
+    copyLarge(
+      {
+        rpc: first.rpc,
+        handle: 'h',
+        clipboard: { write: firstWrite, writeText: vi.fn() } as never,
+        store,
+      },
+      plan(),
+    );
+    expect(firstWrite).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(store.push).toHaveBeenCalledWith('info', EN['copy.ready'], expect.anything()),
+    );
+
+    // A different selection, so the kept text is not written: this is a new copy. It starts at once
+    // and writes in the keypress, which only happens if the first copy released `running`.
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+    const second = slicesRpc([slice('xy', 1, 1, true)]);
+    const secondWrite = vi.fn(() => Promise.resolve());
+    const otherPlan: EnginePlan = { ...plan(), end: { page: 1, index: 2 } };
+    copyLarge(
+      {
+        rpc: second.rpc,
+        handle: 'h',
+        clipboard: { write: secondWrite, writeText: vi.fn() } as never,
+        store,
+      },
+      otherPlan,
+    );
+    expect(secondWrite).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(store.push).toHaveBeenCalledWith('success', EN['copy.done']));
+  });
 });

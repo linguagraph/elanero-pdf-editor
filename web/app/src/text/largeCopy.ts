@@ -231,8 +231,10 @@ export function copyLarge(deps: LargeCopyDeps, plan: EnginePlan): void {
     if (shown && total > 0) jobs.progress(token, Math.round((done * 100) / total));
   });
 
-  if (typeof ClipboardItem === 'undefined' || typeof clipboard.write !== 'function') {
-    // No write in the keypress: the text waits for the next press (the toast's button, or Copy).
+  // No write in the keypress: the text waits for the next press (the toast's button, or Copy). It
+  // is also the fallback when the browser throws at once. settle() runs only when the read ends:
+  // until then the slices are still being read, so the bar, the watcher and `running` must stay.
+  const keepForNextPress = (): void => {
     result.then(
       (res) => {
         settle();
@@ -249,6 +251,10 @@ export function copyLarge(deps: LargeCopyDeps, plan: EnginePlan): void {
         reportRpcError(store, asRpcError(error));
       },
     );
+  };
+
+  if (typeof ClipboardItem === 'undefined' || typeof clipboard.write !== 'function') {
+    keepForNextPress();
     return;
   }
 
@@ -258,10 +264,19 @@ export function copyLarge(deps: LargeCopyDeps, plan: EnginePlan): void {
     if (res.kind !== 'text' || res.parts.length === 0) throw res;
     return textBlob(res.parts);
   });
-  const written = clipboard.write([new ClipboardItem({ 'text/plain': blob })]).then(
-    () => ({ ok: true as const }),
-    (error: unknown) => ({ ok: false as const, error }),
-  );
+  // Handled here too, so a fallback that never reads the blob does not leave a rejection unhandled.
+  blob.catch(() => undefined);
+  let written: Promise<{ ok: true } | { ok: false; error: unknown }>;
+  try {
+    written = clipboard.write([new ClipboardItem({ 'text/plain': blob })]).then(
+      () => ({ ok: true as const }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+  } catch {
+    // The browser threw instead of refusing: nothing was written, and the text waits as above.
+    keepForNextPress();
+    return;
+  }
   void Promise.all([result, written, blob.catch(() => null)]).then(
     ([res, write, data]) => {
       settle();
