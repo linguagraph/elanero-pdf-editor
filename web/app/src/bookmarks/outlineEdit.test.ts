@@ -95,7 +95,7 @@ describe('moveTarget', () => {
     expect(moveTarget(FIXTURE, 6, 'out')).toBeNull();
     expect(moveTarget(FIXTURE, 2, 'up')).toEqual({ parent: 0, position: 0 });
     expect(moveTarget(FIXTURE, 1, 'down')).toEqual({ parent: 0, position: 1 });
-    // Indent into the entry above, which already has a child: the entry becomes its second child.
+    // Indent into the entry above, which has no children yet: the entry becomes its first child.
     expect(moveTarget(FIXTURE, 2, 'in')).toEqual({ parent: 1, position: 0 });
     expect(moveTarget(FIXTURE, 5, 'in')).toBeNull();
     // Outdent lands after the parent's whole subtree.
