@@ -4,10 +4,12 @@ font file (:func:`validate_font_bytes`, W6.9).
 
 Headless (no Qt): the UI runs :meth:`FontCatalog.scan` as a background job.
 
-This module ships in the web package (scripts/web_package.py), so fontTools is imported inside
-the functions that use it, never at module level: the web worker loads fontTools only before
-its first font call. Without fontTools the desktop catalogue reads nothing, and the upload check
-raises ImportError, which the web maps to NOT_SUPPORTED.
+fontTools is imported inside the functions that need it, never at module level, so this module
+can be shipped in the web package (scripts/web_package.py) without fontTools being present.
+The browser loader must also load fontTools before a fonts call; until it does, fonts.validate
+returns NOT_SUPPORTED in the browser (web/app/src/engine/loader.ts needsFontTools is true only
+for actions.run). That loader change is the web slice's job, not this one.
+Without fontTools the desktop catalogue reads nothing, and the upload check raises ImportError.
 """
 
 from __future__ import annotations
