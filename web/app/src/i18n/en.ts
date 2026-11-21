@@ -652,6 +652,7 @@ export const EN = {
   'combine.unsupported': 'Not a PDF or image file, so not added: {name}',
   'combine.tooLarge': '{name} is larger than the web version can open.',
   'combine.busy': 'Another task is running. Wait for it to finish, then combine again.',
+  'combine.running': 'Combining the files. The progress bar shows how far it has got.',
   'combine.done': 'Your combined file is ready.',
   'combine.download': 'Download {name}',
 

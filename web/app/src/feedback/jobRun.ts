@@ -4,6 +4,7 @@
 // hides the bar and shows a success or error toast. Only one job runs at a time, since a mutating
 // job holds the document read-only.
 import { useSyncExternalStore } from 'react';
+import type { Notice } from '../engine/loader';
 import { RpcError } from '../rpc/client';
 import type { JobAbortParams } from '../rpc/generated';
 import { t } from '../i18n/t';
@@ -58,6 +59,17 @@ export interface JobProgressStore {
 
 export interface JobProgressOptions {
   readonly toasts?: ToastStore;
+}
+
+// The bar's percent for a progress notice (W1.2 section 8), or undefined for any other notice. A
+// notice with no total cannot be a percent, so it is ignored.
+export function progressPercent(notice: Notice): number | undefined {
+  if (notice.notice !== 'progress') return undefined;
+  const data = notice.data;
+  if (typeof data !== 'object' || data === null) return undefined;
+  const { done, total } = data as { done?: unknown; total?: unknown };
+  if (typeof done !== 'number' || typeof total !== 'number' || total <= 0) return undefined;
+  return Math.min(100, Math.max(0, Math.round((done * 100) / total)));
 }
 
 // Any failure, as the RPC error the mapping works on. A plain Error becomes an internal error.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Notice } from '../engine/loader';
-import { progressPercent } from './fileJob';
+import { progressPercent } from '../feedback/jobRun';
 
 const progress = (data: unknown): Notice => ({ notice: 'progress', id: 1, data }) as Notice;
 
