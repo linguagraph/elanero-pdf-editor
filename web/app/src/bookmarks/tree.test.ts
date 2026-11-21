@@ -8,7 +8,7 @@ function entry(
   page: number | null = 0,
   is_open = false,
 ): OutlineEntry {
-  return { title, level, page, is_open };
+  return { title, level, page, is_open, top: null };
 }
 
 // Part A > Chapter A1 > Section A1a; Chapter A2; Part B (no children).
@@ -100,5 +100,15 @@ describe('bookmarks keys', () => {
     expect(treeAction(rows, 'Enter', 2)).toEqual({ kind: 'activate', index: 2 });
     expect(treeAction(rows, ' ', 2)).toEqual({ kind: 'activate', index: 2 });
     expect(treeAction(rows, 'a', 2)).toEqual({ kind: 'none' });
+  });
+
+  it('adds after the row on Alt+Shift+N, matched by the physical key', () => {
+    const add = { alt: true, shift: true, code: 'KeyN' };
+    expect(treeAction(rows, 'N', 2, add)).toEqual({ kind: 'add', index: 2 });
+    // On a Mac, Option+Shift+N types a different character, so the key name is not used.
+    expect(treeAction(rows, '˜', 2, add)).toEqual({ kind: 'add', index: 2 });
+    expect(treeAction(rows, 'N', 2, { ...add, ctrl: true })).toEqual({ kind: 'none' });
+    expect(treeAction(rows, 'N', 2, { alt: true, code: 'KeyN' })).toEqual({ kind: 'none' });
+    expect(treeAction(rows, 'n', 2, { code: 'KeyN' })).toEqual({ kind: 'none' });
   });
 });

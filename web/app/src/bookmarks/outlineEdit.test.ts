@@ -14,7 +14,7 @@ import {
 } from './outlineEdit';
 
 function outline(levels: number[]): OutlineEntry[] {
-  return levels.map((level, k) => ({ title: `T${k}`, level, page: k, is_open: false }));
+  return levels.map((level, k) => ({ title: `T${k}`, level, page: k, is_open: false, top: null }));
 }
 
 // Levels [1,2,2,3,1,2,1]: T0 has children T1 and T2 (T2 has T3); T4 has T5; T6 is alone.

@@ -40,6 +40,7 @@ const STATE_NO_DOCUMENT: CommandState = { ...STATE_WITH_DOCUMENT, hasDocument: f
 function fakeView(): DocumentViewHandle {
   return {
     scrollToPage: vi.fn(),
+    location: vi.fn(() => null),
     zoom: vi.fn(),
     stepPage: vi.fn(),
     focusPageField: vi.fn(),
@@ -53,6 +54,7 @@ function fakeView(): DocumentViewHandle {
     copyPlan: vi.fn(() => ({ kind: 'off' }) as const),
     selectedPageSpan: vi.fn(() => 0),
     selectedAreas: vi.fn(() => ({ state: 'off' }) as const),
+    selectedText: vi.fn(() => ''),
     clearTextSelection: vi.fn(),
     loadTextPages: vi.fn(() => Promise.resolve()),
     revealRect: vi.fn(),

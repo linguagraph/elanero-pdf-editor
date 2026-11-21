@@ -7,6 +7,7 @@ const entry = (title: string, level: number): OutlineEntry => ({
   level,
   page: 0,
   is_open: false,
+  top: null,
 });
 
 describe('bookmark expansion keys', () => {

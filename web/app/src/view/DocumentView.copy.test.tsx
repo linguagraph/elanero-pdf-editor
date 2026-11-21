@@ -199,6 +199,22 @@ describe('DocumentView copy with the Select tool (W5.4)', () => {
     expect(read.value[0]).toMatchObject({ page: 0, text: 'ab\ncd' });
   });
 
+  it('selectedText is empty with no selection, and the selected text once it is loaded', async () => {
+    expect(handle.current?.selectedText()).toBe('');
+    dragTo(0, 52 * (4 / 3));
+    await flush();
+    expect(handle.current?.selectedText()).toBe('ab\ncd');
+  });
+
+  it('selectedText is empty while a covered page has no text loaded (no engine call)', async () => {
+    dragTo(1, 1000 + 52 * (4 / 3));
+    await flush();
+    render('select', fakeRpc({ page: 1, release: deferred().promise }));
+    await flush();
+    await flush();
+    expect(handle.current?.selectedText()).toBe('');
+  });
+
   it('copies the native selection, not a Select All left over after the tool changed', async () => {
     pageZero();
     act(() => handle.current?.selectAll());

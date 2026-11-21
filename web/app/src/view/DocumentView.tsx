@@ -43,6 +43,8 @@ import {
   singlePageScene,
   type ViewLayout,
   viewAnchor,
+  viewLocation,
+  type ViewPlace,
   visibleRange,
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
@@ -51,6 +53,7 @@ import {
   type CopyPlan,
   planCopy,
   readModelIndexes,
+  readModelText,
   selectPageText as selectPageTextLayer,
 } from '../text/copy';
 import { toasts } from '../feedback/toasts';
@@ -189,6 +192,13 @@ export interface DocumentViewHandle {
   selectedPageSpan(): number;
   // The areas of the model's selection, one per page (Mark Text). `off` as selectedText.
   selectedAreas(): ModelRead<PageArea[]>;
+  // The text of the model's selection, for a bookmark's default title (W5.2 S3). Built from the text
+  // already loaded, with no engine call: '' when nothing is selected, under Hand, while Select All
+  // waits, or when a covered page's text has not arrived (the title then falls back to the page).
+  selectedText(): string;
+  // The place a new or moved bookmark goes to (W5.2 S3): the current page, and the top of the view
+  // within it. Null when the page is not laid out. Read on demand, so scrolling does not re-render.
+  location(): ViewPlace | null;
   // Clears the model's selection (Mark Text does so once it has marked the selection).
   clearTextSelection(): void;
   // Asks for the text indexes of these pages and resolves once they have been asked for (Mark Text
@@ -1121,6 +1131,20 @@ export function DocumentView({
         if (read.state !== 'ready') return read;
         return { state: 'ready', value: modelSelectionAreas(sel, read.value) };
       },
+      selectedText: (): string => {
+        if (!selectingNow.current || selectAllPending.current !== null) return '';
+        const read = readModelText(modelSelection.current, (page) =>
+          textLayers.readyIndex(page, scheduler.revisionOf(page)),
+        );
+        return read.state === 'ready' ? read.value : '';
+      },
+      location: (): ViewPlace | null =>
+        viewLocation(
+          boxesOnScreen.current,
+          sizes?.[topPage.current]?.height ?? 0,
+          topPage.current,
+          viewportOf(scrollRef.current, contentHeight.current).top,
+        ),
       clearTextSelection: () => {
         selectAllPending.current = null;
         modelSelection.current = null;
@@ -1150,6 +1174,7 @@ export function DocumentView({
       changeLayout,
       chooseNight,
       selectModel,
+      sizes,
       pageCount,
     ],
   );

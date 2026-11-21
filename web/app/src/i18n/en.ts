@@ -975,6 +975,12 @@ export const EN = {
   'bookmarks.destinationSet': 'Bookmark now goes to page {page}.',
   'bookmarks.stale': 'The bookmarks had changed, so nothing was edited. They have been read again.',
   'bookmarks.editFailed': 'The bookmark could not be changed. Try again.',
+  'bookmarks.add': 'Add',
+  'bookmarks.addChild': 'Add Child',
+  'bookmarks.addChild.tooDeep': 'Bookmarks cannot be nested more than 32 levels deep.',
+  'bookmarks.addFirst': 'Add Bookmark',
+  'bookmarks.newTitle': 'Page {page}',
+  'bookmarks.added': 'Added "{title}" for page {page}.',
 
   // Page organizer side panel (W6.1). Rotate and delete reuse the command labels; the undo labels
   // are the engine's, shown in English in v1.
