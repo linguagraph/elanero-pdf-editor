@@ -98,6 +98,10 @@ async function settle(index: number, value: unknown): Promise<void> {
   });
 }
 
+function addCalls(rpc: PageRpc): number {
+  return vi.mocked(rpc.call).mock.calls.filter(([method]) => method === 'actions.run').length;
+}
+
 describe('DocumentView shape gestures (W6.7b)', () => {
   it('a shape added on tab 1 resets tab 1 to Select, and leaves tab 2 alone after a switch', async () => {
     const rpc = fakeRpc(pending);
@@ -115,5 +119,26 @@ describe('DocumentView shape gestures (W6.7b)', () => {
     await settle(0, ADDED);
     expect(tools.get(1)).toBe('select');
     expect(tools.get(2)).toBe('shape-ellipse');
+  });
+
+  it('a second Enter while the first add is in flight adds nothing more', async () => {
+    const rpc = fakeRpc(pending);
+    const onToolChange = vi.fn();
+    await mount({ tool: 'shape-rectangle', tabId: 1, onToolChange }, rpc);
+    enter();
+    enter();
+    expect(addCalls(rpc)).toBe(1);
+    await settle(0, ADDED);
+    expect(onToolChange).toHaveBeenCalledWith('select', 1);
+  });
+
+  it('a new gesture is accepted again once the first add has settled', async () => {
+    const rpc = fakeRpc(pending);
+    const onToolChange = vi.fn();
+    await mount({ tool: 'shape-rectangle', tabId: 1, onToolChange }, rpc);
+    enter();
+    await settle(0, { ...ADDED, executed: false });
+    enter();
+    expect(addCalls(rpc)).toBe(2);
   });
 });

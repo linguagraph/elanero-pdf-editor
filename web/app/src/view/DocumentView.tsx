@@ -280,6 +280,8 @@ export function DocumentView({
   const zoomRef = useRef(manualZoom);
   // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
   const pageFieldRef = useRef<HTMLInputElement>(null);
+  // A shape add in flight (W6.7b): a second gesture or Enter is ignored until it settles.
+  const shapeInFlight = useRef(false);
   const wheelPending = useRef(0);
   // The fraction of a pixel the scaled scroll still owes the spacer (one scroller per view), carried
   // from one wheel or key event to the next so small deltas are not lost (W5.1a S4 fix).
@@ -899,16 +901,20 @@ export function DocumentView({
     if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
-  // shape per choice). A failure keeps the tool on so the user can retry.
+  // shape per choice). A failure keeps the tool on so the user can retry. While an add is in
+  // flight, a further gesture or Enter does nothing, so a double Enter adds one shape.
   const shapeDeps = { rpc, handle, cache: editObjects, scheduler };
   const drawShape = (page: number, spec: ShapeSpec | null) => {
+    if (shapeInFlight.current) return;
     if (spec === null) {
       noteShapeTooSmall();
       return;
     }
     // The tab is read now, before the add starts: the user may switch tabs while it is in flight.
     const drawnOn = tabId;
+    shapeInFlight.current = true;
     void addShape(shapeDeps, page, spec).then((added) => {
+      shapeInFlight.current = false;
       if (added) onToolChange?.('select', drawnOn);
     });
   };
