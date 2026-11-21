@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CallResult } from '../engine/loader';
+import type { CallResult, Notice } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
@@ -18,30 +18,54 @@ if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'funct
   });
 }
 
+function mergeReply(output: ArrayBuffer): CallResult {
+  return {
+    reply: JSON.stringify({
+      v: 1,
+      id: 1,
+      ok: true,
+      result: {
+        kind: 'new_document',
+        label: '',
+        require_full_save: false,
+        document: { $bin: 0 },
+        files: [],
+        value: null,
+        name: 'merged.pdf',
+      },
+      events: [],
+    }),
+    buffer: output,
+  };
+}
+
 // A job worker that answers every job.run with a merged document.
 function mergingWorker(output: ArrayBuffer): WorkerClient {
   return {
-    call: (): Promise<CallResult> =>
-      Promise.resolve({
-        reply: JSON.stringify({
-          v: 1,
-          id: 1,
-          ok: true,
-          result: {
-            kind: 'new_document',
-            label: '',
-            require_full_save: false,
-            document: { $bin: 0 },
-            files: [],
-            value: null,
-            name: 'merged.pdf',
-          },
-          events: [],
-        }),
-        buffer: output,
-      }),
+    call: (): Promise<CallResult> => Promise.resolve(mergeReply(output)),
     onStage: () => () => undefined,
     terminate: vi.fn(),
+  };
+}
+
+// A job worker whose job.run waits for the test: the test sends the job's notices, then finishes it.
+function pendingWorker(output: ArrayBuffer) {
+  let onNotice: ((notice: Notice) => void) | undefined;
+  let resolveCall: ((result: CallResult) => void) | undefined;
+  const worker: WorkerClient = {
+    call: (_request, _buffers, notice): Promise<CallResult> => {
+      onNotice = notice;
+      return new Promise<CallResult>((resolve) => {
+        resolveCall = resolve;
+      });
+    },
+    onStage: () => () => undefined,
+    terminate: vi.fn(),
+  };
+  return {
+    worker,
+    notify: (notice: Notice): void => onNotice?.(notice),
+    finish: (): void => resolveCall?.(mergeReply(output)),
   };
 }
 
@@ -174,6 +198,31 @@ describe('CombineDialog', () => {
       buttonNamed(t('combine.download', { name: 'merged.pdf' })).click();
     });
     expect(download).toHaveBeenCalledWith('merged.pdf', output);
+  });
+
+  it('shows the running line while the job runs, and the bar moves with its notices', async () => {
+    const output = new Uint8Array([7]).buffer;
+    const job = pendingWorker(output);
+    const store = render({ startWorker: () => job.worker });
+    pick('a.pdf', 'b.pdf');
+
+    await act(async () => {
+      buttonNamed(t('combine.button')).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.querySelector('[role="status"]')?.textContent).toBe(t('combine.running'));
+
+    act(() => {
+      job.notify({ notice: 'progress', id: 1, data: { done: 1, total: 2, status: '' } });
+    });
+    expect(store.getState().job?.percent).toBe(50);
+
+    await act(async () => {
+      job.finish();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.querySelector('.combine-status')).toBeNull();
+    expect(document.querySelector('[role="status"]')?.textContent).toContain(t('combine.done'));
   });
 
   it('uses the output name the user typed for the download', async () => {

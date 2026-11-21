@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CallResult } from '../engine/loader';
+import type { CallResult, Notice } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
 import { RpcError } from '../rpc/client';
 import { runMergeJob } from './merge';
@@ -8,9 +8,16 @@ import { runMergeJob } from './merge';
 class FakeJobWorker implements WorkerClient {
   readonly calls: { request: string; buffers: readonly ArrayBuffer[] }[] = [];
   answer: CallResult = { reply: '{}' };
+  // Sent to the call's onNotice before the answer, in order.
+  notices: Notice[] = [];
 
-  call(request: string, buffers: readonly ArrayBuffer[] = []): Promise<CallResult> {
+  call(
+    request: string,
+    buffers: readonly ArrayBuffer[] = [],
+    onNotice?: (notice: Notice) => void,
+  ): Promise<CallResult> {
     this.calls.push({ request, buffers });
+    for (const notice of this.notices) onNotice?.(notice);
     return Promise.resolve(this.answer);
   }
 
@@ -86,6 +93,21 @@ describe('runMergeJob', () => {
     const merged = await runMergeJob(worker, [{ name: 'a.pdf', data: bytes(1) }]);
 
     expect(merged).toEqual({ name: 'merged.pdf', bytes: output });
+  });
+
+  it('reports each progress notice as a percent and ignores the other notices', async () => {
+    const worker = new FakeJobWorker();
+    worker.answer = okReply(bytes(9));
+    worker.notices = [
+      { notice: 'progress', id: 1, data: { done: 1, total: 4, status: '' } },
+      { notice: 'partial', id: 1, data: { done: 2, total: 4 } },
+      { notice: 'progress', id: 1, data: { done: 2, total: 0, status: '' } },
+    ];
+    const percents: number[] = [];
+
+    await runMergeJob(worker, [{ name: 'a.pdf', data: bytes(1) }], (p) => percents.push(p));
+
+    expect(percents).toEqual([25]);
   });
 
   it('turns an error reply into an RpcError with the code and details', async () => {

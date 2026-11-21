@@ -116,7 +116,9 @@ export async function runCombine(
           : { name: item.name, data, ranges: typed };
       }),
     );
-    const output = await runMergeJob(worker, sources);
+    const output = await runMergeJob(worker, sources, (percent) => {
+      deps.store.progress(token, percent);
+    });
     deps.store.finish(token, { ok: true });
     return { status: 'done', name: output.name, bytes: output.bytes };
   } catch (error) {

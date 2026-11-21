@@ -4,7 +4,9 @@
 // worker, so this is not the typed engine client: the envelope is built here, by hand.
 import { RpcError, type RpcErrorCode } from '../rpc/client';
 import { ERROR_CODES, PROTOCOL_VERSION } from '../rpc/generated';
+import type { Notice } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
+import { progressPercent } from '../feedback/jobRun';
 
 export interface MergeSourceBytes {
   readonly name: string;
@@ -44,10 +46,12 @@ function failure(error: unknown): RpcError {
 }
 
 // Runs the merge on the given job worker. The buffers are transferred, so the caller must not reuse
-// them. The worker is left running; the caller terminates it when the job is over.
+// them. The worker is left running; the caller terminates it when the job is over. onProgress gets
+// the job's percent from each progress notice (W6.3b); the last one is 100, sent once the bytes exist.
 export async function runMergeJob(
   worker: WorkerClient,
   sources: readonly MergeSourceBytes[],
+  onProgress?: (percent: number) => void,
 ): Promise<MergeOutput> {
   const buffers: ArrayBuffer[] = [];
   const args = {
@@ -69,7 +73,11 @@ export async function runMergeJob(
     params: { job: 'merge', args },
   });
 
-  const reply = await worker.call(request, buffers);
+  const onNotice = (notice: Notice): void => {
+    const percent = progressPercent(notice);
+    if (percent !== undefined) onProgress?.(percent);
+  };
+  const reply = await worker.call(request, buffers, onNotice);
   let parsed: unknown;
   try {
     parsed = JSON.parse(reply.reply);

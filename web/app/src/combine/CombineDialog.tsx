@@ -291,6 +291,11 @@ export function CombineDialog({
             {message}
           </p>
         )}
+        {phase === 'working' ? (
+          <p className="combine-status" role="status">
+            {t('combine.running')}
+          </p>
+        ) : null}
         {phase === 'done' && result !== null ? (
           <div className="combine-done" role="status">
             <p>{t('combine.done')}</p>

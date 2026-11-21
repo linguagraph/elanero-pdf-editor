@@ -649,6 +649,14 @@ def _run_merge(session: DocumentSession | None, args: dto.MergeArgs, ctx: JobCon
     # The result is a new document (W1.2 section 13), never a change to an open one.
     ctx.token.check()
     engine = get_engine(DEFAULT_ENGINE)
+    # One step per source, then one for writing the result (W6.3b): the bar is determinate from 0,
+    # and the last notice (done == total) is sent only once the merged bytes exist.
+    steps = len(args.sources) + 1
+    ctx.progress(0, steps)
+
+    def report(done: int, _total: int) -> None:
+        ctx.progress(done, steps)
+
     with ENGINE_LOCK, tempfile.TemporaryDirectory() as folder:
         sources: list[MergeSource] = []
         for index, item in enumerate(args.sources):
@@ -664,7 +672,7 @@ def _run_merge(session: DocumentSession | None, args: dto.MergeArgs, ctx: JobCon
             if item.ranges is not None and not is_image(sources[index].path):
                 sources[index].pages = _range_pages(engine, sources[index].path, item.ranges, index)
         try:
-            merged = merge(engine, sources, args.bookmarks, ctx.token, ctx.progress)
+            merged = merge(engine, sources, args.bookmarks, ctx.token, report)
         except PasswordRequired as exc:
             raise RpcFailure(
                 REFUSED, "a source is encrypted", {"reason": "encrypted_source"}
@@ -680,6 +688,7 @@ def _run_merge(session: DocumentSession | None, args: dto.MergeArgs, ctx: JobCon
             data = merged.to_bytes()
         finally:
             merged.close()
+    ctx.progress(steps, steps)
     return JobOutput(kind="new_document", document=data, name="merged.pdf")
 
 

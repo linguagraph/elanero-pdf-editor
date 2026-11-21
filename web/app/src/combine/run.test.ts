@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CallResult } from '../engine/loader';
+import type { CallResult, Notice } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
@@ -15,13 +15,24 @@ class PendingWorker implements WorkerClient {
   readonly terminate = vi.fn();
   private resolveCall: ((result: CallResult) => void) | undefined;
   private rejectCall: ((error: Error) => void) | undefined;
+  private noticeSink: ((notice: Notice) => void) | undefined;
 
-  call(request: string): Promise<CallResult> {
+  call(
+    request: string,
+    _buffers?: readonly ArrayBuffer[],
+    onNotice?: (notice: Notice) => void,
+  ): Promise<CallResult> {
     this.requests.push(request);
+    this.noticeSink = onNotice;
     return new Promise<CallResult>((resolve, reject) => {
       this.resolveCall = resolve;
       this.rejectCall = reject;
     });
+  }
+
+  // Sends a notice of the running job, as the job worker does.
+  notify(notice: Notice): void {
+    this.noticeSink?.(notice);
   }
 
   answer(result: CallResult): void {
@@ -39,6 +50,10 @@ class PendingWorker implements WorkerClient {
 
 function item(id: number, name: string, data = 'x'): SourceItem {
   return { id, name, file: new File([data], name, { type: 'application/pdf' }), pages: '' };
+}
+
+function progress(done: number, total: number): Notice {
+  return { notice: 'progress', id: 1, data: { done, total, status: '' } };
 }
 
 function okReply(bytes: ArrayBuffer): CallResult {
@@ -112,10 +127,7 @@ describe('runCombine', () => {
     const running = runCombine([item(1, 'b.pdf'), item(2, 'a.pdf')], deps);
     await settle();
 
-    const job = store.getState().job;
-    expect(job?.label).toBe(t('combine.label'));
-    store.progress(job?.token ?? '', 40);
-    expect(store.getState().job?.percent).toBe(40);
+    expect(store.getState().job?.label).toBe(t('combine.label'));
 
     worker.answer(okReply(output));
     const outcome = await running;
@@ -127,6 +139,43 @@ describe('runCombine', () => {
     expect(outcome).toEqual({ status: 'done', name: 'merged.pdf', bytes: output });
     expect(store.getState().job).toBeUndefined();
     expect(worker.terminate).toHaveBeenCalled();
+  });
+
+  it('the progress notices move the bar, from 0 to 100', async () => {
+    const { store, worker, deps } = setup();
+
+    const running = runCombine([item(1, 'a.pdf'), item(2, 'b.pdf'), item(3, 'c.pdf')], deps);
+    await settle();
+    expect(store.getState().job?.percent).toBeUndefined();
+
+    worker.notify(progress(0, 3));
+    expect(store.getState().job?.percent).toBe(0);
+    worker.notify(progress(2, 3));
+    expect(store.getState().job?.percent).toBe(67);
+    worker.notify(progress(3, 3));
+    expect(store.getState().job?.percent).toBe(100);
+
+    worker.answer(okReply(new Uint8Array([1]).buffer));
+    await running;
+    expect(store.getState().job).toBeUndefined();
+  });
+
+  it('a late notice after Cancel does not reach the bar, and the outcome is cancelled', async () => {
+    const { store, worker, deps } = setup();
+
+    const running = runCombine([item(1, 'a.pdf'), item(2, 'b.pdf')], deps);
+    await settle();
+    worker.notify(progress(1, 2));
+    expect(store.getState().job?.percent).toBe(50);
+
+    await store.cancel();
+    worker.notify(progress(2, 2));
+    worker.fail(new Error('the worker has been terminated'));
+    const outcome = await running;
+
+    expect(store.getState().job).toBeUndefined();
+    expect(worker.terminate).toHaveBeenCalled();
+    expect(outcome).toEqual({ status: 'cancelled' });
   });
 
   it('cancel stops the job worker, clears the bar and reports no error', async () => {
