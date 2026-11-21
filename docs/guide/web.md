@@ -323,7 +323,7 @@ full policy, with what the desktop app stores, is in the
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
 | Edit the words of a paragraph, add text, images or shapes | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
-| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; each split part is offered as its own download, not a ZIP) |
+| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; each split part is offered as its own download, not a ZIP; Combine takes page ranges per file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |

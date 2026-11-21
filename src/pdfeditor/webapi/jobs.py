@@ -32,13 +32,15 @@ from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS, SnapshotCommand
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.jobs import JobContext, ProgressFn
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document, OptimizeOptions, PasswordRequired
+from pdfeditor.engine.base import Document, Engine, OptimizeOptions, PasswordRequired
 from pdfeditor.engine.registry import DEFAULT_ENGINE, get_engine
 from pdfeditor.model.metadata import EncryptionMethod, SpaceUsage
 from pdfeditor.services.assembly import (
     SUPPORTED_SUFFIXES,
     MergeSource,
+    SourcePagesError,
     SplitMode,
+    is_image,
     merge,
     plan_split,
     safe_name,
@@ -59,6 +61,7 @@ from pdfeditor.services.export.images import (
 )
 from pdfeditor.services.optimize import PRESETS, ReduceOptions, preset, reduce_size
 from pdfeditor.services.optimize import audit as space_audit
+from pdfeditor.services.pages import PageRangeError, parse_page_ranges
 from pdfeditor.services.xfdf import export_xfdf
 from pdfeditor.webapi import dto, limits
 from pdfeditor.webapi.actions import _Events
@@ -502,6 +505,35 @@ def _run_split(session: DocumentSession | None, args: dto.SplitArgs, ctx: JobCon
     return JobOutput(files=files)
 
 
+# A bound on the typed text, not a real limit: a page list never needs more.
+MERGE_RANGES_MAX_CHARS = 2000
+
+
+def _range_pages(engine: Engine, path: Path, text: str, index: int) -> list[int]:
+    """The 0-based pages a typed range picks from the PDF at path (page-range rule, W6.3a)."""
+    try:
+        source = engine.open(path, None)
+    except PasswordRequired as exc:
+        raise RpcFailure(REFUSED, "a source is encrypted", {"reason": "encrypted_source"}) from exc
+    try:
+        count = source.page_count
+    finally:
+        source.close()
+    field = f"args.sources[{index}].ranges"
+    try:
+        return parse_page_ranges(text, count)
+    except PageRangeError as exc:
+        details: dict[str, object] = {
+            "path": field,
+            "reason": "page_range",
+            "kind": exc.kind,
+            "item": exc.item,
+        }
+        if exc.kind == "out_of_range":
+            details["page_count"] = count
+        raise RpcFailure(INVALID_ARGS, f"{field}: {exc}", details) from exc
+
+
 def _convert_merge(data: object, buffers: BufferTable) -> dto.MergeArgs:
     args: dto.MergeArgs = from_json(dto.MergeArgs, data, buffers, "args")
     if not args.sources:
@@ -511,6 +543,19 @@ def _convert_merge(data: object, buffers: BufferTable) -> dto.MergeArgs:
         if Path(source.name).suffix.lower() not in SUPPORTED_SUFFIXES:
             path = f"args.sources[{index}].name"
             raise RpcFailure(INVALID_ARGS, f"{path}: not a PDF or image file", {"path": path})
+        if source.ranges is not None:
+            # The text is read against the page count in _run_merge; here only its shape is seen.
+            path = f"args.sources[{index}].ranges"
+            if source.pages is not None:
+                raise RpcFailure(
+                    INVALID_ARGS, f"{path}: give pages or ranges, not both", {"path": path}
+                )
+            if is_image(Path(source.name)):
+                raise RpcFailure(
+                    INVALID_ARGS, f"{path}: page ranges are for PDF sources", {"path": path}
+                )
+            if len(source.ranges) > MERGE_RANGES_MAX_CHARS:
+                raise RpcFailure(INVALID_ARGS, f"{path}: too long", {"path": path})
         total += len(source.data)
     if total > limits.MAX_JOB_BYTES:
         raise RpcFailure(
@@ -535,11 +580,23 @@ def _run_merge(session: DocumentSession | None, args: dto.MergeArgs, ctx: JobCon
             path.write_bytes(item.data)
             pages = None if item.pages is None else list(item.pages)
             sources.append(MergeSource(path, pages))
+        # A first pass over the typed ranges: each one is read against its file's page count, so a
+        # bad range on the last source fails before the others are merged.
+        for index, item in enumerate(args.sources):
+            if item.ranges is not None and not is_image(sources[index].path):
+                sources[index].pages = _range_pages(engine, sources[index].path, item.ranges, index)
         try:
             merged = merge(engine, sources, args.bookmarks, ctx.token, ctx.progress)
         except PasswordRequired as exc:
             raise RpcFailure(
                 REFUSED, "a source is encrypted", {"reason": "encrypted_source"}
+            ) from exc
+        except SourcePagesError as exc:
+            field = f"args.sources[{exc.index}].pages"
+            raise RpcFailure(
+                INVALID_ARGS,
+                f"{field}: no such page",
+                {"path": field, "page_count": exc.page_count},
             ) from exc
         try:
             data = merged.to_bytes()

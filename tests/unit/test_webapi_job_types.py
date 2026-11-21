@@ -608,6 +608,120 @@ def test_an_out_of_range_split_range_is_invalid_args(web: None, fixture_pdf: Any
     assert err["details"]["path"] == "args.ranges"
 
 
+# -- merge: per-source page ranges (the page-range rule, W6.3a) -------------------------------
+
+
+def test_merge_ranges_round_trip_keeps_the_chosen_pages_and_bookmarks(
+    web: None, fixture_pdf: Any
+) -> None:
+    outline = fixture_pdf("outline").read_bytes()
+    args = {
+        "sources": [
+            {"name": "outline.pdf", "data": {"$bin": 0}, "ranges": "2-4"},
+            {"name": "pic.png", "data": {"$bin": 1}},
+        ]
+    }
+    reply, out = run_without_document("merge", args, [outline, png_bytes()])
+    data = binary(ok(reply)["document"], out)
+    # Pages 2-4 of the outline (three pages) and the picture: four pages in document order.
+    record("page_count_pikepdf", data, pages=4)
+    record(
+        "outline_pdfium",
+        data,
+        rows=[
+            [1, "outline", 0],
+            [2, "Section 1.2", 0],  # its chapter was left out: promoted one level
+            [2, "Chapter 2", 1],
+            [3, "Section 2.1", 1],
+            [3, "Section 2.2", 2],
+            [1, "pic", 3],
+        ],
+    )
+    record("text_contains_pdfium", data, page=0, text="Chapter 1, section 2")
+    record("text_lacks_pdfium", data, page=0, text="Chapter 1, section 1")
+    record("text_contains_pdfium", data, page=2, text="Chapter 2, section 2")
+
+
+def test_merge_ranges_blank_or_all_takes_every_page(web: None, fixture_pdf: Any) -> None:
+    pdf = text_fixture(fixture_pdf)
+    pages = page_total(open_data(pdf, "text.pdf"))
+    args = {
+        "sources": [
+            {"name": "a.pdf", "data": {"$bin": 0}, "ranges": "  "},
+            {"name": "b.pdf", "data": {"$bin": 1}, "ranges": "ALL"},
+        ]
+    }
+    reply, out = run_without_document("merge", args, [pdf, pdf])
+    record("page_count_pikepdf", binary(ok(reply)["document"], out), pages=pages * 2)
+
+
+def test_a_range_past_the_end_is_invalid_args_with_kind_and_page_count(
+    web: None, fixture_pdf: Any
+) -> None:
+    pdf = text_fixture(fixture_pdf)
+    pages = page_total(open_data(pdf, "text.pdf"))
+    args = {
+        "sources": [
+            {"name": "first.pdf", "data": {"$bin": 0}},
+            {"name": "second.pdf", "data": {"$bin": 1}, "ranges": f"1, {pages + 1}"},
+        ]
+    }
+    err = error(run_without_document("merge", args, [pdf, pdf])[0])
+    assert err["code"] == INVALID_ARGS
+    assert err["details"] == {
+        "path": "args.sources[1].ranges",
+        "reason": "page_range",
+        "kind": "out_of_range",
+        "item": str(pages + 1),
+        "page_count": pages,
+    }
+
+
+@pytest.mark.parametrize(
+    ("ranges", "kind", "item"),
+    [("3-2", "invalid", "3-2"), ("x", "invalid", "x"), ("+3", "invalid", "+3"), (",", "empty", "")],
+)
+def test_a_malformed_range_is_invalid_args_with_its_kind(
+    web: None, fixture_pdf: Any, ranges: str, kind: str, item: str
+) -> None:
+    pdf = text_fixture(fixture_pdf)
+    args = {"sources": [{"name": "a.pdf", "data": {"$bin": 0}, "ranges": ranges}]}
+    err = error(run_without_document("merge", args, [pdf])[0])
+    assert err["code"] == INVALID_ARGS
+    assert err["details"]["path"] == "args.sources[0].ranges"
+    assert err["details"]["reason"] == "page_range"
+    assert err["details"]["kind"] == kind
+    assert err["details"]["item"] == item
+
+
+def test_ranges_that_clash_with_pages_or_suit_no_image_are_invalid_args(web: None) -> None:
+    both = {"sources": [{"name": "a.pdf", "data": {"$bin": 0}, "pages": [0], "ranges": "1"}]}
+    assert error(run_without_document("merge", both, [b"%PDF"])[0])["details"]["path"] == (
+        "args.sources[0].ranges"
+    )
+    picture = {"sources": [{"name": "a.png", "data": {"$bin": 0}, "ranges": "1"}]}
+    assert error(run_without_document("merge", picture, [png_bytes()])[0])["code"] == INVALID_ARGS
+    long = {"sources": [{"name": "a.pdf", "data": {"$bin": 0}, "ranges": "1," * 1001}]}
+    assert error(run_without_document("merge", long, [b"%PDF"])[0])["code"] == INVALID_ARGS
+
+
+@pytest.mark.parametrize("pages", [[], [99]])
+def test_pages_that_pick_nothing_are_invalid_args_naming_the_source(
+    web: None, fixture_pdf: Any, pages: list[int]
+) -> None:
+    pdf = text_fixture(fixture_pdf)
+    pages_total = page_total(open_data(pdf, "text.pdf"))
+    args = {
+        "sources": [
+            {"name": "first.pdf", "data": {"$bin": 0}},
+            {"name": "second.pdf", "data": {"$bin": 1}, "pages": pages},
+        ]
+    }
+    err = error(run_without_document("merge", args, [pdf, pdf])[0])
+    assert err["code"] == INVALID_ARGS
+    assert err["details"] == {"path": "args.sources[1].pages", "page_count": pages_total}
+
+
 def test_a_merge_source_that_is_not_a_pdf_or_image_is_invalid_args(web: None) -> None:
     args = {"sources": [{"name": "notes.txt", "data": {"$bin": 0}}]}
     err = error(run_without_document("merge", args, [b"hello"])[0])

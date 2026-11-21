@@ -52,6 +52,14 @@ are joined in the order shown in the list. You can:
 - Enter the password of a file that is protected, so its pages can be used.
 - Keep the bookmarks of each file, merged into one outline.
 
+To use only some pages of a PDF, type them in its **Pages** box. Use commas between items and
+dashes for spans: `1-3, 5` takes pages 1 to 3 and page 5, `8-` takes page 8 to the end, and `-4`
+takes pages 1 to 4. `all`, or an empty box, takes every page, and `;` works like `,`. The pages
+keep their order in the document, whatever order you type them in, so `5, 1` gives page 1 then
+page 5. A page number above the file's last page is refused, and the row says how many pages the
+file has. A bookmark of a page you leave out is dropped, and its sub-bookmarks move up one level.
+The web version takes the same ranges.
+
 The **Quick actions** on the start page also start this panel, as **Combine files**.
 
 ## Crop and page labels

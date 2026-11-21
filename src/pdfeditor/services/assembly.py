@@ -36,6 +36,18 @@ class MergeSource:
     password: str | PasswordCallback | None = None
 
 
+class SourcePagesError(ValueError):
+    """A source's chosen pages are empty or not in its document. ``index`` is the source's place
+    in the merge; ``page_count`` is the document's, so the caller can say what fits."""
+
+    def __init__(self, index: int, page_count: int) -> None:
+        super().__init__(
+            f"source {index + 1} has no pages to take, or a page outside 1-{page_count}"
+        )
+        self.index = index
+        self.page_count = page_count
+
+
 @dataclass(frozen=True)
 class SourceInfo:
     """What the Combine panel shows about one input file."""
@@ -138,6 +150,12 @@ def merge(
                     pages = (
                         list(range(doc.page_count)) if source.pages is None else list(source.pages)
                     )
+                    # Checked before any copy: an empty choice would leave a bookmark pointing at
+                    # the next source, and an index past the end would fail deep in the engine.
+                    if source.pages is not None and (
+                        not pages or any(not 0 <= p < doc.page_count for p in pages)
+                    ):
+                        raise SourcePagesError(n, doc.page_count)
                     out.insert_pages(doc, pages, start)
                     if bookmarks:
                         keep = {p: i for i, p in reversed(list(enumerate(pages)))}
