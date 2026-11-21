@@ -162,7 +162,20 @@ export function CombineDialog({
   // it is not probed. Closing the engine link drops what is still waiting, and hands back the rows
   // still counting, which a new engine counts again.
   useEffect(() => {
-    if (engine === undefined) return undefined;
+    if (engine === undefined) {
+      // No engine to count with. The rows that were still counting are unchecked, not pending: a
+      // pending row blocks Combine, and nothing would ever finish it. They stay in countAgain, so
+      // a new engine counts them again.
+      const waiting = countAgain.current;
+      if (waiting.length > 0) {
+        setProbes((current) => {
+          const next = new Map(current);
+          for (const item of waiting) next.set(item.id, { kind: 'unchecked', reason: 'engine' });
+          return next;
+        });
+      }
+      return undefined;
+    }
     const queue = new ProbeQueue(engine, (id, state) => {
       setProbes((current) => new Map(current).set(id, state));
     });

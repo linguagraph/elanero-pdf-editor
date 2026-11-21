@@ -498,6 +498,29 @@ describe('CombineDialog page counts', () => {
     expect(stalled.names()).toEqual(['a.pdf']);
     expect(startWorker).toHaveBeenCalledTimes(1);
   });
+
+  it('does not refuse Combine for a row still counting when the engine goes away', async () => {
+    const startWorker = vi.fn(() => mergingWorker(new ArrayBuffer(0)));
+    const stalled = manualProbeEngine();
+    render({ startWorker, engine: stalled.engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+    expect(rowNamed('a.pdf')?.textContent).toContain(t('combine.row.counting'));
+
+    render({ startWorker, engine: undefined });
+    await settle();
+    expect(rowNamed('a.pdf')?.textContent).not.toContain(t('combine.row.counting'));
+
+    await act(async () => {
+      buttonNamed(t('combine.button')).click();
+    });
+    await settle();
+
+    expect(document.querySelector('[role="alert"]')?.textContent).not.toBe(
+      t('combine.blocked.pending'),
+    );
+    expect(startWorker).toHaveBeenCalledTimes(1);
+  });
 });
 
 // An engine that holds each probe until the test answers it, and names the probes it was asked.
