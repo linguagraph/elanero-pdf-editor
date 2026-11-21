@@ -2,6 +2,7 @@
 // its level; an entry's children are the entries after it with a greater level, up to the next entry
 // at its own level or above. Pure functions, so the panel and the tests share them.
 import type { OutlineEntry } from '../rpc/generated';
+import type { MoveDirection } from './outlineEdit';
 
 export interface BookmarkRow {
   // The entry's index in the flat outline; it is also the key of its expansion state.
@@ -57,20 +58,46 @@ export type BookmarkAction =
   | { readonly kind: 'focus'; readonly index: number }
   | { readonly kind: 'expand' | 'collapse'; readonly index: number }
   | { readonly kind: 'activate'; readonly index: number }
+  // The edits (W5.2 S2): F2 renames, Delete removes, and Alt+Shift+Arrow moves (Up and Down reorder,
+  // Right indents, Left outdents). Alt+Arrow alone stays with the browser and the app's Back and Forward.
+  | { readonly kind: 'rename' | 'delete'; readonly index: number }
+  | { readonly kind: 'move'; readonly index: number; readonly direction: MoveDirection }
   | { readonly kind: 'none' };
 
+export interface KeyModifiers {
+  readonly alt?: boolean;
+  readonly shift?: boolean;
+  readonly ctrl?: boolean;
+  readonly meta?: boolean;
+}
+
 const NONE: BookmarkAction = { kind: 'none' };
+
+const MOVE_KEYS: Readonly<Record<string, MoveDirection>> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowRight: 'in',
+  ArrowLeft: 'out',
+};
 
 export function treeAction(
   rows: readonly BookmarkRow[],
   key: string,
   index: number,
+  modifiers: KeyModifiers = {},
 ): BookmarkAction {
   const position = rows.findIndex((row) => row.index === index);
   const row = rows[position];
   if (row === undefined) return NONE;
   const focus = (target: BookmarkRow | undefined): BookmarkAction =>
     target === undefined ? NONE : { kind: 'focus', index: target.index };
+  if (modifiers.alt) {
+    const direction = MOVE_KEYS[key];
+    return modifiers.shift && direction !== undefined ? { kind: 'move', index, direction } : NONE;
+  }
+  const bare = !modifiers.shift && !modifiers.ctrl && !modifiers.meta;
+  if (key === 'F2' && bare) return { kind: 'rename', index };
+  if (key === 'Delete' && bare) return { kind: 'delete', index };
   switch (key) {
     case 'ArrowDown':
       return focus(rows[position + 1]);

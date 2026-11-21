@@ -1002,6 +1002,33 @@ def _pixel_red_pdfium(data: bytes, page: int, x: int, y: int) -> None:
     assert r > 200 and g < 80 and b < 80
 
 
+@host_check("shape_operators_pikepdf")
+def _shape_operators_pikepdf(data: bytes, page: int, kind: str) -> None:
+    """The last shape on ``page`` is one q ... Q block: its path operators (re; or four c; or m and
+    l), the stroke width 1.5, a black stroke colour and the stroke paint S, and no fill."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        ops = list(pikepdf.parse_content_stream(pdf.pages[page]))
+    start = max(i for i, (_operands, op) in enumerate(ops) if str(op) == "q")
+    block = [(list(operands), str(op)) for operands, op in ops[start:]]
+    names = [name for _operands, name in block]
+    assert names[-1] == "Q"
+    if kind == "line":
+        assert names.count("m") == 1 and names.count("l") == 1 and "re" not in names
+    elif kind == "rectangle":
+        assert names.count("re") == 1 and "c" not in names
+    elif kind == "ellipse":
+        assert names.count("c") == 4 and names.count("m") == 1 and "re" not in names
+    else:
+        raise AssertionError(f"unknown shape kind {kind}")
+    (width,) = (float(operands[0]) for operands, name in block if name == "w")
+    assert math.isclose(width, 1.5, abs_tol=1e-6)
+    (stroke,) = ([float(v) for v in operands] for operands, name in block if name == "RG")
+    assert stroke == [0.0, 0.0, 0.0]
+    assert names.count("S") == 1 and "f" not in names and "B" not in names
+
+
 @host_check("crop_box_size_pikepdf")
 def _crop_box_size_pikepdf(
     data: bytes, width: float, height: float, page: int = 0, password: str = ""
