@@ -84,6 +84,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "session.links": "render",  # one page's annotations, read once per visible page (W5.3)
     "session.open": "io",
     "session.outline": "instant",
+    "split.plan": "instant",
     "session.pages": "instant",
     "session.security": "instant",
     "session.unlock_owner": "instant",

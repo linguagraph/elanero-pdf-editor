@@ -87,6 +87,8 @@ export type ReviewState = 'None' | 'Accepted' | 'Rejected' | 'Cancelled' | 'Comp
  */
 export type SaveMode = 'in_place' | 'copy';
 
+export type SplitMode = 'pages' | 'ranges' | 'bookmarks' | 'size';
+
 export interface AttachmentData {
   /** the declared file name (untrusted text; the front end cleans it for a download) */
   filename: string;
@@ -750,6 +752,27 @@ export interface SecurityResult {
   has_signatures: boolean;
 }
 
+export interface SplitPartDto {
+  /** the file name, as the split job writes it */
+  name: string;
+  /** 0-based: the part's first page (a range's pages may skip some) */
+  first_page: number;
+  page_count: number;
+}
+
+export interface SplitPlanParams {
+  handle: string;
+  /** "size" is refused: its parts are sized only by writing them */
+  mode: SplitMode;
+  pages_per_file: number;
+  ranges: number[][];
+  name: string;
+}
+
+export interface SplitPlanResult {
+  parts: SplitPartDto[];
+}
+
 export interface StateEvent {
   handle: string;
   /** the document state after the call; sent only when it differs */
@@ -854,6 +877,7 @@ export interface Methods {
   'session.pages': { params: HandleParams; result: PagesResult; deadline: 'instant' };
   'session.security': { params: HandleParams; result: SecurityResult; deadline: 'instant' };
   'session.unlock_owner': { params: UnlockParams; result: UnlockResult; deadline: 'instant' };
+  'split.plan': { params: SplitPlanParams; result: SplitPlanResult; deadline: 'instant' };
   'system.memory': { params: Empty; result: MemoryResult; deadline: 'instant' };
   'text.extract': { params: ExtractParams; result: ExtractResult; deadline: 'slice' };
   'text.layer': { params: PageParams; result: TextLayerResult; deadline: 'render' };
@@ -896,6 +920,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.pages': 'instant',
   'session.security': 'instant',
   'session.unlock_owner': 'instant',
+  'split.plan': 'instant',
   'system.memory': 'instant',
   'text.extract': 'slice',
   'text.layer': 'render',
@@ -943,6 +968,7 @@ export const RESULT_DECODERS: {
   'session.pages': decodePagesResult,
   'session.security': decodeSecurityResult,
   'session.unlock_owner': decodeUnlockResult,
+  'split.plan': decodeSplitPlanResult,
   'system.memory': decodeMemoryResult,
   'text.extract': decodeExtractResult,
   'text.layer': decodeTextLayerResult,
@@ -2041,6 +2067,48 @@ export function decodeSecurityResult(
     pending: orNull(field(o, 'pending', path), `${path}.pending`, (v1, p1) => expectOneOf(v1, ['encrypt', 'remove'] as const, p1)),
     pending_method: orNull(field(o, 'pending_method', path), `${path}.pending_method`, (v1, p1) => expectOneOf(v1, ['none', 'rc4-40', 'rc4-128', 'aes-128', 'aes-256', 'unknown'] as const, p1)),
     has_signatures: expectBoolean(field(o, 'has_signatures', path), `${path}.has_signatures`),
+  };
+}
+
+export function decodeSplitPartDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SplitPartDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'first_page', 'page_count'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    first_page: expectInteger(field(o, 'first_page', path), `${path}.first_page`),
+    page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
+  };
+}
+
+export function decodeSplitPlanParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SplitPlanParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'mode', 'pages_per_file', 'ranges', 'name'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    mode: expectOneOf(field(o, 'mode', path), ['pages', 'ranges', 'bookmarks', 'size'] as const, `${path}.mode`),
+    pages_per_file: expectInteger(field(o, 'pages_per_file', path), `${path}.pages_per_file`),
+    ranges: expectArray(field(o, 'ranges', path), `${path}.ranges`).map((item1, index1) => expectArray(item1, `${`${path}.ranges`}[${index1}]`).map((item2, index2) => expectInteger(item2, `${`${`${path}.ranges`}[${index1}]`}[${index2}]`))),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+  };
+}
+
+export function decodeSplitPlanResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SplitPlanResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['parts'], path);
+  return {
+    parts: expectArray(field(o, 'parts', path), `${path}.parts`).map((item1, index1) => decodeSplitPartDto(item1, ctx, `${`${path}.parts`}[${index1}]`)),
   };
 }
 

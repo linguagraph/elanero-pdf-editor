@@ -921,6 +921,7 @@ export function App({
           engine={rpc}
           handle={session.handle}
           pageCount={activeTab.pages}
+          name={activeTab.name}
           startWorker={jobs.acquire}
         />
       ) : null}

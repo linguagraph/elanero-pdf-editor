@@ -20,7 +20,7 @@ export async function runExtract(
     deps,
     handle,
     'split',
-    splitArgs({ mode: 'ranges', parts: [picked] }),
+    splitArgs({ mode: 'ranges', parts: [picked] }, { name: '', zip: false }),
   );
   const file = files[0];
   if (file === undefined) throw new Error('the extract made no file');

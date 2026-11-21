@@ -409,6 +409,23 @@ def _stamp_orientation_pdfium(data: bytes, page: int) -> None:
     assert right[2] > 150 and right[0] < 100
 
 
+@host_check("zip_parts_pdf")
+def _zip_parts_pdf(data: bytes, names: list[str], pages: list[int]) -> None:
+    """The ZIP holds the part files ``names``, in that order. Each part has ``pages[i]`` pages in
+    pikepdf, and pypdfium2 opens it and renders its first page (W6.2 section 7)."""
+    import zipfile
+
+    import pikepdf
+
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert archive.namelist() == names, archive.namelist()
+        for name, count in zip(names, pages, strict=True):
+            part = archive.read(name)
+            with pikepdf.open(io.BytesIO(part)) as pdf:
+                assert len(pdf.pages) == count, (name, len(pdf.pages))
+            _render_first_page_pdfium(part)
+
+
 @host_check("encrypted_pages_pikepdf")
 def _encrypted_pages_pikepdf(data: bytes, pages: int, password: str) -> None:
     import pikepdf

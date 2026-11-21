@@ -240,6 +240,15 @@ is reloaded until you press it.
   and you can type a label into the page field to go to that page. Links in the document do not
   work yet (coming soon).
 
+## Split a document
+
+**Split Document** (Organize tab, Assemble group) makes several PDFs from one. Choose a mode: every
+N pages, page ranges, top-level bookmarks, or largest file size. For the first three, the dialog
+lists the files it will make, with their page counts, before you split. For the largest file size
+the sizes are known only once the files are written, so the list is not shown. Choose **Separate
+files** or **One ZIP file**; with more than 10 files, the ZIP is chosen for you. Together the files
+can be at most 512 MB. A larger split is refused, and nothing is made.
+
 ## What is not available yet
 
 These features are on the desktop today and are planned for the web version. Most of them are not
@@ -326,7 +335,7 @@ full policy, with what the desktop app stores, is in the
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
 | Edit the words of a paragraph, add text, images or shapes | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
-| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; each split part is offered as its own download, not a ZIP) |
+| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; the parts are offered as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
