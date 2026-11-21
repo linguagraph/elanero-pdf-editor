@@ -170,3 +170,23 @@ describe('runMergeJob', () => {
     expect(error).toMatchObject({ code: 'INTERNAL' });
   });
 });
+
+describe('runMergeJob page ranges', () => {
+  it('sends a ranges field only for the sources that have one', async () => {
+    const worker = new FakeJobWorker();
+    worker.answer = okReply(bytes(9));
+
+    await runMergeJob(worker, [
+      { name: 'a.pdf', data: bytes(1), ranges: '2-3' },
+      { name: 'b.pdf', data: bytes(2) },
+    ]);
+
+    const request = JSON.parse(worker.calls[0]?.request ?? '{}') as {
+      params: { args: { sources: unknown[] } };
+    };
+    expect(request.params.args.sources).toEqual([
+      { name: 'a.pdf', data: { $bin: 0 }, ranges: '2-3' },
+      { name: 'b.pdf', data: { $bin: 1 } },
+    ]);
+  });
+});

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   addSources,
+  isImageSourceName,
   isSupportedSourceName,
   moveSource,
   outputFileName,
   removeSource,
+  setSourcePages,
   type SourceItem,
 } from './sources';
 
@@ -13,7 +15,7 @@ function file(name: string): File {
 }
 
 function item(id: number, name: string): SourceItem {
-  return { id, name, file: file(name) };
+  return { id, name, file: file(name), pages: '' };
 }
 
 function names(items: readonly SourceItem[]): string[] {
@@ -70,5 +72,30 @@ describe('output name', () => {
     expect(outputFileName('   ')).toBe('merged.pdf');
     expect(outputFileName('report')).toBe('report.pdf');
     expect(outputFileName(' report.PDF ')).toBe('report.PDF');
+  });
+});
+
+describe('page ranges per source', () => {
+  it('starts every row with an empty Pages box, which means every page', () => {
+    const { items } = addSources([], [file('a.pdf')], 1);
+    expect(items[0]?.pages).toBe('');
+  });
+
+  it('sets the box of one row and keeps it through a move, and drops it with the row', () => {
+    const { items } = addSources([], [file('a.pdf'), file('b.pdf')], 1);
+    const typed = setSourcePages(items, 1, '2-3');
+    expect(typed.map((entry) => entry.pages)).toEqual(['2-3', '']);
+    const moved = moveSource(typed, 0, 1);
+    expect(moved.map((entry) => [entry.name, entry.pages])).toEqual([
+      ['b.pdf', ''],
+      ['a.pdf', '2-3'],
+    ]);
+    expect(removeSource(moved, 1).map((entry) => entry.pages)).toEqual(['']);
+  });
+
+  it('tells an image name from a PDF name', () => {
+    expect(isImageSourceName('scan.PNG')).toBe(true);
+    expect(isImageSourceName('a.pdf')).toBe(false);
+    expect(isImageSourceName('noextension')).toBe(false);
   });
 });
