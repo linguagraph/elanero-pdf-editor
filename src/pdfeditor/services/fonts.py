@@ -1,26 +1,45 @@
 """Catalog of fonts installed on this machine: where to look, how to read a face, and a
-cache so the app doesn't re-read every font file on every launch.
+cache so the app doesn't re-read every font file on every launch. Also the check of an uploaded
+font file (:func:`validate_font_bytes`, W6.9).
 
 Headless (no Qt): the UI runs :meth:`FontCatalog.scan` as a background job.
+
+fontTools is imported inside the functions that need it, never at module level, so this module
+can be shipped in the web package (scripts/web_package.py) without fontTools being present.
+The browser loader must also load fontTools before a fonts call; until it does, fonts.validate
+returns NOT_SUPPORTED in the browser (web/app/src/engine/loader.ts needsFontTools is true only
+for actions.run). That loader change is the web slice's job, not this one.
+Without fontTools the desktop catalogue reads nothing, and the upload check raises ImportError.
 """
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
 import platform
 import re
+import struct
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from pathlib import Path
-
-from fontTools.ttLib import TTFont
-from fontTools.ttLib.ttCollection import TTCollection
+from typing import TYPE_CHECKING
 
 from pdfeditor.core.jobs import CancelToken, ProgressFn, no_progress
 from pdfeditor.core.paths import data_dir
-from pdfeditor.model.fonts import BITMAP_ONLY, RESTRICTED, FontFace, FontRef, FontRefKind
+from pdfeditor.model.fonts import (
+    BITMAP_ONLY,
+    RESTRICTED,
+    FontFace,
+    FontRef,
+    FontRefKind,
+    licence_refusal,
+)
 from pdfeditor.model.platform import current
+
+if TYPE_CHECKING:  # annotations only: fontTools is imported inside the functions (see below)
+    from fontTools.ttLib import TTFont
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +50,14 @@ __all__ = [
     "BITMAP_ONLY",
     "RESTRICTED",
     "FontCatalog",
+    "FontRejected",
     "cached_catalog",
     "installed_ref_for_font_name",
     "normalize_font_name",
     "read_faces",
     "system_font_dirs",
     "text_scripts",
+    "validate_font_bytes",
 ]
 
 _SKIP_SUFFIXES = {".fon", ".fnt", ".pfb", ".pfm"}
@@ -64,6 +85,11 @@ _SCRIPT_RANGES: tuple[tuple[str, int, int], ...] = (
     ("arabic", 0x0600, 0x06FF),
     ("hebrew", 0x0590, 0x05FF),
 )
+
+# A collection above this many faces is refused from its header, before fontTools builds an offset
+# table for each one (a forged count could otherwise make it read a million entries). Real
+# collections hold a few dozen faces at most.
+MAX_COLLECTION_FACES = 64
 
 _SUBSET_PREFIX = re.compile(r"^[A-Z]{6}\+")
 _STYLE_SUFFIX = re.compile(r"[-, ]?(Bold\s*Italic|BoldItalic|Bold|Italic|Oblique)$", re.IGNORECASE)
@@ -314,6 +340,9 @@ def read_faces(path: Path) -> list[FontFace]:
     if suffix in _SKIP_SUFFIXES or suffix not in _FONT_SUFFIXES:
         return []
     try:
+        from fontTools.ttLib import TTFont
+        from fontTools.ttLib.ttCollection import TTCollection
+
         if suffix in (".ttc", ".otc"):
             collection = TTCollection(str(path), lazy=True)
             try:
@@ -334,6 +363,121 @@ def read_faces(path: Path) -> list[FontFace]:
     except Exception:
         logger.debug("unreadable font file: %s", path, exc_info=True)
         return []
+
+
+class FontRejected(Exception):
+    """A font file that can't be added (:func:`validate_font_bytes`).
+
+    ``kind`` is ``"invalid"``: ``reason`` says why (``not_a_font``, ``woff``, ``unreadable``,
+    ``too_many_faces`` or ``no_usable_face``). Or ``"not_embeddable"``: every usable face is
+    refused by its fsType, ``reason`` is the first one's code (``restricted`` or ``bitmap_only``)
+    and ``refused`` lists them all. Reasons are stable codes, never text from the file.
+    """
+
+    def __init__(self, kind: str, reason: str, refused: Sequence[FontFace] = ()) -> None:
+        super().__init__(reason)
+        self.kind = kind
+        self.reason = reason
+        self.refused: list[FontFace] = list(refused)
+
+
+# The first four bytes of each file kind fontTools reads. WOFF is named only to refuse it with
+# its own reason (fontTools reads it, but the web build has no Brotli for WOFF2).
+_SFNT_FORMATS: dict[bytes, str] = {
+    b"\x00\x01\x00\x00": "truetype",
+    b"true": "truetype",
+    b"OTTO": "opentype",
+    b"ttcf": "collection",
+}
+_WOFF_MAGICS = (b"wOFF", b"wOF2")
+
+
+def _is_usable(font: TTFont) -> bool:
+    """Has a character map with at least one mapping, and outlines. Only the table directory is
+    consulted for the outlines, so no charstrings are decompiled. A bitmap-only font (sbix, CBDT)
+    has no outlines and can't be embedded as a PDF font."""
+    try:
+        if not font.getBestCmap():
+            return False
+    except Exception:
+        return False
+    return ("glyf" in font and "loca" in font) or "CFF " in font or "CFF2" in font
+
+
+def _probe_face(font: TTFont, label: str, index: int) -> tuple[FontFace | None, str]:
+    """``(face, refusal)`` of one face. ``face`` is None when the face is unreadable or not
+    usable (it is skipped). ``refusal`` is the licence code when the usable face's fsType refuses
+    embedding, else ``""``; a refused face's ``reason`` holds that code."""
+    try:
+        face = _face_from_ttfont(font, Path(label), index)
+        if face is None or not _is_usable(font):
+            return None, ""
+        os2 = font.get("OS/2")
+        refusal = licence_refusal(None if os2 is None else int(getattr(os2, "fsType", 0)))
+    except MemoryError:
+        raise
+    except Exception:
+        logger.debug("unreadable face %d of %s", index, label, exc_info=True)
+        return None, ""
+    if refusal is None:
+        return face, ""
+    return replace(face, reason=refusal), refusal
+
+
+def validate_font_bytes(data: bytes, label: str) -> tuple[str, list[FontFace], list[FontFace]]:
+    """``(format, embeddable faces, refused faces)`` of an uploaded font file, read in memory.
+
+    ``label`` is the file name, for messages only. ``format`` is ``truetype``, ``opentype`` or
+    ``collection``. The fsType rules are the desktop's (:func:`licence_refusal`), so a file the
+    desktop refuses is refused here too. Only the tables the checks need are decompiled.
+
+    Raises :class:`FontRejected`, or ``ImportError`` when fontTools is not loaded (the web worker
+    before its install). A ``MemoryError`` is never turned into a rejection.
+    """
+    from fontTools.ttLib import TTFont
+    from fontTools.ttLib.ttCollection import TTCollection
+
+    magic = data[:4]
+    if magic in _WOFF_MAGICS:
+        raise FontRejected("invalid", "woff")
+    fmt = _SFNT_FORMATS.get(magic)
+    if fmt is None:
+        raise FontRejected("invalid", "not_a_font")
+    if fmt == "collection":
+        if len(data) < 12:
+            raise FontRejected("invalid", "unreadable")
+        (count,) = struct.unpack(">I", data[8:12])  # the TTC header's numFonts
+        if count > MAX_COLLECTION_FACES:
+            raise FontRejected("invalid", "too_many_faces")
+
+    try:
+        if fmt == "collection":
+            container: TTCollection | TTFont = TTCollection(io.BytesIO(data), lazy=True)
+            fonts = list(container.fonts)
+        else:
+            container = TTFont(io.BytesIO(data), lazy=True, fontNumber=0)
+            fonts = [container]
+    except MemoryError:
+        raise
+    except Exception:
+        raise FontRejected("invalid", "unreadable") from None
+
+    faces: list[FontFace] = []
+    refused: list[FontFace] = []
+    try:
+        for index, font in enumerate(fonts):
+            face, refusal = _probe_face(font, label, index)
+            if face is None:
+                continue
+            (refused if refusal else faces).append(face)
+    finally:
+        container.close()
+
+    if not faces and not refused:
+        raise FontRejected("invalid", "no_usable_face")
+    if not faces:
+        raise FontRejected("not_embeddable", refused[0].reason, refused)
+    return fmt, faces, refused
 
 
 def _cache_path() -> Path:

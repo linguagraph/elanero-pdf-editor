@@ -20,9 +20,6 @@ EXCLUDED: tuple[str, ...] = (
     "services/signing/",
     "services/ocr.py",
     "services/pdfa.py",
-    # The system font catalog reads the desktop's font folders; the browser has none, and only
-    # the UI and the self-test use it. It imports fontTools at module level, which the web lacks.
-    "services/fonts.py",
     "services/store_updates.py",
     "services/file_association.py",
     "services/export/office.py",

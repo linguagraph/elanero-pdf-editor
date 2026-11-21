@@ -294,6 +294,23 @@ export interface FlattenableResult {
   pages: number;
 }
 
+export interface FontFaceDto {
+  /** the face's index in the file (0 for a single font) */
+  index: number;
+  /** name ID 16, else 1 */
+  family: string;
+  /** name ID 17, else 2, else "Regular" */
+  style: string;
+  /** OS/2 usWeightClass (400 without an OS/2 table) */
+  weight: number;
+  /** fsSelection bit 0 or head.macStyle bit 1 */
+  italic: boolean;
+  /** sorted coarse scripts the cmap covers: "latin", "cyrillic", ... */
+  scripts: string[];
+  /** has an fvar table */
+  variable: boolean;
+}
+
 export interface FontRow {
   /** base font name without the subset prefix */
   name: string;
@@ -304,6 +321,22 @@ export interface FontRow {
   subset: boolean;
   /** 0-based, ascending */
   pages: number[];
+}
+
+export interface FontValidateParams {
+  /** the file name, for messages and logs only; never a path; 1 to 255 characters */
+  name: string;
+  /** the whole font file, one $bin buffer (at most limits.MAX_FONT_BYTES) */
+  data: ArrayBuffer;
+}
+
+export interface FontValidateResult {
+  /** "truetype", "opentype" (CFF or CFF2 outlines) or "collection" (TTC/OTC) */
+  format: string;
+  /** the usable faces the licence allows; never empty on success */
+  faces: FontFaceDto[];
+  /** usable faces the licence refuses (collections only) */
+  refused: RefusedFaceDto[];
 }
 
 export interface FontsResult {
@@ -623,6 +656,14 @@ export interface RedactionMarkDto {
   locked: boolean;
 }
 
+export interface RefusedFaceDto {
+  index: number;
+  family: string;
+  style: string;
+  /** "restricted" or "bitmap_only": the licence code, never English text */
+  reason: string;
+}
+
 export interface RenderPageParams {
   handle: string;
   /** 0-based, in visible page order */
@@ -855,6 +896,7 @@ export interface Methods {
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
   'content.preview_font': { params: PreviewFontParams; result: PreviewFontResult; deadline: 'render' };
+  'fonts.validate': { params: FontValidateParams; result: FontValidateResult; deadline: 'action' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
@@ -898,6 +940,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'comments.xfdf_preview': 'action',
   'content.objects': 'render',
   'content.preview_font': 'render',
+  'fonts.validate': 'action',
   'hello': 'instant',
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
@@ -946,6 +989,7 @@ export const RESULT_DECODERS: {
   'comments.xfdf_preview': decodeXfdfPreviewResult,
   'content.objects': decodeContentObjectsResult,
   'content.preview_font': decodePreviewFontResult,
+  'fonts.validate': decodeFontValidateResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
@@ -1340,6 +1384,24 @@ export function decodeFlattenableResult(
   };
 }
 
+export function decodeFontFaceDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontFaceDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['index', 'family', 'style', 'weight', 'italic', 'scripts', 'variable'], path);
+  return {
+    index: expectInteger(field(o, 'index', path), `${path}.index`),
+    family: expectString(field(o, 'family', path), `${path}.family`),
+    style: expectString(field(o, 'style', path), `${path}.style`),
+    weight: expectInteger(field(o, 'weight', path), `${path}.weight`),
+    italic: expectBoolean(field(o, 'italic', path), `${path}.italic`),
+    scripts: expectArray(field(o, 'scripts', path), `${path}.scripts`).map((item1, index1) => expectString(item1, `${`${path}.scripts`}[${index1}]`)),
+    variable: expectBoolean(field(o, 'variable', path), `${path}.variable`),
+  };
+}
+
 export function decodeFontRow(
   value: unknown,
   ctx: DecodeContext,
@@ -1354,6 +1416,33 @@ export function decodeFontRow(
     embedded: expectBoolean(field(o, 'embedded', path), `${path}.embedded`),
     subset: expectBoolean(field(o, 'subset', path), `${path}.subset`),
     pages: expectArray(field(o, 'pages', path), `${path}.pages`).map((item1, index1) => expectInteger(item1, `${`${path}.pages`}[${index1}]`)),
+  };
+}
+
+export function decodeFontValidateParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontValidateParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'data'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+  };
+}
+
+export function decodeFontValidateResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontValidateResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['format', 'faces', 'refused'], path);
+  return {
+    format: expectString(field(o, 'format', path), `${path}.format`),
+    faces: expectArray(field(o, 'faces', path), `${path}.faces`).map((item1, index1) => decodeFontFaceDto(item1, ctx, `${`${path}.faces`}[${index1}]`)),
+    refused: expectArray(field(o, 'refused', path), `${path}.refused`).map((item1, index1) => decodeRefusedFaceDto(item1, ctx, `${`${path}.refused`}[${index1}]`)),
   };
 }
 
@@ -1880,6 +1969,21 @@ export function decodeRedactionMarkDto(
     contents: expectString(field(o, 'contents', path), `${path}.contents`),
     author: expectString(field(o, 'author', path), `${path}.author`),
     locked: expectBoolean(field(o, 'locked', path), `${path}.locked`),
+  };
+}
+
+export function decodeRefusedFaceDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): RefusedFaceDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['index', 'family', 'style', 'reason'], path);
+  return {
+    index: expectInteger(field(o, 'index', path), `${path}.index`),
+    family: expectString(field(o, 'family', path), `${path}.family`),
+    style: expectString(field(o, 'style', path), `${path}.style`),
+    reason: expectString(field(o, 'reason', path), `${path}.reason`),
   };
 }
 

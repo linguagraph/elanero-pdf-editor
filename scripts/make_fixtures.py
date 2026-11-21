@@ -1374,6 +1374,50 @@ def _build_face(family: str, style: str, weight: int, italic: bool, chars: str, 
     return fb.font
 
 
+def _build_cff(family: str, style: str, weight: int, italic: bool, chars: str):
+    """A minimal (but real, loadable) OpenType face with CFF outlines: square glyphs."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.t2CharStringPen import T2CharStringPen
+
+    glyph_order = [".notdef"] + [f"g{ord(c):04x}" for c in chars]
+    fb = FontBuilder(1000, isTTF=False)
+    fb.setupGlyphOrder(glyph_order)
+    fb.setupCharacterMap({ord(c): f"g{ord(c):04x}" for c in chars})
+    charstrings = {}
+    for name in glyph_order:
+        pen = T2CharStringPen(600, None)
+        pen.moveTo((0, 0))
+        pen.lineTo((500, 0))
+        pen.lineTo((500, 500))
+        pen.lineTo((0, 500))
+        pen.closePath()
+        charstrings[name] = pen.getCharString()
+    fb.setupCFF(family.replace(" ", ""), {}, charstrings, {})
+    fb.setupHorizontalMetrics({name: (600, 0) for name in glyph_order})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupOS2(usWeightClass=weight, fsSelection=0x01 if italic else 0x40, fsType=0)
+    fb.setupNameTable({"familyName": family, "styleName": style})
+    fb.setupPost()
+    return fb.font
+
+
+def _save_collection(path: Path, faces: list[tuple[str, int]]) -> None:
+    """A TTC of synthetic Latin faces, one per ``(family, fsType)``."""
+    from fontTools.ttLib import TTFont
+    from fontTools.ttLib.ttCollection import TTCollection
+
+    parts = []
+    for number, (family, fs_type) in enumerate(faces):
+        part = FONTS_OUT / f"_ttc_part{number}.ttf"
+        _build_face(family, "Regular", 400, False, LATIN, fs_type=fs_type).save(part)
+        parts.append(part)
+    collection = TTCollection()
+    collection.fonts = [TTFont(part) for part in parts]
+    collection.save(path)
+    for part in parts:
+        part.unlink()
+
+
 def generate_fonts() -> None:
     """Synthetic font files for ``tests/services/test_fonts.py``: no real font is committed,
     and none of this depends on what's installed on the machine running the tests."""
@@ -1413,6 +1457,28 @@ def generate_fonts() -> None:
     large_chars = "".join(chr(c) for c in range(0x0100, 0x0100 + 2000))
     _build_face("Test Large", "Regular", 400, False, large_chars).save(
         FONTS_OUT / "TestLarge-Regular.ttf"
+    )
+    # W6.9 slice 1 (fonts.validate): one fact differs in each file, so each test names one rule.
+    _build_face("Test Bitmap Only", "Regular", 400, False, LATIN, fs_type=0x0200).save(
+        FONTS_OUT / "TestBitmapOnly-Regular.ttf"
+    )
+    _build_face("Test Mixed Bits", "Regular", 400, False, LATIN, fs_type=0x0202).save(
+        FONTS_OUT / "TestMixedBits-Regular.ttf"
+    )
+    _build_face("Test Preview Restricted", "Regular", 400, False, LATIN, fs_type=0x0006).save(
+        FONTS_OUT / "TestPreviewRestricted-Regular.ttf"
+    )
+    no_cmap = _build_face("Test No Cmap", "Regular", 400, False, LATIN)
+    del no_cmap["cmap"]
+    no_cmap.save(FONTS_OUT / "TestNoCmap-Regular.ttf")
+    _build_cff("Test Cff", "Regular", 400, False, LATIN).save(FONTS_OUT / "TestCff-Regular.otf")
+    _save_collection(
+        FONTS_OUT / "TestMixedCollection.ttc",
+        [("Test Mixed One", 0), ("Test Mixed Two", 0x0002)],
+    )
+    _save_collection(
+        FONTS_OUT / "TestRestrictedCollection.ttc",
+        [("Test Restricted One", 0x0002), ("Test Restricted Two", 0x0002)],
     )
     print("generated fonts/")
 
