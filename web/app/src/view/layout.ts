@@ -320,3 +320,30 @@ export function scrollTopForAnchor(boxes: readonly PageBox[], anchor: ViewAnchor
   if (box === undefined) return null;
   return Math.max(0, box.top + anchor.yFraction * box.height);
 }
+
+// Where a bookmark goes (W5.2 S3): a page, and how far the top of the viewport is below that page's
+// top, in the page's points. `top` is null for the page top. The offset is a fraction of the box, so
+// it is the same at every zoom and fit mode. The web view has no rotation, so the box's vertical axis
+// is the page's visible y; if view rotation comes to the web, this must map the axis (the desktop's
+// _current_destination does). Null when the page is not laid out.
+export interface ViewPlace {
+  readonly page: number;
+  readonly top: number | null;
+}
+
+export function viewLocation(
+  boxes: readonly PageBox[],
+  heightPt: number,
+  page: number,
+  sceneTop: number,
+): ViewPlace | null {
+  const box = boxes.find((candidate) => candidate.index === page);
+  if (box === undefined) return null;
+  const px = sceneTop - box.top;
+  if (px <= 0 || box.height <= 0) return { page, top: null };
+  const pt = Math.min(heightPt, (px / box.height) * heightPt);
+  const top = Math.round(pt * 100) / 100;
+  // Under a point is the page top: a jump lands a little above the page's own top, so a reader who
+  // just went to a page gets the page top back.
+  return { page, top: top < 1 ? null : top };
+}

@@ -789,7 +789,14 @@ export function App({
             currentPage={viewState.page - 1}
             revision={structureRevision}
             onHistoryStep={onHistoryStep}
-            onSelect={goTo}
+            // A bookmark lands where it points, like a link: the same path, with the offset (W5.2 S3).
+            onSelect={onLinkGoTo}
+            location={() => viewRef.current?.location() ?? null}
+            labels={viewState.labels}
+            selectedText={() => {
+              const read = viewRef.current?.selectedText();
+              return read?.state === 'ready' ? read.value : null;
+            }}
             onClose={() => closePanel('left')}
           />
         ) : documentShown &&

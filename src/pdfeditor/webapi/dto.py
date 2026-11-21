@@ -193,6 +193,9 @@ class OutlineEntry:
     level: int  # 1 for a top-level bookmark
     page: int | None
     is_open: bool  # the file's own "open" flag for the entry (its initial expansion)
+    # The destination's y in visible-space points from the page top (the space of the action's
+    # ``y``), or None for the page top or an entry without a page.
+    top: float | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

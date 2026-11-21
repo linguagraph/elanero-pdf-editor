@@ -43,6 +43,8 @@ import {
   singlePageScene,
   type ViewLayout,
   viewAnchor,
+  viewLocation,
+  type ViewPlace,
   visibleRange,
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
@@ -148,6 +150,9 @@ export interface DocumentViewHandle {
   selectedText(): ModelRead<string>;
   // The areas of the model's selection, one per page (Mark Text). `off` as selectedText.
   selectedAreas(): ModelRead<PageArea[]>;
+  // The place a new or moved bookmark goes to (W5.2 S3): the current page, and the top of the view
+  // within it. Null when the page is not laid out. Read on demand, so scrolling does not re-render.
+  location(): ViewPlace | null;
   // Clears the model's selection (Mark Text does so once it has marked the selection).
   clearTextSelection(): void;
   // Asks for the text indexes of these pages and resolves once they have been asked for (Mark Text
@@ -1022,6 +1027,13 @@ export function DocumentView({
         if (read.state !== 'ready') return read;
         return { state: 'ready', value: modelSelectionAreas(sel, read.value) };
       },
+      location: (): ViewPlace | null =>
+        viewLocation(
+          boxesOnScreen.current,
+          sizes?.[topPage.current]?.height ?? 0,
+          topPage.current,
+          viewportOf(scrollRef.current, contentHeight.current).top,
+        ),
       clearTextSelection: () => {
         modelSelection.current = null;
         coveredRevisions.current = null;
@@ -1051,6 +1063,7 @@ export function DocumentView({
       changeLayout,
       chooseNight,
       selectModel,
+      sizes,
     ],
   );
 

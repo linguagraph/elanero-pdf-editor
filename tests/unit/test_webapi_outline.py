@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
 from pdfeditor.model import platform as model_platform
+from pdfeditor.model.geometry import Point
 from pdfeditor.model.outline import Destination, OutlineItem
 from pdfeditor.webapi import dispatch
 from pdfeditor.webapi.platform import configure_web
@@ -106,3 +108,21 @@ def test_outline_entries_follow_the_tree_depth() -> None:
     root = OutlineItem(title="root", dest=Destination(page_index=0), children=[child])
     entries = outline_entries([root], page_count=2)
     assert [(e.title, e.level) for e in entries] == [("root", 1), ("child", 2)]
+
+
+def test_outline_entries_carry_the_destination_top() -> None:
+    items = [
+        OutlineItem(title="mid", dest=Destination(page_index=1, point=Point(0.0, 120.5))),
+        OutlineItem(title="page top", dest=Destination(page_index=1)),
+        OutlineItem(title="no page", dest=Destination(page_index=9, point=Point(0.0, 5.0))),
+        OutlineItem(title="infinite", dest=Destination(page_index=0, point=Point(0.0, math.inf))),
+        OutlineItem(title="link", uri="https://example.org/"),
+    ]
+    entries = outline_entries(items, page_count=3)
+    assert [(e.title, e.top) for e in entries] == [
+        ("mid", 120.5),
+        ("page top", None),
+        ("no page", None),
+        ("infinite", None),
+        ("link", None),
+    ]

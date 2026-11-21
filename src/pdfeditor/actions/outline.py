@@ -50,6 +50,9 @@ class AddBookmark:
     y: float | None = None  # points from the page top; None is the top of the page
     after: int | None = None  # flat index to insert after; None appends at the top level
     as_child: bool = False  # make it the first child of ``after`` instead of its next sibling
+    # The title of the entry at ``after`` as the panel shows it; a mismatch is STALE_OBJECT.
+    # Ignored when ``after`` is None.
+    expect_after: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +165,10 @@ def add_bookmark(session: DocumentSession, args: AddBookmark) -> ActionResult[in
             tree.append(item)
             new_path: OutlinePath = (len(tree) - 1,)
         else:
-            after_path, _ = _path_at(tree, args.after)
+            if args.expect_after is None:
+                after_path, _ = _path_at(tree, args.after)
+            else:
+                after_path, _ = _entry(tree, args.after, args.expect_after)
             if args.as_child:
                 children_at(tree, after_path).insert(0, item)
                 new_path = (*after_path, 0)

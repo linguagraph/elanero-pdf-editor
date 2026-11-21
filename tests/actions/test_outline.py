@@ -215,8 +215,9 @@ def test_rename_to_the_same_title_is_a_no_op(open_copy: Opener) -> None:
         DeleteBookmark(3, "Section 1.1"),
         MoveBookmark(7, "Chapter 3", parent=0, position=0),
         SetBookmarkDestination(4, "Chapter 2", page=0),
+        AddBookmark("Stale", page=0, after=3, expect_after="Chapter 2 (old)"),
     ],
-    ids=["rename", "delete", "move", "set_destination"],
+    ids=["rename", "delete", "move", "set_destination", "add"],
 )
 def test_a_stale_position_is_refused_and_nothing_changes(open_copy: Opener, args: object) -> None:
     s = open_copy("outline")
@@ -226,6 +227,7 @@ def test_a_stale_position_is_refused_and_nothing_changes(open_copy: Opener, args
         DeleteBookmark: "outline.delete",
         MoveBookmark: "outline.move",
         SetBookmarkDestination: "outline.set_destination",
+        AddBookmark: "outline.add",
     }[type(args)]
     with pytest.raises(StaleObject):
         run(s, name, args)
@@ -247,6 +249,7 @@ def test_a_move_into_its_own_subtree_is_refused(open_copy: Opener) -> None:
         ("outline.add", AddBookmark("   ", page=0)),
         ("outline.add", AddBookmark("Off", page=0, after=99)),
         ("outline.add", AddBookmark("Child", page=0, as_child=True)),
+        ("outline.add", AddBookmark("Infinite", page=0, after=0, y=float("inf"))),
         ("outline.rename", RenameBookmark(0, "Chapter 1", "x" * 1001)),
         ("outline.delete", DeleteBookmark(42, "Chapter 1")),
         ("outline.move", MoveBookmark(0, "Chapter 1", parent=None, position=99)),
@@ -275,3 +278,29 @@ def test_a_nesting_past_the_depth_cap_is_refused(open_copy: Opener) -> None:
 def test_outline_actions_need_outline_write() -> None:
     for name in NAMES.values():
         assert REGISTRY[name].requires == ("outline_write",)
+
+
+def test_add_with_expect_after_checks_the_entry_it_inserts_after(open_copy: Opener) -> None:
+    s = open_copy("outline")
+    run(s, "outline.add", AddBookmark("Matched", page=0, after=3, expect_after="Chapter 2"))
+    assert titles_of(s)[6] == (1, "Matched")  # after Chapter 2 and its two sections, as before
+    # Without expect_after the same add is unchanged; with it set but no ``after``, it is ignored.
+    run(s, "outline.add", AddBookmark("Appended", page=0, expect_after="Anything"))
+    assert titles_of(s)[-1] == (1, "Appended")
+
+
+def test_add_at_a_view_offset_keeps_the_point_after_a_save(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("outline")
+    index = run(s, "outline.add", AddBookmark("Mid", page=0, after=0, y=300.0)).value
+    assert index == 3
+    out = s.save(tmp_path / "view_offset.pdf")
+    reopened = DocumentSession.open(out)
+    try:
+        item = flatten(tree_of(reopened))[index][1]
+        assert item.dest is not None and item.dest.point is not None
+        assert item.dest.point.y == pytest.approx(300.0)
+    finally:
+        close(reopened)
+    record("outline_top_pikepdf", out, tops=[["Mid", 300.0]])

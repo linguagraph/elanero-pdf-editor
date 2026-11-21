@@ -3,6 +3,8 @@
 // the panel can keep the expansion and the focus without waiting for the reload. The rule is the
 // engine's (`outline.move` in actions/outline.py): `parent` is read before the move and `position`
 // is counted in the parent's child list after the entry has left it. A reference test pins this.
+// The add (W5.2 S3) follows the same rule: `applyAdd` is the engine's `outline.add`.
+import { t } from '../i18n/t';
 import type { OutlineEntry } from '../rpc/generated';
 
 export type MoveDirection = 'up' | 'down' | 'in' | 'out';
@@ -163,4 +165,62 @@ export function remapExpanded(
     if (expanded.has(oldIndex)) next.add(newIndex);
   });
   return next;
+}
+
+// The longest default title, in code points: the engine accepts 1000, and a title is a short label.
+const MAX_DEFAULT_TITLE = 120;
+const LINE_BREAK = /\r\n|[\r\n]/;
+
+// The default title of a new bookmark (W5.2 S3): the first non-empty line of the selected text, with
+// its whitespace runs collapsed, else "Page N" (the page's label when the document has one, so the
+// title matches the status bar). Pure apart from the message's wording, which comes from t().
+export function defaultTitle(
+  selected: string | null,
+  label: string | null,
+  pageNumber: number,
+): string {
+  const line = (selected ?? '')
+    .split(LINE_BREAK)
+    .map((part) => part.trim().replace(/\s+/g, ' '))
+    .find((part) => part !== '');
+  if (line !== undefined) return Array.from(line).slice(0, MAX_DEFAULT_TITLE).join('');
+  const shown = (label ?? '').trim();
+  const page =
+    shown === '' ? String(pageNumber) : Array.from(shown).slice(0, MAX_DEFAULT_TITLE).join('');
+  return t('bookmarks.newTitle', { page });
+}
+
+// The outline with a new entry inserted (W5.2 S3), as the engine's `outline.add` places it: after
+// `after`'s whole subtree for a sibling, as the first child for a child, or at the end of the top level
+// when `after` is null. `order[new] = old`, and the new entry's slot is -1, so remapExpanded keeps
+// the expansion of the others and drops nothing. `added` is the new entry's flat index.
+export function applyAdd(
+  e: readonly OutlineEntry[],
+  after: number | null,
+  asChild: boolean,
+  draft: { readonly title: string; readonly page: number; readonly top: number | null },
+): { entries: OutlineEntry[]; order: number[]; added: number } {
+  let added: number;
+  let level: number;
+  if (after === null) {
+    added = e.length;
+    level = 1;
+  } else if (asChild) {
+    added = after + 1;
+    level = (e[after]?.level ?? 0) + 1;
+  } else {
+    added = subtreeEnd(e, after);
+    level = e[after]?.level ?? 1;
+  }
+  const entry: OutlineEntry = {
+    title: draft.title,
+    level,
+    page: draft.page,
+    is_open: false,
+    top: draft.top,
+  };
+  const old = e.map((_, k) => k);
+  const order = [...old.slice(0, added), -1, ...old.slice(added)];
+  const entries = [...e.slice(0, added), entry, ...e.slice(added)];
+  return { entries, order, added };
 }

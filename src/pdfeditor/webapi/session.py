@@ -132,6 +132,7 @@ def outline_entries(items: list[OutlineItem], page_count: int) -> tuple[dto.Outl
             level=level,
             page=_page_or_none(item, page_count),
             is_open=item.is_open,
+            top=_top_or_none(item, page_count),
         )
         for level, item in flatten(items)
     )
@@ -142,6 +143,14 @@ def _page_or_none(item: OutlineItem, page_count: int) -> int | None:
         return None
     index = item.dest.page_index
     return index if 0 <= index < page_count else None
+
+
+def _top_or_none(item: OutlineItem, page_count: int) -> float | None:
+    # Only a destination with a page has a place; a finite y is the only one the panel can use.
+    if _page_or_none(item, page_count) is None or item.dest is None or item.dest.point is None:
+        return None
+    y = item.dest.point.y
+    return y if math.isfinite(y) else None
 
 
 # The web's limits on one page's links (W5.3): a page with more keeps its first ones and says so.

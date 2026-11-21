@@ -514,6 +514,7 @@ export interface OutlineEntry {
   page: number | null;
   /** the file's own "open" flag for the entry (its initial expansion) */
   is_open: boolean;
+  top: number | null;
 }
 
 export interface OutlineResult {
@@ -1732,12 +1733,13 @@ export function decodeOutlineEntry(
   path: string,
 ): OutlineEntry {
   const o = expectObject(value, path);
-  checkKeys(o, ['title', 'level', 'page', 'is_open'], path);
+  checkKeys(o, ['title', 'level', 'page', 'is_open', 'top'], path);
   return {
     title: expectString(field(o, 'title', path), `${path}.title`),
     level: expectInteger(field(o, 'level', path), `${path}.level`),
     page: orNull(field(o, 'page', path), `${path}.page`, (v1, p1) => expectInteger(v1, p1)),
     is_open: expectBoolean(field(o, 'is_open', path), `${path}.is_open`),
+    top: orNull(field(o, 'top', path), `${path}.top`, (v1, p1) => expectNumber(v1, p1)),
   };
 }
 

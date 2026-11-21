@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import type { OutlineEntry } from '../rpc/generated';
+import type { ViewPlace } from '../view/layout';
 import { BookmarksPanel } from './BookmarksPanel';
 import { RailButton } from '../layout/RailButton';
 import { RAIL_ICONS } from '../layout/railIcons';
@@ -19,7 +20,7 @@ beforeEach(() => {
 });
 
 function entry(title: string, level: number, page: number | null, is_open = false): OutlineEntry {
-  return { title, level, page, is_open };
+  return { title, level, page, is_open, top: null };
 }
 
 // A fake engine: session.outline answers at once with the given entries.
@@ -62,17 +63,27 @@ afterEach(() => {
 });
 
 // The side panel as the app composes it: a rail button and, when the tab's panel is open, the panel.
+// What the view supplies beyond the outline (W5.2 S3): the place, the labels and the selection.
+interface HarnessExtra {
+  readonly place?: () => ViewPlace | null;
+  readonly labels?: readonly string[];
+  readonly selectedText?: () => string | null;
+}
+
 function Harness({
   tabId,
   rpc,
   onSelect,
   revision = 0,
+  place = () => null,
+  labels = [],
+  selectedText = () => null,
 }: {
   tabId: number;
   rpc: PageRpc;
-  onSelect: (index: number) => void;
+  onSelect: (index: number, top: number | null) => void;
   revision?: number;
-}) {
+} & HarnessExtra) {
   const open = useOpenPanel('left') === 'bookmarks';
   let panel: ReactNode = null;
   if (open) {
@@ -85,6 +96,9 @@ function Harness({
         revision={revision}
         onHistoryStep={() => undefined}
         onSelect={onSelect}
+        location={place}
+        labels={labels}
+        selectedText={selectedText}
         onClose={() => closePanel('left')}
       />
     );
@@ -137,9 +151,14 @@ async function key(element: HTMLElement, name: string): Promise<void> {
   await flush();
 }
 
-async function mount(tabId: number, rpc: PageRpc, onSelect = vi.fn()): Promise<void> {
+async function mount(
+  tabId: number,
+  rpc: PageRpc,
+  onSelect = vi.fn(),
+  extra: HarnessExtra = {},
+): Promise<void> {
   act(() => {
-    root.render(<Harness tabId={tabId} rpc={rpc} onSelect={onSelect} />);
+    root.render(<Harness tabId={tabId} rpc={rpc} onSelect={onSelect} {...extra} />);
   });
   await flush();
 }
@@ -177,7 +196,7 @@ describe('bookmarks side panel', () => {
     await click(toggleOf('Part One'));
     await click(toggleOf('Chapter 1.1'));
     await click(item('Section 1.1.1'));
-    expect(onSelect).toHaveBeenLastCalledWith(2);
+    expect(onSelect).toHaveBeenLastCalledWith(2, null);
     expect(item('Part Two').getAttribute('aria-disabled')).toBe('true');
     await click(item('Part Two'));
     expect(onSelect).toHaveBeenCalledTimes(1);
@@ -198,7 +217,7 @@ describe('bookmarks side panel', () => {
     await key(item('Section 1.1.1'), 'ArrowLeft');
     expect(document.activeElement).toBe(item('Chapter 1.1'));
     await key(item('Chapter 1.1'), 'Enter');
-    expect(onSelect).toHaveBeenLastCalledWith(1);
+    expect(onSelect).toHaveBeenLastCalledWith(1, null);
     await key(item('Chapter 1.1'), 'ArrowLeft');
     expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Part Two']);
     await key(item('Chapter 1.1'), 'ArrowLeft');
@@ -420,5 +439,171 @@ describe('bookmarks editing (W5.2 S2)', () => {
     await flush();
     await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
     expect(runs()).toHaveLength(2);
+  });
+});
+
+// An outline that changes after the first read: the reload after an add shows the new entry.
+function addingRpc(before: OutlineEntry[], after: OutlineEntry[]) {
+  let reads = 0;
+  const call = vi.fn((method: string) => {
+    if (method === 'session.outline') {
+      reads += 1;
+      return Promise.resolve({ entries: reads === 1 ? before : after });
+    }
+    if (method === 'session.capabilities') {
+      return Promise.resolve({ engine: { outline_write: true }, platform: {} });
+    }
+    if (method === 'actions.run') {
+      return Promise.resolve({
+        label: 'Add Bookmark',
+        executed: true,
+        value: 3,
+        changed: null,
+        state: { history: 2 },
+      });
+    }
+    return Promise.reject(new Error(`unexpected call ${method}`));
+  });
+  return { rpc: { call } as unknown as PageRpc, call };
+}
+
+function buttonNamed(text: string): HTMLButtonElement {
+  const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === text,
+  );
+  if (found === undefined) throw new Error(`no button ${text}`);
+  return found;
+}
+
+const ADD_KEYS: KeyboardEventInit = { key: 'N', altKey: true, shiftKey: true, code: 'KeyN' };
+
+describe('bookmarks adding (W5.2 S3)', () => {
+  it('Alt+Shift+N adds after the row at the view place and opens its title selected', async () => {
+    const { rpc, call } = addingRpc(outline, [
+      ...outline.slice(0, 3),
+      { ...entry('Page 1', 1, 0), top: 120.5 },
+      ...outline.slice(3),
+    ]);
+    openPanel('bookmarks');
+    await mount(20, rpc, vi.fn(), { place: () => ({ page: 0, top: 120.5 }) });
+    const event = await press(item('Part One'), ADD_KEYS);
+    expect(event.defaultPrevented).toBe(true);
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.add',
+      args: {
+        title: 'Page 1',
+        page: 0,
+        y: 120.5,
+        after: 0,
+        as_child: false,
+        expect_after: 'Part One',
+      },
+    });
+    await flush();
+    const field = host.querySelector<HTMLInputElement>('input.bookmarks-rename');
+    expect(field?.value).toBe('Page 1');
+    expect(field?.selectionStart).toBe(0);
+    expect(field?.selectionEnd).toBe('Page 1'.length);
+  });
+
+  it('Escape keeps the suggested title with no second edit', async () => {
+    const { rpc, call } = addingRpc(outline, [
+      ...outline.slice(0, 3),
+      { ...entry('Page 1', 1, 0), top: null },
+      ...outline.slice(3),
+    ]);
+    openPanel('bookmarks');
+    await mount(21, rpc);
+    await press(item('Part One'), ADD_KEYS);
+    await flush();
+    const field = host.querySelector<HTMLInputElement>('input.bookmarks-rename');
+    if (field === null) throw new Error('no rename field');
+    await press(field, { key: 'Escape' });
+    expect(host.querySelector('input.bookmarks-rename')).toBeNull();
+    const runs = call.mock.calls.filter(([method]) => method === 'actions.run');
+    expect(runs).toHaveLength(1);
+  });
+
+  it('names the new bookmark after the selected text, else the page label', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(22, rpc, vi.fn(), {
+      selectedText: () => '  Selected   words \nsecond line',
+      labels: ['i'],
+    });
+    await press(item('Part One'), ADD_KEYS);
+    expect(call).toHaveBeenCalledWith(
+      'actions.run',
+      expect.objectContaining({ args: expect.objectContaining({ title: 'Selected words' }) }),
+    );
+  });
+
+  it('Add Child on the toolbar adds the first child of the row', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(23, rpc);
+    await click(item('Part One'));
+    await click(buttonNamed('Add Child'));
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.add',
+      args: {
+        title: 'Page 1',
+        page: 0,
+        y: null,
+        after: 0,
+        as_child: true,
+        expect_after: 'Part One',
+      },
+    });
+  });
+
+  it('Add Child is off where the outline is deepest', async () => {
+    const { rpc } = editableRpc([entry('Deep', 32, 0)]);
+    openPanel('bookmarks');
+    await mount(24, rpc);
+    expect(buttonNamed('Add Child').disabled).toBe(true);
+    expect(buttonNamed('Add').disabled).toBe(false);
+  });
+
+  it('an empty outline offers Add Bookmark only when it can be edited', async () => {
+    const { rpc, call } = editableRpc([]);
+    openPanel('bookmarks');
+    await mount(25, rpc);
+    await click(buttonNamed('Add Bookmark'));
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.add',
+      args: { title: 'Page 1', page: 0, y: null, after: null, as_child: false, expect_after: null },
+    });
+    const { rpc: readOnly } = fakeRpc([]);
+    closePanel('left');
+    openPanel('bookmarks');
+    await mount(26, readOnly);
+    const names = [...host.querySelectorAll('button')].map((button) => button.textContent);
+    expect(names).not.toContain('Add Bookmark');
+  });
+
+  it('Set to Current Page sends the view place, offset included', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(27, rpc, vi.fn(), { place: () => ({ page: 2, top: 40 }) });
+    await click(item('Part One'));
+    await click(buttonNamed('Set to Current Page'));
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.set_destination',
+      args: { index: 0, expect_title: 'Part One', page: 2, y: 40 },
+    });
+  });
+
+  it('a click on an entry with an offset goes to that offset', async () => {
+    const { rpc } = fakeRpc([{ ...entry('Part One', 1, 0), top: 40 }]);
+    const onSelect = vi.fn();
+    openPanel('bookmarks');
+    await mount(28, rpc, onSelect);
+    await click(item('Part One'));
+    expect(onSelect).toHaveBeenLastCalledWith(0, 40);
   });
 });

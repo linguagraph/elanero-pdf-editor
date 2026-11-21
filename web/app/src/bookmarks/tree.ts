@@ -62,6 +62,8 @@ export type BookmarkAction =
   // Right indents, Left outdents). Alt+Arrow alone stays with the browser and the app's Back and Forward.
   | { readonly kind: 'rename' | 'delete'; readonly index: number }
   | { readonly kind: 'move'; readonly index: number; readonly direction: MoveDirection }
+  // Alt+Shift+N adds a bookmark after the row (W5.2 S3); a child add has no key (the toolbar's button).
+  | { readonly kind: 'add'; readonly index: number }
   | { readonly kind: 'none' };
 
 export interface KeyModifiers {
@@ -69,6 +71,9 @@ export interface KeyModifiers {
   readonly shift?: boolean;
   readonly ctrl?: boolean;
   readonly meta?: boolean;
+  // The physical key (KeyboardEvent.code). Option+Shift+N makes a different `key` on macOS, so the
+  // add key matches by code.
+  readonly code?: string;
 }
 
 const NONE: BookmarkAction = { kind: 'none' };
@@ -92,6 +97,9 @@ export function treeAction(
   const focus = (target: BookmarkRow | undefined): BookmarkAction =>
     target === undefined ? NONE : { kind: 'focus', index: target.index };
   if (modifiers.alt) {
+    if (modifiers.shift && !modifiers.ctrl && !modifiers.meta && modifiers.code === 'KeyN') {
+      return { kind: 'add', index };
+    }
     const direction = MOVE_KEYS[key];
     return modifiers.shift && direction !== undefined ? { kind: 'move', index, direction } : NONE;
   }

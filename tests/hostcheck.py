@@ -1158,6 +1158,38 @@ def _outline_pikepdf(data: bytes, expected: list[list[Any]]) -> None:
     assert out == [(int(level), title) for level, title in expected]
 
 
+@host_check("outline_top_pikepdf")
+def _outline_top_pikepdf(data: bytes, tops: list[list[Any]]) -> None:
+    """For each ``[title, visible_y]``, the bookmark's /XYZ destination has its top at that many
+    points below the page's crop box top (the visible space the web and desktop use), within 1 pt.
+
+    The destination is read by hand (/Dest, or /A /D), so the check does not depend on MuPDF.
+    """
+    import pikepdf
+
+    found: dict[str, Any] = {}
+
+    def walk(node: Any) -> None:
+        child = node.get("/First")
+        while child is not None:
+            found.setdefault(str(child.Title), child)
+            walk(child)
+            child = child.get("/Next")
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        walk(pdf.Root.Outlines)
+        index_of = {page.obj.objgen: number for number, page in enumerate(pdf.pages)}
+        for title, visible_y in tops:
+            item = found[title]
+            dest = item.get("/Dest")
+            if dest is None:
+                dest = item["/A"]["/D"]
+            assert str(dest[1]) == "/XYZ", dest
+            page = pdf.pages[index_of[dest[0].objgen]]
+            crop_top = float(page.cropbox[3])
+            assert abs((crop_top - float(visible_y)) - float(dest[3])) < 1.0, (title, dest)
+
+
 @host_check("render_size_pdfium")
 def _render_size_pdfium(data: bytes, page: int, scale: float) -> None:
     import pypdfium2 as pdfium

@@ -141,3 +141,8 @@
     border-color: ButtonText;
   }
 }
+
+/* Adding (W5.2 S3): the empty outline's Add Bookmark button sits under its status line. */
+.bookmarks-status-action {
+  padding: 0 var(--space-4) var(--space-4);
+}

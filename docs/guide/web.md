@@ -156,9 +156,16 @@ is reloaded until you press it.
   Enter keeps it and Escape cancels). Press Delete to remove it with everything nested under it.
   Press Alt+Shift+Up or Alt+Shift+Down to move it among its neighbours, and Alt+Shift+Right or
   Alt+Shift+Left to indent it under the entry above or outdent it. The toolbar's Set to Current
-  Page points the entry at the top of the page now on screen. Each change can be undone from the
-  message that follows it. Adding bookmarks is coming soon. Each open document keeps its own
-  expanded entries until you close it.
+  Page points the entry at the place now on screen. Each change can be undone from the message
+  that follows it.
+  To add a bookmark, press Alt+Shift+N or use the toolbar's Add: it goes after the entry you are on.
+  Add Child puts it first under that entry instead, and a document with no bookmarks offers Add
+  Bookmark. The new bookmark goes to the page you are reading, at the place you have scrolled to
+  on it. Its title is the first line of the text you have selected with the Select tool, or else
+  "Page N", and the title is selected for typing: Enter keeps what you type, and Escape keeps the
+  suggested title. Clicking an entry goes to its place on the page, not only to the top of it.
+  Dragging entries to move them is not available yet. Each open document keeps its own expanded
+  entries until you close it.
 - **Attachments.** The **Attachments** button on the left rail lists the files embedded in the
   document, with the size of each. Click a file to see its name, size and description, then press
   **Save** to download it to your computer. The file is saved as it is; the browser never opens or
@@ -348,7 +355,7 @@ full policy, with what the desktop app stores, is in the
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; combine shows a progress bar, and Cancel stops the job; split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
-| Bookmarks: rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; adding bookmarks is coming soon) |
+| Bookmarks: add, rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; drag and drop is not available yet) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
 | Crop box drawn on a page | Yes | Yes (Crop dialog, Draw on page: drag a box on a page, Esc cancels; the dialog reopens with its margins on that page) |

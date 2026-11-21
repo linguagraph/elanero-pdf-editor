@@ -1,20 +1,23 @@
 // The bookmarks side panel (W5.2, W1.4 section 9): the document outline as a tree (ARIA tree roles,
 // with the arrow keys of the tree pattern). A click on an entry, or Enter on it, asks the document
-// view to scroll to its page. Where the engine has outline_write (S2), the panel also renames,
-// deletes, moves and re-targets entries, by keys (F2, Delete, Alt+Shift+Arrow) or a toolbar of text
-// buttons. Each edit is one engine action with an Undo toast; the outline then reloads.
-// Adding bookmarks comes later (S3).
+// view to scroll to its place. Where the engine has outline_write, the panel also adds, renames,
+// deletes, moves and re-targets entries, by keys (Alt+Shift+N, F2, Delete, Alt+Shift+Arrow) or a
+// toolbar of text buttons. Each edit is one engine action with an Undo toast; the outline then
+// reloads. A new entry's title opens for typing (S3), so it can be named at once.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import type { HistoryResult, OutlineEntry } from '../rpc/generated';
+import type { ViewPlace } from '../view/layout';
 import { expandedOf, fingerprintOf, setExpandedOf } from './expansion';
 import { runBookmarkEdit, type BookmarkEditOutcome } from './runEdit';
 import {
+  applyAdd,
   applyDelete,
   applyMove,
   childrenOf,
+  defaultTitle,
   deleteFocus,
   moveTarget,
   parentOf,
@@ -30,22 +33,34 @@ export interface BookmarksPanelProps {
   readonly handle: string;
   // The tab the panel belongs to: its expansion state is kept per tab.
   readonly tabId: number;
-  // The page shown in the view (zero-based): Set to Current Page uses it.
+  // The page shown in the view (zero-based): the place a bookmark goes to when the view has none.
   readonly currentPage: number;
   // Changes when the structure or the outline changed (App's structureRevision): the outline reloads.
   readonly revision: number;
   // Reports the step an Undo toast undid or redid, so the app can refresh what it shows.
   readonly onHistoryStep: (reply: HistoryResult) => void;
-  // Called with the page index (zero-based) when an entry with a page is chosen.
-  readonly onSelect: (index: number) => void;
+  // Called with the page index (zero-based) and the top (points from the page top, null for the top)
+  // when an entry with a page is chosen.
+  readonly onSelect: (index: number, top: number | null) => void;
+  // The place a new or re-targeted bookmark goes to. A function read at the moment of the edit, so
+  // scrolling does not re-render the panel.
+  readonly location: () => ViewPlace | null;
+  // The document's page labels: a new bookmark's default title uses the label of its page.
+  readonly labels: readonly string[];
+  // The first line of the model's text selection, or null when there is none.
+  readonly selectedText: () => string | null;
   readonly onClose: () => void;
 }
 
 // The deepest indent the stylesheet has a rule for; deeper entries share its indent.
 const MAX_DEPTH = 8;
 
+// The deepest level an outline may reach (the engine's MAX_OUTLINE_DEPTH): Add Child is off there.
+const MAX_OUTLINE_LEVEL = 32;
+
 // The key of each edit, as the toolbar's tooltip and aria-keyshortcuts show it.
 const KEYS = {
+  add: 'Alt+Shift+N',
   rename: 'F2',
   delete: 'Delete',
   up: 'Alt+Shift+ArrowUp',
@@ -58,7 +73,15 @@ type EditKind =
   | { readonly kind: 'rename'; readonly title: string }
   | { readonly kind: 'delete' }
   | { readonly kind: 'move'; readonly direction: MoveDirection }
-  | { readonly kind: 'page'; readonly page: number };
+  | { readonly kind: 'page'; readonly place: ViewPlace };
+
+// A toolbar button's click: an add (after the row, or as its child), opening the rename field, the
+// page edit (which reads the view's place at the click), or an edit that is sent as it is.
+type ToolbarAction =
+  | { readonly kind: 'add'; readonly asChild: boolean }
+  | { readonly kind: 'rename' }
+  | { readonly kind: 'page' }
+  | { readonly kind: 'edit'; readonly edit: EditKind };
 
 // One edit as the panel will send it, with the outline it predicts for the reload.
 interface PlannedEdit {
@@ -69,6 +92,8 @@ interface PlannedEdit {
   readonly nextExpanded: ReadonlySet<number>;
   // The flat index of the row to focus after the reload (in the predicted outline), or null.
   readonly focus: number | null;
+  // An added bookmark: after the reload its title field opens, instead of focusing the row.
+  readonly rename?: boolean;
 }
 
 // Works out the engine call for one edit of the row at `index`, or null when there is nothing to
@@ -96,15 +121,17 @@ function planEdit(
         focus: index,
       };
     }
-    case 'page':
+    case 'page': {
+      const { page, top } = edit.place;
       return {
         name: 'outline.set_destination',
-        args: { index, expect_title, page: edit.page, y: null },
-        text: t('bookmarks.destinationSet', { page: edit.page + 1 }),
-        next: entries.map((e, k) => (k === index ? { ...e, page: edit.page } : e)),
+        args: { index, expect_title, page, y: top },
+        text: t('bookmarks.destinationSet', { page: page + 1 }),
+        next: entries.map((e, k) => (k === index ? { ...e, page, top } : e)),
         nextExpanded: expanded,
         focus: index,
       };
+    }
     case 'delete': {
       const nested = subtreeEnd(entries, index) - index - 1;
       const removed = applyDelete(entries, index);
@@ -145,6 +172,41 @@ function planEdit(
       };
     }
   }
+}
+
+// The engine call for a new bookmark after `after` (null: the end of the top level), at `place`,
+// with `title`. The predicted outline is applyAdd's, which follows the engine's placement.
+function planAdd(
+  entries: readonly OutlineEntry[],
+  expanded: ReadonlySet<number>,
+  after: number | null,
+  asChild: boolean,
+  place: ViewPlace,
+  title: string,
+): PlannedEdit | null {
+  const anchor = after === null ? undefined : entries[after];
+  if (after !== null && anchor === undefined) return null;
+  const predicted = applyAdd(entries, after, asChild, { title, page: place.page, top: place.top });
+  const nextExpanded = remapExpanded(expanded, predicted.order);
+  // A child opens its parent, so the new row is visible.
+  if (asChild && after !== null) nextExpanded.add(after);
+  return {
+    name: 'outline.add',
+    args: {
+      title,
+      page: place.page,
+      y: place.top,
+      after,
+      as_child: asChild,
+      // The title the panel shows at `after`: a stale panel is refused instead of adding in the wrong place.
+      expect_after: anchor?.title ?? null,
+    },
+    text: t('bookmarks.added', { title, page: place.page + 1 }),
+    next: predicted.entries,
+    nextExpanded,
+    focus: predicted.added,
+    rename: true,
+  };
 }
 
 // The title field of the row being renamed. Enter and Escape end it and return the focus to the
@@ -208,6 +270,9 @@ function BookmarkTree({
   revision,
   onHistoryStep,
   onSelect,
+  location,
+  labels,
+  selectedText,
 }: Omit<BookmarksPanelProps, 'onClose'>) {
   const [entries, setEntries] = useState<readonly OutlineEntry[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -222,7 +287,8 @@ function BookmarkTree({
   const listRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   // Set by an edit: the row to focus once the reloaded outline has rendered (null index: none).
-  const pendingFocus = useRef<{ index: number | null } | null>(null);
+  // `rename` opens that row's title field instead (a new bookmark).
+  const pendingFocus = useRef<{ index: number | null; rename?: boolean } | null>(null);
   // A synchronous guard: a second key or click before the state updates must not send a second edit.
   const busyRef = useRef(false);
   // Set by an edit that changed the outline: busy then lasts until the reload has applied the new
@@ -279,6 +345,11 @@ function BookmarkTree({
     if (pending.index === null) return;
     const index = Math.min(pending.index, entries.length - 1);
     setFocusIndex(index);
+    // A new bookmark's title field focuses itself when it opens.
+    if (pending.rename === true) {
+      setEditing(index);
+      return;
+    }
     if (
       active instanceof HTMLButtonElement &&
       toolbarRef.current?.contains(active) === true &&
@@ -291,6 +362,56 @@ function BookmarkTree({
       listRef.current?.querySelector<HTMLElement>('[data-index]');
     row?.focus();
   }, [entries]);
+
+  // Sends one edit, then saves the expansion the reload should show and asks for the reload.
+  const runEdit = async (plan: PlannedEdit | null) => {
+    if (plan === null || entries === null || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    // Saved before the edit, so an Undo finds the expansion this outline had.
+    setExpandedOf(tabId, fingerprintOf(entries), new Set(expanded));
+    let outcome: BookmarkEditOutcome = 'failed';
+    let value: unknown;
+    try {
+      const result = await runBookmarkEdit(
+        { rpc, handle, onHistoryStep },
+        plan.name,
+        plan.args,
+        plan.text,
+      );
+      outcome = result.outcome;
+      value = result.value;
+    } finally {
+      // A reload follows an edit that went through or found the outline stale; the reload effect
+      // ends the busy state once it has applied the entries.
+      if (outcome !== 'done' && outcome !== 'stale') {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    }
+    if (outcome === 'done') {
+      setExpandedOf(tabId, fingerprintOf(plan.next), new Set(plan.nextExpanded));
+      // An added bookmark focuses the index the engine returned; the predicted one is the fallback.
+      const focus = plan.rename === true && typeof value === 'number' ? value : plan.focus;
+      pendingFocus.current = { index: focus, rename: plan.rename };
+      reloadPending.current = true;
+      setReloadToken((count) => count + 1);
+    } else if (outcome === 'stale') {
+      pendingFocus.current = { index: focusIndex ?? 0 };
+      reloadPending.current = true;
+      setReloadToken((count) => count + 1);
+    }
+  };
+
+  // Adds a bookmark after `after` (null: the end of the top level). It goes to the view's place,
+  // and its title is the selected text, else "Page N" (S3).
+  const addAt = (after: number | null, asChild: boolean) => {
+    if (entries === null) return;
+    const place = location() ?? { page: currentPage, top: null };
+    const label = labels[place.page] ?? null;
+    const title = defaultTitle(selectedText(), label, place.page + 1);
+    void runEdit(planAdd(entries, expanded, after, asChild, place, title));
+  };
 
   if (loadFailed) {
     return (
@@ -308,9 +429,23 @@ function BookmarkTree({
   }
   if (entries.length === 0) {
     return (
-      <p role="status" className="bookmarks-status">
-        {t('bookmarks.empty')}
-      </p>
+      <>
+        <p role="status" className="bookmarks-status">
+          {t('bookmarks.empty')}
+        </p>
+        {editable ? (
+          <div className="bookmarks-status-action">
+            <button
+              type="button"
+              className="bookmarks-action"
+              disabled={busy}
+              onClick={() => addAt(null, false)}
+            >
+              {t('bookmarks.addFirst')}
+            </button>
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -331,44 +466,11 @@ function BookmarkTree({
     listRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)?.focus();
   };
   const choose = (index: number) => {
-    const page = entries[index]?.page;
-    if (page !== null && page !== undefined) onSelect(page);
+    const row = entries[index];
+    const page = row?.page;
+    if (row !== undefined && page !== null && page !== undefined) onSelect(page, row.top);
   };
 
-  // Sends one edit, then saves the expansion the reload should show and asks for the reload.
-  const runEdit = async (plan: PlannedEdit | null) => {
-    if (plan === null || busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    // Saved before the edit, so an Undo finds the expansion this outline had.
-    setExpandedOf(tabId, fingerprintOf(entries), new Set(expanded));
-    let outcome: BookmarkEditOutcome = 'failed';
-    try {
-      outcome = await runBookmarkEdit(
-        { rpc, handle, onHistoryStep },
-        plan.name,
-        plan.args,
-        plan.text,
-      );
-    } finally {
-      // A reload follows an edit that went through or found the outline stale; the reload effect
-      // ends the busy state once it has applied the entries.
-      if (outcome !== 'done' && outcome !== 'stale') {
-        busyRef.current = false;
-        setBusy(false);
-      }
-    }
-    if (outcome === 'done') {
-      setExpandedOf(tabId, fingerprintOf(plan.next), new Set(plan.nextExpanded));
-      pendingFocus.current = { index: plan.focus };
-      reloadPending.current = true;
-      setReloadToken((value) => value + 1);
-    } else if (outcome === 'stale') {
-      pendingFocus.current = { index: activeIndex ?? 0 };
-      reloadPending.current = true;
-      setReloadToken((value) => value + 1);
-    }
-  };
   const canEdit = editable && !locked;
   const finishRename = (index: number, value: string | null, refocus: boolean) => {
     setEditing(null);
@@ -382,12 +484,18 @@ function BookmarkTree({
       shift: event.shiftKey,
       ctrl: event.ctrlKey,
       meta: event.metaKey,
+      code: event.code,
     });
     if (action.kind === 'none') return;
     // Every key the panel handles is prevented, even an edit key that does nothing here: the Edit
     // tool's document-level Delete listener must not act on a Delete the panel has taken.
     event.preventDefault();
-    if (action.kind === 'rename' || action.kind === 'delete' || action.kind === 'move') {
+    if (
+      action.kind === 'add' ||
+      action.kind === 'rename' ||
+      action.kind === 'delete' ||
+      action.kind === 'move'
+    ) {
       // Edit keys do nothing while an edit runs or when the document cannot be edited; the
       // navigation keys still work.
       if (!canEdit) return;
@@ -395,6 +503,7 @@ function BookmarkTree({
     if (action.kind === 'focus') focusRow(action.index);
     else if (action.kind === 'expand' || action.kind === 'collapse') toggle(action.index);
     else if (action.kind === 'activate') choose(action.index);
+    else if (action.kind === 'add') addAt(action.index, false);
     else if (action.kind === 'rename') setEditing(action.index);
     else if (action.kind === 'delete') {
       void runEdit(planEdit(entries, expanded, action.index, { kind: 'delete' }));
@@ -406,69 +515,95 @@ function BookmarkTree({
   };
 
   const current = activeIndex ?? null;
-  // The toolbar's buttons, each acting on the current row: `edit` is what a click does ('rename'
-  // opens the field, anything else is sent as an edit).
+  // The toolbar's buttons, each acting on the current row: `action` says what a click does (see
+  // runToolbar); `hint` is the tooltip of a button that is off for a reason the user can act on.
   const toolbarButtons: {
     readonly id: string;
     readonly label: string;
     readonly keys: string;
     readonly disabled: boolean;
-    readonly edit: EditKind | 'rename';
+    readonly hint?: string;
+    readonly action: ToolbarAction;
   }[] = [];
   if (current !== null) {
     const edgeOf = (direction: MoveDirection) => moveTarget(entries, current, direction) === null;
+    const level = entries[current]?.level ?? 1;
     toolbarButtons.push(
+      {
+        id: 'add',
+        label: t('bookmarks.add'),
+        keys: KEYS.add,
+        disabled: false,
+        action: { kind: 'add', asChild: false },
+      },
+      {
+        id: 'addChild',
+        label: t('bookmarks.addChild'),
+        keys: '',
+        disabled: level >= MAX_OUTLINE_LEVEL,
+        hint: t('bookmarks.addChild.tooDeep'),
+        action: { kind: 'add', asChild: true },
+      },
       {
         id: 'rename',
         label: t('bookmarks.rename'),
         keys: KEYS.rename,
         disabled: false,
-        edit: 'rename',
+        action: { kind: 'rename' },
       },
       {
         id: 'delete',
         label: t('bookmarks.delete'),
         keys: KEYS.delete,
         disabled: false,
-        edit: { kind: 'delete' },
+        action: { kind: 'edit', edit: { kind: 'delete' } },
       },
       {
         id: 'up',
         label: t('bookmarks.moveUp'),
         keys: KEYS.up,
         disabled: edgeOf('up'),
-        edit: { kind: 'move', direction: 'up' },
+        action: { kind: 'edit', edit: { kind: 'move', direction: 'up' } },
       },
       {
         id: 'down',
         label: t('bookmarks.moveDown'),
         keys: KEYS.down,
         disabled: edgeOf('down'),
-        edit: { kind: 'move', direction: 'down' },
+        action: { kind: 'edit', edit: { kind: 'move', direction: 'down' } },
       },
       {
         id: 'in',
         label: t('bookmarks.indent'),
         keys: KEYS.in,
         disabled: edgeOf('in'),
-        edit: { kind: 'move', direction: 'in' },
+        action: { kind: 'edit', edit: { kind: 'move', direction: 'in' } },
       },
       {
         id: 'out',
         label: t('bookmarks.outdent'),
         keys: KEYS.out,
         disabled: edgeOf('out'),
-        edit: { kind: 'move', direction: 'out' },
+        action: { kind: 'edit', edit: { kind: 'move', direction: 'out' } },
       },
       {
         id: 'page',
         label: t('bookmarks.setDestination'),
         keys: '',
         disabled: false,
-        edit: { kind: 'page', page: currentPage },
+        action: { kind: 'page' },
       },
     );
   }
+  // What a toolbar click does, read when the click happens (the view's place is read then too).
+  const runToolbar = (action: ToolbarAction, index: number) => {
+    if (action.kind === 'add') addAt(index, action.asChild);
+    else if (action.kind === 'rename') setEditing(index);
+    else if (action.kind === 'page') {
+      const place = location() ?? { page: currentPage, top: null };
+      void runEdit(planEdit(entries, expanded, index, { kind: 'page', place }));
+    } else void runEdit(planEdit(entries, expanded, index, action.edit));
+  };
 
   return (
     <>
@@ -487,11 +622,16 @@ function BookmarkTree({
               disabled={button.disabled}
               aria-disabled={locked || undefined}
               aria-keyshortcuts={button.keys || undefined}
-              title={button.keys ? `${button.label} (${button.keys})` : button.label}
+              title={
+                button.disabled && button.hint !== undefined
+                  ? button.hint
+                  : button.keys
+                    ? `${button.label} (${button.keys})`
+                    : button.label
+              }
               onClick={() => {
-                if (current === null || !canEdit) return;
-                if (button.edit === 'rename') setEditing(current);
-                else void runEdit(planEdit(entries, expanded, current, button.edit));
+                if (!canEdit || current === null) return;
+                runToolbar(button.action, current);
               }}
             >
               {button.label}

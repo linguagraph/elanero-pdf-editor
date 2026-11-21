@@ -20,16 +20,22 @@ export interface BookmarkEditDeps {
 // do. 'stale': the outline had changed, so nothing was edited. 'failed': an error was reported.
 export type BookmarkEditOutcome = 'done' | 'unchanged' | 'stale' | 'failed';
 
+export interface BookmarkEditResult {
+  readonly outcome: BookmarkEditOutcome;
+  // The action's own value when it went through (an add's new flat index), else undefined.
+  readonly value?: unknown;
+}
+
 export async function runBookmarkEdit(
   deps: BookmarkEditDeps,
   name: string,
   args: Record<string, unknown>,
   text: string,
-): Promise<BookmarkEditOutcome> {
+): Promise<BookmarkEditResult> {
   const store = deps.store ?? toasts;
   try {
     const reply = await deps.rpc.call('actions.run', { handle: deps.handle, name, args });
-    if (!reply.executed) return 'unchanged';
+    if (!reply.executed) return { outcome: 'unchanged' };
     offerUndo('info', text, {
       rpc: deps.rpc,
       handle: deps.handle,
@@ -37,17 +43,17 @@ export async function runBookmarkEdit(
       onUndone: deps.onHistoryStep,
       store,
     });
-    return 'done';
+    return { outcome: 'done', value: reply.value };
   } catch (error) {
     if (error instanceof RpcError) {
       if (error.code === 'STALE_OBJECT') {
         store.push('info', t('bookmarks.stale'));
-        return 'stale';
+        return { outcome: 'stale' };
       }
       reportRpcError(store, error);
-      return 'failed';
+      return { outcome: 'failed' };
     }
     store.push('error', t('bookmarks.editFailed'));
-    return 'failed';
+    return { outcome: 'failed' };
   }
 }
