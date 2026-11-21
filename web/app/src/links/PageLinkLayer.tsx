@@ -32,6 +32,15 @@ function nameOf(link: LinkDto, labels: readonly string[]): string {
   return action.notice === 'noTarget' ? t('links.noTarget') : t('links.unsupported');
 }
 
+// The links read for one page at one revision.
+interface Listed {
+  readonly page: number;
+  readonly revision: number;
+  readonly links: readonly LinkDto[];
+}
+
+const NO_LINKS: readonly LinkDto[] = [];
+
 export function PageLinkLayer({
   cache,
   page,
@@ -40,14 +49,21 @@ export function PageLinkLayer({
   labels,
   onFollow,
 }: PageLinkLayerProps) {
-  const [links, setLinks] = useState<readonly LinkDto[]>([]);
+  // The list is kept with the page and revision it was read for, so a layer asked for another
+  // revision shows none until that revision's reply arrives: an older revision's rectangles never stay.
+  const [listed, setListed] = useState<Listed | null>(null);
+  const links =
+    listed !== null && listed.page === page && listed.revision === revision
+      ? listed.links
+      : NO_LINKS;
 
   useEffect(() => {
     let active = true;
     cache.get(page, revision).then(
       (reply) => {
         // A reply at another revision is not this page's list: the layer shows none until it has one.
-        if (active && reply.revision === revision) setLinks(sortLinks(reply.links));
+        if (active && reply.revision === revision)
+          setListed({ page, revision, links: sortLinks(reply.links) });
       },
       () => {
         // No links for this page: the page still shows, and it has no tab stops for them.

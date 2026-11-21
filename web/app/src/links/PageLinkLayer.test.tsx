@@ -136,4 +136,34 @@ describe('PageLinkLayer', () => {
     await render(cacheAt(7), { revision: 1 });
     expect(spans()).toHaveLength(0);
   });
+
+  it('drops the rectangles of the old revision while the new revision is pending', async () => {
+    const oneLink = LINKS[1];
+    if (oneLink === undefined) throw new Error('no link');
+    let answerRevisionTwo: (result: LinksResult) => void = () => {};
+    const rpc = {
+      call: vi
+        .fn()
+        .mockResolvedValueOnce({ revision: 1, links: [oneLink], truncated: false })
+        .mockReturnValueOnce(
+          new Promise<LinksResult>((resolve) => {
+            answerRevisionTwo = resolve;
+          }),
+        ),
+    } as unknown as LinksRpc;
+    const cache = new LinkCache(rpc, 'h');
+
+    await render(cache, { revision: 1 });
+    expect(spans()).toHaveLength(1);
+
+    // The revision-2 reply is still pending: the revision-1 rectangle must not stay focusable.
+    await render(cache, { revision: 2 });
+    expect(spans()).toHaveLength(0);
+
+    await act(async () => {
+      answerRevisionTwo({ revision: 2, links: [oneLink], truncated: false });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(spans()).toHaveLength(1);
+  });
 });
