@@ -16,7 +16,7 @@ import {
   field,
   ReplyShapeError,
 } from '../rpc/shape';
-import { type JobProgressStore, jobProgress } from '../feedback/jobRun';
+import { type JobProgressStore, jobProgress, progressPercent } from '../feedback/jobRun';
 import { memoryWarner } from '../feedback/memoryWarning';
 import type { ResultFile } from './downloads';
 
@@ -116,17 +116,6 @@ export function readFileJobOutput(result: CallResult, job: string): FileJobOutpu
     };
   });
   return { files, value: field(value, 'value', 'result') ?? null };
-}
-
-// The bar's percent for a progress notice (W1.2 section 8), or undefined for any other notice. A
-// notice with no total cannot be a percent, so it is ignored.
-export function progressPercent(notice: Notice): number | undefined {
-  if (notice.notice !== 'progress') return undefined;
-  const data = notice.data;
-  if (typeof data !== 'object' || data === null) return undefined;
-  const { done, total } = data as { done?: unknown; total?: unknown };
-  if (typeof done !== 'number' || typeof total !== 'number' || total <= 0) return undefined;
-  return Math.min(100, Math.max(0, Math.round((done * 100) / total)));
 }
 
 // Runs one file job. Resolves with the files; rejects with an RpcError, or FileJobCancelled.
