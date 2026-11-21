@@ -146,4 +146,53 @@ describe('ProbeQueue', () => {
     expect(call).toHaveBeenCalledTimes(1);
     expect(reports.some(([id, state]) => id === 1 && state.kind === 'counted')).toBe(false);
   });
+
+  it('a row removed before its probe runs is not probed', async () => {
+    const { engine, call, calls } = manualEngine();
+    const reports: [number, ProbeState][] = [];
+    const queue = new ProbeQueue(engine, (id, state) => reports.push([id, state]));
+    queue.add(pdf(1, 'a.pdf'));
+    queue.add(pdf(2, 'b.pdf'));
+    await flush();
+
+    queue.forget(2); // b.pdf is removed while a.pdf is in flight
+    calls[0]?.resolve(counted(3));
+    await flush();
+
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(calls[0]?.name).toBe('a.pdf');
+    expect(reports.some(([id, state]) => id === 2 && state.kind === 'counted')).toBe(false);
+  });
+
+  it('a row removed while its probe is in flight gets no reply', async () => {
+    const { engine, calls } = manualEngine();
+    const reports: [number, ProbeState][] = [];
+    const queue = new ProbeQueue(engine, (id, state) => reports.push([id, state]));
+    queue.add(pdf(1, 'a.pdf'));
+    await flush();
+
+    queue.forget(1);
+    calls[0]?.resolve(counted(3));
+    await flush();
+
+    expect(reports).toEqual([[1, { kind: 'pending' }]]);
+  });
+
+  it('close hands back the rows still counting, so a new queue can count them', async () => {
+    const { engine, call, calls } = manualEngine();
+    const first = new ProbeQueue(engine, () => undefined);
+    first.add(pdf(1, 'a.pdf'));
+    first.add(pdf(2, 'b.pdf'));
+    await flush();
+
+    const left = first.close();
+    expect(left.map((item) => item.id)).toEqual([1, 2]);
+
+    const reports: [number, ProbeState][] = [];
+    const second = new ProbeQueue(engine, (id, state) => reports.push([id, state]));
+    for (const item of left) second.add(item);
+    await flush();
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(calls[1]?.name).toBe('a.pdf');
+  });
 });

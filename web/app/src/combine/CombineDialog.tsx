@@ -154,18 +154,23 @@ export function CombineDialog({
   const fieldRefs = useRef(new Map<number, HTMLInputElement>());
   const focusId = useRef<number | null>(null);
   const probing = useRef<ProbeQueue | null>(null);
+  // The rows that were still counting when the engine changed: the next queue counts them again.
+  const countAgain = useRef<readonly SourceItem[]>([]);
 
   // One queue for the engine. Its replies only set a row's state: ids are never reused, so a reply
-  // for a removed row leaves an entry nothing reads. Closing the dialog's engine link drops what is
-  // still waiting.
+  // for a removed row leaves an entry nothing reads. A removed row is forgotten (see removeRow), so
+  // it is not probed. Closing the engine link drops what is still waiting, and hands back the rows
+  // still counting, which a new engine counts again.
   useEffect(() => {
     if (engine === undefined) return undefined;
     const queue = new ProbeQueue(engine, (id, state) => {
       setProbes((current) => new Map(current).set(id, state));
     });
     probing.current = queue;
+    for (const item of countAgain.current) queue.add(item);
+    countAgain.current = [];
     return () => {
-      queue.close();
+      countAgain.current = queue.close();
       probing.current = null;
     };
   }, [engine]);
@@ -194,6 +199,16 @@ export function CombineDialog({
         ? t('combine.unsupported', { name: added.rejected.join(', ') })
         : null,
     );
+  };
+
+  // Removes a row, and stops its probe if it has not run yet (or drops its reply if it is running).
+  const removeRow = (index: number): void => {
+    const removed = items[index];
+    if (removed !== undefined) {
+      probing.current?.forget(removed.id);
+      countAgain.current = countAgain.current.filter((item) => item.id !== removed.id);
+    }
+    setItems(removeSource(items, index));
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
@@ -337,7 +352,7 @@ export function CombineDialog({
                   <Button
                     className="combine-button"
                     isDisabled={phase === 'working'}
-                    onPress={() => setItems(removeSource(items, index))}
+                    onPress={() => removeRow(index)}
                   >
                     {t('combine.remove')}
                   </Button>

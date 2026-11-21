@@ -31,11 +31,15 @@ export function stateOfError(error: unknown): ProbeState {
 export type ProbeReport = (id: number, state: ProbeState) => void;
 
 // The queue of probes for one dialog. add() queues a PDF row and reports it pending; images are
-// never probed. close() drops whatever is still waiting, and a reply that comes after it is ignored.
+// never probed. forget() drops a row that was removed: it is not probed, and its reply is ignored.
+// close() drops whatever is still waiting, a reply that comes after it is ignored, and returns the
+// rows still counting so the next queue (a new engine) can count them again.
 export class ProbeQueue {
   private readonly engine: Pick<EngineConnection, 'whenReady'>;
   private readonly report: ProbeReport;
   private readonly waiting: SourceItem[] = [];
+  // The rows added and not yet reported or forgotten: waiting, or in flight.
+  private readonly unfinished = new Map<number, SourceItem>();
   private running = false;
   private closed = false;
 
@@ -47,13 +51,21 @@ export class ProbeQueue {
   add(item: SourceItem): void {
     if (this.closed || isImageSourceName(item.name)) return;
     this.report(item.id, { kind: 'pending' });
+    this.unfinished.set(item.id, item);
     this.waiting.push(item);
     void this.pump();
   }
 
-  close(): void {
+  forget(id: number): void {
+    this.unfinished.delete(id);
+  }
+
+  close(): readonly SourceItem[] {
     this.closed = true;
     this.waiting.length = 0;
+    const left = [...this.unfinished.values()];
+    this.unfinished.clear();
+    return left;
   }
 
   // Runs the queue in order. One probe is in flight at a time, so the viewer's engine is never
@@ -63,8 +75,10 @@ export class ProbeQueue {
     this.running = true;
     try {
       for (let item = this.waiting.shift(); item !== undefined; item = this.waiting.shift()) {
+        if (!this.unfinished.has(item.id)) continue; // removed before its turn
         const state = await this.probeOne(item);
         if (this.closed) return;
+        if (!this.unfinished.delete(item.id)) continue; // removed while it was in flight
         this.report(item.id, state);
       }
     } finally {

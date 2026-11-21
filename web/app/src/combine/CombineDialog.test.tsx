@@ -466,4 +466,55 @@ describe('CombineDialog page counts', () => {
     await settle();
     expect(startWorker).not.toHaveBeenCalled();
   });
+
+  it('does not probe a row that was removed before its probe ran', async () => {
+    const engine = manualProbeEngine();
+    render({ engine: engine.engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+
+    act(() => {
+      rowNamed('b.pdf')?.querySelectorAll('button')[2]?.click(); // remove b.pdf while a.pdf counts
+    });
+    engine.answer('a.pdf', { pages: 3 });
+    await settle();
+
+    expect(engine.names()).toEqual(['a.pdf']);
+  });
+
+  it('counts the rows still pending again when the engine changes', async () => {
+    const startWorker = vi.fn(() => mergingWorker(new ArrayBuffer(0)));
+    const stalled = manualProbeEngine();
+    render({ startWorker, engine: stalled.engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+
+    render({ startWorker, engine: probingEngine(() => ({ pages: 2 })) });
+    await settle();
+    await act(async () => {
+      buttonNamed(t('combine.button')).click();
+    });
+
+    expect(stalled.names()).toEqual(['a.pdf']);
+    expect(startWorker).toHaveBeenCalledTimes(1);
+  });
 });
+
+// An engine that holds each probe until the test answers it, and names the probes it was asked.
+function manualProbeEngine() {
+  const calls: { name: string; resolve: (value: unknown) => void }[] = [];
+  const client = {
+    call: (_method: string, params: { name: string }): Promise<unknown> =>
+      new Promise<unknown>((resolve) => {
+        calls.push({ name: params.name, resolve });
+      }),
+  };
+  return {
+    engine: { whenReady: () => Promise.resolve(client as unknown as EngineClient) },
+    names: (): string[] => calls.map((call) => call.name),
+    answer: (name: string, reply: { pages: number }): void => {
+      const call = calls.find((candidate) => candidate.name === name);
+      call?.resolve({ page_count: reply.pages, encrypted: false, needed_password: false });
+    },
+  };
+}
