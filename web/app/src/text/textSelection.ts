@@ -34,6 +34,11 @@ export class TextSelection {
     readonly focus: TextPos,
   ) {}
 
+  // The selection of a whole page, from its first caret to its last (Select All).
+  static ofPage(page: number, length: number): TextSelection {
+    return new TextSelection({ page, index: 0 }, { page, index: length });
+  }
+
   get start(): TextPos {
     return comparePos(this.anchor, this.focus) <= 0 ? this.anchor : this.focus;
   }

@@ -5,9 +5,11 @@ import { COMMANDS, REGISTRY } from '../commands/catalog';
 import { commandForEvent } from '../commands/shortcuts';
 import { commandDisabledReason, runCommand, type CommandHandlers } from '../commands/run';
 import type { CommandState } from '../commands/registry';
-import { copySelectedText, selectPageText, selectedText } from './copy';
+import { copySelectedText, modelSelectedText, selectPageText, selectedText } from './copy';
+import { PageTextIndex } from './pageTextIndex';
 import { type TextLineLookup, domSelectionAreas } from './selection';
 import { decodeTextLayer, type TextLine } from './textLayer';
+import { TextSelection } from './textSelection';
 
 // Page 0: "ab" and "cd", two lines. Page 1: "ef", one line (the layers of selection.test.ts).
 const LAYER_0 = {
@@ -157,6 +159,65 @@ describe('copySelectedText', () => {
     const store = fakeStore();
     copySelectedText({ selection, lookup, clipboard: { writeText }, store });
     await vi.waitFor(() => expect(store.push).toHaveBeenCalledWith('error', EN['copy.failed']));
+  });
+});
+
+// The model's index of page 0 ("ab" and "cd", as useTextSelection.test.tsx lays them out).
+const MODEL_INDEX = new PageTextIndex({
+  text: 'ab\ncd',
+  lineRects: [
+    { x0: 72, y0: 72, x1: 84, y1: 84 },
+    { x0: 72, y0: 84, x1: 84, y1: 96 },
+  ],
+  charBoxes: [72, 72, 78, 84, 78, 72, 84, 84, 0, 0, 0, 0, 72, 84, 78, 96, 78, 84, 84, 96],
+  lineNumbers: [0, 0, 0, 1, 1],
+});
+const indexOf = (page: number) => (page === 0 ? MODEL_INDEX : undefined);
+
+describe('model selection copy (W5.4: a drag or Select All)', () => {
+  it('reads the model selection of two lines as "ab\\ncd"', () => {
+    const selection = new TextSelection({ page: 0, index: 0 }, { page: 0, index: 5 });
+    expect(modelSelectedText(selection, indexOf)).toBe('ab\ncd');
+  });
+
+  it('gives null (the browser is read instead) with no selection, an empty one or an unready page', () => {
+    expect(modelSelectedText(null, indexOf)).toBeNull();
+    expect(
+      modelSelectedText(new TextSelection({ page: 0, index: 2 }, { page: 0, index: 2 }), indexOf),
+    ).toBeNull();
+    const selection = new TextSelection({ page: 0, index: 0 }, { page: 0, index: 5 });
+    expect(modelSelectedText(selection, () => undefined)).toBeNull();
+  });
+
+  it('copies the model text when the browser has no selection', () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    const selection = new TextSelection({ page: 0, index: 0 }, { page: 0, index: 5 });
+    copySelectedText({
+      selection: null,
+      lookup,
+      clipboard: { writeText },
+      store: fakeStore(),
+      modelText: () => modelSelectedText(selection, indexOf),
+    });
+    expect(writeText).toHaveBeenCalledWith('ab\ncd');
+  });
+
+  it('copies the browser selection when the model has none', () => {
+    const page = mountPage(0, LINES_0);
+    const writeText = vi.fn(() => Promise.resolve());
+    copySelectedText({
+      selection: select(textOf(page, 0), 0, textOf(page, 0), 2),
+      lookup,
+      clipboard: { writeText },
+      store: fakeStore(),
+      modelText: () => modelSelectedText(null, indexOf),
+    });
+    expect(writeText).toHaveBeenCalledWith('ab');
+  });
+
+  it('Select All selects the whole page in the model, and Copy yields it', () => {
+    const selection = TextSelection.ofPage(0, MODEL_INDEX.length);
+    expect(modelSelectedText(selection, indexOf)).toBe('ab\ncd');
   });
 });
 

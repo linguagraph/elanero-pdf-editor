@@ -288,12 +288,14 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
-    // Copy (Ctrl+C) copies the browser's selection over the page text, as the desktop does (W5.4 S4).
+    // Copy (Ctrl+C) copies the selection over the page text, as the desktop does (W5.4 S4): the
+    // model's (a drag or Select All), or the browser's when the model has none.
     copy: () =>
       copySelectedText({
         selection: window.getSelection(),
         lookup: (page) => viewRef.current?.cachedLines(page),
         clipboard: navigator.clipboard,
+        modelText: () => viewRef.current?.selectedText() ?? null,
       }),
     // Ctrl+F: the search panel, on the left, with focus in its query box (also when it is open).
     find: () => {
