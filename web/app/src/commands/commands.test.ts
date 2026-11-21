@@ -355,6 +355,35 @@ describe('the Select and Hand tools (W4.10)', () => {
   });
 });
 
+describe('the shape tools (W6.7b)', () => {
+  const SHAPES = ['add-rectangle', 'add-ellipse', 'add-line'] as const;
+  const editable = state({ hasDocument: true, capabilities: ALL_CAPABILITIES, contentEdit: true });
+
+  it('need a document whose engine can edit content, with the reason', () => {
+    for (const id of SHAPES) {
+      expect(commandDisabledReasonOf(id, state())).toBe('needsDocument');
+      expect(commandDisabledReasonOf(id, withDoc)).toBe('contentEditOff');
+      expect(commandDisabledReasonOf(id, editable)).toBeNull();
+    }
+  });
+
+  it('show only their own tool as pressed', () => {
+    const rectangle = state({ ...editable, viewTool: 'shape-rectangle' });
+    expect(REGISTRY.get('add-rectangle')?.checked?.(rectangle)).toBe(true);
+    expect(REGISTRY.get('add-ellipse')?.checked?.(rectangle)).toBe(false);
+    expect(REGISTRY.get('add-line')?.checked?.(rectangle)).toBe(false);
+    expect(REGISTRY.get('select-tool')?.checked?.(rectangle)).toBe(false);
+  });
+
+  it('run their handler through the registry', () => {
+    const rectangle = vi.fn();
+    expect(runCommand(REGISTRY, 'add-rectangle', editable, { 'add-rectangle': rectangle })).toBe(
+      true,
+    );
+    expect(rectangle).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the comment and redaction tools (W4.3a S7)', () => {
   it('shows each comment tool as pressed only while it is the tool on', () => {
     const on = state({ hasDocument: true, commentTool: 'rectangle' });

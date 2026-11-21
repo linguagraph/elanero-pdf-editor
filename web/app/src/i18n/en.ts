@@ -176,6 +176,10 @@ export const EN = {
   'edit.deleted': 'Objects deleted.',
   'edit.stale': 'The page changed, so the selection was cleared. Select the objects again.',
   'edit.failed': 'The edit could not be made.',
+  'edit.shape.added': 'Shape added.',
+  'edit.shape.layer':
+    'Draw a shape: drag on the page, or press Enter for a default-size shape in the middle of the page. Esc stops.',
+  'edit.shape.tooSmall': 'The shape would be off the page. Click further from the edge.',
   'command.add-text.label': 'Add Text',
   'command.add-image.label': 'Add Image',
   'command.add-rectangle.label': 'Rectangle',

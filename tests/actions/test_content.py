@@ -216,6 +216,44 @@ def test_add_shape_labels_and_undo(open_copy: Opener, spec: ShapeSpec, label: st
     assert snapshot_of(s) == before
 
 
+REFUSED_SHAPES = [
+    pytest.param(ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 200, 560), width=0.0), id="width0"),
+    pytest.param(
+        ShapeSpec(ShapeKind.ELLIPSE, Rect(100, 500, 200, 560), width=100.0), id="width100"
+    ),
+    pytest.param(ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 100, 560)), id="empty_rect"),
+    pytest.param(ShapeSpec(ShapeKind.ELLIPSE, Rect(200, 500, 100, 560)), id="flipped_box"),
+    pytest.param(
+        ShapeSpec(ShapeKind.LINE, start=Point(100, 600), end=Point(100, 600)), id="point_line"
+    ),
+]
+
+
+@pytest.mark.parametrize("spec", REFUSED_SHAPES)
+def test_add_shape_refuses_bad_specs(open_copy: Opener, spec: ShapeSpec) -> None:
+    s = open_copy("text_multipage")
+    before = snapshot_of(s)
+    with pytest.raises(Refused):
+        content.add_shape(s, AddShape(0, spec))
+    assert snapshot_of(s) == before
+    assert not s.undo_stack.can_undo
+
+
+def test_add_shape_redo_restores_it_at_a_new_revision(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    content.add_shape(s, AddShape(0, ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 200, 560))))
+    with s.lock:
+        added_at = s.document.page(0).revision
+    added = snapshot_of(s)
+    assert s.undo()
+    with s.lock:
+        # A web cache keyed by the revision the add reported must not be reused after an undo.
+        assert s.document.page(0).revision != added_at
+    assert s.redo()
+    assert [o.type for o in objects(s)].count(ObjectType.PATH) == 1
+    assert snapshot_of(s) == added
+
+
 def test_delete_two_objects_is_counted(open_copy: Opener) -> None:
     s = open_copy("mixed_content")
     two = (refs(s, 0, ObjectType.TEXT)[0], refs(s, 0, ObjectType.IMAGE)[0])
@@ -433,6 +471,90 @@ def test_round_trip_add_shape(open_copy: Opener, tmp_path: Path) -> None:
     record("pixel_red_pdfium", out, page=0, x=150, y=530)
     with reopened(out) as doc:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.PATH) == 1
+
+
+# Each shape, the box its path must cover, and a clip on its outline and (for a box) its centre.
+SHAPE_CASES = [
+    pytest.param(
+        ShapeKind.RECTANGLE,
+        ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 200, 560), width=1.5),
+        Rect(100, 500, 200, 560),
+        [97, 527, 103, 533],
+        [140, 520, 160, 540],
+        id="rectangle",
+    ),
+    pytest.param(
+        ShapeKind.ELLIPSE,
+        ShapeSpec(ShapeKind.ELLIPSE, Rect(100, 500, 200, 560), width=1.5),
+        Rect(100, 500, 200, 560),
+        [97, 527, 103, 533],
+        [140, 520, 160, 540],
+        id="ellipse",
+    ),
+    pytest.param(
+        ShapeKind.LINE,
+        ShapeSpec(ShapeKind.LINE, start=Point(100, 600), end=Point(300, 640), width=1.5),
+        Rect(100, 600, 300, 640),
+        [197, 617, 203, 623],
+        None,
+        id="line",
+    ),
+]
+
+
+@pytest.mark.parametrize(("kind", "spec", "box", "ink", "blank"), SHAPE_CASES)
+def test_round_trip_add_shape_kinds(
+    open_copy: Opener,
+    tmp_path: Path,
+    kind: ShapeKind,
+    spec: ShapeSpec,
+    box: Rect,
+    ink: list[float],
+    blank: list[float] | None,
+) -> None:
+    s = open_copy("text_multipage")
+    content.add_shape(s, AddShape(0, spec))
+    out = s.save(tmp_path / f"added_{kind.value}.pdf")
+    assert_opens_everywhere(out)
+    with reopened(out) as doc:
+        paths = [o for o in doc.page(0).content_objects() if o.type is ObjectType.PATH]
+    assert len(paths) == 1
+    # The path covers the requested box to within 2 pt (a stroke may widen it).
+    b = paths[0].bbox
+    assert b.x0 <= box.x0 + 2 and b.y0 <= box.y0 + 2
+    assert b.x1 >= box.x1 - 2 and b.y1 >= box.y1 - 2
+    record("shape_operators_pikepdf", out, page=0, kind=kind.value)
+    record("ink_region_pdfium", out, page=0, clip=ink)
+    if blank is not None:
+        record("blank_region_pdfium", out, page=0, clip=blank)
+
+
+def test_round_trip_filled_shape_on_rotated_page(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("rotated_pages")
+    red = Color(1, 0, 0)
+    spec = ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 100, 200, 160), stroke=red, fill=red)
+    content.add_shape(s, AddShape(1, spec))  # /Rotate 90, no crop box
+    out = s.save(tmp_path / "rotated_shape.pdf")
+    assert_opens_everywhere(out)
+    record("pixel_red_pdfium", out, page=1, x=150, y=130)
+
+
+@pytest.mark.desktop_only  # a pixel check on a render the Pyodide run cannot make
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Known engine bug: on a page that is both rotated and cropped, shapes land offset by the"
+        " crop origin (PyMuPDF's transformation_matrix drops the crop offset). See"
+        " docs/web/design/W6.7b-shapes.md section 2.3. Remove this xfail when the engine fix lands."
+    ),
+)
+def test_shape_on_rotated_cropped_page(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("off_page_text")  # page 1: /Rotate 90, CropBox (50, 50, 550, 750)
+    red = Color(1, 0, 0)
+    spec = ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 100, 200, 160), stroke=red, fill=red)
+    content.add_shape(s, AddShape(1, spec))
+    out = s.save(tmp_path / "rotated_cropped_shape.pdf")
+    record("pixel_red_pdfium", out, page=1, x=150, y=130)
 
 
 def test_round_trip_replace_image(open_copy: Opener, tmp_path: Path) -> None:

@@ -52,7 +52,7 @@ import { PageTextLayer } from '../text/PageTextLayer';
 import { useTextSelection } from '../text/useTextSelection';
 import { textLayerPassive } from '../text/textLayerPassive';
 import { useHandPan } from './useHandPan';
-import type { ViewTool } from './viewTool';
+import { isShapeTool, type ViewTool } from './viewTool';
 import { CropLayer } from '../crop/CropLayer';
 import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
@@ -71,6 +71,8 @@ import { TextLayerCache } from '../text/textLayerCache';
 import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
+import { ShapeLayer } from '../edit/ShapeLayer';
+import { addShape, noteShapeTooSmall, type ShapeSpec, SHAPE_KIND } from '../edit/shapes';
 import { CachedCanvas } from './pixels';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
@@ -892,6 +894,18 @@ export function DocumentView({
   const place = (page: number, rect: PageRect, text: string) => {
     if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
   };
+  // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
+  // shape per choice). A failure keeps the tool on so the user can retry.
+  const shapeDeps = { rpc, handle, cache: editObjects, scheduler };
+  const drawShape = (page: number, spec: ShapeSpec | null) => {
+    if (spec === null) {
+      noteShapeTooSmall();
+      return;
+    }
+    void addShape(shapeDeps, page, spec).then((added) => {
+      if (added) onToolChange?.('select');
+    });
+  };
 
   return (
     <section
@@ -1069,6 +1083,17 @@ export function DocumentView({
                         selection={editSelection}
                         onSelect={setEditSelection}
                         onCommit={commitChange}
+                      />
+                    ) : null}
+                    {isShapeTool(tool) && sizes !== null ? (
+                      <ShapeLayer
+                        kind={SHAPE_KIND[tool]}
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        focusable={box.index === currentPage}
+                        onDraw={(spec) => drawShape(box.index, spec)}
+                        onStop={() => onToolChange?.('select')}
                       />
                     ) : null}
                     {tool === 'cropBox' && sizes !== null ? (

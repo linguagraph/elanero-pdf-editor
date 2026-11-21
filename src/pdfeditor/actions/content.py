@@ -118,6 +118,24 @@ _SHAPE_LABELS = {
     ShapeKind.LINE: "Add Line",
 }
 
+# The widest outline a shape may have, in points. Above it the stroke covers most of a small box.
+MAX_SHAPE_WIDTH = 72.0
+
+
+def _check_shape(spec: ShapeSpec) -> None:
+    """Refuse a spec that would draw nothing, or an outline no one can see. The web sends untrusted
+    input, and an empty box would still cost an undo snapshot. Coordinates off the page are not
+    refused: a PDF may draw outside its crop box, and the web clamps before it sends."""
+    if not 0 < spec.width <= MAX_SHAPE_WIDTH:
+        raise Refused(f"A shape's line width must be above 0 and at most {MAX_SHAPE_WIDTH:g}.")
+    if spec.kind is ShapeKind.LINE:
+        if spec.start == spec.end:
+            raise Refused("A line needs two different ends.")
+        return
+    box = spec.rect
+    if box.x1 <= box.x0 or box.y1 <= box.y0:
+        raise Refused("A rectangle or ellipse needs a box with area.")
+
 
 # -- actions -------------------------------------------------------------------------------
 
@@ -197,6 +215,7 @@ def add_shape(session: DocumentSession, args: AddShape) -> ActionResult[None]:
     label = _SHAPE_LABELS[args.spec.kind]
     with session.lock:
         _check_page(session, args.page)
+    _check_shape(args.spec)
     snapshot(session, label, lambda doc: doc.page(args.page).add_shape(args.spec))
     return ActionResult(label, None)
 
