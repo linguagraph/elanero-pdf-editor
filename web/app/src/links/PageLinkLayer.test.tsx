@@ -121,6 +121,20 @@ describe('PageLinkLayer', () => {
     expect(name).not.toContain('body');
   });
 
+  it('gives a mail link a hover title of its address, without the ?body= query', async () => {
+    const mail: LinkDto = {
+      rect: { x0: 72, y0: 100, x1: 150, y1: 114 },
+      kind: 'uri',
+      page: null,
+      top: null,
+      uri: `mailto:a@example.org?subject=Hi&body=${'x'.repeat(400)}`,
+    };
+    await render(cacheAt(1, [mail]));
+    const title = spans()[0]?.title;
+    expect(title).toBe('a@example.org');
+    expect(title).not.toContain('body');
+  });
+
   it('gives a page title on hover for a goto link only', async () => {
     await render(cacheAt(1), { labels: ['i', 'iv'] });
     expect(spans()[0]?.title).toBe(t('links.title.page', { label: 'iv' }));

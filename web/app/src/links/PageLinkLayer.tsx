@@ -111,7 +111,9 @@ export function PageLinkLayer({
           target.action === 'goto'
             ? t('links.title.page', { label: pageLabelFor(target.page, labels) })
             : target.action === 'confirm'
-              ? target.href
+              ? target.scheme === 'mailto:'
+                ? mailAddress(target.href)
+                : target.href
               : undefined;
         return (
           <span
