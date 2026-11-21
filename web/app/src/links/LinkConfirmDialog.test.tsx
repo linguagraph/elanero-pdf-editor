@@ -112,6 +112,18 @@ describe('LinkConfirmDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('a second press of Open before the dialog closes does not open again', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    // The parent keeps the dialog up here, so the second press lands while it is still open.
+    const onClose = vi.fn();
+    await render(WEB, onClose);
+    act(() => {
+      button(t('links.confirm.open')).click();
+      button(t('links.confirm.open')).click();
+    });
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
   it('Cancel closes without opening anything', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const onClose = vi.fn();

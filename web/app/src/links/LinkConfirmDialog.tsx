@@ -1,6 +1,7 @@
 // The confirmation before a web or mail link opens (W5.3). It shows the parsed host and the full
 // address as text, so what the reader checks is exactly what Open navigates to. Cancel comes first,
 // so it takes the initial focus; Escape and a tap outside cancel too.
+import { useEffect, useRef } from 'react';
 import { Button } from 'react-aria-components';
 import { t } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
@@ -18,6 +19,14 @@ export interface LinkConfirmDialogProps {
 const HOST_MARK = '';
 
 export function LinkConfirmDialog({ target, onClose }: LinkConfirmDialogProps) {
+  // Set by the first Open press. A second press before the dialog closes must not open the link
+  // again, so the ref is read and set synchronously, before the parent re-renders. It is cleared
+  // when the target changes, so the next link can be opened.
+  const opened = useRef(false);
+  useEffect(() => {
+    opened.current = false;
+  }, [target]);
+
   return (
     <Overlay
       isOpen={target !== null}
@@ -44,6 +53,8 @@ export function LinkConfirmDialog({ target, onClose }: LinkConfirmDialogProps) {
             <Button
               className="overlay-close"
               onPress={() => {
+                if (opened.current) return;
+                opened.current = true;
                 // Synchronous in the press, so the browser still counts it as the user's click.
                 window.open(target.href, '_blank', 'noopener,noreferrer');
                 onClose();
