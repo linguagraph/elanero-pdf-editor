@@ -8,7 +8,7 @@ import { BookmarksPanel } from './BookmarksPanel';
 import { RailButton } from '../layout/RailButton';
 import { RAIL_ICONS } from '../layout/railIcons';
 import { closePanel, openPanel, useOpenPanel } from '../layout/sidePanels';
-import { expandedOf, forgetBookmarksTab, setExpandedOf } from './expansion';
+import { expandedOf, fingerprintOf, forgetBookmarksTab, setExpandedOf } from './expansion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -66,10 +66,12 @@ function Harness({
   tabId,
   rpc,
   onSelect,
+  revision = 0,
 }: {
   tabId: number;
   rpc: PageRpc;
   onSelect: (index: number) => void;
+  revision?: number;
 }) {
   const open = useOpenPanel('left') === 'bookmarks';
   let panel: ReactNode = null;
@@ -79,6 +81,9 @@ function Harness({
         rpc={rpc}
         handle="h"
         tabId={tabId}
+        currentPage={0}
+        revision={revision}
+        onHistoryStep={() => undefined}
         onSelect={onSelect}
         onClose={() => closePanel('left')}
       />
@@ -254,11 +259,166 @@ describe('bookmarks side panel', () => {
     expect(titles()).toContain('Chapter 1.1');
   });
 
-  it('forgets a closed tab, and an outline of another length starts from the file flags', () => {
-    setExpandedOf(20, 4, new Set([0]));
-    expect(expandedOf(20, 4)).toEqual(new Set([0]));
-    expect(expandedOf(20, 5)).toBeUndefined();
+  it('forgets a closed tab, and an outline with other content starts from the file flags', () => {
+    const key = fingerprintOf(outline);
+    setExpandedOf(20, key, new Set([0]));
+    expect(expandedOf(20, key)).toEqual(new Set([0]));
+    expect(expandedOf(20, fingerprintOf(outline.slice(1)))).toBeUndefined();
     forgetBookmarksTab(20);
-    expect(expandedOf(20, 4)).toBeUndefined();
+    expect(expandedOf(20, key)).toBeUndefined();
+  });
+});
+
+// A fake engine that also has outline_write, so the editing keys and the toolbar are on.
+function editableRpc(entries: OutlineEntry[]) {
+  const call = vi.fn((method: string) => {
+    if (method === 'session.outline') return Promise.resolve({ entries });
+    if (method === 'session.capabilities') {
+      return Promise.resolve({ engine: { outline_write: true }, platform: {} });
+    }
+    if (method === 'actions.run') {
+      return Promise.resolve({
+        label: 'Move Bookmark',
+        executed: true,
+        value: null,
+        changed: null,
+        state: { history: 1 },
+      });
+    }
+    return Promise.reject(new Error(`unexpected call ${method}`));
+  });
+  return { rpc: { call } as unknown as PageRpc, call };
+}
+
+async function press(element: HTMLElement, init: KeyboardEventInit): Promise<KeyboardEvent> {
+  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+  await act(async () => {
+    element.dispatchEvent(event);
+  });
+  await flush();
+  return event;
+}
+
+describe('bookmarks editing (W5.2 S2)', () => {
+  it('moves the entry with Alt+Shift+Arrow and sends the engine its parent and position', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(9, rpc);
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.move',
+      args: { index: 3, expect_title: 'Part Two', parent: null, position: 0 },
+    });
+  });
+
+  it('leaves Alt+Arrow alone, so the app Back and Forward keys still work', async () => {
+    // The child is an outdent target (Alt+Shift+Left would move it), so a missing Shift check
+    // would send an edit here.
+    const { rpc, call } = editableRpc([entry('Part', 1, 0, true), entry('Child', 2, 1)]);
+    openPanel('bookmarks');
+    await mount(14, rpc);
+    const event = await press(item('Child'), { key: 'ArrowLeft', altKey: true });
+    expect(event.defaultPrevented).toBe(false);
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
+  });
+
+  it('a read-only outline still takes the edit keys, so the Edit tool does not see them', async () => {
+    // fakeRpc has no session.capabilities answer, so the outline reads as not editable.
+    const { rpc, call } = fakeRpc(outline);
+    openPanel('bookmarks');
+    await mount(11, rpc);
+    const del = await press(item('Part One'), { key: 'Delete' });
+    expect(del.defaultPrevented).toBe(true);
+    const rename = await press(item('Part One'), { key: 'F2' });
+    expect(rename.defaultPrevented).toBe(true);
+    expect(host.querySelector('input.bookmarks-rename')).toBeNull();
+    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+  });
+
+  it('renames in place: F2 opens the field, Enter sends the trimmed title', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(9, rpc);
+    await press(item('Part Two'), { key: 'F2' });
+    const field = host.querySelector<HTMLInputElement>('input.bookmarks-rename');
+    expect(field).not.toBeNull();
+    if (field === null) return;
+    field.value = '  Part Two B ';
+    await press(field, { key: 'Enter' });
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.rename',
+      args: { index: 3, expect_title: 'Part Two', title: 'Part Two B' },
+    });
+  });
+
+  it('Escape closes the rename field without an edit', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(9, rpc);
+    await press(item('Part Two'), { key: 'F2' });
+    const field = host.querySelector<HTMLInputElement>('input.bookmarks-rename');
+    if (field === null) throw new Error('no rename field');
+    await press(field, { key: 'Escape' });
+    expect(host.querySelector('input.bookmarks-rename')).toBeNull();
+    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+  });
+
+  it('closes an open rename when a reload replaces the outline under it', async () => {
+    const { rpc, call } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(13, rpc);
+    await press(item('Part Two'), { key: 'F2' });
+    expect(host.querySelector('input.bookmarks-rename')).not.toBeNull();
+    act(() => {
+      root.render(<Harness tabId={13} rpc={rpc} onSelect={vi.fn()} revision={1} />);
+    });
+    await flush();
+    expect(host.querySelector('input.bookmarks-rename')).toBeNull();
+    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+  });
+
+  it('ignores an edit key while the reload after an edit is still running', async () => {
+    const reload: { resolve?: (value: { entries: OutlineEntry[] }) => void } = {};
+    let outlineReads = 0;
+    const call = vi.fn((method: string) => {
+      if (method === 'session.outline') {
+        outlineReads += 1;
+        if (outlineReads === 1) return Promise.resolve({ entries: outline });
+        // The reload after the edit waits until the test resolves it.
+        return new Promise((resolve) => {
+          reload.resolve = resolve;
+        });
+      }
+      if (method === 'session.capabilities') {
+        return Promise.resolve({ engine: { outline_write: true }, platform: {} });
+      }
+      if (method === 'actions.run') {
+        return Promise.resolve({
+          label: 'Move Bookmark',
+          executed: true,
+          value: null,
+          changed: null,
+          state: { history: 1 },
+        });
+      }
+      return Promise.reject(new Error(`unexpected call ${method}`));
+    });
+    const rpc = { call } as unknown as PageRpc;
+    const runs = () => call.mock.calls.filter(([method]) => method === 'actions.run');
+    openPanel('bookmarks');
+    await mount(12, rpc);
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(runs()).toHaveLength(1);
+    // The outline is still the one the edit replaced, so a second move is ignored.
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(runs()).toHaveLength(1);
+    await act(async () => {
+      reload.resolve?.({ entries: outline });
+    });
+    await flush();
+    await press(item('Part Two'), { key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(runs()).toHaveLength(2);
   });
 });

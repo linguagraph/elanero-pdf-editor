@@ -84,3 +84,60 @@
   padding: var(--space-4);
   color: var(--color-text-muted);
 }
+
+/* Editing (W5.2 S2): the toolbar of text buttons, the current row and the rename field. */
+.bookmarks-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bookmarks-action {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bookmarks-action:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.bookmarks-action:disabled,
+.bookmarks-action[aria-disabled='true'] {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.bookmarks-row--current {
+  background: var(--color-surface-alt);
+}
+
+.bookmarks-rename {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-focus-ring);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+@media (forced-colors: active) {
+  .bookmarks-row--current {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .bookmarks-action {
+    border-color: ButtonText;
+  }
+}

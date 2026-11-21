@@ -227,6 +227,7 @@ export interface PageRpc {
     M extends
       | 'session.pages'
       | 'session.info'
+      | 'session.capabilities'
       | 'session.outline'
       | 'session.security'
       | 'session.links'
