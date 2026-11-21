@@ -17,6 +17,8 @@ from typing import Any
 import pytest
 
 from pdfeditor.core.jobs import CancelToken
+from pdfeditor.engine.base import EngineError
+from pdfeditor.engine.registry import get_engine
 from pdfeditor.model import platform as model_platform
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
@@ -381,6 +383,89 @@ def test_without_the_audit_the_values_are_null_and_the_steps_are_three(
     assert value["audit_before"] is None
     assert value["audit_after"] is None
     assert {notice["data"]["total"] for notice in notices} == {3}
+
+
+def test_a_failed_audit_still_returns_the_reduced_file_with_null_audits(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = {"preset": "screen", "audit": True}
+    _, copy = prepare(handle, "reduce_size", args)
+
+    def audit_fails(*_: Any, **__: Any) -> Any:
+        raise EngineError("audit broke")
+
+    monkeypatch.setattr(jobs, "space_audit", audit_fails)
+    with caplog.at_level("WARNING", logger="pdfeditor.webapi.jobs"):
+        reply, out = run_job("reduce_size", args, copy)
+    value = ok(reply)["value"]
+    assert value["audit_before"] is None
+    assert value["audit_after"] is None
+    assert value["before"] > 0 and value["after"] > 0  # the reduce itself ran
+    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+    assert "space audit failed" in caplog.text
+
+
+def test_a_failed_after_audit_keeps_the_before_audit(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The before-audit succeeds and the after-audit fails: the outcome carries the before-audit,
+    # the after-audit is None, and the reduced file is still returned.
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = {"preset": "screen", "audit": True}
+    _, copy = prepare(handle, "reduce_size", args)
+    real_audit = jobs.space_audit
+    calls: list[int] = []
+
+    def audit_then_fail(*a: Any, **k: Any) -> Any:
+        calls.append(1)
+        if len(calls) == 1:
+            return real_audit(*a, **k)
+        raise EngineError("after-audit broke")
+
+    monkeypatch.setattr(jobs, "space_audit", audit_then_fail)
+    reply, out = run_job("reduce_size", args, copy)
+    value = ok(reply)["value"]
+    assert value["audit_before"] is not None
+    assert value["audit_before"]["total"] > 0
+    assert value["audit_after"] is None
+    assert value["before"] > 0 and value["after"] > 0
+    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+
+
+def test_a_reduced_copy_that_cannot_be_reopened_still_returns_the_file(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The reopen for the after-audit is inside the audit's protection: a reopen failure drops the
+    # after-audit, and the reduced file is still what the user gets.
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    args = {"preset": "screen", "audit": True}
+    _, copy = prepare(handle, "reduce_size", args)
+    real_reduce = jobs.reduce_size
+    reduced: list[bytes] = []
+
+    def capture_reduce(*a: Any, **k: Any) -> Any:
+        result = real_reduce(*a, **k)
+        reduced.append(result.data)
+        return result
+
+    engine = get_engine()
+    real_open = engine.open
+
+    def open_unless_reduced(source: Any, password: Any = None) -> Any:
+        if reduced and source == reduced[0]:
+            raise EngineError("cannot read the reduced copy")
+        return real_open(source, password)
+
+    monkeypatch.setattr(jobs, "reduce_size", capture_reduce)
+    monkeypatch.setattr(engine, "open", open_unless_reduced)
+    with caplog.at_level("WARNING", logger="pdfeditor.webapi.jobs"):
+        reply, out = run_job("reduce_size", args, copy)
+    value = ok(reply)["value"]
+    assert value["audit_after"] is None
+    assert value["before"] > 0 and value["after"] > 0
+    assert binary(ok(reply)["files"][0]["data"], out).startswith(b"%PDF")
+    assert "cannot be reopened" in caplog.text
 
 
 def test_a_cancel_before_the_after_audit_stops_the_job(

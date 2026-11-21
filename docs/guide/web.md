@@ -310,6 +310,23 @@ an encrypted document keeps the password. When Save refuses a signed document, i
 Writing back to the original file in place needs the browser's File System Access API, and is not
 available yet.
 
+## Printing
+
+**Print** (Ctrl+P, or the Home tab's File group) opens the print dialog. Choose the
+pages: all pages, the current page, or a range such as `1-3, 5`. Then choose the resolution, 150 dpi
+(faster) or 300 dpi (sharper), and whether to include comments, and press **Print**.
+
+- The web version prints each page as an image, not as vector text, so the printed text is as sharp
+  as the chosen resolution.
+- Printing runs as a job, with its percentage on the job bar. The pages are made one at a time, and
+  the browser's print dialog opens once all of them are ready. **Cancel** on the job bar stops the job
+  and discards the pages made so far. Nothing in the document changes.
+- A print of more than 200 pages asks you to confirm first. Every page is held in memory until the
+  browser's print dialog opens, so a long print can slow the tab down. To print less at once, print
+  a page range, or choose 150 dpi. **Back** returns to the dialog with your choices kept.
+- The dialog and the browser's print dialog are separate: after you press Print, use the browser's
+  own options (paper size, copies, the printer) in its dialog.
+
 ## Where your data is stored
 
 - **Your documents** are held in the memory of the browser tab while they are open. While a document
@@ -349,7 +366,7 @@ full policy, with what the desktop app stores, is in the
 | Edit the words of a paragraph, add text or images | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF cannot be combined yet; split offers the parts as separate downloads or as one ZIP file) |
-| Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
+| Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
 | Bookmarks: rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; adding bookmarks is coming soon) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |

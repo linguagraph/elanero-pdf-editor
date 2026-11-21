@@ -55,7 +55,7 @@ export interface EngineHandle {
   dispatch(
     request: string,
     buffers?: readonly ArrayBuffer[],
-    onNotice?: (notice: Notice) => void,
+    onNotice?: (notice: Notice, buffer?: ArrayBuffer) => void,
   ): CallResult;
   // Installs fontTools the first time a text edit needs it (W6.8a). Resolves in every case: without
   // fontTools the edit still runs, with a degraded character map, so a failure only logs a warning.
@@ -134,8 +134,9 @@ def _pdfeditor_call(request, joined, sizes):
 `;
 
 // The job worker's adapter (W3.7). It answers job.run through the job worker's own table, and hands
-// each progress notice to the JS side as JSON text, which the caller parses. Its reply carries the
-// whole list of result buffers, so a split can return one file per part.
+// each notice to the JS side as JSON text, which the caller parses. A partial notice (W6.5) also
+// carries its buffer, as a view the JS side copies at once; a progress notice carries none. Its
+// reply carries the whole list of result buffers, so a split can return one file per part.
 const JOB_ADAPTER_PY = `
 import json as _json
 from pdfeditor.webapi import jobworker as _jobworker
@@ -151,8 +152,10 @@ def _pdfeditor_job_call(request, joined, sizes, on_notice):
             buffers.append(bytes(view[start:end]))
             start = end
     def notify(notice):
-        on_notice(_json.dumps(notice, allow_nan=False, separators=(",", ":")))
-    reply, out = _jobworker.dispatch(request, buffers, notify)
+        on_notice(_json.dumps(notice, allow_nan=False, separators=(",", ":")), None)
+    def partial(notice, out):
+        on_notice(_json.dumps(notice, allow_nan=False, separators=(",", ":")), memoryview(out[0]))
+    reply, out = _jobworker.dispatch(request, buffers, notify, None, partial)
     return reply, [memoryview(data) for data in out]
 `;
 
@@ -162,7 +165,7 @@ type PyCallable = (
   request: string,
   joined: PyProxyLike | undefined,
   sizes: PyProxyLike,
-  onNotice?: (text: string) => void,
+  onNotice?: (text: string, data?: PyProxyLike | null) => void,
 ) => unknown;
 
 // pyodide.mjs decides at evaluation time whether it runs in a classic worker by calling
@@ -243,9 +246,20 @@ function makeDispatch(
       input = joined === undefined ? undefined : pyodide.toPy(joined);
       sizes = pyodide.toPy(buffers.map((buffer) => buffer.byteLength));
       const notify = withNotices
-        ? (text: string) => {
+        ? (text: string, data?: PyProxyLike | null) => {
             const notice = parseNotice(text);
-            if (notice !== undefined) onNotice?.(notice);
+            if (notice === undefined) return;
+            // A partial's buffer is copied out of the wasm heap here, and its proxy freed at once.
+            if (data === undefined || data === null) {
+              onNotice?.(notice);
+              return;
+            }
+            const view = asProxy(data);
+            try {
+              onNotice?.(notice, copyBytes(view.toJs()));
+            } finally {
+              view.destroy();
+            }
           }
         : undefined;
       // The engine's adapter takes three arguments; only the job adapter takes the notice callback.

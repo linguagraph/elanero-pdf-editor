@@ -9,6 +9,7 @@ const DEFAULT_DATE: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyl
 const numberCache = new Map<string, Intl.NumberFormat>();
 const dateCache = new Map<string, Intl.DateTimeFormat>();
 const megabyteCache = new Map<string, Intl.NumberFormat>();
+const decimalCache = new Map<string, Intl.NumberFormat>();
 
 function cached<T>(cache: Map<string, T>, locale: string, make: () => T): T {
   let value = cache.get(locale);
@@ -52,4 +53,19 @@ export function formatMegabytes(bytes: number): string {
       }),
   );
   return format.format(bytes / MEBIBYTE);
+}
+
+// A number with a fixed count of decimal places in the locale's separator ("1.5" in English,
+// "1,5" in German). Sizes use it, since toFixed always writes a point.
+export function formatDecimal(value: number, digits: number): string {
+  const locale = getLocale();
+  return cached(
+    decimalCache,
+    `${locale}:${digits}`,
+    () =>
+      new Intl.NumberFormat(locale, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      }),
+  ).format(value);
 }

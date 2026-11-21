@@ -1,6 +1,6 @@
 import { EngineLoadError } from './errors';
 import { needsFontTools, type CallResult, type LoadEngine, type WorkerRole } from './loader';
-import type { DispatchMessage, ErrorMessage, ReplyMessage, Stage } from './protocol';
+import type { DispatchMessage, ErrorMessage, NoticeMessage, ReplyMessage, Stage } from './protocol';
 
 // The slice of a dedicated worker's global scope that the server uses.
 export interface WorkerScope {
@@ -91,8 +91,10 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
       // A text edit runs after fontTools is in place (W6.8a), so the first one waits for the install.
       if (needsFontTools(message.request)) await handle.ensureFontTools?.();
       // A notice of this call (a job's progress) goes out before the reply, with the call's id.
-      const onNotice = (notice: Record<string, unknown>): void => {
-        scope.postMessage({ kind: 'notice', id: message.id, notice });
+      const onNotice = (notice: Record<string, unknown>, buffer?: ArrayBuffer): void => {
+        const noticeMessage: NoticeMessage = { kind: 'notice', id: message.id, notice, buffer };
+        if (buffer === undefined) scope.postMessage(noticeMessage);
+        else scope.postMessage(noticeMessage, [buffer]);
       };
       const result = handle.dispatch(message.request, message.buffers ?? [], onNotice);
       const drawn = await bitmapReply(message.request, result);

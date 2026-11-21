@@ -951,6 +951,11 @@ class PrintArgs:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class PrintValue:
+    pages: int  # the pages printed; the pages themselves came as partial notices (W6.5)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class ExtractImagesArgs:
     name: str  # the document's display name: the ZIP's stem
     pages: tuple[int, ...] | None = None  # 0-based: the images shown on these; None: every page
