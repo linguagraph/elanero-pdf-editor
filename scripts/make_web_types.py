@@ -60,6 +60,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "comments.flattenable": "instant",
     "content.objects": "render",
     "content.preview_font": "render",
+    "fonts.validate": "action",  # reads a whole font file (up to MAX_FONT_BYTES) under Pyodide
     "actions.redo": "edit",
     "actions.run": "action",
     "actions.undo": "edit",
@@ -84,6 +85,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "session.links": "render",  # one page's annotations, read once per visible page (W5.3)
     "session.open": "io",
     "session.outline": "instant",
+    "split.plan": "instant",
     "session.pages": "instant",
     "session.security": "instant",
     "session.unlock_owner": "instant",

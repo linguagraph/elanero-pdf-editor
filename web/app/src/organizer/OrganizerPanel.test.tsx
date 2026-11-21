@@ -523,7 +523,14 @@ describe('page organizer extract', () => {
       params: {
         handle: 'h',
         job: 'split',
-        args: { mode: 'ranges', pages_per_file: 1, ranges: [[1, 3]], max_bytes: 0 },
+        args: {
+          mode: 'ranges',
+          pages_per_file: 1,
+          ranges: [[1, 3]],
+          max_bytes: 0,
+          name: '',
+          zip: false,
+        },
       },
     });
     expect(download).toHaveBeenCalledWith('doc (extract).pdf', expect.any(ArrayBuffer));

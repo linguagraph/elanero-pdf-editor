@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createToastStore } from '../feedback/toasts';
 import { t, tp } from '../i18n/t';
 import type { PageArea } from '../text/textLayer';
-import { domSelectionAreas } from '../text/selection';
-import { markSelectedText } from './markText';
+import { domSelectionAreas, type ModelRead } from '../text/selection';
+import { markSelectedText, type MarkTextDeps } from './markText';
 
 vi.mock('../text/selection', () => ({ domSelectionAreas: vi.fn(() => [] as PageArea[]) }));
 
@@ -27,7 +27,22 @@ function fakeSelection() {
   };
 }
 
+// The deps of a press with the model off (the browser's selection is the one read) unless given.
+function deps(overrides: Partial<MarkTextDeps> = {}): MarkTextDeps {
+  return {
+    controller: fakeController(),
+    model: () => ({ state: 'off' }),
+    clearModel: vi.fn(),
+    loadPages: vi.fn(async () => undefined),
+    selection: null,
+    lookup: () => undefined,
+    store: createToastStore(),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(domSelectionAreas).mockReturnValue([]);
 });
 
@@ -35,24 +50,19 @@ describe('markSelectedText (W4.12 S2)', () => {
   it('shows an info message and marks nothing with no selected text', async () => {
     const store = createToastStore();
     const controller = fakeController();
-    await markSelectedText({
-      controller,
-      selection: null,
-      lookup: () => undefined,
-      store,
-    });
+    await markSelectedText(deps({ controller, store }));
     expect(controller.markAreas).not.toHaveBeenCalled();
     const [toast] = store.getState().visible;
     expect(toast?.kind).toBe('info');
     expect(toast?.text).toBe(t('redact.selectTextFirst'));
   });
 
-  it('marks the selection areas, clears the selection and says how many', async () => {
+  it('marks the browser selection areas under Hand, clears the selection and says how many', async () => {
     vi.mocked(domSelectionAreas).mockReturnValue([AREA]);
     const store = createToastStore();
     const controller = fakeController(false, 1);
     const selection = fakeSelection();
-    await markSelectedText({ controller, selection, lookup: () => undefined, store });
+    await markSelectedText(deps({ controller, selection, store }));
     expect(controller.markAreas).toHaveBeenCalledWith([AREA]);
     expect(selection.removeAllRanges).toHaveBeenCalledTimes(1);
     const [toast] = store.getState().visible;
@@ -64,12 +74,7 @@ describe('markSelectedText (W4.12 S2)', () => {
     vi.mocked(domSelectionAreas).mockReturnValue([AREA]);
     const store = createToastStore();
     const selection = fakeSelection();
-    await markSelectedText({
-      controller: fakeController(false, 0),
-      selection,
-      lookup: () => undefined,
-      store,
-    });
+    await markSelectedText(deps({ controller: fakeController(false, 0), selection, store }));
     expect(selection.removeAllRanges).not.toHaveBeenCalled();
     expect(store.getState().visible).toHaveLength(0);
   });
@@ -77,12 +82,82 @@ describe('markSelectedText (W4.12 S2)', () => {
   it('does nothing while an apply runs', async () => {
     vi.mocked(domSelectionAreas).mockReturnValue([AREA]);
     const controller = fakeController(true);
-    await markSelectedText({
-      controller,
-      selection: fakeSelection(),
-      lookup: () => undefined,
-      store: createToastStore(),
-    });
+    await markSelectedText(deps({ controller, selection: fakeSelection() }));
     expect(controller.markAreas).not.toHaveBeenCalled();
   });
 });
+
+describe('markSelectedText on the model selection (W5.4)', () => {
+  it('marks the model areas, clears the model and not the browser ranges', async () => {
+    const store = createToastStore();
+    const controller = fakeController(false, 1);
+    const clearModel = vi.fn();
+    const selection = fakeSelection();
+    await markSelectedText(
+      deps({ controller, clearModel, selection, store, model: () => ready([AREA]) }),
+    );
+    expect(controller.markAreas).toHaveBeenCalledWith([AREA]);
+    expect(clearModel).toHaveBeenCalledTimes(1);
+    expect(selection.removeAllRanges).not.toHaveBeenCalled();
+    expect(domSelectionAreas).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(tp('redact.markedText', 1));
+  });
+
+  it('shows selectTextFirst for an empty model selection, without reading the browser', async () => {
+    const store = createToastStore();
+    const controller = fakeController();
+    await markSelectedText(deps({ controller, store, model: () => ready([]) }));
+    expect(controller.markAreas).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('redact.selectTextFirst'));
+    expect(domSelectionAreas).not.toHaveBeenCalled();
+  });
+
+  it('waits for loading pages, then marks the selection read again', async () => {
+    const store = createToastStore();
+    const controller = fakeController(false, 1);
+    const clearModel = vi.fn();
+    const loadPages = vi.fn(async () => undefined);
+    let reads = 0;
+    const model = (): ModelRead<PageArea[]> => {
+      reads += 1;
+      return reads === 1 ? { state: 'loading', pages: [1] } : ready([AREA]);
+    };
+    await markSelectedText(deps({ controller, clearModel, loadPages, store, model }));
+    expect(loadPages).toHaveBeenCalledWith([1]);
+    expect(controller.markAreas).toHaveBeenCalledWith([AREA]);
+    expect(clearModel).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks nothing and says the text is still loading when a page stays unready', async () => {
+    const store = createToastStore();
+    const controller = fakeController();
+    await markSelectedText(
+      deps({ controller, store, model: () => ({ state: 'loading', pages: [1] }) }),
+    );
+    expect(controller.markAreas).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('text.stillLoading'));
+  });
+
+  it('marks nothing when the user has dropped the selection while the pages loaded', async () => {
+    const controller = fakeController();
+    let reads = 0;
+    const model = (): ModelRead<PageArea[]> => {
+      reads += 1;
+      return reads === 1 ? { state: 'loading', pages: [1] } : { state: 'off' };
+    };
+    await markSelectedText(deps({ controller, model }));
+    expect(controller.markAreas).not.toHaveBeenCalled();
+  });
+
+  it('does nothing while an apply runs, before any read', async () => {
+    const controller = fakeController(true);
+    const model = vi.fn(() => ready([AREA]));
+    await markSelectedText(deps({ controller, model }));
+    expect(model).not.toHaveBeenCalled();
+    expect(controller.markAreas).not.toHaveBeenCalled();
+  });
+});
+
+function ready(value: PageArea[]): ModelRead<PageArea[]> {
+  return { state: 'ready', value };
+}
