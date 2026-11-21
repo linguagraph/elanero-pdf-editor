@@ -249,6 +249,7 @@ export interface PageRpc {
       | 'layers.list'
       | 'redaction.list'
       | 'comments.list'
+      | 'split.plan'
       | 'system.memory',
   >(
     method: M,

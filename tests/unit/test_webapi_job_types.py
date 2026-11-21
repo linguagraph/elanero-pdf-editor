@@ -29,6 +29,7 @@ from pdfeditor.services.export.fonts import program_fs_type
 from pdfeditor.webapi import dispatch, jobs, jobworker, limits
 from pdfeditor.webapi.errors import (
     CANCELLED,
+    FILE_TOO_LARGE,
     INVALID_ARGS,
     NOT_SUPPORTED,
     RENDER_TOO_LARGE,
@@ -1089,3 +1090,107 @@ def test_extract_fonts_of_a_document_without_embedded_fonts(web: None, fixture_p
     assert result["value"]["refused"] == []
     # the base-14 fonts have no program in the file, so they are named as not embedded
     assert result["value"]["not_embedded"]
+
+
+# -- split: document order, names, ZIP, the output cap and the preview (W6.2) -------------------
+
+
+def test_split_by_bookmarks_gives_the_parts_in_document_order(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("outline_unsorted").read_bytes(), "unsorted.pdf")
+    args = {"mode": "bookmarks", "name": "Report.pdf"}
+    _, copy = prepare(handle, "split", args)
+    reply, out = run_on_copy("split", args, copy)
+    names = [name for name, _, _ in files_of(ok(reply), out)]
+    # Document order, not alphabetical: "Zebra" comes after "Intro", and the second "Appendix"
+    # gets its own name.
+    assert names == [
+        "Report_Intro.pdf",
+        "Report_Zebra.pdf",
+        "Report_Appendix.pdf",
+        "Report_Appendix (2).pdf",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "stem"),
+    [("Report.pdf", "Report"), ("", "document"), ("...", "document")],
+)
+def test_the_part_names_take_the_document_name_as_their_stem(
+    web: None, fixture_pdf: Any, name: str, stem: str
+) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"mode": "pages", "pages_per_file": 1, "name": name}
+    _, copy = prepare(handle, "split", args)
+    reply, out = run_on_copy("split", args, copy)
+    names = [file_name for file_name, _, _ in files_of(ok(reply), out)]
+    assert names[0] == f"{stem}_part1.pdf"
+
+
+def test_split_as_zip_gives_one_stored_archive_of_the_parts(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    pages = page_total(handle)
+    args = {"mode": "pages", "pages_per_file": 1, "name": "Report.pdf", "zip": True}
+    _, copy = prepare(handle, "split", args)
+    reply, out = run_on_copy("split", args, copy)
+    files = files_of(ok(reply), out)
+    assert [(name, mime) for name, mime, _ in files] == [("Report-split.zip", "application/zip")]
+    part_names = [f"Report_part{number}.pdf" for number in range(1, pages + 1)]
+    with zipfile.ZipFile(io.BytesIO(files[0][2])) as archive:
+        assert all(info.compress_type == zipfile.ZIP_STORED for info in archive.infolist())
+    record("zip_parts_pdf", files[0][2], names=part_names, pages=[1] * pages)
+
+
+def test_a_split_with_one_part_as_zip_is_the_pdf_itself(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"mode": "ranges", "ranges": [[0, 1]], "name": "Report.pdf", "zip": True}
+    _, copy = prepare(handle, "split", args)
+    reply, out = run_on_copy("split", args, copy)
+    files = files_of(ok(reply), out)
+    assert len(files) == 1
+    assert files[0][1] == "application/pdf"
+    record("page_count_pikepdf", files[0][2], pages=2)
+
+
+def test_a_split_over_the_output_cap_stops_before_the_next_part(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(text_fixture(fixture_pdf), "text.pdf")
+    args = {"mode": "pages", "pages_per_file": 1}
+    _, copy = prepare(handle, "split", args)
+    monkeypatch.setattr(limits, "MAX_SPLIT_BYTES", 1)
+    notices: list[dict[str, Any]] = []
+    reply, _ = run_on_copy("split", args, copy, notify=notices.append)
+    err = error(reply)
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"]["max_bytes"] == 1
+    assert len(notices) < page_total(handle)
+
+
+def test_split_plan_gives_the_names_and_pages_the_job_writes(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("outline_unsorted").read_bytes(), "unsorted.pdf")
+    before = ok(call("session.info", {"handle": handle}))
+    cases: list[dict[str, Any]] = [
+        {"mode": "pages", "pages_per_file": 2},
+        {"mode": "ranges", "ranges": [[0], [1, 2]]},
+        {"mode": "bookmarks"},
+    ]
+    for case in cases:
+        params = {"handle": handle, "name": "Report.pdf", **case}
+        plan = ok(call("split.plan", params))["parts"]
+        _, copy = prepare(handle, "split", {**case, "name": "Report.pdf"})
+        reply, out = run_on_copy("split", {**case, "name": "Report.pdf"}, copy)
+        files = files_of(ok(reply), out)
+        assert [part["name"] for part in plan] == [name for name, _, _ in files]
+        assert [part["page_count"] for part in plan] == [
+            reopened_state(data)[0] for _, _, data in files
+        ]
+    # The preview writes nothing: the document reads the same as before.
+    assert ok(call("session.info", {"handle": handle})) == before
+
+
+def test_split_plan_refuses_a_size_split_and_bad_pages(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("outline_unsorted").read_bytes(), "unsorted.pdf")
+    size = call("split.plan", {"handle": handle, "mode": "size", "name": ""})
+    assert error(size)["code"] == INVALID_ARGS
+    ranges = call("split.plan", {"handle": handle, "mode": "ranges", "ranges": [[9]], "name": ""})
+    assert error(ranges)["code"] == INVALID_ARGS

@@ -15,8 +15,8 @@ from pdfeditor.core.commands.snapshot import SnapshotCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.metadata import Metadata
 
-# The web package excludes the desktop font catalog (scripts/web_package.py); the font-folder
-# tests below are desktop_only, so the web run never reaches the name this guard leaves unbound.
+# The web package ships the font catalog (scripts/web_package.py); the font-folder tests below are
+# desktop_only, so the web run never reaches the name this guard leaves unbound.
 with contextlib.suppress(ImportError):
     from pdfeditor.services.fonts import FontCatalog
 

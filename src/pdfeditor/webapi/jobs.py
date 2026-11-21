@@ -40,8 +40,10 @@ from pdfeditor.services.assembly import (
     MergeSource,
     SourcePagesError,
     SplitMode,
+    SplitPlan,
     is_image,
     merge,
+    part_names,
     plan_split,
     safe_name,
     subset_size,
@@ -472,36 +474,61 @@ def _run_export(
     return JobOutput(files=files)
 
 
+def _check_split_args(
+    mode: SplitMode, pages_per_file: int, max_bytes: int, path: str = "args"
+) -> None:
+    if pages_per_file < 1:
+        field = f"{path}.pages_per_file"
+        raise RpcFailure(INVALID_ARGS, f"{field}: must be 1 or more", {"path": field})
+    if mode is SplitMode.MAX_SIZE and max_bytes <= 0:
+        field = f"{path}.max_bytes"
+        raise RpcFailure(INVALID_ARGS, f"{field}: must be more than 0", {"path": field})
+
+
+def _plan_for(engine: Engine, doc: Document, args: dto.SplitArgs) -> SplitPlan:
+    """The parts of a split. The job and the preview (split.plan) share it, so they cannot drift."""
+    _check_split_args(args.mode, args.pages_per_file, args.max_bytes)
+    if args.mode is SplitMode.RANGES:
+        for part in args.ranges:
+            _check_pages(part, doc.page_count, "args.ranges")
+
+    def size_of(pages: list[int]) -> int:
+        return subset_size(engine, doc, pages)
+
+    return plan_split(doc, args.mode, args.pages_per_file, args.ranges, args.max_bytes, size_of)
+
+
 def _convert_split(data: object, buffers: BufferTable) -> dto.SplitArgs:
     args: dto.SplitArgs = from_json(dto.SplitArgs, data, buffers, "args")
-    if args.pages_per_file < 1:
-        raise RpcFailure(
-            INVALID_ARGS,
-            "args.pages_per_file: must be 1 or more",
-            {"path": "args.pages_per_file"},
-        )
-    if args.mode is SplitMode.MAX_SIZE and args.max_bytes <= 0:
-        raise RpcFailure(
-            INVALID_ARGS, "args.max_bytes: must be more than 0", {"path": "args.max_bytes"}
-        )
+    _check_split_args(args.mode, args.pages_per_file, args.max_bytes)
     return args
 
 
 def _run_split(session: DocumentSession | None, args: dto.SplitArgs, ctx: JobContext) -> JobOutput:
     owner = _session(session)
+    stem = _stem(args.name)
     with owner.lock, tempfile.TemporaryDirectory() as folder:
         doc = owner.document
-        if args.mode is SplitMode.RANGES:
-            for part in args.ranges:
-                _check_pages(part, doc.page_count, "args.ranges")
+        plan = _plan_for(owner.engine, doc, args)
+        names = part_names(plan, stem)
+        written = 0
 
-        def size_of(pages: list[int]) -> int:
-            return subset_size(owner.engine, doc, pages)
+        def progress(done: int, total: int) -> None:
+            # Checked after each part, so a split over the cap stops before the next part and
+            # before any ZIP is built (W6.2 section 4).
+            nonlocal written
+            written += (Path(folder) / names[done - 1]).stat().st_size
+            if written > limits.MAX_SPLIT_BYTES:
+                raise RpcFailure(
+                    FILE_TOO_LARGE,
+                    "the split files are too large",
+                    {"max_bytes": limits.MAX_SPLIT_BYTES, "size": written},
+                )
+            ctx.progress(done, total)
 
-        plan = plan_split(doc, args.mode, args.pages_per_file, args.ranges, args.max_bytes, size_of)
         # The parts are written into the folder and read back: write_split is the desktop's code.
-        write_split(owner.engine, doc, plan, Path(folder), "split", ctx.token, ctx.progress)
-        files = _collect(Path(folder))
+        write_split(owner.engine, doc, plan, Path(folder), stem, ctx.token, progress)
+        files = _split_output(Path(folder), names, stem, args.zip)
     return JobOutput(files=files)
 
 
@@ -532,6 +559,57 @@ def _range_pages(engine: Engine, path: Path, text: str, index: int) -> list[int]
         if exc.kind == "out_of_range":
             details["page_count"] = count
         raise RpcFailure(INVALID_ARGS, f"{field}: {exc}", details) from exc
+
+
+def _split_output(
+    folder: Path, names: list[str], stem: str, as_zip: bool
+) -> tuple[dto.FileDto, ...]:
+    """The parts in document order, each read back and deleted at once so the peak stays near one
+    copy of the output. With ``as_zip`` and two or more parts they are stored (not deflated: the
+    parts' streams are already compressed) into one ZIP, as the parts are added."""
+    if as_zip and len(names) > 1:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+            for name in names:
+                path = folder / name
+                archive.write(path, arcname=name)
+                path.unlink()
+        return (
+            dto.FileDto(name=f"{stem}-split.zip", mime="application/zip", data=buffer.getvalue()),
+        )
+    files: list[dto.FileDto] = []
+    for name in names:
+        path = folder / name
+        files.append(dto.FileDto(name=name, mime=_mime_of(name), data=path.read_bytes()))
+        path.unlink()
+    return tuple(files)
+
+
+def split_plan(params: dto.SplitPlanParams) -> dto.SplitPlanResult:
+    """The files a split would make, with their pages: read-only, for the dialog's preview.
+
+    Runs on the engine worker under the session lock and writes nothing. Mode "size" is refused:
+    its parts are sized only by writing them, which is the split itself.
+    """
+    if params.mode is SplitMode.MAX_SIZE:
+        raise RpcFailure(
+            INVALID_ARGS, "params.mode: a size split is not previewed", {"path": "mode"}
+        )
+    session = REGISTRY.get(params.handle)
+    args = dto.SplitArgs(
+        mode=params.mode,
+        pages_per_file=params.pages_per_file,
+        ranges=params.ranges,
+        name=params.name,
+    )
+    with session.lock:
+        plan = _plan_for(session.engine, session.document, args)
+        names = part_names(plan, _stem(params.name))
+    parts = tuple(
+        dto.SplitPartDto(name=name, first_page=group[0], page_count=len(group))
+        for name, group in zip(names, plan.groups, strict=True)
+    )
+    return dto.SplitPlanResult(parts=parts)
 
 
 def _convert_merge(data: object, buffers: BufferTable) -> dto.MergeArgs:

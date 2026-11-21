@@ -12,8 +12,10 @@ from pdfeditor.model.geometry import Rect
 from pdfeditor.services.assembly import (
     MergeSource,
     SplitMode,
+    SplitPlan,
     extract,
     merge,
+    part_names,
     plan_split,
     subset_size,
     write_split,
@@ -215,3 +217,32 @@ def test_duplicated_page_stamped_alone_round_trip(fixture_pdf, tmp_path: Path) -
     record("page_text_pdfium", path, page=0, absent=["FOOT"], present=["DRAFT"])
     record("page_text_pdfium", path, page=1, absent=["DRAFT"], present=["FOOT 2"])
     record("page_render_width_pdfium", path, page=1, scale=0.5)
+
+
+def test_part_names_are_unique_and_keep_plan_order() -> None:
+    plan = SplitPlan(
+        groups=[[0], [1], [2], [3], [4], [5]],
+        names=["Intro", "Chapter 1", "Intro", "A/B", "A_B", "intro"],
+    )
+    assert part_names(plan, "book") == [
+        "book_Intro.pdf",
+        "book_Chapter 1.pdf",
+        "book_Intro (2).pdf",
+        "book_A_B.pdf",
+        "book_A_B (2).pdf",
+        "book_intro (3).pdf",  # case-insensitive: the file systems of Windows and macOS are
+    ]
+
+
+def test_an_untitled_part_is_named_by_its_number() -> None:
+    plan = SplitPlan(groups=[[0], [1], [2]], names=["", "", "Two"])
+    assert part_names(plan, "book") == ["book_1.pdf", "book_2.pdf", "book_Two.pdf"]
+
+
+def test_write_split_writes_every_part_when_titles_repeat(fixture_pdf, tmp_path: Path) -> None:
+    doc = ENGINE.open(fixture_pdf("outline"))
+    plan = SplitPlan(groups=[[0, 1], [2, 3]], names=["Same", "Same"])
+    written = write_split(ENGINE, doc, plan, tmp_path / "out", "book")
+    assert [p.name for p in written] == ["book_Same.pdf", "book_Same (2).pdf"]
+    for path in written:
+        assert path.exists()

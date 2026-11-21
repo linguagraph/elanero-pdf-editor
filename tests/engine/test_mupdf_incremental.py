@@ -20,10 +20,11 @@ from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.metadata import Metadata
 from tests.hostcheck import record
 
-# The version in uv.lock. A pymupdf bump must re-check incremental_bytes (it calls
+# The PyMuPDF version the test environment is pinned to (the pymupdf constraint in
+# pyproject.toml). A pymupdf bump must re-check incremental_bytes (it calls
 # pymupdf._as_pdf_document, JM_embedded_clean, JM_ensure_identity and mupdf.pdf_save_document)
 # and then update this constant.
-LOCKED_PYMUPDF_VERSION = "1.28.2"
+LOCKED_PYMUPDF_VERSION = "2.1"
 
 SIGNED = Path(__file__).parent.parent / "fixtures" / "real" / "signed_selfsigned.pdf"
 INCREMENTAL = SaveOptions(incremental=True)

@@ -1,10 +1,10 @@
 // W8.1 S5: print (W6.5, W1.4 section 11). The Print dialog takes a page scope; Print runs the print
 // job and hands its pages to a hidden iframe, one image per page. This spec prints the current page.
-// A range of two or more pages does not reach the iframe: the job's reply carries one binary value
-// per page, and printWorker.ts reads only the first one (src/print/printWorker.ts), so the job fails
-// with an internal error. The spec for that case is a test.fixme below until the worker is fixed. The browser's print dialog cannot
-// be driven from a test, so window.print is stubbed in every frame (an init script) and the stub
-// logs the page count it was called with, from the iframe's own document.
+// A range of two or more pages used to fail: printWorker.ts read only the job's first binary value.
+// That defect is fixed in #522, which reads every page's $bin marker. The two-page spec below stays a
+// test.fixme until it is run against staged engine assets (scripts/stage_engine_assets.mjs). The
+// browser's print dialog cannot be driven from a test, so window.print is stubbed in every frame (an
+// init script) and the stub logs the page count it was called with, from the iframe's own document.
 import { expect, test } from '@playwright/test';
 import { STAGED, fixture, openApp, openPdf, watchPage } from './support';
 
@@ -64,7 +64,7 @@ test.describe('engine staged', () => {
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
-  // BLOCKED: printWorker.ts takes the job's reply as one buffer, so a second page fails (see above).
+  // Still fixme: the worker defect is fixed in #522, but this spec has not run on staged engine assets.
   test.fixme('print a page range of two pages: the iframe gets both images', async () => {
     // Enable with the worker fix: the same flow as above, with the range "1-2", and two images.
   });

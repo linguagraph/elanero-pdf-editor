@@ -483,6 +483,7 @@ export const EN = {
   'copy.tooLarge':
     'The selection is too large to copy at once (about 50 MB of text). Select fewer pages.',
   'copy.failed': 'The browser did not copy the text. Click the page and try again.',
+  'text.stillLoading': 'The text of the selected pages is still loading. Try again in a moment.',
   'redact.selectTextFirst': 'Select some text on a page first, then press Mark Text.',
   'redact.notReady': 'The document is not ready yet. Press Mark Text again in a moment.',
   'redact.markedText': {
@@ -1054,13 +1055,25 @@ export const EN = {
     other: '"{item}" is outside the document, which has {count} pages.',
   },
   'split.error.size': 'Enter a size in megabytes that is greater than 0.',
+  'split.error.tooLarge':
+    'The split files together are larger than {size}. Split fewer pages or use larger parts.',
   'split.failed': 'The document could not be split. Try again.',
+  'split.output.label': 'Download as',
+  'split.output.files': 'Separate files',
+  'split.output.zip': 'One ZIP file',
+  'split.preview.heading': { one: '{count} file', other: '{count} files' },
+  'split.preview.part': {
+    one: '{name}: 1 page, page {first}',
+    other: '{name}: {count} pages, from page {first}',
+  },
+  'split.preview.more': 'And {count} more files',
+  'split.preview.size':
+    'File names and page counts are known after the split: sizes are measured while the files are written.',
   'split.submit': 'Split',
   'split.close': 'Close',
   'split.running': 'Splitting the document. The progress bar shows how far it has got.',
   'split.results.heading': 'Files ({count})',
   'split.download': 'Download {name}',
-  'split.zipPending': 'Download as ZIP is not available yet. Each file downloads on its own.',
   'export.title': 'Export pages',
   'export.format.label': 'Format',
   'export.format.txt': 'Plain text (.txt)',

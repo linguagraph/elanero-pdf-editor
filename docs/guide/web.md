@@ -131,6 +131,8 @@ is reloaded until you press it.
   break where each line ends and between pages. **Select All** (Ctrl+A, also in the Home tab) selects
   the text of the page at the top of the view. Copy says so when nothing is selected, and when the
   selection is too large to copy at once (about 50 MB of text). A scanned page has no text to copy.
+  Copy can also say that the text of a selected page is still loading: try again in a moment. With
+  **Hand** chosen, Copy and Select All use the browser's own selection instead.
 - **Keyboard shortcuts.** A few web keys work so far: **Ctrl+C** (Copy) and **Ctrl+A** (Select All), **Alt+Left** and **Alt+Right** go back and
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
@@ -205,8 +207,9 @@ is reloaded until you press it.
   every selected mark. A locked mark cannot be changed. **Delete** removes the selected marks.
   **Apply Selected** and **Apply All** burn the marks into the document after you confirm; Apply All
   includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
-- **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you have selected on the pages as
-  redaction marks: one mark per selected block of text, all in one undo step. It only marks. Nothing is
+- **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you selected with the Select tool
+  (a drag, or Select All) as redaction marks: one mark per page the selection covers, all in one undo
+  step. It only marks. Nothing is
   removed until you apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text
   selected, the command asks you to select some first. A mark keeps the selected text in its note until
   the mark is applied, and applying the marks removes that text from the file.
@@ -236,6 +239,15 @@ is reloaded until you press it.
 - **Page labels and links.** The status bar shows the document's own page labels (such as i, ii, 1),
   and you can type a label into the page field to go to that page. Links in the document do not
   work yet (coming soon).
+
+## Split a document
+
+**Split Document** (Organize tab, Assemble group) makes several PDFs from one. Choose a mode: every
+N pages, page ranges, top-level bookmarks, or largest file size. For the first three, the dialog
+lists the files it will make, with their page counts, before you split. For the largest file size
+the sizes are known only once the files are written, so the list is not shown. Choose **Separate
+files** or **One ZIP file**; with more than 10 files, the ZIP is chosen for you. Together the files
+can be at most 512 MB. A larger split is refused, and nothing is made.
 
 ## What is not available yet
 
@@ -323,7 +335,7 @@ full policy, with what the desktop app stores, is in the
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
 | Edit the words of a paragraph, add text, images or shapes | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
-| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; each split part is offered as its own download, not a ZIP; Combine takes page ranges per file) |
+| Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; the parts are offered as separate downloads or as one ZIP file; Combine takes page ranges per file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes, and offers the copy only when it is smaller) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |

@@ -233,6 +233,16 @@ def test_font_preview_ships_and_imports_without_fonttools() -> None:
     assert failures == {}, failures
 
 
+@pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")
+def test_font_check_ships_and_imports_without_fonttools() -> None:
+    # The uploaded-font check (W6.9) runs in the web worker, so its module ships; fontTools is
+    # imported only inside its functions, so the module loads before the worker installs it.
+    assert "services/fonts.py" in [str(f) for f in wp.web_files()]
+    modules = ["pdfeditor.services.fonts", "pdfeditor.webapi.fonts"]
+    failures = _import_failures(modules, blocked=(*BLOCKED, "fontTools"))
+    assert failures == {}, failures
+
+
 def test_private_copy_refuses_when_fonttools_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     # A missing fontTools is the web worker before its install: the copy is refused, not raised.
     from pdfeditor.services.font_preview import private_copy

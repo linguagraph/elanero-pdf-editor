@@ -687,6 +687,38 @@ class PreviewFontResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class FontValidateParams:
+    name: str  # the file name, for messages and logs only; never a path; 1 to 255 characters
+    data: bytes  # the whole font file, one $bin buffer (at most limits.MAX_FONT_BYTES)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontFaceDto:
+    index: int  # the face's index in the file (0 for a single font)
+    family: str  # name ID 16, else 1
+    style: str  # name ID 17, else 2, else "Regular"
+    weight: int  # OS/2 usWeightClass (400 without an OS/2 table)
+    italic: bool  # fsSelection bit 0 or head.macStyle bit 1
+    scripts: tuple[str, ...]  # sorted coarse scripts the cmap covers: "latin", "cyrillic", ...
+    variable: bool  # has an fvar table
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RefusedFaceDto:
+    index: int
+    family: str
+    style: str
+    reason: str  # "restricted" or "bitmap_only": the licence code, never English text
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontValidateResult:
+    format: str  # "truetype", "opentype" (CFF or CFF2 outlines) or "collection" (TTC/OTC)
+    faces: tuple[FontFaceDto, ...]  # the usable faces the licence allows; never empty on success
+    refused: tuple[RefusedFaceDto, ...]  # usable faces the licence refuses (collections only)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class JobPrepareParams:
     handle: str
     job: str  # a job type name (W1.2 section 13), such as "action" or "reduce_size"
@@ -830,6 +862,29 @@ class SplitArgs:
     pages_per_file: int = 1  # mode "pages"
     ranges: tuple[tuple[int, ...], ...] = ()  # mode "ranges": the 0-based pages of each part
     max_bytes: int = 0  # mode "size": the largest part, in bytes
+    name: str = ""  # the document's display name: the stem of the part names
+    zip: bool = False  # one ZIP of the parts instead of one file per part
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitPlanParams:
+    handle: str
+    mode: SplitMode  # "size" is refused: its parts are sized only by writing them
+    pages_per_file: int = 1
+    ranges: tuple[tuple[int, ...], ...] = ()
+    name: str = ""
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitPartDto:
+    name: str  # the file name, as the split job writes it
+    first_page: int  # 0-based: the part's first page (a range's pages may skip some)
+    page_count: int
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SplitPlanResult:
+    parts: tuple[SplitPartDto, ...]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

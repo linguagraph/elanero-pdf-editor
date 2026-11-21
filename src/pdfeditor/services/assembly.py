@@ -276,6 +276,28 @@ def safe_name(text: str) -> str:
     return keep[:80] or "part"
 
 
+def part_names(plan: SplitPlan, stem: str) -> list[str]:
+    """File names of the parts, in plan order: "<stem>_<name>.pdf", unique (case-insensitive).
+
+    One rule for the desktop, the web job's ZIP and the web preview, so the preview shows the
+    names the user gets. A part with no name is "<stem>_<n>.pdf"; a name used before gets " (2)",
+    " (3)"... because two parts with one name would overwrite each other on disk (and twice in a
+    ZIP). The comparison ignores case, as Windows and macOS file systems do.
+    """
+    names: list[str] = []
+    taken: set[str] = set()
+    for n in range(len(plan.groups)):
+        name = plan.names[n] if n < len(plan.names) else ""
+        base = f"{stem}_{safe_name(name) if name else n + 1}"
+        candidate, k = base, 1
+        while candidate.casefold() in taken:
+            k += 1
+            candidate = f"{base} ({k})"
+        taken.add(candidate.casefold())
+        names.append(f"{candidate}.pdf")
+    return names
+
+
 def write_split(
     engine: Engine,
     doc: Document,
@@ -287,10 +309,11 @@ def write_split(
 ) -> list[Path]:
     folder.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for n, (group, name) in enumerate(zip(plan.groups, plan.names, strict=True)):
+    names = part_names(plan, stem)
+    for n, (group, file_name) in enumerate(zip(plan.groups, names, strict=True)):
         if token is not None:
             token.check()
-        target = folder / f"{stem}_{safe_name(name) if name else n + 1}.pdf"
+        target = folder / file_name
         part = extract(engine, doc, group)
         try:
             written.append(part.save(target))

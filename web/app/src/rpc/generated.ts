@@ -87,6 +87,8 @@ export type ReviewState = 'None' | 'Accepted' | 'Rejected' | 'Cancelled' | 'Comp
  */
 export type SaveMode = 'in_place' | 'copy';
 
+export type SplitMode = 'pages' | 'ranges' | 'bookmarks' | 'size';
+
 export interface AttachmentData {
   /** the declared file name (untrusted text; the front end cleans it for a download) */
   filename: string;
@@ -292,6 +294,23 @@ export interface FlattenableResult {
   pages: number;
 }
 
+export interface FontFaceDto {
+  /** the face's index in the file (0 for a single font) */
+  index: number;
+  /** name ID 16, else 1 */
+  family: string;
+  /** name ID 17, else 2, else "Regular" */
+  style: string;
+  /** OS/2 usWeightClass (400 without an OS/2 table) */
+  weight: number;
+  /** fsSelection bit 0 or head.macStyle bit 1 */
+  italic: boolean;
+  /** sorted coarse scripts the cmap covers: "latin", "cyrillic", ... */
+  scripts: string[];
+  /** has an fvar table */
+  variable: boolean;
+}
+
 export interface FontRow {
   /** base font name without the subset prefix */
   name: string;
@@ -302,6 +321,22 @@ export interface FontRow {
   subset: boolean;
   /** 0-based, ascending */
   pages: number[];
+}
+
+export interface FontValidateParams {
+  /** the file name, for messages and logs only; never a path; 1 to 255 characters */
+  name: string;
+  /** the whole font file, one $bin buffer (at most limits.MAX_FONT_BYTES) */
+  data: ArrayBuffer;
+}
+
+export interface FontValidateResult {
+  /** "truetype", "opentype" (CFF or CFF2 outlines) or "collection" (TTC/OTC) */
+  format: string;
+  /** the usable faces the licence allows; never empty on success */
+  faces: FontFaceDto[];
+  /** usable faces the licence refuses (collections only) */
+  refused: RefusedFaceDto[];
 }
 
 export interface FontsResult {
@@ -621,6 +656,14 @@ export interface RedactionMarkDto {
   locked: boolean;
 }
 
+export interface RefusedFaceDto {
+  index: number;
+  family: string;
+  style: string;
+  /** "restricted" or "bitmap_only": the licence code, never English text */
+  reason: string;
+}
+
 export interface RenderPageParams {
   handle: string;
   /** 0-based, in visible page order */
@@ -750,6 +793,27 @@ export interface SecurityResult {
   has_signatures: boolean;
 }
 
+export interface SplitPartDto {
+  /** the file name, as the split job writes it */
+  name: string;
+  /** 0-based: the part's first page (a range's pages may skip some) */
+  first_page: number;
+  page_count: number;
+}
+
+export interface SplitPlanParams {
+  handle: string;
+  /** "size" is refused: its parts are sized only by writing them */
+  mode: SplitMode;
+  pages_per_file: number;
+  ranges: number[][];
+  name: string;
+}
+
+export interface SplitPlanResult {
+  parts: SplitPartDto[];
+}
+
 export interface StateEvent {
   handle: string;
   /** the document state after the call; sent only when it differs */
@@ -832,6 +896,7 @@ export interface Methods {
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
   'content.preview_font': { params: PreviewFontParams; result: PreviewFontResult; deadline: 'render' };
+  'fonts.validate': { params: FontValidateParams; result: FontValidateResult; deadline: 'action' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
@@ -854,6 +919,7 @@ export interface Methods {
   'session.pages': { params: HandleParams; result: PagesResult; deadline: 'instant' };
   'session.security': { params: HandleParams; result: SecurityResult; deadline: 'instant' };
   'session.unlock_owner': { params: UnlockParams; result: UnlockResult; deadline: 'instant' };
+  'split.plan': { params: SplitPlanParams; result: SplitPlanResult; deadline: 'instant' };
   'system.memory': { params: Empty; result: MemoryResult; deadline: 'instant' };
   'text.extract': { params: ExtractParams; result: ExtractResult; deadline: 'slice' };
   'text.layer': { params: PageParams; result: TextLayerResult; deadline: 'render' };
@@ -874,6 +940,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'comments.xfdf_preview': 'action',
   'content.objects': 'render',
   'content.preview_font': 'render',
+  'fonts.validate': 'action',
   'hello': 'instant',
   'jobs.abort': 'instant',
   'jobs.apply': 'action',
@@ -896,6 +963,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.pages': 'instant',
   'session.security': 'instant',
   'session.unlock_owner': 'instant',
+  'split.plan': 'instant',
   'system.memory': 'instant',
   'text.extract': 'slice',
   'text.layer': 'render',
@@ -921,6 +989,7 @@ export const RESULT_DECODERS: {
   'comments.xfdf_preview': decodeXfdfPreviewResult,
   'content.objects': decodeContentObjectsResult,
   'content.preview_font': decodePreviewFontResult,
+  'fonts.validate': decodeFontValidateResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
   'jobs.apply': decodeJobApplyResult,
@@ -943,6 +1012,7 @@ export const RESULT_DECODERS: {
   'session.pages': decodePagesResult,
   'session.security': decodeSecurityResult,
   'session.unlock_owner': decodeUnlockResult,
+  'split.plan': decodeSplitPlanResult,
   'system.memory': decodeMemoryResult,
   'text.extract': decodeExtractResult,
   'text.layer': decodeTextLayerResult,
@@ -1314,6 +1384,24 @@ export function decodeFlattenableResult(
   };
 }
 
+export function decodeFontFaceDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontFaceDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['index', 'family', 'style', 'weight', 'italic', 'scripts', 'variable'], path);
+  return {
+    index: expectInteger(field(o, 'index', path), `${path}.index`),
+    family: expectString(field(o, 'family', path), `${path}.family`),
+    style: expectString(field(o, 'style', path), `${path}.style`),
+    weight: expectInteger(field(o, 'weight', path), `${path}.weight`),
+    italic: expectBoolean(field(o, 'italic', path), `${path}.italic`),
+    scripts: expectArray(field(o, 'scripts', path), `${path}.scripts`).map((item1, index1) => expectString(item1, `${`${path}.scripts`}[${index1}]`)),
+    variable: expectBoolean(field(o, 'variable', path), `${path}.variable`),
+  };
+}
+
 export function decodeFontRow(
   value: unknown,
   ctx: DecodeContext,
@@ -1328,6 +1416,33 @@ export function decodeFontRow(
     embedded: expectBoolean(field(o, 'embedded', path), `${path}.embedded`),
     subset: expectBoolean(field(o, 'subset', path), `${path}.subset`),
     pages: expectArray(field(o, 'pages', path), `${path}.pages`).map((item1, index1) => expectInteger(item1, `${`${path}.pages`}[${index1}]`)),
+  };
+}
+
+export function decodeFontValidateParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontValidateParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'data'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+  };
+}
+
+export function decodeFontValidateResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontValidateResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['format', 'faces', 'refused'], path);
+  return {
+    format: expectString(field(o, 'format', path), `${path}.format`),
+    faces: expectArray(field(o, 'faces', path), `${path}.faces`).map((item1, index1) => decodeFontFaceDto(item1, ctx, `${`${path}.faces`}[${index1}]`)),
+    refused: expectArray(field(o, 'refused', path), `${path}.refused`).map((item1, index1) => decodeRefusedFaceDto(item1, ctx, `${`${path}.refused`}[${index1}]`)),
   };
 }
 
@@ -1857,6 +1972,21 @@ export function decodeRedactionMarkDto(
   };
 }
 
+export function decodeRefusedFaceDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): RefusedFaceDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['index', 'family', 'style', 'reason'], path);
+  return {
+    index: expectInteger(field(o, 'index', path), `${path}.index`),
+    family: expectString(field(o, 'family', path), `${path}.family`),
+    style: expectString(field(o, 'style', path), `${path}.style`),
+    reason: expectString(field(o, 'reason', path), `${path}.reason`),
+  };
+}
+
 export function decodeRenderPageParams(
   value: unknown,
   ctx: DecodeContext,
@@ -2041,6 +2171,48 @@ export function decodeSecurityResult(
     pending: orNull(field(o, 'pending', path), `${path}.pending`, (v1, p1) => expectOneOf(v1, ['encrypt', 'remove'] as const, p1)),
     pending_method: orNull(field(o, 'pending_method', path), `${path}.pending_method`, (v1, p1) => expectOneOf(v1, ['none', 'rc4-40', 'rc4-128', 'aes-128', 'aes-256', 'unknown'] as const, p1)),
     has_signatures: expectBoolean(field(o, 'has_signatures', path), `${path}.has_signatures`),
+  };
+}
+
+export function decodeSplitPartDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SplitPartDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'first_page', 'page_count'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    first_page: expectInteger(field(o, 'first_page', path), `${path}.first_page`),
+    page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
+  };
+}
+
+export function decodeSplitPlanParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SplitPlanParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'mode', 'pages_per_file', 'ranges', 'name'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    mode: expectOneOf(field(o, 'mode', path), ['pages', 'ranges', 'bookmarks', 'size'] as const, `${path}.mode`),
+    pages_per_file: expectInteger(field(o, 'pages_per_file', path), `${path}.pages_per_file`),
+    ranges: expectArray(field(o, 'ranges', path), `${path}.ranges`).map((item1, index1) => expectArray(item1, `${`${path}.ranges`}[${index1}]`).map((item2, index2) => expectInteger(item2, `${`${`${path}.ranges`}[${index1}]`}[${index2}]`))),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+  };
+}
+
+export function decodeSplitPlanResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): SplitPlanResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['parts'], path);
+  return {
+    parts: expectArray(field(o, 'parts', path), `${path}.parts`).map((item1, index1) => decodeSplitPartDto(item1, ctx, `${`${path}.parts`}[${index1}]`)),
   };
 }
 

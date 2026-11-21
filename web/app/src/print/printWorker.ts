@@ -47,16 +47,18 @@ export async function runPrintWorker(
   }
   const body = objectOf(reply.result, 'reply.result');
   if (body.kind !== 'files' || !Array.isArray(body.files)) fail('the result is not a file list');
+  // Each page's bytes are the reply's buffer named by its $bin marker (W1.2 section 5). The reply
+  // carries one buffer per page, so every page is read, in order, not just the first.
+  const buffers = result.buffers ?? (result.buffer === undefined ? [] : [result.buffer]);
   return body.files.map((entry: unknown) => {
     const file = objectOf(entry, 'file');
     const data = objectOf(file.data, 'file.data');
-    // One binary value per reply (W1.2 section 5): every page must share the single buffer.
-    if (data.$bin !== 0 || result.buffer === undefined)
-      fail('a page image is not in the reply; only one binary value can cross');
+    const buffer = typeof data.$bin === 'number' ? buffers[data.$bin] : undefined;
+    if (buffer === undefined) fail(`page ${String(file.name)} is not in the reply`);
     return {
       name: String(file.name),
       mime: String(file.mime),
-      data: result.buffer,
+      data: buffer,
     };
   });
 }
