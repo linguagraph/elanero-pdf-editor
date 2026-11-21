@@ -5,7 +5,7 @@ import type { CallResult } from '../engine/loader';
 import type { WorkerClient } from '../engine/start';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
-import { tp } from '../i18n/t';
+import { t, tp } from '../i18n/t';
 import type { ProbeState } from './probe';
 import { runCombine } from './run';
 import type { SourceItem } from './sources';
@@ -86,6 +86,22 @@ describe('runCombine with the probe', () => {
       status: 'rangeError',
       problem: { index: 0, kind: 'out_of_range', item: '9', count: 2 },
     });
+    expect(startWorker).not.toHaveBeenCalled();
+  });
+
+  it('refuses while a row is still counting, and starts no worker', async () => {
+    const { startWorker } = unusedWorker();
+    const probes = new Map<number, ProbeState>([
+      [1, { kind: 'counted', pages: 2, encrypted: false }],
+      [2, { kind: 'pending' }],
+    ]);
+    const outcome = await runCombine([item(1, 'a.pdf'), item(2, 'b.pdf')], {
+      store: store(),
+      startWorker,
+      probes,
+    });
+
+    expect(outcome).toEqual({ status: 'refused', message: t('combine.blocked.pending') });
     expect(startWorker).not.toHaveBeenCalled();
   });
 });

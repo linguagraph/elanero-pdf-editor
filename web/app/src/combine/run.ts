@@ -60,6 +60,9 @@ export function checkSources(
   if (locked > 0) return tp('combine.blocked.locked', locked);
   const unreadable = countOf(items, probes, 'unreadable');
   if (unreadable > 0) return tp('combine.blocked.unreadable', unreadable);
+  // A row still counting may turn out locked or unreadable: the job would fail with a generic
+  // message, so Combine waits for the count instead.
+  if (countOf(items, probes, 'pending') > 0) return t('combine.blocked.pending');
   return null;
 }
 

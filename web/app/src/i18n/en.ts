@@ -695,6 +695,7 @@ export const EN = {
     one: "Remove the file that can't be read to combine.",
     other: "Remove the {count} files that can't be read to combine.",
   },
+  'combine.blocked.pending': 'Wait for the page counts to finish, then combine.',
 
   // Print dialog (W6.5, W1.6 section 5).
   'print.title': 'Print',
