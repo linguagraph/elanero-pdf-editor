@@ -5,7 +5,7 @@ import { COMMANDS, REGISTRY } from '../commands/catalog';
 import { commandForEvent } from '../commands/shortcuts';
 import { commandDisabledReason, runCommand, type CommandHandlers } from '../commands/run';
 import type { CommandState } from '../commands/registry';
-import { copySelectedText, modelSelectedText, selectPageText, selectedText } from './copy';
+import { copySelectedText, readModelText, selectPageText, selectedText } from './copy';
 import { PageTextIndex } from './pageTextIndex';
 import { type TextLineLookup, domSelectionAreas } from './selection';
 import { decodeTextLayer, type TextLine } from './textLayer';
@@ -174,19 +174,21 @@ const MODEL_INDEX = new PageTextIndex({
 });
 const indexOf = (page: number) => (page === 0 ? MODEL_INDEX : undefined);
 
-describe('model selection copy (W5.4: a drag or Select All)', () => {
+describe('model selection read (W5.4: a drag or Select All)', () => {
   it('reads the model selection of two lines as "ab\\ncd"', () => {
     const selection = new TextSelection({ page: 0, index: 0 }, { page: 0, index: 5 });
-    expect(modelSelectedText(selection, indexOf)).toBe('ab\ncd');
+    expect(readModelText(selection, indexOf)).toEqual({ state: 'ready', value: 'ab\ncd' });
   });
 
-  it('gives null (the browser is read instead) with no selection, an empty one or an unready page', () => {
-    expect(modelSelectedText(null, indexOf)).toBeNull();
-    expect(
-      modelSelectedText(new TextSelection({ page: 0, index: 2 }, { page: 0, index: 2 }), indexOf),
-    ).toBeNull();
-    const selection = new TextSelection({ page: 0, index: 0 }, { page: 0, index: 5 });
-    expect(modelSelectedText(selection, () => undefined)).toBeNull();
+  it('is ready with an empty text for no selection or an empty one, whatever the index', () => {
+    expect(readModelText(null, () => undefined)).toEqual({ state: 'ready', value: '' });
+    const empty = new TextSelection({ page: 0, index: 2 }, { page: 0, index: 2 });
+    expect(readModelText(empty, () => undefined)).toEqual({ state: 'ready', value: '' });
+  });
+
+  it('is loading, naming the pages, when a covered page has no index yet', () => {
+    const selection = new TextSelection({ page: 0, index: 0 }, { page: 2, index: 1 });
+    expect(readModelText(selection, indexOf)).toEqual({ state: 'loading', pages: [1, 2] });
   });
 
   it('copies the model text when the browser has no selection', () => {
@@ -197,12 +199,12 @@ describe('model selection copy (W5.4: a drag or Select All)', () => {
       lookup,
       clipboard: { writeText },
       store: fakeStore(),
-      modelText: () => modelSelectedText(selection, indexOf),
+      model: () => readModelText(selection, indexOf),
     });
     expect(writeText).toHaveBeenCalledWith('ab\ncd');
   });
 
-  it('copies the browser selection when the model has none', () => {
+  it('copies the browser selection when the model is off (Hand)', () => {
     const page = mountPage(0, LINES_0);
     const writeText = vi.fn(() => Promise.resolve());
     copySelectedText({
@@ -210,14 +212,46 @@ describe('model selection copy (W5.4: a drag or Select All)', () => {
       lookup,
       clipboard: { writeText },
       store: fakeStore(),
-      modelText: () => modelSelectedText(null, indexOf),
+      model: () => ({ state: 'off' }),
     });
     expect(writeText).toHaveBeenCalledWith('ab');
   });
 
+  it('does not fall back to the browser when the model is ready and empty', () => {
+    const page = mountPage(0, LINES_0);
+    const writeText = vi.fn(() => Promise.resolve());
+    const store = fakeStore();
+    copySelectedText({
+      selection: select(textOf(page, 0), 0, textOf(page, 0), 2),
+      lookup,
+      clipboard: { writeText },
+      store,
+      model: () => ({ state: 'ready', value: '' }),
+    });
+    expect(writeText).not.toHaveBeenCalled();
+    expect(store.push).toHaveBeenCalledWith('info', EN['copy.nothingSelected']);
+  });
+
+  it('says the text is still loading and asks for the pages, without a clipboard call', () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    const store = fakeStore();
+    const loadPages = vi.fn(() => Promise.resolve());
+    copySelectedText({
+      selection: null,
+      lookup,
+      clipboard: { writeText },
+      store,
+      model: () => ({ state: 'loading', pages: [1] }),
+      loadPages,
+    });
+    expect(writeText).not.toHaveBeenCalled();
+    expect(loadPages).toHaveBeenCalledWith([1]);
+    expect(store.push).toHaveBeenCalledWith('info', EN['text.stillLoading']);
+  });
+
   it('Select All selects the whole page in the model, and Copy yields it', () => {
     const selection = TextSelection.ofPage(0, MODEL_INDEX.length);
-    expect(modelSelectedText(selection, indexOf)).toBe('ab\ncd');
+    expect(readModelText(selection, indexOf)).toEqual({ state: 'ready', value: 'ab\ncd' });
   });
 });
 

@@ -289,13 +289,14 @@ export function App({
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
     // Copy (Ctrl+C) copies the selection over the page text, as the desktop does (W5.4 S4): the
-    // model's (a drag or Select All), or the browser's when the model has none.
+    // model's (a drag or Select All), or the browser's under Hand.
     copy: () =>
       copySelectedText({
         selection: window.getSelection(),
         lookup: (page) => viewRef.current?.cachedLines(page),
         clipboard: navigator.clipboard,
-        modelText: () => viewRef.current?.selectedText() ?? null,
+        model: () => viewRef.current?.selectedText() ?? { state: 'off' },
+        loadPages: (pages) => viewRef.current?.loadTextPages(pages) ?? Promise.resolve(),
       }),
     // Ctrl+F: the search panel, on the left, with focus in its query box (also when it is open).
     find: () => {
@@ -574,7 +575,8 @@ export function App({
             }
             setMarkPagesOpen(true);
           },
-          // Mark Text (W4.12) marks the browser's selection on the view's pages; nothing is applied.
+          // Mark Text (W4.12) marks the text selection on the view's pages (the model's, or the
+          // browser's under Hand); nothing is applied.
           'mark-text': () => {
             const view = viewRef.current;
             if (redaction === null || view === null) {
@@ -583,6 +585,9 @@ export function App({
             }
             void markSelectedText({
               controller: redaction,
+              model: () => view.selectedAreas(),
+              clearModel: () => view.clearTextSelection(),
+              loadPages: (pages) => view.loadTextPages(pages),
               selection: window.getSelection(),
               lookup: (page) => view.cachedLines(page),
             });

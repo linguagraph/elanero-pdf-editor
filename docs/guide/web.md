@@ -131,6 +131,8 @@ is reloaded until you press it.
   break where each line ends and between pages. **Select All** (Ctrl+A, also in the Home tab) selects
   the text of the page at the top of the view. Copy says so when nothing is selected, and when the
   selection is too large to copy at once (about 50 MB of text). A scanned page has no text to copy.
+  Copy can also say that the text of a selected page is still loading: try again in a moment. With
+  **Hand** chosen, Copy and Select All use the browser's own selection instead.
 - **Keyboard shortcuts.** A few web keys work so far: **Ctrl+C** (Copy) and **Ctrl+A** (Select All), **Alt+Left** and **Alt+Right** go back and
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
@@ -205,8 +207,9 @@ is reloaded until you press it.
   every selected mark. A locked mark cannot be changed. **Delete** removes the selected marks.
   **Apply Selected** and **Apply All** burn the marks into the document after you confirm; Apply All
   includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
-- **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you have selected on the pages as
-  redaction marks: one mark per selected block of text, all in one undo step. It only marks. Nothing is
+- **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you selected with the Select tool
+  (a drag, or Select All) as redaction marks: one mark per page the selection covers, all in one undo
+  step. It only marks. Nothing is
   removed until you apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text
   selected, the command asks you to select some first. A mark keeps the selected text in its note until
   the mark is applied, and applying the marks removes that text from the file.

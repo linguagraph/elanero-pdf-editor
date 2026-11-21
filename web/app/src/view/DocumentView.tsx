@@ -46,7 +46,13 @@ import {
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
-import { modelSelectedText, selectPageText as selectPageTextLayer } from '../text/copy';
+import {
+  readModelIndexes,
+  readModelText,
+  selectPageText as selectPageTextLayer,
+} from '../text/copy';
+import { MODEL_OFF, type ModelRead, modelSelectionAreas } from '../text/selection';
+import type { PageArea } from '../text/textLayer';
 import { TextSelection } from '../text/textSelection';
 import { PageTextLayer } from '../text/PageTextLayer';
 import { useTextSelection } from '../text/useTextSelection';
@@ -67,7 +73,7 @@ import { RedactionBar } from '../redaction/RedactionBar';
 import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
-import { TextLayerCache } from '../text/textLayerCache';
+import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
 import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
@@ -125,10 +131,19 @@ export interface DocumentViewHandle {
   // Turns the redaction mark tool on or off, as the toolbar's Mark button does (W4.3a S7).
   setRedacting(on: boolean): void;
   // Selects the text of the page at the top of the view, for Select All (W5.4 S4): the model's
-  // selection of the whole page, or the browser's when the page has no index yet.
+  // selection of the whole page once its index has arrived. Under Hand, a DOM range over the page's
+  // text layer, which the browser's own selection then holds.
   selectPageText(): void;
-  // The text of the model's selection, or null when the model has none (Copy reads it first).
-  selectedText(): string | null;
+  // The text of the model's selection (Copy reads it first). `off` when the model is not in charge
+  // (the Hand tool), so the browser's selection is read instead.
+  selectedText(): ModelRead<string>;
+  // The areas of the model's selection, one per page (Mark Text). `off` as selectedText.
+  selectedAreas(): ModelRead<PageArea[]>;
+  // Clears the model's selection (Mark Text does so once it has marked the selection).
+  clearTextSelection(): void;
+  // Asks for the text indexes of these pages and resolves once they have been asked for (Mark Text
+  // waits on them; Copy only asks). At most MAX_TEXT_LAYERS pages are asked for.
+  loadTextPages(pages: readonly number[]): Promise<void>;
   // Scrolls so a rectangle on the page (in points) is in view, as the search panel does for a hit.
   revealRect(index: number, rect: PageRectPt): void;
 }
@@ -505,10 +520,38 @@ export function DocumentView({
   // tool takes over, a stale selection must not override the browser's native one.
   const modelSelection = useRef<TextSelection | null>(null);
   const selectingNow = useRef(false);
+  // The revisions of the pages the model's selection covers, as of the last render. A change to one
+  // of them (Undo, Redo, an edit) makes the selection's offsets stale, so the selection is dropped.
+  const coveredRevisions = useRef<Map<number, number> | null>(null);
   useEffect(() => {
     selectingNow.current = selecting;
     modelSelection.current = selecting ? textSelection.selection : null;
+    const sel = modelSelection.current;
+    if (sel === null || sel.isEmpty) {
+      coveredRevisions.current = null;
+      return;
+    }
+    const revisions = new Map<number, number>();
+    for (let page = sel.start.page; page <= sel.end.page; page += 1) {
+      revisions.set(page, scheduler.revisionOf(page));
+    }
+    coveredRevisions.current = revisions;
   });
+  useEffect(
+    () =>
+      scheduler.subscribeRevisions(() => {
+        const covered = coveredRevisions.current;
+        if (covered === null) return;
+        for (const [page, revision] of covered) {
+          if (scheduler.revisionOf(page) === revision) continue;
+          modelSelection.current = null;
+          coveredRevisions.current = null;
+          selectModel(null);
+          return;
+        }
+      }),
+    [scheduler, selectModel],
+  );
   // Leaving Select clears the model's selection, so it is neither drawn nor copied later.
   useEffect(() => {
     if (!selecting) selectModel(null);
@@ -846,22 +889,60 @@ export function DocumentView({
       setRedacting: chooseRedacting,
       selectPageText: () => {
         const page = topPage.current;
-        const index = textLayers.readyIndex(page, scheduler.revisionOf(page));
-        if (index === undefined) {
+        if (!selectingNow.current) {
+          // Under Hand the browser's own selection holds the page (the layer is not the model's).
           selectPageTextLayer(
             window.getSelection(),
             scrollRef.current?.querySelector(`[data-page="${page}"] .page-text-layer`) ?? null,
           );
           return;
         }
-        selectModel(TextSelection.ofPage(page, index.length));
+        const index = textLayers.readyIndex(page, scheduler.revisionOf(page));
+        if (index !== undefined) {
+          selectModel(TextSelection.ofPage(page, index.length));
+          return;
+        }
+        // The index is still loading: the whole page is selected once it arrives, if the user still
+        // has the Select tool on and the page is still at the top.
+        void textLayers.index(page, scheduler.revisionOf(page)).then(
+          (loaded) => {
+            if (selectingNow.current && topPage.current === page) {
+              selectModel(TextSelection.ofPage(page, loaded.length));
+            }
+          },
+          () => undefined,
+        );
       },
-      selectedText: () =>
+      selectedText: (): ModelRead<string> =>
         selectingNow.current
-          ? modelSelectedText(modelSelection.current, (page) =>
+          ? readModelText(modelSelection.current, (page) =>
               textLayers.readyIndex(page, scheduler.revisionOf(page)),
             )
-          : null,
+          : MODEL_OFF,
+      selectedAreas: (): ModelRead<PageArea[]> => {
+        if (!selectingNow.current) return MODEL_OFF;
+        const sel = modelSelection.current;
+        if (sel === null || sel.isEmpty) return { state: 'ready', value: [] };
+        const read = readModelIndexes(sel, (page) =>
+          textLayers.readyIndex(page, scheduler.revisionOf(page)),
+        );
+        if (read.state !== 'ready') return read;
+        return { state: 'ready', value: modelSelectionAreas(sel, read.value) };
+      },
+      clearTextSelection: () => {
+        modelSelection.current = null;
+        coveredRevisions.current = null;
+        selectModel(null);
+      },
+      loadTextPages: (pages) =>
+        Promise.all(
+          pages.slice(0, MAX_TEXT_LAYERS).map((page) =>
+            textLayers.index(page, scheduler.revisionOf(page)).then(
+              () => undefined,
+              () => undefined,
+            ),
+          ),
+        ).then(() => undefined),
     }),
     [
       scrollToPage,
@@ -1104,7 +1185,7 @@ export function DocumentView({
                         viewTool: tool,
                         markToolOn: redactionTools.state.active,
                       })}
-                      selection={tool === 'select' ? textSelection.selection : undefined}
+                      selection={selecting ? textSelection.selection : undefined}
                     />
                     {keys.some((key) => scheduler.isFailed(key)) ? (
                       <span className="doc-page-error">{t('view.renderFailed')}</span>

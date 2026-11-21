@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { domSelectionAreas, type TextLineLookup } from './selection';
-import { decodeTextLayer, type TextLine } from './textLayer';
+import { PageTextIndex } from './pageTextIndex';
+import { domSelectionAreas, modelSelectionAreas, type TextLineLookup } from './selection';
+import { decodeTextLayer, selectionAreas, type TextLine } from './textLayer';
+import { type PageIndexes, TextSelection } from './textSelection';
 
 // Page 0: "ab" and "cd" (the same layer as textLayer.test.ts). Page 1: "ef", one line.
 const LAYER_0 = {
@@ -173,5 +175,52 @@ describe('domSelectionAreas', () => {
     const [first] = LINES_0;
     const stale: TextLine[] = first === undefined ? [] : [{ ...first, text: 'xy' }];
     expect(domSelectionAreas(selection, (p) => (p === 0 ? stale : undefined))).toEqual([]);
+  });
+});
+
+// The same two layers as the model index (PageTextIndex), so the model's areas can be checked
+// against the DOM path's: a mark made from a drag must equal the one the browser's ranges gave.
+const INDEX_0 = new PageTextIndex({
+  text: 'ab\ncd',
+  lineRects: [],
+  charBoxes: [10, 20, 20, 30, 20, 20, 30, 30, 0, 0, 0, 0, 10, 40, 20, 52, 20, 40, 31, 52],
+  lineNumbers: [0, 0, 0, 1, 1],
+});
+const INDEX_1 = new PageTextIndex({
+  text: 'ef',
+  lineRects: [],
+  charBoxes: [100, 100, 110, 110, 110, 100, 120, 110],
+  lineNumbers: [0, 0],
+});
+const PAGES: PageIndexes = { get: (page) => (page === 0 ? INDEX_0 : INDEX_1) };
+
+describe('modelSelectionAreas (W5.4: the model selection as page areas)', () => {
+  it('gives the same area as the DOM path for a whole page', () => {
+    const [area] = modelSelectionAreas(TextSelection.ofPage(0, 5), PAGES);
+    expect(area).toEqual(selectionAreas(LINES_0, 0, 0, 5));
+    expect(area?.text).toBe('ab\ncd');
+  });
+
+  it('gives the same area as the DOM path for a partly selected page', () => {
+    const selection = new TextSelection({ page: 0, index: 1 }, { page: 0, index: 4 });
+    const [area] = modelSelectionAreas(selection, PAGES);
+    expect(area).toEqual(selectionAreas(LINES_0, 0, 1, 4));
+    expect(area?.text).toBe('b\nc');
+  });
+
+  it('gives one area per page across two pages, in page order', () => {
+    const selection = new TextSelection({ page: 0, index: 3 }, { page: 1, index: 1 });
+    const areas = modelSelectionAreas(selection, PAGES);
+    expect(areas.map((area) => [area.page, area.text])).toEqual([
+      [0, 'cd'],
+      [1, 'e'],
+    ]);
+    expect(areas[0]).toEqual(selectionAreas(LINES_0, 0, 3, 5));
+    expect(areas[1]).toEqual(selectionAreas(LINES_1, 1, 0, 1));
+  });
+
+  it('gives no area for a selection of boxless chars only', () => {
+    const selection = new TextSelection({ page: 0, index: 2 }, { page: 0, index: 3 });
+    expect(modelSelectionAreas(selection, PAGES)).toEqual([]);
   });
 });
