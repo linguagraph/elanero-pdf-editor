@@ -2,10 +2,28 @@
 // layer's spans (PageTextLayer): each span carries its line index (data-line), and its page element
 // carries the page (data-page). The DOM offsets become code-point offsets in the layer's text, so
 // the areas come from the same char boxes the engine reported, in visible page space.
-import { type PageArea, selectionAreas, type TextLine } from './textLayer';
+import {
+  type AreaQuad,
+  type AreaRect,
+  type PageArea,
+  selectionAreas,
+  type TextLine,
+} from './textLayer';
+import type { PageIndexes, TextSelection } from './textSelection';
 
 // The lines of a page as they are shown, or undefined when they have not arrived.
 export type TextLineLookup = (page: number) => readonly TextLine[] | undefined;
+
+// What the model says about a command's selection (W5.4). `off` means the model is not in charge
+// (the Hand tool, or no view), so the browser's selection is read. `loading` lists the covered pages
+// whose index has not arrived, so the command can ask for them. `ready` carries the value, which is
+// '' or [] when nothing is selected.
+export type ModelRead<T> =
+  | { readonly state: 'off' }
+  | { readonly state: 'loading'; readonly pages: readonly number[] }
+  | { readonly state: 'ready'; readonly value: T };
+
+export const MODEL_OFF: { readonly state: 'off' } = { state: 'off' };
 
 // A code-point span of one page's layer text: [start, end).
 interface Extent {
@@ -100,4 +118,41 @@ function domOffset(span: HTMLElement, node: Node, offset: number): number {
 // Counts code points, the engine's index unit (a surrogate pair is one char).
 function codePoints(text: string): number {
   return Array.from(text).length;
+}
+
+// The page areas of a model selection, one per page it covers with a box, in page order. Each
+// line's rect gives one quad, the page's rect is their union, and the text is the span's text (lines
+// joined by LINE_SEP), so a mark made from a drag equals the one the browser's ranges gave.
+export function modelSelectionAreas(selection: TextSelection, pages: PageIndexes): PageArea[] {
+  const areas: PageArea[] = [];
+  for (const span of selection.pageSpans(pages)) {
+    const index = pages.get(span.page);
+    const rects = index.rects(span.start, span.end);
+    if (rects.length === 0) continue;
+    areas.push({
+      page: span.page,
+      rect: rects.reduce(unionOf),
+      quads: rects.map(quadOf),
+      text: index.extract(span.start, span.end),
+    });
+  }
+  return areas;
+}
+
+function unionOf(a: AreaRect, b: AreaRect): AreaRect {
+  return {
+    x0: Math.min(a.x0, b.x0),
+    y0: Math.min(a.y0, b.y0),
+    x1: Math.max(a.x1, b.x1),
+    y1: Math.max(a.y1, b.y1),
+  };
+}
+
+function quadOf(rect: AreaRect): AreaQuad {
+  return {
+    ul: { x: rect.x0, y: rect.y0 },
+    ur: { x: rect.x1, y: rect.y0 },
+    ll: { x: rect.x0, y: rect.y1 },
+    lr: { x: rect.x1, y: rect.y1 },
+  };
 }

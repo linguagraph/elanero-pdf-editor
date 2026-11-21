@@ -133,11 +133,9 @@ test.describe('engine staged', () => {
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
-  // BLOCKED: the engine's text.layer reply carries two buffers, and the worker RPC allows one
-  // (web/app/src/engine/loader.ts: "a reply carries at most one buffer"), so the page's text lines
-  // never arrive and no text can be selected. Mark Text stays unrun until that is fixed; the flow
-  // is written here so it can be enabled then. The issue is to be opened by the coordinator.
-  test.fixme('mark text on a selection, apply, save: the saved file leaks nothing', async ({
+  // The leak test for Mark Text (AGENTS.md): text lines arrive (the text.layer reply is split into
+  // buffers), and the selection is a pointer drag over the line, which the model reads (W5.4).
+  test('mark text on a selection, apply, save: the saved file leaks nothing', async ({
     page,
     context,
   }, testInfo) => {
@@ -146,17 +144,17 @@ test.describe('engine staged', () => {
     await openPdf(page, 'sensitive.pdf', fixture('sensitive.pdf'));
     await openProtect(page);
 
-    // Select the email line and the SSN line, one Mark Text press each.
+    // Select the email line and the SSN line by a drag from the line's left edge to past its right
+    // edge (as text.spec.ts drags), one Mark Text press each.
     for (const text of ['Email: jane', 'SSN: 123']) {
       const line = page.locator('.page-text-line', { hasText: text }).first();
       await expect(line).toBeVisible();
-      await line.evaluate((element) => {
-        const selection = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      });
+      const box = await line.boundingBox();
+      if (box === null) throw new Error(`no box for the line ${text}`);
+      await page.mouse.move(box.x + 1, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width + 4, box.y + box.height / 2, { steps: 10 });
+      await page.mouse.up();
       await page.getByRole('button', { name: 'Mark Text', exact: true }).click();
     }
     await expect(redactBar(page).getByText('2 marked', { exact: true })).toBeVisible();

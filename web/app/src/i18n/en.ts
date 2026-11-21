@@ -483,6 +483,7 @@ export const EN = {
   'copy.tooLarge':
     'The selection is too large to copy at once (about 50 MB of text). Select fewer pages.',
   'copy.failed': 'The browser did not copy the text. Click the page and try again.',
+  'text.stillLoading': 'The text of the selected pages is still loading. Try again in a moment.',
   'redact.selectTextFirst': 'Select some text on a page first, then press Mark Text.',
   'redact.notReady': 'The document is not ready yet. Press Mark Text again in a moment.',
   'redact.markedText': {
