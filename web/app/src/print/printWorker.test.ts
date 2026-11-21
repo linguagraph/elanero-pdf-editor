@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
+import { CallError } from '../engine/errors';
 import type { WorkerClient } from '../engine/start';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
@@ -213,6 +214,41 @@ describe('runPrintWorker with partial notices', () => {
     await expect(runPrintWorker(worker, { dpi: 150, annotations: true }, DOC)).rejects.toThrow(
       'has no bytes',
     );
+  });
+
+  it('stops at the first bad partial: the worker is terminated and no later page is taken', async () => {
+    // As the real worker does, this one rejects its call once it is terminated, and delivers no
+    // notice after that. The first partial is out of order, so the job must stop there.
+    const delivered: Record<string, unknown>[] = [];
+    let terminated = false;
+    const terminate = vi.fn(() => {
+      terminated = true;
+    });
+    const notices: ReadonlyArray<readonly [Record<string, unknown>, ArrayBuffer?]> = [
+      [partial(1), pageBytes(1)],
+      [partial(0), pageBytes(2)],
+      [partial(1), pageBytes(3)],
+      [partial(2), pageBytes(4)],
+    ];
+    const worker: WorkerClient = {
+      call: async (_request, _buffers, onNotice) => {
+        for (const [notice, buffer] of notices) {
+          if (terminated) throw new CallError('the worker has been terminated');
+          delivered.push(notice);
+          onNotice?.(notice, buffer);
+        }
+        return { reply: replyWithPages(3) };
+      },
+      onStage: () => () => undefined,
+      terminate,
+    };
+
+    await expect(runPrintWorker(worker, { dpi: 150, annotations: true }, DOC)).rejects.toThrow(
+      'page 1 arrived out of order',
+    );
+    expect(terminate).toHaveBeenCalledTimes(1);
+    // Only the bad partial was delivered; the three after it never reached the handler.
+    expect(delivered).toHaveLength(1);
   });
 
   it('fails rather than print a short document when a partial was dropped', async () => {

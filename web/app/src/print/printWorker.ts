@@ -52,16 +52,24 @@ export async function runPrintWorker(
     method: 'job.run',
     params: { job: 'print_pages', args, document: { $bin: 0 } },
   });
-  const result = await worker.call(request, [document], (notice, buffer) => {
-    const percent = progressPercent(notice);
-    if (percent !== undefined) onProgress(percent);
-    if (notice.notice !== 'partial' || failure !== undefined) return;
-    try {
-      pages.push(partialPage(notice, buffer, pages.length));
-    } catch (error) {
-      failure = error;
-    }
-  });
+  const result = await worker
+    .call(request, [document], (notice, buffer) => {
+      const percent = progressPercent(notice);
+      if (percent !== undefined) onProgress(percent);
+      if (notice.notice !== 'partial' || failure !== undefined) return;
+      try {
+        pages.push(partialPage(notice, buffer, pages.length));
+      } catch (error) {
+        failure = error;
+        // The first bad partial ends the job, as a cancel does: the worker is terminated, so no
+        // further page renders. The call then rejects, and the catch below raises the failure.
+        worker.terminate();
+      }
+    })
+    .catch((error: unknown) => {
+      if (failure !== undefined) throw failure;
+      throw error;
+    });
   if (failure !== undefined) throw failure;
   const reply = objectOf(JSON.parse(result.reply) as unknown, 'reply');
   if (reply.ok !== true) {
