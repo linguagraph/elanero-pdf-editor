@@ -17,6 +17,7 @@ import { CombineDialog } from '../combine/CombineDialog';
 import { CompressDialog } from '../compress/CompressDialog';
 import { CommentsExportDialog } from '../commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from '../commentsImport/CommentsImportDialog';
+import { LinkConfirmDialog } from '../links/LinkConfirmDialog';
 import { ExportDialog } from '../export/ExportDialog';
 import { FlattenDialog } from '../flatten/FlattenDialog';
 import { runAxe } from '../test/axe';
@@ -237,6 +238,21 @@ describe('dialogs that open on an engine session (W8.5 S1)', () => {
 
   it('comments import dialog', async () => {
     render(<CommentsImportDialog isOpen onClose={() => undefined} engine={engine} handle="h1" />);
+    await expectAccessible();
+  });
+
+  it('link confirm dialog (W5.3)', async () => {
+    render(
+      <LinkConfirmDialog
+        target={{
+          action: 'confirm',
+          href: 'https://example.org/',
+          scheme: 'https:',
+          host: 'example.org',
+        }}
+        onClose={() => undefined}
+      />,
+    );
     await expectAccessible();
   });
 });

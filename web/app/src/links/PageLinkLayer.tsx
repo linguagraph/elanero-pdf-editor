@@ -24,12 +24,17 @@ export interface PageLinkLayerProps {
   readonly onFollow: (link: LinkDto) => void;
 }
 
-// The name a screen reader reads for a link: where it goes, not its visible text.
+// The name a screen reader reads for a link: where it goes, not its visible text. A web link names
+// its host and a mail link its address, so a long address does not fill the name.
 function nameOf(link: LinkDto, labels: readonly string[]): string {
   const action = classifyLink(link);
   if (action.action === 'goto')
     return t('links.goTo', { label: pageLabelFor(action.page, labels) });
-  return action.notice === 'noTarget' ? t('links.noTarget') : t('links.unsupported');
+  if (action.action === 'confirm')
+    return t('links.web', { address: action.scheme === 'mailto:' ? action.href : action.host });
+  if (action.notice === 'malformed') return t('links.invalid');
+  if (action.notice === 'noTarget') return t('links.noTarget');
+  return t('links.unsupported');
 }
 
 // The links read for one page at one revision.
@@ -95,7 +100,9 @@ export function PageLinkLayer({
         const title =
           target.action === 'goto'
             ? t('links.title.page', { label: pageLabelFor(target.page, labels) })
-            : undefined;
+            : target.action === 'confirm'
+              ? target.href
+              : undefined;
         return (
           <span
             key={index}
