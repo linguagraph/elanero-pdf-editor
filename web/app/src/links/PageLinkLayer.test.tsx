@@ -106,6 +106,21 @@ describe('PageLinkLayer', () => {
     ]);
   });
 
+  it('names a mail link by its address, without a long ?body= query', async () => {
+    const body = 'x'.repeat(400);
+    const mail: LinkDto = {
+      rect: { x0: 72, y0: 100, x1: 150, y1: 114 },
+      kind: 'uri',
+      page: null,
+      top: null,
+      uri: `mailto:a@example.org?subject=Hi&body=${body}`,
+    };
+    await render(cacheAt(1, [mail]));
+    const name = spans()[0]?.getAttribute('aria-label');
+    expect(name).toBe(t('links.web', { address: 'a@example.org' }));
+    expect(name).not.toContain('body');
+  });
+
   it('gives a page title on hover for a goto link only', async () => {
     await render(cacheAt(1), { labels: ['i', 'iv'] });
     expect(spans()[0]?.title).toBe(t('links.title.page', { label: 'iv' }));

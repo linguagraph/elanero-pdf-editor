@@ -24,6 +24,14 @@ export interface PageLinkLayerProps {
   readonly onFollow: (link: LinkDto) => void;
 }
 
+// The address of a mail link: the mailto path before any '?'. The ?subject= and ?body= query can run
+// to any length, so a screen reader does not read it out.
+function mailAddress(href: string): string {
+  const path = href.replace(/^mailto:/i, '');
+  const query = path.indexOf('?');
+  return query === -1 ? path : path.slice(0, query);
+}
+
 // The name a screen reader reads for a link: where it goes, not its visible text. A web link names
 // its host and a mail link its address, so a long address does not fill the name.
 function nameOf(link: LinkDto, labels: readonly string[]): string {
@@ -31,7 +39,9 @@ function nameOf(link: LinkDto, labels: readonly string[]): string {
   if (action.action === 'goto')
     return t('links.goTo', { label: pageLabelFor(action.page, labels) });
   if (action.action === 'confirm')
-    return t('links.web', { address: action.scheme === 'mailto:' ? action.href : action.host });
+    return t('links.web', {
+      address: action.scheme === 'mailto:' ? mailAddress(action.href) : action.host,
+    });
   if (action.notice === 'malformed') return t('links.invalid');
   if (action.notice === 'noTarget') return t('links.noTarget');
   return t('links.unsupported');
