@@ -69,7 +69,8 @@ Search works on text. A scanned page has no text until you run [OCR](ocr.md).
 ## Copy and select text
 
 With the **Select Tool** active (press **V**, or **Esc** to return to it), drag across text to
-select it. **Ctrl+C** copies the selection, and **Ctrl+A** selects everything on the page. Right-click
+select it. A press that starts off the text pans the page instead, as with the Hand tool.
+**Ctrl+C** copies the selection, and **Ctrl+A** selects everything on the page. Right-click
 selected text for **Copy** and **Translate…** (see [Translation](translation.md)).
 
 ## Attachments and layers

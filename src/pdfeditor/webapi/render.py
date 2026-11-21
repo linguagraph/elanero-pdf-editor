@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-from pdfeditor.core.layout import rotated_size, view_matrix
+from pdfeditor.core.layout import rotated_size, tile_device_rect, view_matrix
 from pdfeditor.engine.base import ColorMode, Document, RenderRequest, RenderResult
 from pdfeditor.model.geometry import Rect
 from pdfeditor.webapi import dto, limits
@@ -121,7 +121,8 @@ def _render_tile_locked(document: Document, params: dto.RenderTileParams) -> dto
         raise RpcFailure(INVALID_ARGS, "params.tile_x: outside the page", {"path": "params.tile_x"})
     if params.tile_y * TILE_PX >= page_px_h:
         raise RpcFailure(INVALID_ARGS, "params.tile_y: outside the page", {"path": "params.tile_y"})
-    x0, y0, x1, y1 = _tile_device_rect(page_px_w, page_px_h, params.tile_x, params.tile_y)
+    clipped = tile_device_rect(params.tile_x, params.tile_y, TILE_PX, page_px_w, page_px_h)
+    x0, y0, x1, y1 = (int(v) for v in (clipped.x0, clipped.y0, clipped.x1, clipped.y1))
     tile_w = x1 - x0
     tile_h = y1 - y0
     if tile_w * tile_h > limits.MAX_TILE_PIXELS:
@@ -144,16 +145,6 @@ def _render_tile_locked(document: Document, params: dto.RenderTileParams) -> dto
     return dto.PageImage(
         width=tile_w, height=tile_h, revision=page.revision, format=FORMAT_RGBA, pixels=pixels
     )
-
-
-def _tile_device_rect(
-    page_px_w: int, page_px_h: int, tile_x: int, tile_y: int
-) -> tuple[int, int, int, int]:
-    """The tile's device-pixel rectangle, clipped at the page image's edge. The grid is the one of
-    ``ui/view/tiles.tile_specs``: tile ``n`` covers ``[n * TILE_PX, (n + 1) * TILE_PX)``."""
-    x0 = tile_x * TILE_PX
-    y0 = tile_y * TILE_PX
-    return x0, y0, min(x0 + TILE_PX, page_px_w), min(y0 + TILE_PX, page_px_h)
 
 
 def _fit_rgba(packed: bytes, src_w: int, src_h: int, width: int, height: int) -> bytes:

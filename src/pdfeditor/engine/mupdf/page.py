@@ -59,12 +59,17 @@ class MuPage:
     def fz(self) -> pymupdf.Page:
         if self._fz_page is None:
             self._fz_page = self._doc.fz.load_page(self._index)
+        self._doc.touch_page(self)
         return self._fz_page
 
     def invalidate(self) -> None:
-        """Drop cached MuPDF objects after the page (or the whole document) changed."""
+        """Drop cached MuPDF objects after the page (or the whole document) changed.
+
+        The MuPage and its revision stay, so a caller holding it reloads on its next access.
+        """
         self._fz_page = None
         self._display_lists.clear()
+        self._doc._loaded.pop(self, None)
 
     # MuPDF reports text, search hits, links and annotations in *unrotated* page space, while
     # rendering and ``rect`` use the visible (rotated) space. The Page contract says everything is
@@ -84,6 +89,7 @@ class MuPage:
 
     def _display_list(self, annots: bool) -> pymupdf.DisplayList:
         rev = self.revision
+        self._doc.touch_page(self)
         cached = self._display_lists.get(annots)
         if cached is None or cached[0] != rev:
             cached = (rev, self.fz.get_displaylist(annots=annots))
@@ -200,7 +206,6 @@ class MuPage:
         return [self._vquad(q, m) for q in quads]
 
     def links(self) -> list[Link]:
-        m = self._vis_matrix()
         out: list[Link] = []
         for ln in self.fz.get_links():
             kind = _LINK_KINDS.get(ln.get("kind", 0), LinkKind.OTHER)
@@ -216,7 +221,9 @@ class MuPage:
                 )
             out.append(
                 Link(
-                    rect=self._vrect(ln["from"], m),
+                    # The "from" rect is already in visible space (the same as the text layer's
+                    # boxes); converting it again turned a rect on a rotated page into garbage.
+                    rect=cv.rect(ln["from"]),
                     kind=kind,
                     dest=dest,
                     uri=ln.get("uri", "") or "",

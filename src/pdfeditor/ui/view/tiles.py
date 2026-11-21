@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from PySide6.QtGui import QImage
 
-from pdfeditor.core.layout import rotated_size, view_matrix
+from pdfeditor.core.layout import rotated_size, tile_grid, view_matrix
 from pdfeditor.core.render_cache import THUMBNAIL_TILE, TileKey, quantize_scale
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.geometry import Matrix, Rect
@@ -40,26 +40,15 @@ def tile_specs(
     """Tiles at device ``scale`` needed to cover ``exposed`` (item coordinates)."""
     s_milli = quantize_scale(scale)
     s = s_milli / 1000
-    w, h = rotated_size(page_rect.width, page_rect.height, rotation)
-    full_px = Rect(0, 0, w * s, h * s)
     matrix = view_matrix(page_rect, rotation, s)
     inverse = matrix.inverted()
     rev = page_revision(session, index)
-    step = TILE_PX / s  # tile edge in points
-    x_first = max(0, int(exposed.x0 // step))
-    y_first = max(0, int(exposed.y0 // step))
-    x_last = int(min(exposed.x1, w - 1e-6) // step)
-    y_last = int(min(exposed.y1, h - 1e-6) // step)
     out: list[TileSpec] = []
-    for ty in range(y_first, y_last + 1):
-        for tx in range(x_first, x_last + 1):
-            px = Rect(tx * TILE_PX, ty * TILE_PX, (tx + 1) * TILE_PX, (ty + 1) * TILE_PX)
-            px = px.intersection(full_px)
-            if px.is_empty:
-                continue
-            key = TileKey(session.id, index, rev, s_milli, rotation, tx, ty, variant)
-            target = Rect(px.x0 / s, px.y0 / s, px.x1 / s, px.y1 / s)
-            out.append(TileSpec(key, matrix, px.transform(inverse), target))
+    for cell in tile_grid(page_rect, rotation, s_milli, exposed, TILE_PX):
+        key = TileKey(session.id, index, rev, s_milli, rotation, cell.tx, cell.ty, variant)
+        px = cell.device_rect
+        target = Rect(px.x0 / s, px.y0 / s, px.x1 / s, px.y1 / s)
+        out.append(TileSpec(key, matrix, px.transform(inverse), target))
     return out
 
 

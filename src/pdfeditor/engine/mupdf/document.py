@@ -10,6 +10,7 @@ import re
 import shutil
 import tempfile
 import uuid
+from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -186,6 +187,12 @@ def open_document(source: Path | bytes, password: str | PasswordCallback | None)
         raise OpenError(_DAMAGED_MESSAGE) from exc
 
 
+# Most pages with MuPDF objects (a fz page, display lists) loaded at once. Each loaded page holds
+# MuPDF memory until it is evicted, so scrolling through a large document stays bounded. The same
+# limit applies on desktop and web.
+PAGE_OBJECT_LIMIT = 64
+
+
 class MuDocument:
     def __init__(
         self,
@@ -212,6 +219,9 @@ class MuDocument:
         self.renamed: dict[str, str] = {}
         self._password = password
         self._pages: dict[int, MuPage] = {}
+        # Pages with loaded MuPDF objects, least recently used first. Touched and evicted only
+        # under the engine lock (see touch_page); MuPage.invalidate removes its own entry.
+        self._loaded: OrderedDict[MuPage, None] = OrderedDict()
         self._revisions: dict[int, int] = {}
         self._generation = 0  # bumped whenever the whole document is reloaded
         # Cached so page()/revision never call into MuPDF (they're used without the lock).
@@ -274,9 +284,30 @@ class MuDocument:
         self._sharing.reset()
         self._generation += 1
         self._page_count = int(self._fz.page_count)
-        for page in self._pages.values():
+        for page in [*self._pages.values(), *self._loaded]:
             page.invalidate()
+        self._loaded.clear()
         self._pages.clear()
+
+    def touch_page(self, page: MuPage) -> None:
+        """Mark ``page`` as the most recently used loaded page, and evict the oldest pages over
+        ``PAGE_OBJECT_LIMIT``.
+
+        Called from MuPage.fz and MuPage._display_list, which already call MuPDF, so the engine
+        lock is held: freeing a MuPDF object outside it can corrupt the heap. An evicted MuPage
+        stays valid; its objects reload on its next access.
+        """
+        loaded = self._loaded
+        loaded[page] = None
+        loaded.move_to_end(page)
+        while len(loaded) > PAGE_OBJECT_LIMIT:
+            oldest, _ = loaded.popitem(last=False)
+            oldest.invalidate()
+
+    @property
+    def loaded_page_count(self) -> int:
+        """Pages with MuPDF objects loaded right now (at most ``PAGE_OBJECT_LIMIT``)."""
+        return len(self._loaded)
 
     def _catalog_key(self, key: str) -> tuple[str, str]:
         result: tuple[str, str] = self._fz.xref_get_key(self._fz.pdf_catalog(), key)

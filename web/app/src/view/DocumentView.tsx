@@ -46,8 +46,10 @@ import {
 } from './layout';
 import { PageMarks } from '../search/PageMarks';
 import { marksOnPage, type SearchMarks } from '../search/search';
-import { selectPageText as selectPageTextLayer } from '../text/copy';
+import { modelSelectedText, selectPageText as selectPageTextLayer } from '../text/copy';
+import { TextSelection } from '../text/textSelection';
 import { PageTextLayer } from '../text/PageTextLayer';
+import { useTextSelection } from '../text/useTextSelection';
 import { textLayerPassive } from '../text/textLayerPassive';
 import { useHandPan } from './useHandPan';
 import type { ViewTool } from './viewTool';
@@ -70,6 +72,7 @@ import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { CachedCanvas } from './pixels';
+import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
 import { planPageRenders, tileRect, tilesInViewport } from './tiles';
 import { CanvasPill } from './CanvasPill';
@@ -121,8 +124,11 @@ export interface DocumentViewHandle {
   setCommentTool(tool: CommentToolId | null): void;
   // Turns the redaction mark tool on or off, as the toolbar's Mark button does (W4.3a S7).
   setRedacting(on: boolean): void;
-  // Selects the text of the page at the top of the view, for Select All (W5.4 S4).
+  // Selects the text of the page at the top of the view, for Select All (W5.4 S4): the model's
+  // selection of the whole page, or the browser's when the page has no index yet.
   selectPageText(): void;
+  // The text of the model's selection, or null when the model has none (Copy reads it first).
+  selectedText(): string | null;
   // Scrolls so a rectangle on the page (in points) is in view, as the search panel does for a hit.
   revealRect(index: number, rect: PageRectPt): void;
 }
@@ -477,8 +483,38 @@ export function DocumentView({
   );
   // The Hand tool's drag moves the scene one pixel per pixel dragged, so it scrolls by this ratio
   // above the scaled-space limit (W5.1a S4).
+  // The Select tool: a press on text selects it (W5.4 S3) and a press off text pans, as on the
+  // desktop. An armed gesture tool takes the drag instead (textLayerPassive), so neither happens.
+  const selecting =
+    tool === 'select' &&
+    !textLayerPassive({
+      commentTool,
+      viewTool: tool,
+      markToolOn: redactionTools.state.active,
+    });
+  const textSelection = useTextSelection({
+    lookup: textLayers,
+    revisionOf: (page) => scheduler.revisionOf(page),
+    zoom,
+    scroll: scrollRef,
+    enabled: selecting,
+  });
+  const selectModel = textSelection.select;
+  // The model's selection as of the last render, read by Copy (selectedText) outside the render. It
+  // counts only while the Select tool is on (`selecting`): once Hand or an armed comment or redaction
+  // tool takes over, a stale selection must not override the browser's native one.
+  const modelSelection = useRef<TextSelection | null>(null);
+  const selectingNow = useRef(false);
+  useEffect(() => {
+    selectingNow.current = selecting;
+    modelSelection.current = selecting ? textSelection.selection : null;
+  });
+  // Leaving Select clears the model's selection, so it is neither drawn nor copied later.
+  useEffect(() => {
+    if (!selecting) selectModel(null);
+  }, [selecting, selectModel]);
   const pan = useHandPan(
-    tool === 'hand',
+    tool === 'hand' || selecting,
     scrollPerScenePixel(layout.height, scroll.height || window.innerHeight),
   );
 
@@ -702,7 +738,7 @@ export function DocumentView({
     setScroll(viewportOf(element, layout.height));
   }, [layout]);
 
-  const devicePixelRatio = window.devicePixelRatio || 1;
+  const devicePixelRatio = useDevicePixelRatio();
   const scale = scaleMilli(zoom, devicePixelRatio);
   const range = visibleRange(layout.boxes, scroll.top, scroll.height);
   // Above the scroll-space limit the stage is scrolled by the scene top, so a page's offset in the
@@ -808,12 +844,24 @@ export function DocumentView({
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
       setCommentTool: chooseCommentTool,
       setRedacting: chooseRedacting,
-      selectPageText: () =>
-        selectPageTextLayer(
-          window.getSelection(),
-          scrollRef.current?.querySelector(`[data-page="${topPage.current}"] .page-text-layer`) ??
-            null,
-        ),
+      selectPageText: () => {
+        const page = topPage.current;
+        const index = textLayers.readyIndex(page, scheduler.revisionOf(page));
+        if (index === undefined) {
+          selectPageTextLayer(
+            window.getSelection(),
+            scrollRef.current?.querySelector(`[data-page="${page}"] .page-text-layer`) ?? null,
+          );
+          return;
+        }
+        selectModel(TextSelection.ofPage(page, index.length));
+      },
+      selectedText: () =>
+        selectingNow.current
+          ? modelSelectedText(modelSelection.current, (page) =>
+              textLayers.readyIndex(page, scheduler.revisionOf(page)),
+            )
+          : null,
     }),
     [
       scrollToPage,
@@ -828,6 +876,7 @@ export function DocumentView({
       chooseRedacting,
       changeLayout,
       chooseNight,
+      selectModel,
     ],
   );
 
@@ -922,7 +971,9 @@ export function DocumentView({
                 : null;
             setFocusedPage(page === null ? null : Number(page.dataset.page));
           }}
-          onPointerDown={pan.onPointerDown}
+          onPointerDown={(event) => {
+            if (!textSelection.startPress(event)) pan.onPointerDown(event);
+          }}
           onPointerMove={pan.onPointerMove}
           onPointerUp={pan.onPointerUp}
           onPointerCancel={pan.onPointerCancel}
@@ -1053,6 +1104,7 @@ export function DocumentView({
                         viewTool: tool,
                         markToolOn: redactionTools.state.active,
                       })}
+                      selection={tool === 'select' ? textSelection.selection : undefined}
                     />
                     {keys.some((key) => scheduler.isFailed(key)) ? (
                       <span className="doc-page-error">{t('view.renderFailed')}</span>

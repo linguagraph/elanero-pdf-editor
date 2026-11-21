@@ -4,8 +4,9 @@
 // are joined the same way. Nothing here changes the document.
 import { toasts, type ToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
-import { LINE_SEP } from './pageTextIndex';
+import { LINE_SEP, type PageTextIndex } from './pageTextIndex';
 import { domSelectionAreas, type TextLineLookup } from './selection';
+import type { TextSelection } from './textSelection';
 
 // The most text one copy takes (W1.4 section 10, decision D4): a larger selection is refused with a
 // message, never cut short, so the clipboard never gets part of what was selected.
@@ -18,6 +19,9 @@ export interface CopyDeps {
   readonly lookup: TextLineLookup;
   readonly clipboard: Pick<Clipboard, 'writeText'> | undefined;
   readonly store?: Pick<ToastStore, 'push'>;
+  // The text of the model's selection (modelSelectedText), or null when the model has none. A
+  // model selection wins over the browser's; the browser's is read only when the model has none.
+  readonly modelText?: () => string | null;
 }
 
 // The selected text, or '' when nothing selected has text. Each page's selected lines are joined by
@@ -28,11 +32,34 @@ export function selectedText(selection: Selection | null, lookup: TextLineLookup
     .join(LINE_SEP);
 }
 
+// The text of the model's selection, pages joined as the desktop joins them. Null when the model has
+// nothing to read: no selection, an empty one, or a covered page whose index has not arrived (the
+// caller then reads the browser's selection instead).
+export function modelSelectedText(
+  selection: TextSelection | null,
+  indexOf: (page: number) => PageTextIndex | undefined,
+): string | null {
+  if (selection === null || selection.isEmpty) return null;
+  const indexes = new Map<number, PageTextIndex>();
+  for (let page = selection.start.page; page <= selection.end.page; page += 1) {
+    const index = indexOf(page);
+    if (index === undefined) return null;
+    indexes.set(page, index);
+  }
+  return selection.text({
+    get: (page) => {
+      const index = indexes.get(page);
+      if (index === undefined) throw new Error(`no index for page ${page}`);
+      return index;
+    },
+  });
+}
+
 // Copies the selection to the clipboard. It runs synchronously up to the clipboard call, so the
 // browser still counts it as the user's keypress or click (Firefox and Safari require that).
 export function copySelectedText(deps: CopyDeps): void {
   const store = deps.store ?? toasts;
-  const text = selectedText(deps.selection, deps.lookup);
+  const text = deps.modelText?.() ?? selectedText(deps.selection, deps.lookup);
   if (text === '') {
     store.push('info', t('copy.nothingSelected'));
     return;

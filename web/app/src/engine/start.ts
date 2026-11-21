@@ -120,13 +120,19 @@ function startWorker(options: StartOptions): WorkerClient {
       return;
     }
     const waiter = pending.get(data.id);
-    if (waiter === undefined) return;
+    if (waiter === undefined) {
+      // A bitmap of a call that is no longer waiting has no owner, so it is released here.
+      if ('bitmap' in data) data.bitmap?.close();
+      return;
+    }
     pending.delete(data.id);
     if ('error' in data) {
       waiter.reject(toError(data.error));
     } else {
       const reply = data as ReplyMessage;
-      if (reply.buffers !== undefined) {
+      if (reply.bitmap !== undefined) {
+        waiter.resolve({ reply: reply.reply, buffer: reply.buffer, bitmap: reply.bitmap });
+      } else if (reply.buffers !== undefined) {
         const [first] = reply.buffers;
         waiter.resolve({
           reply: reply.reply,

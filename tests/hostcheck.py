@@ -1454,3 +1454,22 @@ def _comment_contents_pikepdf(data: bytes, comment: str, contents: str | None) -
             return
         assert len(targets) == 1, len(targets)
         assert str(targets[0].get("/Contents", "")) == contents
+
+
+# -- bookmarks (W5.2 S1) -------------------------------------------------------------------------
+
+
+@host_check("outline_pdfium")
+def _outline_pdfium(data: bytes, rows: list[list[Any]], password: str = "") -> None:
+    """The saved bookmark tree as ``[level, title, page index]`` rows, from pypdfium2."""
+    import pypdfium2 as pdfium
+
+    pd = pdfium.PdfDocument(data, password=password or None)
+    try:
+        found = []
+        for item in pd.get_toc():
+            dest = item.get_dest()
+            found.append([item.level + 1, item.get_title(), dest.get_index() if dest else -1])
+    finally:
+        pd.close()
+    assert found == rows, found

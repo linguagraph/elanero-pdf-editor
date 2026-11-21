@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EngineLoadError } from './errors';
 import type { EngineHandle, LoadOptions } from './loader';
 import { serveEngine, type WorkerScope } from './worker-server';
@@ -132,5 +132,127 @@ describe('serveEngine', () => {
       id: 3,
       error: { message: 'bad envelope' },
     });
+  });
+});
+
+// A stand-in for the browser's ImageData and createImageBitmap (W5.1b S5). Node has neither.
+class FakeImageData {
+  constructor(
+    readonly data: Uint8ClampedArray,
+    readonly width: number,
+    readonly height: number,
+  ) {}
+}
+
+function fakeBitmap() {
+  return { close: vi.fn(), width: 0, height: 0 };
+}
+
+function renderRequest(method: string): string {
+  return JSON.stringify({ v: 1, id: 7, method, params: {} });
+}
+
+function renderReply(width: number, height: number): string {
+  return JSON.stringify({
+    v: 1,
+    id: 7,
+    ok: true,
+    result: { width, height, revision: 3, format: 'rgba', pixels: { $bin: 0 } },
+    events: [],
+  });
+}
+
+describe('serveEngine render bitmaps (W5.1b S5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Starts a worker whose engine answers one reply, sends the request, and returns what was posted.
+  async function answerWith(reply: { reply: string; buffer?: ArrayBuffer }, method: string) {
+    const { scope, posted, send } = fakeScope();
+    serveEngine(scope, { load: async () => ({ dispatch: () => reply }) });
+    send({ kind: 'init', baseUrl: 'http://localhost/engine/' });
+    send({ id: 7, method: 'dispatch', request: renderRequest(method) });
+    await flush();
+    return posted[posted.length - 1];
+  }
+
+  it('sends a render.page reply as a bitmap, outside the RPC message, and transfers it', async () => {
+    const bitmap = fakeBitmap();
+    const createImageBitmap = vi.fn<(image: unknown, options: unknown) => Promise<unknown>>(
+      async () => bitmap,
+    );
+    vi.stubGlobal('ImageData', FakeImageData);
+    vi.stubGlobal('createImageBitmap', createImageBitmap);
+    const pixels = new Uint8ClampedArray([1, 2, 3, 4, 5, 6, 7, 8]).buffer;
+
+    const last = await answerWith({ reply: renderReply(2, 1), buffer: pixels }, 'render.page');
+
+    expect(createImageBitmap).toHaveBeenCalledWith(expect.any(FakeImageData), {
+      premultiplyAlpha: 'none',
+      colorSpaceConversion: 'none',
+    });
+    const image = createImageBitmap.mock.calls[0]?.[0] as unknown as FakeImageData;
+    expect([image.width, image.height]).toEqual([2, 1]);
+    const message = last?.message as {
+      id: number;
+      reply: string;
+      buffer: ArrayBuffer;
+      bitmap: unknown;
+    };
+    expect(message.id).toBe(7);
+    expect(message.bitmap).toBe(bitmap);
+    expect(message.buffer.byteLength).toBe(0);
+    expect(JSON.parse(message.reply).result).toMatchObject({
+      format: 'bitmap',
+      pixels: { $bin: 0 },
+    });
+    expect(last?.transfer).toEqual([bitmap]);
+  });
+
+  it('keeps the ArrayBuffer reply when the worker has no createImageBitmap', async () => {
+    vi.stubGlobal('ImageData', FakeImageData);
+    vi.stubGlobal('createImageBitmap', undefined);
+    const pixels = new Uint8ClampedArray([1, 2, 3, 4]).buffer;
+    const reply = renderReply(1, 1);
+
+    const last = await answerWith({ reply, buffer: pixels }, 'render.tile');
+
+    expect(last?.message).toEqual({ id: 7, reply, buffer: pixels });
+    expect(last?.transfer).toEqual([pixels]);
+  });
+
+  it('keeps the ArrayBuffer reply when the browser refuses the bitmap', async () => {
+    vi.stubGlobal('ImageData', FakeImageData);
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => {
+        throw new Error('refused');
+      }),
+    );
+    const pixels = new Uint8ClampedArray([1, 2, 3, 4]).buffer;
+    const reply = renderReply(1, 1);
+
+    const last = await answerWith({ reply, buffer: pixels }, 'render.page');
+
+    expect(last?.message).toEqual({ id: 7, reply, buffer: pixels });
+    expect(last?.transfer).toEqual([pixels]);
+  });
+
+  it('leaves other methods and stale-revision replies unchanged', async () => {
+    const createImageBitmap = vi.fn(async () => fakeBitmap());
+    vi.stubGlobal('ImageData', FakeImageData);
+    vi.stubGlobal('createImageBitmap', createImageBitmap);
+    const pixels = new Uint8ClampedArray([1, 2, 3, 4]).buffer;
+
+    const other = await answerWith({ reply: renderReply(1, 1), buffer: pixels }, 'session.info');
+    expect(other?.message).toEqual({ id: 7, reply: renderReply(1, 1), buffer: pixels });
+
+    // A stale revision answers with no pixels: nothing to draw, so the reply stays as it is.
+    const stale = renderReply(1, 1);
+    const empty = new ArrayBuffer(0);
+    const staleOut = await answerWith({ reply: stale, buffer: empty }, 'render.page');
+    expect(staleOut?.message).toEqual({ id: 7, reply: stale, buffer: empty });
+    expect(createImageBitmap).not.toHaveBeenCalled();
   });
 });

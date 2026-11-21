@@ -28,7 +28,7 @@ dependencies = [
     # Store build (services/store_updates.py). Foundation is what the Store projection returns.
     "winrt-runtime>=4.1.0; sys_platform == 'win32'",
     "winrt-Windows.Services.Store>=4.0; sys_platform == 'win32'",
-    "winrt-Windows.Foundation>=4.0; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=4!10.0.28000.2957; sys_platform == 'win32'",
     "winrt-Windows.Foundation.Collections>=4.0; sys_platform == 'win32'",
 ]
 
@@ -36,7 +36,7 @@ dependencies = [
 build = ["pyinstaller>=6.10"]
 # The user guide site (docs/guide, mkdocs.yml). Docs tooling only: never a runtime dependency.
 # Pinned: the docs workflow installs exactly these. Both are MIT.
-docs = ["mkdocs==1.6.1", "mkdocs-material==9.8.0"]
+docs = ["mkdocs==1.6.1", "mkdocs-material==9.8.1"]
 dev = [
     "pytest>=9.2.0,<9.3",  # 9.2 breaks pytest-benchmark 5.3 (Function._nodeid)
     "pytest-qt>=4.3",

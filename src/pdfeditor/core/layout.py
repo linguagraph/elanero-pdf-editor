@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from enum import Enum
 
 from pdfeditor.model.geometry import Matrix, Rect
@@ -19,6 +20,54 @@ class LayoutMode(Enum):
 
 def rotated_size(width: float, height: float, rotation: int) -> tuple[float, float]:
     return (height, width) if rotation % 180 else (width, height)
+
+
+@dataclass(frozen=True, slots=True)
+class TileCell:
+    tx: int
+    ty: int
+    device_rect: Rect  # clipped to the page's device size, in device pixels
+
+
+def tile_device_rect(tx: int, ty: int, tile_px: int, full_w: float, full_h: float) -> Rect:
+    """Device-pixel rectangle of tile ``(tx, ty)``, clipped to a ``full_w`` x ``full_h`` page.
+
+    Tile ``n`` covers ``[n * tile_px, (n + 1) * tile_px)``, so the grid is the same at every
+    scale. An edge tile is clipped; a tile past the page is empty (``is_empty``).
+    """
+    x0 = tx * tile_px
+    y0 = ty * tile_px
+    return Rect(x0, y0, x0 + tile_px, y0 + tile_px).intersection(Rect(0, 0, full_w, full_h))
+
+
+def tile_grid(
+    page_rect: Rect,
+    rotation: int,
+    scale_milli: int,
+    exposed: Rect,
+    tile_px: int,
+) -> list[TileCell]:
+    """Tiles of ``tile_px`` device pixels covering ``exposed`` (page item coordinates).
+
+    ``scale_milli`` is the quantized device scale (thousandths of a pixel per point). The
+    desktop uses 512 px tiles and the web 1024 px, so the tile edge is a parameter.
+    """
+    s = scale_milli / 1000
+    w, h = rotated_size(page_rect.width, page_rect.height, rotation)
+    full_w, full_h = w * s, h * s
+    step = tile_px / s  # tile edge in points
+    x_first = max(0, int(exposed.x0 // step))
+    y_first = max(0, int(exposed.y0 // step))
+    x_last = int(min(exposed.x1, w - 1e-6) // step)
+    y_last = int(min(exposed.y1, h - 1e-6) // step)
+    out: list[TileCell] = []
+    for ty in range(y_first, y_last + 1):
+        for tx in range(x_first, x_last + 1):
+            clipped = tile_device_rect(tx, ty, tile_px, full_w, full_h)
+            if clipped.is_empty:
+                continue
+            out.append(TileCell(tx, ty, clipped))
+    return out
 
 
 def view_matrix(page_rect: Rect, rotation: int, scale: float) -> Matrix:

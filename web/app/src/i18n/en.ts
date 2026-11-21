@@ -849,6 +849,18 @@ export const EN = {
   'attachments.size.mb': '{value} MB',
   'attachments.size.gb': '{value} GB',
 
+  // Layers side panel (W5.2, W7.9 S3): read-only list of the optional content layers. Toggling
+  // them is not built yet (W7.9 S4).
+  'layers.title': 'Layers',
+  'layers.list': 'Optional content layers',
+  'layers.empty': 'This document has no layers.',
+  'layers.loading': 'Loading layers…',
+  'layers.loadFailed': 'The layers could not be read. Try opening the file again.',
+  'layers.unnamed': 'Unnamed layer',
+  'layers.visible': 'Visible',
+  'layers.hidden': 'Hidden',
+  'layers.locked': 'Locked',
+
   // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
   'bookmarks.title': 'Bookmarks',
   'bookmarks.list': 'Document bookmarks',

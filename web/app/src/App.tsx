@@ -81,6 +81,7 @@ import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
 import { BookmarksPanel } from './bookmarks/BookmarksPanel';
 import { AttachmentsPanel } from './attachments/AttachmentsPanel';
+import { LayersPanel } from './layers/LayersPanel';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { OrganizerPanel } from './organizer/OrganizerPanel';
 import { type FindRequest, SearchPanel } from './search/SearchPanel';
@@ -287,12 +288,14 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
-    // Copy (Ctrl+C) copies the browser's selection over the page text, as the desktop does (W5.4 S4).
+    // Copy (Ctrl+C) copies the selection over the page text, as the desktop does (W5.4 S4): the
+    // model's (a drag or Select All), or the browser's when the model has none.
     copy: () =>
       copySelectedText({
         selection: window.getSelection(),
         lookup: (page) => viewRef.current?.cachedLines(page),
         clipboard: navigator.clipboard,
+        modelText: () => viewRef.current?.selectedText() ?? null,
       }),
     // Ctrl+F: the search panel, on the left, with focus in its query box (also when it is open).
     find: () => {
@@ -397,6 +400,14 @@ export function App({
       disabled: !documentShown,
       onAction: () => {
         togglePanel('attachments');
+      },
+    },
+    {
+      id: 'layers',
+      label: t('layers.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('layers');
       },
     },
     {
@@ -686,6 +697,13 @@ export function App({
             controlsId={documentShown ? 'app-panel-left' : undefined}
           />
           <RailButton
+            panel="layers"
+            label={t('layers.title')}
+            icon={RAIL_ICONS.layers}
+            disabled={!documentShown}
+            controlsId={documentShown ? 'app-panel-left' : undefined}
+          />
+          <RailButton
             panel="redactions"
             label={t('redactions.title')}
             icon={RAIL_ICONS.redactions}
@@ -746,6 +764,13 @@ export function App({
           activeId !== null &&
           session !== null ? (
           <AttachmentsPanel
+            key={activeId}
+            rpc={session.rpc}
+            handle={session.handle}
+            onClose={() => closePanel('left')}
+          />
+        ) : documentShown && leftPanelOpen === 'layers' && activeId !== null && session !== null ? (
+          <LayersPanel
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}

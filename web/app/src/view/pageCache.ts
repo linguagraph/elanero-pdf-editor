@@ -9,7 +9,22 @@ export const DEFAULT_CACHE_BYTES = 256 * 1024 * 1024;
 export interface CachedPage {
   readonly width: number;
   readonly height: number;
+  // The pixels of a page the worker sent as an ArrayBuffer. A page the worker drew into an
+  // ImageBitmap (W5.1b S5) carries an empty buffer here and the bitmap beside it.
   readonly pixels: ArrayBuffer;
+  readonly bitmap?: ImageBitmap;
+}
+
+// The bytes an entry takes in the budget. A bitmap is counted at its decoded size (4 bytes a
+// pixel), since the GPU copy is what the budget stands for, not the empty buffer beside it.
+function sizeOf(item: CachedPage): number {
+  return item.bitmap === undefined ? item.pixels.byteLength : item.width * item.height * 4;
+}
+
+// Releases a bitmap the cache holds. Closing frees its GPU memory at once, so it must happen only
+// when the cache drops the entry, never while a canvas may still draw it.
+function closeBitmap(item: CachedPage): void {
+  item.bitmap?.close();
 }
 
 export interface PageKey {
@@ -65,16 +80,21 @@ export class PageCache {
   // Stores a page and evicts the least recently used unpinned pages until the budget holds. A page
   // larger than the whole budget is not kept at all, since keeping it would evict everything else.
   set(key: string, item: CachedPage): void {
-    const size = item.pixels.byteLength;
+    const size = sizeOf(item);
     this.delete(key);
-    if (size > this.maxBytes) return;
+    if (size > this.maxBytes) {
+      // Not kept, so nothing else will release its bitmap.
+      closeBitmap(item);
+      return;
+    }
     this.items.set(key, item);
     this.bytes += size;
     for (const [oldKey, old] of this.items) {
       if (this.bytes <= this.maxBytes) break;
       if (oldKey === key || this.pinned.has(oldKey)) continue;
       this.items.delete(oldKey);
-      this.bytes -= old.pixels.byteLength;
+      this.bytes -= sizeOf(old);
+      closeBitmap(old);
     }
   }
 
@@ -82,10 +102,12 @@ export class PageCache {
     const item = this.items.get(key);
     if (item === undefined) return;
     this.items.delete(key);
-    this.bytes -= item.pixels.byteLength;
+    this.bytes -= sizeOf(item);
+    closeBitmap(item);
   }
 
   clear(): void {
+    for (const item of this.items.values()) closeBitmap(item);
     this.items.clear();
     this.bytes = 0;
   }

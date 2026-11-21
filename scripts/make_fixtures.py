@@ -260,6 +260,66 @@ def rotated_pages() -> None:
     _save(doc, "rotated_pages.pdf")
 
 
+def _anchor(page: Any, text: str, y: float) -> Any:
+    """Writes the anchor text and returns its rect, taken while the page is still unrotated."""
+    page.insert_text((72, y), text, fontsize=14)
+    return page.search_for(text)[0]
+
+
+def links_rotated() -> None:
+    """Links on a rotated page and on a plain one (W5.3 S1, the web link list).
+
+    Page 0 is rotated 90 and holds a GOTO link (to page 1), a URI link, and a link with an empty
+    destination (MuPDF reports it as a named action, so the web sees it as unsupported). Page 1
+    holds a javascript: URI and a Launch action. Every link rect is taken from its anchor text
+    before the rotation, so the rect and the text layer describe the same visible-space box,
+    which the test checks.
+    """
+    doc = pymupdf.open()
+    doc.new_page(width=A4.width, height=A4.height)
+    doc.new_page(width=A4.width, height=A4.height)
+    first, second = doc[0], doc[1]
+    first.insert_link(
+        {
+            "kind": pymupdf.LINK_GOTO,
+            "from": _anchor(first, "Go to page 2", 100),
+            "page": 1,
+            "to": pymupdf.Point(0, 50),
+        }
+    )
+    first.insert_link(
+        {
+            "kind": pymupdf.LINK_URI,
+            "from": _anchor(first, "Visit example.org", 160),
+            "uri": "https://example.org/",
+        }
+    )
+    first.insert_link(
+        {
+            "kind": pymupdf.LINK_GOTO,
+            "from": _anchor(first, "Unnamed destination", 220),
+            "page": -1,  # no page and no name: MuPDF reports it as a named action
+            "to": pymupdf.Point(0, 0),
+        }
+    )
+    first.set_rotation(90)
+    second.insert_link(
+        {
+            "kind": pymupdf.LINK_URI,
+            "from": _anchor(second, "Script link", 100),
+            "uri": "javascript:alert(1)",
+        }
+    )
+    second.insert_link(
+        {
+            "kind": pymupdf.LINK_LAUNCH,
+            "from": _anchor(second, "Launch link", 160),
+            "file": "tool.exe",
+        }
+    )
+    _save(doc, "links_rotated.pdf")
+
+
 def cjk_text() -> None:
     doc = pymupdf.open()
     page = doc.new_page(width=A4.width, height=A4.height)
@@ -1243,6 +1303,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "encrypted": encrypted,
     "hybrid_xref": hybrid_xref,
     "rotated_pages": rotated_pages,
+    "links_rotated": links_rotated,
     "cjk_text": cjk_text,
     "subset_fonts": subset_fonts,
     "licensed_fonts": licensed_fonts,
