@@ -11,8 +11,9 @@ import pytest
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model.platform import PlatformCapabilities, configure, current
 
-# The web package excludes the desktop font catalog (scripts/web_package.py); the two tests that
-# read it are desktop_only, so the web run never calls the name this guard leaves unbound.
+# The web package ships the font catalog (scripts/web_package.py), but its folders are empty there;
+# the two tests that read the system folders are desktop_only, so the web run never calls the name
+# this guard leaves unbound.
 with contextlib.suppress(ImportError):
     from pdfeditor.services.fonts import system_font_dirs
 

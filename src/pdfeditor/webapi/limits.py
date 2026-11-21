@@ -37,6 +37,11 @@ MAX_PREPARED_JOBS = 1  # prepared jobs (begun or waiting for their run) per engi
 # oldest snapshots are dropped and the undo history shortens (W2.3); nothing is refused.
 SNAPSHOT_BUDGET_BYTES = 512 * 1024 * 1024
 
+# Uploaded fonts (W6.9 slice 1). The bytes are held in the worker's heap more than once (the
+# buffer, the Python bytes, MuPDF's copy at embed time), so one file is bounded well below the
+# 1 GiB document ceiling. 50 MiB takes every single-weight font in common use, CJK included.
+MAX_FONT_BYTES = 50 * 1024**2
+
 # The engine heap (W1.1 section 7): the front end warns once the wasm linear memory passes this.
 # Linear memory only grows, so this is a high-water mark, and a warning is never an error.
 HEAP_WARN_BYTES = 1536 * 1024**2  # 1.5 GiB

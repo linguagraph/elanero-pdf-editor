@@ -11,8 +11,9 @@ import pytest
 from pdfeditor.core.jobs import Cancelled, CancelToken
 from pdfeditor.model.fonts import FontRef
 
-# The web package excludes the desktop font catalog (scripts/web_package.py), so the import is
-# guarded. Every test here is desktop_only, so the web run never reaches a name it did not bind.
+# The catalog ships in the web package (W6.9: its fontTools imports are lazy), but the desktop font
+# folders are empty there. Every test here is desktop_only, so the web run never reaches a name it
+# did not bind; the guard only keeps this module importable under Pyodide.
 with contextlib.suppress(ImportError):
     from pdfeditor.services import fonts as fonts_service
     from pdfeditor.services.fonts import (
