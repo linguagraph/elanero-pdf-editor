@@ -6,6 +6,7 @@
 // comments are drawn into the page image by the engine.
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type Ref,
   useCallback,
   useEffect,
@@ -56,9 +57,14 @@ import type { PageArea } from '../text/textLayer';
 import { TextSelection } from '../text/textSelection';
 import { PageTextLayer } from '../text/PageTextLayer';
 import { useTextSelection } from '../text/useTextSelection';
-import { textLayerPassive } from '../text/textLayerPassive';
+import { linksActive, textLayerPassive } from '../text/textLayerPassive';
+import { LinkCache } from '../links/linkCache';
+import { PageLinkLayer } from '../links/PageLinkLayer';
+import { classifyLink, type LinkNotice } from '../links/linkTarget';
+import { isTap, type LinkPress } from '../links/linkTap';
+import type { LinkDto } from '../rpc/generated';
 import { useHandPan } from './useHandPan';
-import type { ViewTool } from './viewTool';
+import { isShapeTool, type ViewTool } from './viewTool';
 import { CropLayer } from '../crop/CropLayer';
 import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
@@ -77,12 +83,14 @@ import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
 import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
+import { ShapeLayer } from '../edit/ShapeLayer';
+import { addShape, noteShapeTooSmall, type ShapeSpec, SHAPE_KIND } from '../edit/shapes';
 import { CachedCanvas } from './pixels';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
 import { planPageRenders, tileRect, tilesInViewport } from './tiles';
 import { CanvasPill } from './CanvasPill';
-import { DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
+import { CSS_PX_PER_POINT, DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
 import type { ZoomRequest } from './zoomBox';
 import {
   anchoredScroll,
@@ -109,7 +117,8 @@ export { MAX_RENDER_ATTEMPTS } from './renderScheduler';
 // the view through here (W4.2a S6), as the canvas pill does from inside.
 export interface DocumentViewHandle {
   // Scrolls so the page's top edge is at the top of the viewport. Out-of-range indexes do nothing.
-  scrollToPage(index: number): void;
+  // A link's target passes its height in points (top), which lands that point at the top instead.
+  scrollToPage(index: number, top?: number): void;
   // A zoom request (a fit mode or a percentage), or one step of the zoom in either direction.
   zoom(request: ZoomRequest | { readonly step: -1 | 1 }): void;
   // Moves to the next or the previous page, clamped to the document.
@@ -182,15 +191,52 @@ export interface DocumentViewProps {
   readonly redaction?: RedactionController;
   // The view tool (W4.10): Hand pans with a drag. The app keeps it per tab; Select when absent.
   readonly tool?: ViewTool;
+  // The tab this view shows (W6.7b). A shape add that settles later hands it back with the reset
+  // to Select, so the reset lands on the tab that drew the shape, not on the tab now shown.
+  readonly tabId?: number | null;
   // Called when the view itself asks for another tool: a comment or mark tool chosen here sets it
-  // back to Select, so the two never read as on together.
-  readonly onToolChange?: (tool: ViewTool) => void;
+  // back to Select, so the two never read as on together. A shape add passes the tab it drew on.
+  readonly onToolChange?: (tool: ViewTool, tabId?: number | null) => void;
   // The crop box tool (W4.11 S5) reports the box it drew, as margins on its page (1-based), or null
   // when Esc ends the tool with no box. The app ends the tool and reopens the crop dialog.
   readonly onCropBoxEnd?: (drawn: DrawnCrop | null) => void;
   // Reports which comment tool is on (or null), so the ribbon shows it pressed (W4.3a S7). Called
   // on mount too, so a remounted view reports its reset state.
   readonly onCommentToolChange?: (tool: CommentToolId | null) => void;
+  // A link jumped to a page of this document (W5.3). The app records the jump in the tab's history
+  // and scrolls; without it the view scrolls itself and records nothing (tests).
+  readonly onLinkGoTo?: (page: number, top: number | null) => void;
+}
+
+// How long a notice from a link that did nothing stays in the view (W5.3).
+const LINK_NOTICE_MS = 8000;
+
+const LINK_NOTICE_KEYS = {
+  noTarget: 'links.notice.noTarget',
+  unsupported: 'links.notice.unsupported',
+} as const;
+
+// The link under a press, with its page and its index in that page's sorted list (W5.3). Null when
+// the press is not a primary press on a link.
+function linkPressAt(event: ReactPointerEvent<HTMLElement>): LinkPress | null {
+  if (event.button !== 0 || !(event.target instanceof Element)) return null;
+  const link = event.target.closest<HTMLElement>('.page-link');
+  const pageElement = link?.closest<HTMLElement>('.doc-page') ?? null;
+  if (link === null || pageElement === null) return null;
+  return {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    page: Number(pageElement.dataset.page),
+    index: Number(link.dataset.link),
+  };
+}
+
+// The scroll offset, in CSS pixels, of a point a link names on its page: its height in points,
+// kept on the page. No point gives no offset.
+function targetOffsetPx(topPt: number | undefined, heightPt: number, zoom: number): number {
+  if (topPt === undefined) return 0;
+  return Math.min(heightPt, Math.max(0, topPt)) * zoom * CSS_PX_PER_POINT;
 }
 
 // A button, link or ARIA widget inside the scroller keeps its own Space and arrow keys (W5.1a S4 fix).
@@ -258,9 +304,11 @@ export function DocumentView({
   startWorker,
   redaction,
   tool = 'select',
+  tabId = null,
   onToolChange,
   onCropBoxEnd,
   onCommentToolChange,
+  onLinkGoTo,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
   // The page labels, from the same session.pages reply as the sizes (W5.3).
@@ -289,6 +337,8 @@ export function DocumentView({
   const zoomRef = useRef(manualZoom);
   // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
   const pageFieldRef = useRef<HTMLInputElement>(null);
+  // A shape add in flight (W6.7b): a second gesture or Enter is ignored until it settles.
+  const shapeInFlight = useRef(false);
   const wheelPending = useRef(0);
   // The fraction of a pixel the scaled scroll still owes the spacer (one scroller per view), carried
   // from one wheel or key event to the next so small deltas are not lost (W5.1a S4 fix).
@@ -418,6 +468,16 @@ export function DocumentView({
   }, [tool, onCropBoxEnd]);
   // The text layers of this document, one per page and revision (W5.4).
   const textLayers = useMemo(() => new TextLayerCache(rpc, handle), [rpc, handle]);
+  // The links of each page (W5.3), one cache per document, like the text layers. A press on a link
+  // is kept from its pointer-down until the release decides whether it was a tap.
+  const linkLists = useMemo(() => new LinkCache(rpc, handle), [rpc, handle]);
+  const [linkNotice, setLinkNotice] = useState<{ readonly notice: LinkNotice } | null>(null);
+  const linkPress = useRef<LinkPress | null>(null);
+  useEffect(() => {
+    if (linkNotice === null) return;
+    const id = window.setTimeout(() => setLinkNotice(null), LINK_NOTICE_MS);
+    return () => window.clearTimeout(id);
+  }, [linkNotice]);
 
   useEffect(() => {
     let active = true;
@@ -641,14 +701,18 @@ export function DocumentView({
 
   // Scrolls so the page's top edge is at the top of the viewport; shared by the handle and the pill.
   const scrollToPage = useCallback(
-    (index: number) => {
+    (index: number, topPt?: number) => {
       const element = scrollRef.current;
+      // A link's target lands below the page's top by its height in points (W5.3); no target lands
+      // at the top, as before.
+      const offset = targetOffsetPx(topPt, sizes?.[index]?.height ?? 0, zoom);
       if (viewLayout === 'single') {
         // One page is shown, so the jump changes the page and lands at that page's top. The place is
         // set to where it lands, so the restore after the new page is laid out agrees with it.
         const scene = singlePageScene(sizes ?? [], zoom, index);
-        const top = scrollTopForPage(scene.boxes, 0, zoom);
-        if (element === null || top === null) return;
+        const pageTop = scrollTopForPage(scene.boxes, 0, zoom);
+        if (element === null || pageTop === null) return;
+        const top = pageTop + offset;
         readingPlace.current = viewAnchor(scene.boxes, top);
         setSinglePage(index);
         scrollToScene(element, top, scene.height);
@@ -657,14 +721,43 @@ export function DocumentView({
       }
       // Spreads aim at the page's own top like the continuous column (the desktop's go_to_page rule),
       // so one function serves both layouts here.
-      const top = scrollTopForPage(layout.boxes, index, zoom);
-      if (element === null || top === null) return;
-      scrollToScene(element, top, layout.height);
+      const pageTop = scrollTopForPage(layout.boxes, index, zoom);
+      if (element === null || pageTop === null) return;
+      scrollToScene(element, pageTop + offset, layout.height);
       capturePlace();
       setScroll(viewportOf(element, layout.height));
     },
     [layout, sizes, zoom, viewLayout, capturePlace],
   );
+
+  // Follows a link (W5.3): a jump to a page of this document, or a notice when it is not one. The
+  // notice replaces an earlier one, and any link action clears it.
+  const followLink = useCallback(
+    (link: LinkDto) => {
+      const action = classifyLink(link);
+      if (action.action === 'notice') {
+        setLinkNotice({ notice: action.notice });
+        return;
+      }
+      setLinkNotice(null);
+      if (onLinkGoTo !== undefined) onLinkGoTo(action.page, action.top);
+      else scrollToPage(action.page, action.top ?? undefined);
+    },
+    [onLinkGoTo, scrollToPage],
+  );
+
+  // The tap on a link: the release follows the link the press started on, at the list's index.
+  const followPress = (press: LinkPress) => {
+    const link = linkLists.ready(press.page, scheduler.revisionOf(press.page))?.[press.index];
+    if (link !== undefined) followLink(link);
+  };
+
+  // Whether the links take presses now (W5.3): only under Select and Hand, with no gesture tool on.
+  const linkLayerOn = linksActive({
+    commentTool,
+    viewTool: tool,
+    markToolOn: redactionTools.state.active,
+  });
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -973,6 +1066,24 @@ export function DocumentView({
   const place = (page: number, rect: PageRect, text: string) => {
     if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
   };
+  // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
+  // shape per choice). A failure keeps the tool on so the user can retry. While an add is in
+  // flight, a further gesture or Enter does nothing, so a double Enter adds one shape.
+  const shapeDeps = { rpc, handle, cache: editObjects, scheduler };
+  const drawShape = (page: number, spec: ShapeSpec | null) => {
+    if (shapeInFlight.current) return;
+    if (spec === null) {
+      noteShapeTooSmall();
+      return;
+    }
+    // The tab is read now, before the add starts: the user may switch tabs while it is in flight.
+    const drawnOn = tabId;
+    shapeInFlight.current = true;
+    void addShape(shapeDeps, page, spec).then((added) => {
+      shapeInFlight.current = false;
+      if (added) onToolChange?.('select', drawnOn);
+    });
+  };
 
   return (
     <section
@@ -1032,6 +1143,11 @@ export function DocumentView({
           onApply={() => void redactionTools.controller.apply(null)}
         />
       </div>
+      {linkNotice === null ? null : (
+        <p role="status" className="doc-link-notice">
+          {t(LINK_NOTICE_KEYS[linkNotice.notice])}
+        </p>
+      )}
       {sizes === null ? (
         <p role="status" className="doc-view-status">
           {t('view.loading')}
@@ -1053,11 +1169,23 @@ export function DocumentView({
             setFocusedPage(page === null ? null : Number(page.dataset.page));
           }}
           onPointerDown={(event) => {
+            linkPress.current = linkPressAt(event);
             if (!textSelection.startPress(event)) pan.onPointerDown(event);
           }}
           onPointerMove={pan.onPointerMove}
-          onPointerUp={pan.onPointerUp}
-          onPointerCancel={pan.onPointerCancel}
+          onPointerUp={(event) => {
+            pan.onPointerUp(event);
+            // The pan's capture sends the click to the scroller, so a link is followed here: a tap
+            // on the press's link, not a drag (linkTap.ts).
+            const press = linkPress.current;
+            linkPress.current = null;
+            if (press !== null && isTap(press, event.pointerId, event.clientX, event.clientY))
+              followPress(press);
+          }}
+          onPointerCancel={(event) => {
+            linkPress.current = null;
+            pan.onPointerCancel(event);
+          }}
           onLostPointerCapture={pan.onLostPointerCapture}
         >
           <div
@@ -1152,6 +1280,17 @@ export function DocumentView({
                         onCommit={commitChange}
                       />
                     ) : null}
+                    {isShapeTool(tool) && sizes !== null ? (
+                      <ShapeLayer
+                        kind={SHAPE_KIND[tool]}
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        focusable={box.index === currentPage}
+                        onDraw={(spec) => drawShape(box.index, spec)}
+                        onStop={() => onToolChange?.('select')}
+                      />
+                    ) : null}
                     {tool === 'cropBox' && sizes !== null ? (
                       <CropLayer
                         zoom={zoom}
@@ -1187,6 +1326,16 @@ export function DocumentView({
                       })}
                       selection={selecting ? textSelection.selection : undefined}
                     />
+                    {linkLayerOn && sizes !== null ? (
+                      <PageLinkLayer
+                        cache={linkLists}
+                        page={box.index}
+                        revision={scheduler.revisionOf(box.index)}
+                        zoom={zoom}
+                        labels={labels}
+                        onFollow={followLink}
+                      />
+                    ) : null}
                     {keys.some((key) => scheduler.isFailed(key)) ? (
                       <span className="doc-page-error">{t('view.renderFailed')}</span>
                     ) : null}

@@ -64,6 +64,7 @@ from pdfeditor.model.annotations import (
     AnnotRef,
     ReviewState,
 )
+from pdfeditor.model.link_scheme import is_allowed_link, link_scheme
 from pdfeditor.model.objects import ObjectType
 from pdfeditor.model.outline import Link, LinkKind
 from pdfeditor.services.assembly import SUPPORTED_SUFFIXES
@@ -1341,6 +1342,12 @@ class MainWindow(QMainWindow):
 
     def open_external_link(self, link: Link) -> None:
         if link.kind is LinkKind.URI and link.uri:
+            # Only the web and mail schemes may open, as in the web app (W5.3). Other schemes are
+            # refused without asking, so a PDF cannot offer to run a file or a script.
+            if not is_allowed_link(link.uri):
+                scheme = link_scheme(link.uri) or "unknown"
+                self.notify(f'This link was not opened: "{scheme[:20]}" links are blocked.')
+                return
             answer = QMessageBox.question(
                 self, "Open Link", f"The document is trying to open:\n\n{link.uri}\n\nAllow it?"
             )

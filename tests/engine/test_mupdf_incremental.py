@@ -47,6 +47,8 @@ def _byte_range(data: bytes) -> bytes:
     return match.group(0)
 
 
+# The web build runs PyMuPDF 1.28.2 under Pyodide, so this desktop pin check is not for it.
+@pytest.mark.desktop_only
 def test_version_is_the_locked_pymupdf() -> None:
     assert pymupdf.VersionBind == LOCKED_PYMUPDF_VERSION
 

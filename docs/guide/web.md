@@ -151,8 +151,14 @@ is reloaded until you press it.
   Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
   With the keyboard, Up and Down move through the entries, Right and Left open and close them,
   and Enter goes to the page.
-  Entries without a page are greyed out. The panel is read-only for now: you cannot add, rename or
-  move bookmarks yet. Each open document keeps its own expanded entries until you close it.
+  Entries without a page are greyed out. Where the document can be edited, a toolbar sits above the
+  list, and the entry you are on is highlighted. Press F2 to rename it (type the new title, then
+  Enter keeps it and Escape cancels). Press Delete to remove it with everything nested under it.
+  Press Alt+Shift+Up or Alt+Shift+Down to move it among its neighbours, and Alt+Shift+Right or
+  Alt+Shift+Left to indent it under the entry above or outdent it. The toolbar's Set to Current
+  Page points the entry at the top of the page now on screen. Each change can be undone from the
+  message that follows it. Adding bookmarks is coming soon. Each open document keeps its own
+  expanded entries until you close it.
 - **Attachments.** The **Attachments** button on the left rail lists the files embedded in the
   document, with the size of each. Click a file to see its name, size and description, then press
   **Save** to download it to your computer. The file is saved as it is; the browser never opens or
@@ -237,8 +243,12 @@ is reloaded until you press it.
   recorded, and a new jump after going back clears the forward pages. The history is kept for each
   open document until you reload the page.
 - **Page labels and links.** The status bar shows the document's own page labels (such as i, ii, 1),
-  and you can type a label into the page field to go to that page. Links in the document do not
-  work yet (coming soon).
+  and you can type a label into the page field to go to that page.
+- **Links.** Click or tap a link in the document, or Tab to it and press Enter, to jump to the page
+  it names; the jump is recorded, so Back returns to where you were. A link to a page one page away
+  or on the same page is not recorded in Back. Links to web addresses, email, other files and
+  programs, and any other kind of link do not open in the web version: a short message says so, and
+  nothing is opened.
 
 ## Split a document
 
@@ -256,7 +266,7 @@ built in the web version yet:
 
 - the full set of keyboard shortcuts (the ribbon and the command palette work; see
   [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
-- editing the words of a paragraph, adding text, images and shapes, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
+- editing the words of a paragraph, adding text and images, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
 - comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and watermarks;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
 - translation (which will be turned on only when you ask for it);
@@ -333,10 +343,12 @@ full policy, with what the desktop app stores, is in the
 | Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and the command palette (Ctrl+Shift+P) work, with some keys; the full shortcut list is coming soon |
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
-| Edit the words of a paragraph, add text, images or shapes | Yes | Coming soon |
+| Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; style fixed to a black 1.5-point outline |
+| Edit the words of a paragraph, add text or images | Yes | Coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; the parts are offered as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
+| Bookmarks: rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; adding bookmarks is coming soon) |
 | Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
 | Crop box drawn on a page | Yes | Yes (Crop dialog, Draw on page: drag a box on a page, Esc cancels; the dialog reopens with its margins on that page) |
@@ -345,6 +357,8 @@ full policy, with what the desktop app stores, is in the
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change) |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
+| Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
+| Web and email links | Yes | Coming soon |
 | Other comments, stamps, watermarks | Yes | Coming soon |
 | Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
