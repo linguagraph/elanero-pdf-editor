@@ -73,6 +73,7 @@ from pdfeditor.actions import (  # noqa: E402,F401
     content,
     document,
     marks,
+    outline,
     pages,
     redaction,
     security,

@@ -42,6 +42,43 @@ def flatten(items: list[OutlineItem]) -> list[tuple[int, OutlineItem]]:
     return out
 
 
+# An entry's path is the child index at each level, so its level is the path's length.
+OutlinePath = tuple[int, ...]
+
+# The deepest level an edit may create (W5.2). A file that is already deeper still loads and
+# can be edited elsewhere; only an edit that goes deeper than this is refused.
+MAX_OUTLINE_DEPTH = 32
+
+
+def entries(items: list[OutlineItem]) -> list[tuple[OutlinePath, OutlineItem]]:
+    """Every entry in list order (depth first), with its path. The position in this list is the
+    flat index the web uses to address a bookmark. Iterative, so a deep chain cannot hit the
+    recursion limit."""
+    out: list[tuple[OutlinePath, OutlineItem]] = []
+    stack: list[tuple[OutlinePath, OutlineItem]] = [
+        ((i,), item) for i, item in reversed(list(enumerate(items)))
+    ]
+    while stack:
+        path, item = stack.pop()
+        out.append((path, item))
+        stack.extend(((*path, i), child) for i, child in reversed(list(enumerate(item.children))))
+    return out
+
+
+def children_at(items: list[OutlineItem], parent: OutlinePath) -> list[OutlineItem]:
+    """The live child list under ``parent`` (``()`` is the top level). It is the list the tree
+    holds, so editing it edits the tree; the list object stays valid while siblings change."""
+    level = items
+    for index in parent:
+        level = level[index].children
+    return level
+
+
+def depth(items: list[OutlineItem]) -> int:
+    """The deepest level in the tree; 0 when it is empty."""
+    return max((len(path) for path, _ in entries(items)), default=0)
+
+
 class LinkKind(Enum):
     GOTO = "goto"  # internal page destination
     URI = "uri"
