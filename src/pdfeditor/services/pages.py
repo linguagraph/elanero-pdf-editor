@@ -47,39 +47,53 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
     return sorted(pages)
 
 
-def _item_bounds(item: str, page_count: int) -> tuple[int, int]:
-    """The 1-based inclusive span of one item; raises PageRangeError when it does not fit."""
-    if "-" in item:
-        lo_s, _, hi_s = item.partition("-")
-        lo_s, hi_s = lo_s.strip(), hi_s.strip()
-        if (lo_s and not _DIGITS.fullmatch(lo_s)) or (hi_s and not _DIGITS.fullmatch(hi_s)):
-            raise _malformed(item)
-        lo = int(lo_s) if lo_s else 1
-        hi = int(hi_s) if hi_s else page_count
-        explicit_lo, explicit_hi = bool(lo_s), bool(hi_s)
+def _item_bounds(typed: str, page_count: int) -> tuple[int, int]:
+    """The 1-based inclusive span of one item; raises PageRangeError when it does not fit.
+
+    The numbers are read with ``int()`` and the range checks run first, as they always have, so
+    every desktop message (``int()``'s own text, page 0, a reversed span, out of range) matches
+    the old code. Only then is the ASCII-digit rule applied, which refuses ``+3``, ``1_0`` and
+    non-ASCII digits that ``int()`` would accept.
+    """
+    text = typed.lower()  # the messages have always shown the item lower-cased
+    if "-" in text:
+        lo_s, _, hi_s = text.partition("-")
+        lo = _as_int(lo_s, typed) if lo_s.strip() else 1
+        hi = _as_int(hi_s, typed) if hi_s.strip() else page_count
+        explicit_lo, explicit_hi = bool(lo_s.strip()), bool(hi_s.strip())
+        pieces = [p.strip() for p in (lo_s, hi_s) if p.strip()]
     else:
-        if not _DIGITS.fullmatch(item):
-            raise _malformed(item)
-        lo = hi = int(item)
+        lo = hi = _as_int(text, typed)
         explicit_lo = explicit_hi = True
-    if (
-        (explicit_lo and lo == 0)
-        or (explicit_hi and hi == 0)
-        or (explicit_lo and explicit_hi and lo > hi)
-    ):
-        # Page 0 and reversed spans are wrong whatever the page count; the text is the old one.
-        raise PageRangeError(
-            "invalid", item, f"page range {item.lower()!r} is outside 1-{page_count}"
+        pieces = [text.strip()]
+    ascii_only = all(_DIGITS.fullmatch(p) for p in pieces)
+    if lo < 1 or hi > page_count or lo > hi:
+        # The message is main's for every such item. The kind is "invalid" when the item is wrong
+        # whatever the page count (page 0, a negative end, a reversed span, an ASCII refusal) and
+        # "out_of_range" only for a page above the count.
+        wrong = (
+            (explicit_lo and lo < 1)
+            or (explicit_hi and hi < 1)
+            or (explicit_lo and explicit_hi and lo > hi)
+            or not ascii_only
         )
-    if lo > page_count or hi > page_count:
-        raise PageRangeError(
-            "out_of_range", item, f"page range {item.lower()!r} is outside 1-{page_count}"
-        )
+        kind: PageRangeKind = "invalid" if wrong else "out_of_range"
+        raise PageRangeError(kind, typed, f"page range {text!r} is outside 1-{page_count}")
+    for piece in pieces:
+        if not _DIGITS.fullmatch(piece):
+            # int() accepted it, so the text is the one int() gives for a token it rejects.
+            raise PageRangeError(
+                "invalid", typed, f"invalid literal for int() with base 10: {piece!r}"
+            )
     return lo, hi
 
 
-def _malformed(item: str) -> PageRangeError:
-    return PageRangeError("invalid", item, f"page range {item.lower()!r} is not a valid range")
+def _as_int(piece: str, typed: str) -> int:
+    """``int(piece)``, with its ValueError turned into a PageRangeError that keeps the text."""
+    try:
+        return int(piece)
+    except ValueError as exc:
+        raise PageRangeError("invalid", typed, str(exc)) from None
 
 
 def format_page_ranges(indices: list[int]) -> str:

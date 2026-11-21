@@ -48,6 +48,32 @@ def test_the_item_keeps_its_case_and_the_message_keeps_the_old_text() -> None:
     assert str(info.value) == "page range '3-2' is outside 1-5"
 
 
+@pytest.mark.parametrize(
+    ("spec", "message"),
+    [
+        # Malformed items keep the text int() gave on main, lower-cased like the item.
+        ("x", "invalid literal for int() with base 10: 'x'"),
+        ("X", "invalid literal for int() with base 10: 'x'"),
+        ("1-x", "invalid literal for int() with base 10: 'x'"),
+        ("X-2", "invalid literal for int() with base 10: 'x'"),
+        # The ASCII-only refusals reuse the same text, since int() would have taken them.
+        ("+3", "invalid literal for int() with base 10: '+3'"),
+        ("٣", "invalid literal for int() with base 10: '٣'"),
+        # Range messages are main's, including int()'s 10 for "1_0" and the negative end of "1--3".
+        ("1_0", "page range '1_0' is outside 1-5"),
+        ("0", "page range '0' is outside 1-5"),
+        ("3-2", "page range '3-2' is outside 1-5"),
+        ("1--3", "page range '1--3' is outside 1-5"),
+        ("6", "page range '6' is outside 1-5"),
+        ("8-", "page range '8-' is outside 1-5"),
+    ],
+)
+def test_desktop_messages_match_the_old_text(spec: str, message: str) -> None:
+    with pytest.raises(PageRangeError) as info:
+        parse_page_ranges(spec, 5)
+    assert str(info.value) == message
+
+
 def test_all_is_case_blind_and_blank_items_are_skipped() -> None:
     assert parse_page_ranges("ALL", 3) == [0, 1, 2]
     assert parse_page_ranges(" 1 ;; 3 ,", 3) == [0, 2]
