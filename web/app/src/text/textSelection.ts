@@ -94,3 +94,48 @@ export class TextSelection {
       .join(LINE_SEP);
   }
 }
+
+// The selection a drag makes once a long-press has selected a word (W5.4 section 2): the word
+// stays whole. A focus before the word keeps the word's end as the anchor, one after it keeps the
+// word's start, and one inside it selects just the word.
+export function extendFromWord(word: TextSelection, focus: TextPos): TextSelection {
+  if (comparePos(focus, word.start) < 0) return new TextSelection(word.end, focus);
+  if (comparePos(focus, word.end) > 0) return new TextSelection(word.start, focus);
+  return new TextSelection(word.start, word.end);
+}
+
+// The size of a selection for the live region (W5.4 section 6). `chars` counts the characters
+// without the line separators, and is null when a covered page's index has not arrived yet: then
+// only the pages are known. `pages` counts the pages the selection has text on.
+export interface SelectionSize {
+  readonly pages: number;
+  readonly chars: number | null;
+}
+
+export function selectedSize(
+  selection: TextSelection,
+  indexOf: (page: number) => PageTextIndex | undefined,
+): SelectionSize {
+  if (selection.isEmpty) return { pages: 0, chars: 0 };
+  const found = new Map<number, PageTextIndex>();
+  for (let page = selection.start.page; page <= selection.end.page; page += 1) {
+    const index = indexOf(page);
+    if (index === undefined) {
+      return { pages: selection.end.page - selection.start.page + 1, chars: null };
+    }
+    found.set(page, index);
+  }
+  const spans = selection.pageSpans({
+    get: (page) => {
+      const index = found.get(page);
+      if (index === undefined) throw new Error(`no index for page ${page}`);
+      return index;
+    },
+  });
+  let chars = 0;
+  for (const span of spans) {
+    const text = found.get(span.page)?.extract(span.start, span.end) ?? '';
+    chars += Array.from(text).filter((c) => c !== LINE_SEP).length;
+  }
+  return { pages: spans.length, chars };
+}
