@@ -23,6 +23,12 @@ function pageLines(page: Page, index: number): Locator {
   return page.locator(`[data-page="${index}"] .page-text-line`);
 }
 
+// The selection's marks on one page (SelectionMarks): one per selected line. A long-press marks the
+// word under the finger at once; the live region speaks only when the gesture ends (section 6).
+function selectionMarks(page: Page, index: number): Locator {
+  return page.locator(`[data-page="${index}"] .page-selection-mark`);
+}
+
 function centre(box: { x: number; y: number; width: number; height: number }): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
@@ -49,8 +55,9 @@ async function dragFinger(cdp: CDPSession, from: Point, to: Point, steps = 10): 
   }
 }
 
-// The live region's selection announcement (W5.4 section 6): the status that names the size. A test
-// polls it with expect.poll, so it waits for the state rather than for a fixed time.
+// The live region's selection announcement (W5.4 section 6): the status that names the size, set when
+// a gesture ends (the finger lifts), not while it runs. A test polls it with expect.poll, so it waits
+// for the state rather than for a fixed time.
 async function selectionAnnouncement(page: Page): Promise<string> {
   const texts = await page.getByRole('status').allTextContents();
   return texts.find((text) => /characters? selected\./.test(text)) ?? '';
@@ -84,10 +91,12 @@ test.describe('engine staged', () => {
     // The press is at the start of the line, so the word under it is the line's first word.
     const start = { x: first.x + 2, y: centre(first).y };
     await touchEvent(cdp, 'touchStart', start);
-    // The hold is LONG_PRESS_MS (500 ms): the announcement appears when it fires, with the finger down.
-    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
+    // The hold is LONG_PRESS_MS (500 ms): the word is marked when it fires, with the finger down.
+    await expect(selectionMarks(page, 0)).toHaveCount(1);
     await dragFinger(cdp, start, { x: last.x + last.width + 4, y: centre(last).y }, 12);
     await touchEvent(cdp, 'touchEnd');
+    // The live region announces the size when the gesture ends, at the lift (section 6).
+    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
 
     await page.keyboard.press('Control+C');
     await expect(page.getByText('Copied to clipboard.', { exact: true })).toBeVisible();
@@ -149,9 +158,10 @@ test.describe('engine staged', () => {
     const cdp = await page.context().newCDPSession(page);
     const start = { x: first.x + 2, y: centre(first).y };
     await touchEvent(cdp, 'touchStart', start);
-    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
+    await expect(selectionMarks(page, 0)).toHaveCount(1);
     await dragFinger(cdp, start, { x: last.x + last.width + 4, y: centre(last).y }, 12);
     await touchEvent(cdp, 'touchEnd');
+    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
 
     // The handles show after a touch selection (section 3). Each one is a 44 x 44 px target.
     const handles = page.locator('.selection-handle');
