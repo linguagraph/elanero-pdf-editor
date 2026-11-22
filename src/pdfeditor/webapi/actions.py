@@ -207,7 +207,10 @@ def get_mark(params: dto.MarkGetParams) -> dto.MarkDetailResult:
     watermark: dto.WatermarkSpecDto | None = None
     background: dto.BackgroundSpecDto | None = None
     dropped = False
-    if params.kind in (MarkKind.HEADER_FOOTER, MarkKind.BATES):
+    # Only other tools' marks (Acrobat's) were found: their settings are not ours, so none is read.
+    if info.foreign:
+        pass
+    elif params.kind in (MarkKind.HEADER_FOOTER, MarkKind.BATES):
         spec = stamping.header_footer_from_settings(info.settings)
         if spec is not None:
             header, dropped = _header_dto(spec)

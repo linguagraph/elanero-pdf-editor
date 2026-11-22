@@ -421,3 +421,19 @@ def test_mark_get_leaves_unreadable_settings_out(web: None, fixture_pdf: Any) ->
     assert found["found"] is True
     assert found["pages"] == [0]
     assert found["watermark"] is None
+
+
+def test_mark_get_reports_acrobat_marks_as_foreign_with_no_settings(
+    web: None, fixture_pdf: Any
+) -> None:
+    # The Acrobat-style watermark is another tool's: it is found, but none of its settings is read.
+    handle = open_bytes(fixture_pdf("page_marks_acrobat_like").read_bytes(), "acrobat.pdf")
+    found = mark_get(handle, "Watermark")
+    assert found["found"] is True
+    assert found["foreign"] is True
+    assert found["pages"] == [0]
+    assert found["ranges"] == "1"
+    assert found["watermark"] is None
+    assert found["header_footer"] is None
+    assert found["background"] is None
+    assert found["font_dropped"] is False
