@@ -234,3 +234,312 @@ def test_round_trip_of_highlight_text(open_copy: Opener, tmp_path: Path) -> None
     record("comment_count_pikepdf", out, count=len(on_page(s, 0)), page=0)
     record("comment_count_pikepdf", out, count=len(on_page(s, 1)), page=1)
     record("render_first_page_pdfium", out)
+
+
+def page_size(s: DocumentSession) -> Rect:
+    with s.lock:
+        return s.document.page(0).rect
+
+
+def make(s: DocumentSession, args: CreateAnnotation) -> object:
+    return layer.run(s, "annotations.create", args)
+
+
+def made_on_page(s: DocumentSession, result: object) -> AnnotationModel:
+    name = result.value[0].name  # type: ignore[attr-defined]
+    return next(a for a in on_page(s) if a.name == name)
+
+
+# One gesture per new tool, with the label and the kind the desktop gives the comment.
+NEW_TOOLS: dict[str, tuple[CreateAnnotation, str, AnnotationType]] = {
+    "textbox": (
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 420, 340), "Typed"),
+        "Add Text Box",
+        AnnotationType.FREE_TEXT,
+    ),
+    "callout": (
+        CreateAnnotation(
+            CommentTool.CALLOUT, 0, Rect(200, 380, 360, 420), "Pointed", points=(Point(60, 400),)
+        ),
+        "Add Callout",
+        AnnotationType.FREE_TEXT,
+    ),
+    "pen": (
+        CreateAnnotation(
+            CommentTool.PEN,
+            0,
+            Rect(0, 0, 0, 0),
+            points=(Point(100, 100), Point(120, 140), Point(160, 130), Point(200, 180)),
+        ),
+        "Add Drawing",
+        AnnotationType.INK,
+    ),
+    "line": (
+        CreateAnnotation(
+            CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(100, 700), Point(250, 700))
+        ),
+        "Add Line",
+        AnnotationType.LINE,
+    ),
+    "arrow": (
+        CreateAnnotation(
+            CommentTool.ARROW, 0, Rect(0, 0, 0, 0), points=(Point(100, 680), Point(250, 680))
+        ),
+        "Add Arrow",
+        AnnotationType.LINE,
+    ),
+    "oval": (
+        CreateAnnotation(CommentTool.OVAL, 0, Rect(100, 500, 180, 560)),
+        "Add Oval",
+        AnnotationType.CIRCLE,
+    ),
+    "polygon": (
+        CreateAnnotation(
+            CommentTool.POLYGON,
+            0,
+            Rect(0, 0, 0, 0),
+            points=(Point(100, 700), Point(200, 700), Point(150, 780)),
+        ),
+        "Add Polygon",
+        AnnotationType.POLYGON,
+    ),
+    "polyline": (
+        CreateAnnotation(
+            CommentTool.POLYLINE,
+            0,
+            Rect(0, 0, 0, 0),
+            points=(Point(100, 700), Point(200, 720), Point(260, 760)),
+        ),
+        "Add Polyline",
+        AnnotationType.POLYLINE,
+    ),
+}
+
+
+@pytest.mark.parametrize("tool", list(NEW_TOOLS))
+def test_each_new_tool_adds_one_comment_of_its_kind_with_its_label(
+    open_copy: Opener, tool: str
+) -> None:
+    s = open_copy("annotations")
+    args, label, kind = NEW_TOOLS[tool]
+    before = len(on_page(s))
+    result = make(s, args)
+    assert result.executed and result.label == label  # type: ignore[attr-defined]
+    assert s.undo_stack.undo_label == label
+    assert made_on_page(s, result).type is kind
+    assert len(on_page(s)) == before + 1
+
+
+def test_a_text_box_click_gets_the_default_size(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    result = make(s, CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 300, 300), "Click"))
+    assert made_on_page(s, result).rect == Rect(300, 300, 480, 340)
+
+
+def test_a_callout_click_gets_a_default_box_beside_its_tip(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    tip = Point(60, 400)
+    args = CreateAnnotation(CommentTool.CALLOUT, 0, Rect(300, 400, 300, 400), "Hi", points=(tip,))
+    made = made_on_page(s, make(s, args))
+    assert made.rect.width == pytest.approx(180) and made.rect.height == pytest.approx(40)
+    assert made.rect.x0 == pytest.approx(300)  # the box sits to the right of the tip
+    assert made.vertices[0] == tip and len(made.vertices) >= 2
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 420, 340), "   "),
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 420, 340), ""),
+        CreateAnnotation(
+            CommentTool.CALLOUT, 0, Rect(200, 380, 360, 420), "", points=(Point(60, 400),)
+        ),
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(5000, 5000, 5100, 5100), "Far"),
+        CreateAnnotation(
+            CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(100, 100), Point(101, 101))
+        ),
+        CreateAnnotation(CommentTool.PEN, 0, Rect(0, 0, 0, 0), points=(Point(100, 100),)),
+        CreateAnnotation(CommentTool.OVAL, 0, Rect(100, 100, 100, 100)),
+    ],
+)
+def test_gestures_that_add_nothing_report_not_executed(
+    open_copy: Opener, args: CreateAnnotation
+) -> None:
+    s = open_copy("annotations")
+    before = len(on_page(s))
+    result = make(s, args)
+    assert not result.executed  # type: ignore[attr-defined]
+    assert len(on_page(s)) == before
+    assert not s.undo_stack.can_undo
+
+
+def test_points_outside_the_page_are_clamped_onto_it(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    page = page_size(s)
+    stroke = (Point(-50, 100), Point(page.x1 + 80, 200), Point(300, page.y1 + 500), Point(300, 300))
+    result = make(s, CreateAnnotation(CommentTool.PEN, 0, Rect(0, 0, 0, 0), points=stroke))
+    made = made_on_page(s, result)
+    points = [p for line in made.ink for p in line]
+    assert len(points) >= 2
+    assert all(page.x0 <= p.x <= page.x1 and page.y0 <= p.y <= page.y1 for p in points)
+
+
+def test_polygon_drops_a_repeated_vertex_and_needs_three(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    repeated = (Point(100, 700), Point(100.4, 700.2), Point(200, 700), Point(150, 780))
+    made = made_on_page(
+        s, make(s, CreateAnnotation(CommentTool.POLYGON, 0, Rect(0, 0, 0, 0), points=repeated))
+    )
+    assert len(made.vertices) == 3
+    two = (Point(100, 700), Point(100.4, 700.2), Point(100.6, 700.1))
+    with pytest.raises(Refused):
+        make(s, CreateAnnotation(CommentTool.POLYGON, 0, Rect(0, 0, 0, 0), points=two))
+
+
+LONG_PEN = tuple(Point(float(i % 500), float(i % 700)) for i in range(10_001))
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        CreateAnnotation(CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(1, 1),)),
+        CreateAnnotation(
+            CommentTool.ARROW,
+            0,
+            Rect(0, 0, 0, 0),
+            points=(Point(1, 1), Point(9, 9), Point(20, 20)),
+        ),
+        CreateAnnotation(CommentTool.CALLOUT, 0, Rect(1, 1, 50, 50), "x", points=()),
+        CreateAnnotation(
+            CommentTool.CALLOUT, 0, Rect(1, 1, 50, 50), "x", points=(Point(1, 1), Point(9, 9))
+        ),
+        CreateAnnotation(CommentTool.POLYLINE, 0, Rect(0, 0, 0, 0), points=(Point(1, 1),)),
+        CreateAnnotation(CommentTool.PEN, 0, Rect(0, 0, 0, 0), points=LONG_PEN),
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(1, 1, 50, 50), "x" * (64 * 1024 + 1)),
+    ],
+    ids=[
+        "line-1-point",
+        "arrow-3-points",
+        "callout-0-points",
+        "callout-2-points",
+        "polyline-1-point",
+        "pen-10001-points",
+        "text-over-64-KiB",
+    ],
+)
+def test_input_limits_are_refused(open_copy: Opener, args: CreateAnnotation) -> None:
+    s = open_copy("annotations")
+    before = len(on_page(s))
+    with pytest.raises(Refused):
+        make(s, args)
+    assert len(on_page(s)) == before
+
+
+@pytest.mark.parametrize("tool", list(NEW_TOOLS))
+def test_round_trip_of_each_new_comment(open_copy: Opener, tmp_path: Path, tool: str) -> None:
+    """Each new comment saves, reopens and renders in pikepdf and pypdfium2 (the round-trip
+    rule), with the subtype and the keys that carry its shape. The page has no comments of its
+    own, so the first annotation of each subtype the checks read is the new one."""
+    s = open_copy("text_multipage")
+    args, _, kind = NEW_TOOLS[tool]
+    before = len(on_page(s))
+    make(s, args)
+    out = s.save(tmp_path / f"{tool}.pdf")
+
+    reopened = reopen(out)
+    try:
+        with reopened.lock:
+            kinds = [m.type for m in reopened.document.page(0).annotations()]
+        assert kind in kinds
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+
+    subtype = {
+        AnnotationType.FREE_TEXT: "/FreeText",
+        AnnotationType.INK: "/Ink",
+        AnnotationType.LINE: "/Line",
+        AnnotationType.CIRCLE: "/Circle",
+        AnnotationType.POLYGON: "/Polygon",
+        AnnotationType.POLYLINE: "/PolyLine",
+    }[kind]
+    record("comment_count_pikepdf", out, count=before + 1)
+    record("annot_keys_pikepdf", out, subtype=subtype)
+    if tool == "callout":
+        record("callout_annot_pikepdf", out, page=0)
+    if tool == "pen":
+        record("annot_keys_pikepdf", out, subtype=subtype, present=["/InkList"])
+    if tool in ("line", "arrow"):
+        record("annot_keys_pikepdf", out, subtype=subtype, present=["/L"])
+    if tool == "arrow":
+        record("annot_keys_pikepdf", out, subtype=subtype, present=["/LE"])
+    if tool in ("polygon", "polyline"):
+        record("annot_keys_pikepdf", out, subtype=subtype, present=["/Vertices"])
+    record("render_first_page_pdfium", out)
+
+
+@pytest.mark.parametrize("text", ["", "   "])
+def test_an_empty_sticky_note_is_created(open_copy: Opener, text: str) -> None:
+    """A sticky note may be blank (the desktop's NoteTool allows it); only the box tools refuse
+    a blank text."""
+    s = open_copy("annotations")
+    before = len(on_page(s))
+    result = make(s, CreateAnnotation(CommentTool.NOTE, 0, Rect(300, 300, 300, 300), text))
+    assert result.executed  # type: ignore[attr-defined]
+    assert result.label == "Add Sticky Note"  # type: ignore[attr-defined]
+    made = made_on_page(s, result)
+    assert made.type is AnnotationType.TEXT and made.contents == text
+    assert len(on_page(s)) == before + 1
+    assert s.undo_stack.undo_label == "Add Sticky Note"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        CreateAnnotation(CommentTool.NOTE, 0, Rect(300, 300, 300, 300), "a\ud800b"),
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 420, 340), "a\udc00"),
+    ],
+    ids=["note", "text-box"],
+)
+def test_text_with_a_lone_surrogate_is_refused_and_changes_nothing(
+    open_copy: Opener, args: CreateAnnotation
+) -> None:
+    """JSON can carry a lone surrogate, which UTF-8 can't store: the action refuses it before
+    the byte-count check, with no comment added and no undo step."""
+    s = open_copy("annotations")
+    before = len(on_page(s))
+    with pytest.raises(Refused):
+        make(s, args)
+    assert len(on_page(s)) == before
+    assert not s.undo_stack.can_undo
+
+
+def test_a_drag_of_exactly_three_points_draws(open_copy: Opener) -> None:
+    """The design: drags under 3 pt add nothing, so a drag of exactly 3.0 pt draws."""
+    s = open_copy("annotations")
+    line = make(
+        s,
+        CreateAnnotation(
+            CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(100, 100), Point(103, 100))
+        ),
+    )
+    assert line.executed  # type: ignore[attr-defined]
+    assert made_on_page(s, line).type is AnnotationType.LINE
+
+    box = make(s, CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 303, 303), "Tiny"))
+    assert box.executed  # type: ignore[attr-defined]
+    assert made_on_page(s, box).rect == Rect(300, 300, 303, 303)
+
+
+def test_a_drag_under_three_points_is_a_click(open_copy: Opener) -> None:
+    """Just under 3 pt is a click: a line adds nothing, a text box gets the default size."""
+    s = open_copy("annotations")
+    line = make(
+        s,
+        CreateAnnotation(
+            CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(100, 100), Point(102.9, 100))
+        ),
+    )
+    assert not line.executed  # type: ignore[attr-defined]
+    box = make(s, CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 302.9, 302.9), "Tiny"))
+    assert made_on_page(s, box).rect == Rect(300, 300, 480, 340)
