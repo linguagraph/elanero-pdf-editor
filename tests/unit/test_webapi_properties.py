@@ -237,6 +237,34 @@ def test_encrypted_round_trip_reads_back_with_the_password(web: None, fixture_pd
     assert info(reopened)["title"] == "Secret title"
 
 
+def test_full_save_keeps_the_pdf_version(web: None, fixture_pdf: Any) -> None:
+    # The Advanced panel shows the version as text only, so a full (non-incremental) save must
+    # keep the version the file reported. Pinned in MuPDF and in pikepdf (the round-trip rule).
+    handle, _ = open_bytes(fixture_pdf("text_multipage").read_bytes())
+    version = info(handle)["pdf_version"]
+    assert re.fullmatch(r"\d\.\d", version)
+    set_title(handle, "Versioned title")
+    result, saved = save(handle, "copy")
+    assert result["incremental"] is False
+    record("pdf_version_pikepdf", saved, version=version)
+    record("opens_pdfium", saved)
+    reopened, _ = open_bytes(saved)
+    assert info(reopened)["pdf_version"] == version
+
+
+def test_full_save_of_an_encrypted_file_keeps_the_pdf_version(web: None, fixture_pdf: Any) -> None:
+    handle, _ = open_bytes(fixture_pdf("encrypted").read_bytes(), USER_PW)
+    version = info(handle)["pdf_version"]
+    assert re.fullmatch(r"\d\.\d", version)
+    ok(call_raw("session.unlock_owner", {"handle": handle, "password": OWNER_PW})[0])
+    set_title(handle, "Versioned secret")
+    result, saved = save(handle, "copy")
+    assert result["incremental"] is False
+    record("pdf_version_pikepdf", saved, version=version, password=USER_PW)
+    reopened, _ = open_bytes(saved, USER_PW)
+    assert info(reopened)["pdf_version"] == version
+
+
 def test_an_empty_info_block_adds_no_xmp_packet(web: None, fixture_pdf: Any) -> None:
     handle, _ = open_bytes(fixture_pdf("text_multipage").read_bytes())
     if info(handle)["has_xmp"]:
