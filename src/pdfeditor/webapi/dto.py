@@ -743,6 +743,43 @@ class FontValidateResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class FontAddParams:
+    name: str  # the user's file name, for display only; never a path; 1 to 255 characters
+    data: bytes  # the whole font file, one $bin buffer (at most limits.MAX_FONT_BYTES)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class UploadedFontDto:
+    id: str  # sha256 of the bytes, 64 lowercase hex characters
+    name: str  # the file name of the first fonts.add of these bytes
+    format: str  # "truetype", "opentype" or "collection"
+    size: int  # bytes
+    path: str  # the FontRef path, "/fonts/<id>.<ext>": the name the engine reads the file by
+    faces: tuple[FontFaceDto, ...]  # the usable faces the licence allows, in the file's order
+    refused: tuple[RefusedFaceDto, ...]  # usable faces the licence refuses (collections only)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontAddResult:
+    font: UploadedFontDto
+    added: bool  # False when these bytes were already stored (nothing changed)
+    used_bytes: int  # the store's total after the call
+    max_bytes: int  # limits.MAX_FONT_STORE_BYTES
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontListResult:
+    fonts: tuple[UploadedFontDto, ...]  # in the order they were added
+    used_bytes: int
+    max_bytes: int
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FontRemoveParams:
+    id: str  # an UploadedFontDto.id: 64 lowercase hex characters; an unknown one is a no-op
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class CombineProbeParams:
     name: str  # the file name with .pdf, for the suffix check and messages; never a path
     data: bytes  # the whole file, one $bin buffer (at most limits.MAX_PROBE_BYTES)

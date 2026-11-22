@@ -121,6 +121,12 @@ describe('fontTools on the web (W6.8a)', () => {
         JSON.stringify({ v: 1, id: 5, method: 'content.preview_font', params: { handle: 'h' } }),
       ),
     ).toBe(true);
+    // An uploaded font is read by fontTools (W6.9 slice 2); the list and the removal are not.
+    const call = (method: string) => JSON.stringify({ v: 1, id: 6, method, params: {} });
+    expect(needsFontTools(call('fonts.validate'))).toBe(true);
+    expect(needsFontTools(call('fonts.add'))).toBe(true);
+    expect(needsFontTools(call('fonts.list'))).toBe(false);
+    expect(needsFontTools(call('fonts.remove'))).toBe(false);
     expect(needsFontTools('not json')).toBe(false);
   });
 

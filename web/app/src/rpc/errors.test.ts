@@ -18,6 +18,7 @@ const DETAIL_SAMPLES: Record<RpcErrorCode, ReadonlyArray<Record<string, unknown>
   INVALID_ARGS: [{}, { path: 'args.max_bytes' }],
   INVALID_FONT: NONE,
   FONT_NOT_EMBEDDABLE: NONE,
+  FONT_STORAGE_FULL: NONE,
   PROTOCOL_MISMATCH: NONE,
   NO_DOCUMENT: NONE,
   PASSWORD_REQUIRED: NONE,

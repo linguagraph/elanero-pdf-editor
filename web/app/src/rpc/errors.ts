@@ -100,6 +100,7 @@ export const TABLE: Record<RpcErrorCode, Entry> = {
   INVALID_ARGS: { messageId: 'error.INVALID_ARGS', action: 'reload page' },
   INVALID_FONT: { messageId: 'error.INVALID_FONT', action: 'dismiss' },
   FONT_NOT_EMBEDDABLE: { messageId: 'error.FONT_NOT_EMBEDDABLE', action: 'dismiss' },
+  FONT_STORAGE_FULL: { messageId: 'error.FONT_STORAGE_FULL', action: 'dismiss' },
   PROTOCOL_MISMATCH: { messageId: 'error.PROTOCOL_MISMATCH', action: 'reload page' },
   NO_DOCUMENT: { messageId: 'error.NO_DOCUMENT', action: 'close document' },
   PASSWORD_REQUIRED: { messageId: 'error.PASSWORD_REQUIRED', action: 'ask for password' },

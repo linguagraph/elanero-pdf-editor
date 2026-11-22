@@ -24,7 +24,7 @@ import {
 export const PROTOCOL_VERSION = 1;
 
 /** Every stable error code (W1.2 section 4), sorted. */
-export const ERROR_CODES = ['BUSY', 'CANCELLED', 'ENGINE_ERROR', 'FILE_TOO_LARGE', 'FONT_NOT_EMBEDDABLE', 'IMAGE_TOO_LARGE', 'INTERNAL', 'INVALID_ARGS', 'INVALID_FONT', 'INVALID_REQUEST', 'NOT_SUPPORTED', 'NO_DOCUMENT', 'OPEN_FAILED', 'OUT_OF_MEMORY', 'PASSWORD_REQUIRED', 'PROTOCOL_MISMATCH', 'REFUSED', 'RENDER_TOO_LARGE', 'SAVE_FAILED', 'STALE_CURSOR', 'STALE_JOB', 'STALE_OBJECT', 'TOO_MANY_PAGES', 'TRANSLATION_AUTH', 'TRANSLATION_CONFIG', 'TRANSLATION_OFFLINE', 'TRANSLATION_QUOTA', 'TRANSLATION_SAME_LANGUAGE', 'TRANSLATION_SERVICE', 'TRANSLATION_TOO_LONG', 'WRONG_PASSWORD'] as const;
+export const ERROR_CODES = ['BUSY', 'CANCELLED', 'ENGINE_ERROR', 'FILE_TOO_LARGE', 'FONT_NOT_EMBEDDABLE', 'FONT_STORAGE_FULL', 'IMAGE_TOO_LARGE', 'INTERNAL', 'INVALID_ARGS', 'INVALID_FONT', 'INVALID_REQUEST', 'NOT_SUPPORTED', 'NO_DOCUMENT', 'OPEN_FAILED', 'OUT_OF_MEMORY', 'PASSWORD_REQUIRED', 'PROTOCOL_MISMATCH', 'REFUSED', 'RENDER_TOO_LARGE', 'SAVE_FAILED', 'STALE_CURSOR', 'STALE_JOB', 'STALE_OBJECT', 'TOO_MANY_PAGES', 'TRANSLATION_AUTH', 'TRANSLATION_CONFIG', 'TRANSLATION_OFFLINE', 'TRANSLATION_QUOTA', 'TRANSLATION_SAME_LANGUAGE', 'TRANSLATION_SERVICE', 'TRANSLATION_TOO_LONG', 'WRONG_PASSWORD'] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 /** The soft deadline classes (W1.2 section 10), in milliseconds. */
@@ -312,6 +312,23 @@ export interface FlattenableResult {
   pages: number;
 }
 
+export interface FontAddParams {
+  /** the user's file name, for display only; never a path; 1 to 255 characters */
+  name: string;
+  /** the whole font file, one $bin buffer (at most limits.MAX_FONT_BYTES) */
+  data: ArrayBuffer;
+}
+
+export interface FontAddResult {
+  font: UploadedFontDto;
+  /** False when these bytes were already stored (nothing changed) */
+  added: boolean;
+  /** the store's total after the call */
+  used_bytes: number;
+  /** limits.MAX_FONT_STORE_BYTES */
+  max_bytes: number;
+}
+
 export interface FontFaceDto {
   /** the face's index in the file (0 for a single font) */
   index: number;
@@ -327,6 +344,18 @@ export interface FontFaceDto {
   scripts: string[];
   /** has an fvar table */
   variable: boolean;
+}
+
+export interface FontListResult {
+  /** in the order they were added */
+  fonts: UploadedFontDto[];
+  used_bytes: number;
+  max_bytes: number;
+}
+
+export interface FontRemoveParams {
+  /** an UploadedFontDto.id: 64 lowercase hex characters; an unknown one is a no-op */
+  id: string;
 }
 
 export interface FontRow {
@@ -912,6 +941,23 @@ export interface UnlockResult {
   unlocked: boolean;
 }
 
+export interface UploadedFontDto {
+  /** sha256 of the bytes, 64 lowercase hex characters */
+  id: string;
+  /** the file name of the first fonts.add of these bytes */
+  name: string;
+  /** "truetype", "opentype" or "collection" */
+  format: string;
+  /** bytes */
+  size: number;
+  /** the FontRef path, "/fonts/<id>.<ext>": the name the engine reads the file by */
+  path: string;
+  /** the usable faces the licence allows, in the file's order */
+  faces: FontFaceDto[];
+  /** usable faces the licence refuses (collections only) */
+  refused: RefusedFaceDto[];
+}
+
 export interface XfdfPreviewParams {
   handle: string;
   /** the XFDF file's text, as annotations.import_xfdf takes it (at most 8 MiB) */
@@ -942,6 +988,9 @@ export interface Methods {
   'content.image': { params: ImageParams; result: ImageDataResult; deadline: 'io' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
   'content.preview_font': { params: PreviewFontParams; result: PreviewFontResult; deadline: 'render' };
+  'fonts.add': { params: FontAddParams; result: FontAddResult; deadline: 'action' };
+  'fonts.list': { params: Empty; result: FontListResult; deadline: 'instant' };
+  'fonts.remove': { params: FontRemoveParams; result: Empty; deadline: 'instant' };
   'fonts.validate': { params: FontValidateParams; result: FontValidateResult; deadline: 'action' };
   'hello': { params: Empty; result: HelloResult; deadline: 'instant' };
   'jobs.abort': { params: JobAbortParams; result: JobAbortResult; deadline: 'instant' };
@@ -988,6 +1037,9 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'content.image': 'io',
   'content.objects': 'render',
   'content.preview_font': 'render',
+  'fonts.add': 'action',
+  'fonts.list': 'instant',
+  'fonts.remove': 'instant',
   'fonts.validate': 'action',
   'hello': 'instant',
   'jobs.abort': 'instant',
@@ -1039,6 +1091,9 @@ export const RESULT_DECODERS: {
   'content.image': decodeImageDataResult,
   'content.objects': decodeContentObjectsResult,
   'content.preview_font': decodePreviewFontResult,
+  'fonts.add': decodeFontAddResult,
+  'fonts.list': decodeFontListResult,
+  'fonts.remove': decodeEmpty,
   'fonts.validate': decodeFontValidateResult,
   'hello': decodeHelloResult,
   'jobs.abort': decodeJobAbortResult,
@@ -1462,6 +1517,34 @@ export function decodeFlattenableResult(
   };
 }
 
+export function decodeFontAddParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontAddParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'data'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+  };
+}
+
+export function decodeFontAddResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontAddResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['font', 'added', 'used_bytes', 'max_bytes'], path);
+  return {
+    font: decodeUploadedFontDto(field(o, 'font', path), ctx, `${path}.font`),
+    added: expectBoolean(field(o, 'added', path), `${path}.added`),
+    used_bytes: expectInteger(field(o, 'used_bytes', path), `${path}.used_bytes`),
+    max_bytes: expectInteger(field(o, 'max_bytes', path), `${path}.max_bytes`),
+  };
+}
+
 export function decodeFontFaceDto(
   value: unknown,
   ctx: DecodeContext,
@@ -1477,6 +1560,32 @@ export function decodeFontFaceDto(
     italic: expectBoolean(field(o, 'italic', path), `${path}.italic`),
     scripts: expectArray(field(o, 'scripts', path), `${path}.scripts`).map((item1, index1) => expectString(item1, `${`${path}.scripts`}[${index1}]`)),
     variable: expectBoolean(field(o, 'variable', path), `${path}.variable`),
+  };
+}
+
+export function decodeFontListResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontListResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['fonts', 'used_bytes', 'max_bytes'], path);
+  return {
+    fonts: expectArray(field(o, 'fonts', path), `${path}.fonts`).map((item1, index1) => decodeUploadedFontDto(item1, ctx, `${`${path}.fonts`}[${index1}]`)),
+    used_bytes: expectInteger(field(o, 'used_bytes', path), `${path}.used_bytes`),
+    max_bytes: expectInteger(field(o, 'max_bytes', path), `${path}.max_bytes`),
+  };
+}
+
+export function decodeFontRemoveParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): FontRemoveParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['id'], path);
+  return {
+    id: expectString(field(o, 'id', path), `${path}.id`),
   };
 }
 
@@ -2425,6 +2534,24 @@ export function decodeUnlockResult(
   checkKeys(o, ['unlocked'], path);
   return {
     unlocked: expectBoolean(field(o, 'unlocked', path), `${path}.unlocked`),
+  };
+}
+
+export function decodeUploadedFontDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): UploadedFontDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['id', 'name', 'format', 'size', 'path', 'faces', 'refused'], path);
+  return {
+    id: expectString(field(o, 'id', path), `${path}.id`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    format: expectString(field(o, 'format', path), `${path}.format`),
+    size: expectInteger(field(o, 'size', path), `${path}.size`),
+    path: expectString(field(o, 'path', path), `${path}.path`),
+    faces: expectArray(field(o, 'faces', path), `${path}.faces`).map((item1, index1) => decodeFontFaceDto(item1, ctx, `${`${path}.faces`}[${index1}]`)),
+    refused: expectArray(field(o, 'refused', path), `${path}.refused`).map((item1, index1) => decodeRefusedFaceDto(item1, ctx, `${`${path}.refused`}[${index1}]`)),
   };
 }
 
