@@ -89,6 +89,7 @@ METHODS: dict[str, Method] = {
     "fonts.list": Method(dto.Empty, fonts.listed),
     "fonts.remove": Method(dto.FontRemoveParams, fonts.remove),
     "combine.probe": Method(dto.CombineProbeParams, combine.probe),
+    "combine.unlock": Method(dto.CombineUnlockParams, combine.unlock),
     "content.objects": Method(dto.PageParams, content.list_objects),
     "content.preview_font": Method(dto.PreviewFontParams, content.preview_font),
     "content.image": Method(dto.ImageParams, content.export_image),

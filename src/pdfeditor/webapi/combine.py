@@ -25,6 +25,7 @@ from pdfeditor.webapi.errors import (
     WRONG_PASSWORD,
     RpcFailure,
 )
+from pdfeditor.webapi.jobs import DECRYPTED_COPY_OPTIONS
 
 MAX_NAME_CHARS = 255
 MAX_PASSWORD_CHARS = 1024  # the bound a source password takes too (W6.3b section 3)
@@ -66,6 +67,38 @@ def probe(params: dto.CombineProbeParams) -> dto.CombineProbeResult:
     return dto.CombineProbeResult(page_count=pages, encrypted=encrypted, needed_password=needed)
 
 
+def unlock(params: dto.CombineUnlockParams) -> dto.CombineUnlockResult:
+    """Open one locked PDF with its password and return an unprotected copy of it (W6.3b P1).
+
+    The password is used for this one open and goes no further: the copy is made under the same
+    lock and the document is closed before the reply, so the engine keeps no password. The page
+    holds the copy and forgets the password, and no job worker ever sees one.
+    """
+    _check_name(params.name)
+    if len(params.password) > MAX_PASSWORD_CHARS:
+        raise RpcFailure(
+            INVALID_ARGS,
+            f"params.password: at most {MAX_PASSWORD_CHARS} characters",
+            {"path": "params.password"},
+        )
+    size = len(params.data)  # checked before anything reads the bytes
+    if size > limits.MAX_PROBE_BYTES:
+        raise RpcFailure(
+            FILE_TOO_LARGE,
+            "the file is too large to unlock here",
+            {"max_bytes": limits.MAX_PROBE_BYTES, "size": size},
+        )
+    engine = get_engine(DEFAULT_ENGINE)
+    with ENGINE_LOCK:
+        document = _open(engine, params)
+        try:
+            pages = document.page_count
+            data = document.to_bytes(DECRYPTED_COPY_OPTIONS)
+        finally:
+            document.close()
+    return dto.CombineUnlockResult(page_count=pages, data=data)
+
+
 def _needs_password(engine: Engine, params: dto.CombineProbeParams) -> bool:
     """Whether the file will not open without a password, asked of a second open with none. The
     caller holds the lock. Only an encrypted file that was opened with a password gets here: the
@@ -91,7 +124,7 @@ def _check_name(name: str) -> None:
         raise RpcFailure(INVALID_ARGS, "params.name: not a PDF file", {"path": "params.name"})
 
 
-def _open(engine: Engine, params: dto.CombineProbeParams) -> Document:
+def _open(engine: Engine, params: dto.CombineProbeParams | dto.CombineUnlockParams) -> Document:
     """Open the bytes; the caller holds the lock and closes the document. The password is passed
     once, and the errors never carry it (``from None`` also drops the engine's chained cause)."""
     try:
