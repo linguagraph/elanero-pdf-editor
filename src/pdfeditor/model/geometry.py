@@ -218,3 +218,11 @@ def simplify(points: list[Point], epsilon: float) -> list[Point]:
         return [a, b]
     left = simplify(points[: index + 1], epsilon)
     return left[:-1] + simplify(points[index:], epsilon)
+
+
+@dataclass(frozen=True, slots=True)
+class PageRects:
+    """The rectangles of one page, in page points (visible space): one per line of a selection."""
+
+    page: int
+    rects: tuple[Rect, ...]

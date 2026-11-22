@@ -49,6 +49,7 @@ function fakePyodide({ protocol = WEBAPI_PROTOCOL, log = [] }: FakeOptions = {})
     }),
     toPy: vi.fn(() => ({ toJs: () => undefined, destroy: vi.fn() })),
     globals: { get: vi.fn((name: string) => (name === '_pdfeditor_call' ? call : undefined)) },
+    registerJsModule: vi.fn(),
     FS: {
       writeFile: vi.fn((path: string) => {
         log.push(`writeFile ${path}`);
@@ -259,6 +260,7 @@ function fakeJobPyodide({ notices = [], buffers = [new Uint8Array([7, 8])] }: Jo
     globals: {
       get: vi.fn((name: string) => (name === '_pdfeditor_job_call' ? call : undefined)),
     },
+    registerJsModule: vi.fn(),
     FS: { writeFile: vi.fn() },
   };
   return { pyodide, call, log };

@@ -482,6 +482,13 @@ export interface JobPrepareResult {
   state: DocStateDto | null;
 }
 
+export interface LanguageDto {
+  /** the service's code, as the translate calls send it */
+  code: string;
+  /** the English name; the browser shows its own localised name when it can */
+  name: string;
+}
+
 export interface LayerEntry {
   /** the engine's optional-content id, used by layers.set_visible (a later slice) */
   id: number;
@@ -926,6 +933,28 @@ export interface TextStyleDto {
   word_spacing: number;
 }
 
+export interface TranslationInfoResult {
+  services: TranslationServiceDto[];
+  /** service id -> its languages */
+  languages: Record<string, LanguageDto[]>;
+}
+
+/** One translation service the web offers (W6.6). The three are fixed by the CSP. */
+export interface TranslationServiceDto {
+  /** "mymemory", "azure" or "libretranslate" */
+  id: string;
+  /** the service's name for the pickers and the notice */
+  name: string;
+  /** its privacy policy, linked from the consent notice */
+  privacy_url: string;
+  /** a key is needed before any request can be sent */
+  needs_key: boolean;
+  /** False: the source language must be named (MyMemory) */
+  detects_source: boolean;
+  /** the longest selection the service takes at once */
+  max_chars: number;
+}
+
 export interface UndoParams {
   handle: string;
   expect_history: number | null;
@@ -1019,6 +1048,7 @@ export interface Methods {
   'text.extract': { params: ExtractParams; result: ExtractResult; deadline: 'slice' };
   'text.layer': { params: PageParams; result: TextLayerResult; deadline: 'render' };
   'text.search': { params: SearchParams; result: SearchResult; deadline: 'slice' };
+  'translation.info': { params: Empty; result: TranslationInfoResult; deadline: 'instant' };
 }
 export type MethodName = keyof Methods;
 
@@ -1068,6 +1098,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'text.extract': 'slice',
   'text.layer': 'render',
   'text.search': 'slice',
+  'translation.info': 'instant',
 };
 
 /** The calls that return one slice of a chunked operation (W1.2 section 9). */
@@ -1122,6 +1153,7 @@ export const RESULT_DECODERS: {
   'text.extract': decodeExtractResult,
   'text.layer': decodeTextLayerResult,
   'text.search': decodeSearchResult,
+  'translation.info': decodeTranslationInfoResult,
 };
 
 /** Every kind of change event (W1.2 section 7), sorted. */
@@ -1799,6 +1831,19 @@ export function decodeJobPrepareResult(
     mutating: expectBoolean(field(o, 'mutating', path), `${path}.mutating`),
     document: takeBinary(field(o, 'document', path), ctx, `${path}.document`),
     state: orNull(field(o, 'state', path), `${path}.state`, (v1, p1) => decodeDocStateDto(v1, ctx, p1)),
+  };
+}
+
+export function decodeLanguageDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LanguageDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['code', 'name'], path);
+  return {
+    code: expectString(field(o, 'code', path), `${path}.code`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
   };
 }
 
@@ -2496,6 +2541,36 @@ export function decodeTextStyleDto(
     line_height: expectNumber(field(o, 'line_height', path), `${path}.line_height`),
     char_spacing: expectNumber(field(o, 'char_spacing', path), `${path}.char_spacing`),
     word_spacing: expectNumber(field(o, 'word_spacing', path), `${path}.word_spacing`),
+  };
+}
+
+export function decodeTranslationInfoResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): TranslationInfoResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['services', 'languages'], path);
+  return {
+    services: expectArray(field(o, 'services', path), `${path}.services`).map((item1, index1) => decodeTranslationServiceDto(item1, ctx, `${`${path}.services`}[${index1}]`)),
+    languages: decodeRecord(field(o, 'languages', path), `${path}.languages`, (item1, p1) => expectArray(item1, p1).map((item2, index2) => decodeLanguageDto(item2, ctx, `${p1}[${index2}]`))),
+  };
+}
+
+export function decodeTranslationServiceDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): TranslationServiceDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['id', 'name', 'privacy_url', 'needs_key', 'detects_source', 'max_chars'], path);
+  return {
+    id: expectString(field(o, 'id', path), `${path}.id`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    privacy_url: expectString(field(o, 'privacy_url', path), `${path}.privacy_url`),
+    needs_key: expectBoolean(field(o, 'needs_key', path), `${path}.needs_key`),
+    detects_source: expectBoolean(field(o, 'detects_source', path), `${path}.detects_source`),
+    max_chars: expectInteger(field(o, 'max_chars', path), `${path}.max_chars`),
   };
 }
 

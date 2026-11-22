@@ -8,6 +8,8 @@ existing clients need no change (plan W2.4). This module imports ``js`` only ins
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from pdfeditor.services.translation.http import Opener, Reply, Request
 
@@ -29,15 +31,21 @@ WEB_ENDPOINT_ORIGINS: frozenset[str] = frozenset(
 _SKIPPED_HEADERS = frozenset({"user-agent", "accept-encoding", "content-length"})
 
 
-def make_xhr_opener() -> Opener:
-    """An opener that sends each request with the browser's synchronous XMLHttpRequest."""
-    from js import XMLHttpRequest  # the browser's API; only exists inside Pyodide
+def make_xhr_opener(factory: Callable[[], Any] | None = None) -> Opener:
+    """An opener that sends each request with a synchronous XMLHttpRequest.
+    ``factory`` makes one request object per call: the browser's, or the engine worker's gated
+    wrapper (W6.6), which has the same methods and properties.
+    """
+    if factory is None:
+        from js import XMLHttpRequest  # the browser's API; only exists inside Pyodide
+
+        factory = XMLHttpRequest.new
 
     def opener(request: Request, timeout: float) -> Reply:
         # Pyodide does not convert bytes to a JS value; XHR needs a string here. Every body we
         # send is JSON in UTF-8, so the decode is lossless. A non-UTF-8 body raises, by design.
         text_body = None if request.data is None else request.data.decode("utf-8")
-        xhr = XMLHttpRequest.new()
+        xhr = factory()
         try:
             xhr.open(request.method, request.url, False)
             # The timeout works because this runs in a worker: synchronous XHR throws when a
