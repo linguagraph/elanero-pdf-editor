@@ -100,6 +100,7 @@ import { EditLayer, type EditSelection, type TextEdit } from '../edit/EditLayer'
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
 import { TextBoxLayer } from '../edit/TextBoxLayer';
+import type { TextStyleArg } from '../edit/textStyle';
 import { addImage, dropPendingImage, exportImage, pendingImageOf } from '../edit/images';
 import {
   addShape,
@@ -559,21 +560,21 @@ export function DocumentView({
   // A new block (Add Text) is added in its box, and a successful add returns the tool to Select, as a
   // shape does. A blank text adds nothing and closes the editor, with the tool left on.
   const applyTextEdit = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, style: TextStyleArg | null): Promise<boolean> => {
       const edit = textEdit;
       if (edit === null) return true;
       if (edit.newRect !== undefined) {
         const drawnOn = tabId;
         const outcome = await commitAdd(
           { rpc, handle, cache: editObjects, scheduler },
-          { page: edit.page, rect: edit.newRect, text },
+          { page: edit.page, rect: edit.newRect, text, style },
         );
         if (outcome === 'done' && text.trim() !== '') onToolChange?.('select', drawnOn);
         return outcome !== 'busy';
       }
       const outcome = await commitText(
         { rpc, handle, cache: editObjects, scheduler },
-        { page: edit.page, revision: edit.revision, object: edit.object, text },
+        { page: edit.page, revision: edit.revision, object: edit.object, text, style },
         setEditSelection,
       );
       return outcome !== 'busy';

@@ -171,6 +171,21 @@ def test_replace_text_in_a_subset_font_reports_substitution(open_copy: Opener) -
     assert any("Qwertyuiop XYZ 987" in t for t in texts(s))
 
 
+def test_replace_text_names_the_characters_the_document_font_lacks(open_copy: Opener) -> None:
+    s = open_copy("licensed_fonts")
+    key = next(
+        o.key
+        for o in objects(s)
+        if o.type is ObjectType.TEXT and o.style is not None and o.style.font == "Free Sans Regular"
+    )
+    ref = next(r for r in refs(s, 0, ObjectType.TEXT) if r.key == key)
+    result = content.replace_text(s, ReplaceText(ref, "Жзи Qwerty"))
+    assert isinstance(result.value, FontChoice) and result.value.substituted
+    # the Cyrillic letters, and the Latin ones the subset lacks; nothing outside the text
+    assert set("Жзи") <= set(result.value.missing) <= set("QwertyЖзи")
+    assert any("Жзи Qwerty" in t for t in texts(s))
+
+
 def test_add_text_blank_is_not_executed(open_copy: Opener) -> None:
     s = open_copy("text_multipage")
     result = content.add_text(s, AddText(0, Rect(300, 700, 550, 720), "   ", TextStyle()))

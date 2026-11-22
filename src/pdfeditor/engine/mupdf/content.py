@@ -423,7 +423,9 @@ def _font_for_known(
     code = _STANDARD[family_of(style.font)][(style.bold, style.italic)]
     font = pymupdf.Font(code)
     substituted = original_embedded or not _BASE14.match(style.font)
-    return font.buffer, FontChoice(font.name, substituted=substituted)
+    # The notice names the characters the document's program lacks, when it was tried (reuse on).
+    missing = _missing_chars(buffer, wanted) if reuse_embedded and buffer else ""
+    return font.buffer, FontChoice(font.name, substituted=substituted, missing=missing)
 
 
 def _font_for(
