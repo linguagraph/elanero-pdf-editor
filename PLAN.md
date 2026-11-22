@@ -590,23 +590,23 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W5.1a** Document view: virtualised page list _(continuous, single-page and two-page layouts, fit modes and the saved default zoom, reader keeps its place on zoom and layout changes (#464), layout vectors shared with the desktop (#466), single-page layout (#477), scaled scroll space above the browser limit (#487), wheel and keyboard scroll at the scene rate (#489), Playwright check of the virtual page list with the engine staged (#520))_
 - [x] **W5.1b** HiDPI tiles, render cache and prefetch _(tiles above 4 MP and the 256 MiB tile cache with prefetch (#255), engine page cache bounded to 64 pages (#512), tile grid moved to core/layout.py (#513), re-render on devicePixelRatio change (#516), page images drawn from ImageBitmaps made in the worker (#518))_
 - [x] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
-- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails panel (#247); bookmarks panel read-only (#264, #271) and editable in the web (rename, delete, move, set destination, Undo, toolbar: engine actions #517, web panel #526); attachments and layers panels read-only (#488, #511); pending: adding bookmarks and the y offset (S3), drag and drop, Playwright bookmarks spec)_
-- [ ] **W5.3** Links, navigation history, page jump, page labels _(partial: page jump, navigation history (#248), page labels (#277, #283); link layer with goto links recorded in history, and the desktop scheme allow-list for links (#528 S2a; session.links call #519); pending: web URI links with the confirmation dialog and notices (S2b), Playwright links spec)_
-- [ ] **W5.4** Text selection and copy; search panel _(partial: text layer (#250); selection model drawn and dragged (#486, #514); Copy, Select All and Mark Text through the selection model, which also fixes Mark Text (#524); search panel (#416, #442); Playwright specs (#515); pending: large-copy slice (whole-document Select All, chunked text extract), touch selection under Select (W8.5))_
+- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails (#247); bookmarks read-only (#264, #271), edited in the web (#517, #526), added and offset (#540), reordered and nested by drag (#546, slice A); attachments and layers read-only (#488, #511); pending: spring-loading and indent width (slice B), the Playwright bookmarks spec)_
+- [ ] **W5.3** Links, navigation history, page jump, page labels _(partial: page jump, navigation history (#248), page labels (#277, #283); link layer, goto links in history and the desktop scheme allow-list (#528); web and mail links ask first and show the full address (#535); pending: the Playwright links spec, the web-accessibility line)_
+- [ ] **W5.4** Text selection and copy; search panel _(partial: text layer (#250); selection drawn and dragged (#486, #514); Copy, Select All and Mark Text through the selection model (#524); whole-document Select All and sliced copy (#541); touch and pen selection by long-press and handles (#545, #549); pending: Playwright specs on Chromium (the touch path has no browser test yet), the 1,000-page timing check)_
 
 **W6 Required features, #139**
 
 - [x] **W6.1** R2 Page organizer _(organizer panel (#249) with thumbnails, multi-select, rotate, move up/down and delete, each undoable and tested with a fake engine (Vitest); insert blank and duplicate (#274), extract and insert from file (#281) are done; reorder logic (#286); drag-and-drop reorder is wired (#293, #428, #470))_
-- [ ] **W6.2** R3 Split dialog _(partial: split dialog (#251); split preview, ZIP output and part names, which also fix the desktop overwrite and bookmark order (#530); pending: Playwright split feature spec)_
-- [ ] **W6.3** R6 Combine dialog _(partial: source list, reordering, combine flow (#252); determinate progress through the merge job (#523); page ranges per source (#531, in review); pending: page-count probe, previews and password entry (W6.3b), moving Print, Crop and Mark Pages to the shared range rule)_
-- [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job with progress and Cancel, result with both sizes and download (#262, #288, #270, #434, #427); space audit before and after (#527, in review); pending: the three-browser Playwright compress spec)_
-- [ ] **W6.5** R7 Print _(partial: print dialog (#253), range parsing, dpi, browser print path; a multi-page print prints every page (#522); pending: partial notices and progress for large documents, the 200-page question, the 300 dpi check, the end-to-end two-page test)_
+- [ ] **W6.2** R3 Split dialog _(partial: split dialog (#251); preview, ZIP output, part names and document order (#530); pending: the Playwright split feature spec)_
+- [ ] **W6.3** R6 Combine dialog _(partial: source list, reordering, combine flow (#252); determinate progress (#523); page ranges per source (#531); page counts and merged-result preview (#539); pending: password entry (W6.3b PR 2, waiting for the owner's decision on the W1.2 rule), moving Print, Crop and Mark Pages to the shared range rule)_
+- [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job, result with both sizes (#262, #288, #270, #434, #427); space audit before and after (#527); pending: the Playwright compress spec, which failed on its first CI run (see W8.1))_
+- [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi; multi-page print (#522); streamed pages with progress, the 200-page question and 300 dpi (#536); pending: the two-page end-to-end test, still test.fixme)_
 - [ ] **W6.6** R4 Translate
 - [x] **W6.7a** R1a select, move and delete page objects _(on main: geometry and test vectors #384, `content.objects` call #385, web object cache and hit test #392, Edit layer and previews #403, commit of moves and deletes with Undo #411; the `content_edit` capability gate and the object edit spec are in (#421))_
-- [ ] **W6.7b** R1a add shapes; add, replace and export images _(partial: add rectangle, ellipse and line on the web and in the engine (#529); shapes on rotated and cropped pages are offset until the engine fix (strict xfail test_shape_on_rotated_cropped_page); pending: images (add, replace, export), shape styling)_
-- [ ] **W6.8a** R1b in-place paragraph editor and add text
+- [ ] **W6.7b** R1a add shapes; add, replace and export images _(partial: shapes (#529); add an image (#547); the rotated and cropped offset fixed (#548); pending: replace and export (slice 2b, in review), shape styling)_
+- [ ] **W6.8a** R1b in-place paragraph editor and add text _(partial: editing existing paragraphs in place (#550); pending: Add Text (slice 8a-2))_
 - [ ] **W6.8b** R1b font picker
-- [ ] **W6.9** R1c Font upload _(partial: fonts.validate, and services/fonts.py shipped in the web package (#525); pending: worker storage and the catalogue, OPFS persistence, the upload UI, docs/guide page)_
+- [ ] **W6.9** R1c Font upload _(partial: fonts.validate (#525); the security guard on font references (#544); pending: worker storage and catalogue (slice 2), OPFS persistence, the upload UI, docs/guide page)_
 
 **W7 Added features, #140**
 
@@ -624,7 +624,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W8 Quality, #141**
 
-- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: on main: harness #395, nightly workflow #400, open, view and navigate specs #405, redaction spec #412, object edit spec #421; the Mark Text test in `web/app/e2e/features/redaction.spec.ts` is still `test.fixme` on main (the #414 fix did not un-skip it); crop, save-as and print specs (#418) are in; pending: the Mark Text test, the crop spec's WebKit case, the two WebKit cases of the save-as spec and the print spec's error and page-range cases (all still `test.fixme` on main), and a first run of the nightly workflow in Actions)_
+- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow, and the feature specs; Chromium-by-default runs (#542); the first CI run of the feature specs found failing specs in compress, redaction, security, text and long-document, which need a fix or a fixme with a linked issue; pending: the new specs for bookmarks, links, split and the print two-page test)_
 - [ ] **W8.2** Visual golden tests for rendering
 - [ ] **W8.3** Performance tests in CI
 - [x] **W8.4** Fuzz and robustness tests
