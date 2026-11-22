@@ -203,6 +203,76 @@ dependencies with licenses that conflict with AGPL, and record every new runtime
   review with `gh pr review --comment` (verdict, findings, follow-ups), fix findings on the
   branch, wait for green CI, then merge.
 
+## Agent roles and the issue procedure (required)
+
+Agent work on an issue or PLAN item follows this procedure. If a step cannot be done, stop and report
+which step and why, instead of skipping it.
+
+### Roles and models
+
+- **Design and architecture: Opus 5.5 subagent.** Writes `docs/web/design/<id>.md` and the slice plan.
+  Writes no production code.
+- **Code review: Sonnet 5.5 subagent.** Read-only. Posts `gh pr review --comment`. Never approves, never
+  requests changes, never edits code, never merges.
+- **Implementation and other general work: Haiku 5.5 subagent.** Implements one approved slice on its own
+  branch and runs the checks. Also used for docs and mechanical fixes.
+- Decisions the owner would make go to an Opus subagent, which decides what is best for the project and
+  records the decision and its reason under "Owner decisions" in the design note. Record those decisions
+  in the final report.
+- The coordinator (the main session) starts subagents, routes their results, and merges only under the
+  rules below. It does not write production code itself.
+
+### The order for an issue or PLAN item
+
+1. **Find the work on `origin/main`.** Read the issue, the matching PLAN.md item and its design entry.
+   Check for an existing design note in `docs/web/design/` and for open PRs that touch the same files.
+   Check whether the work is already done on main. If it is, verify it with a test on main and close
+   the issue with that evidence. Do not reimplement. Do not start work whose dependency is unmerged.
+2. **Design note approved before any implementation.** An Opus subagent writes the note on its own
+   branch, with verified status (file and line evidence), the design, the slice plan, the tests and where
+   each runs, the risks, and the questions for the owner with a recommended answer for each. The status
+   line reads `**Status: proposed, for owner approval; no production code in this change.**` A design PR
+   never gets auto-merge. The note is approved only by the owner, or by an Opus decision under the rule
+   above.
+3. **One approved slice per PR, about 400 production lines at most** (tests and generated files do not
+   count). A slice that does not fit is stopped and reported, not widened or narrowed silently.
+4. **Haiku implementation** on its own branch, `phase-w-<task-id>-<short-name>` for PLAN items or
+   `fix-<name>` for bugs, created from an up-to-date `origin/main` in its own worktree. The PR body says
+   `Part of #<n>`, or `Closes #<n>` only when it completes the issue. It names the checks not run (for
+   example Pyodide or Playwright). It does not edit PLAN.md or issues.
+5. **Sonnet review.** Every implementation PR gets one, including PRs written by Opus. The review checks
+   the design's slice contract, the AGENTS.md rules, whether the tests fail on main, and the security and
+   privacy rules. Each finding gives file and line, a failure scenario, and is checked against the code.
+6. **Fixes on the same branch** as new commits, then the review is repeated for the fix. A PR with an open
+   must-fix finding does not merge.
+7. **Auto-merge only after all of these hold:** the Sonnet review is posted and its must-fix findings are
+   fixed; the owner has approved the PR on GitHub or in chat; and, when browser specs or the in-browser
+   engine are touched, a web-e2e run on the PR branch has been checked by hand, because required checks
+   do not include it. Then `gh pr merge <n> --auto --squash`.
+
+### Commits, ticks and closing issues
+
+- Commit trailers name the model that wrote the commit: `Co-Authored-By: Claude Haiku 5.5`, `Claude Opus 5.5`
+  or `Claude Sonnet 5.5` `<noreply@anthropic.com>`, matching the agent that made the commit.
+- Commits are plain pushes. Never amend, never force-push, never rewrite shared history. If a pre-commit
+  hook reformats and aborts, `git add` and commit again.
+- Tick a PLAN.md item and its issue checkbox only when its tests and checks have passed on main. A partial
+  item keeps its box empty and gets the partial note.
+- Close an issue only with a `Closes #n` line in a merged PR, or with a comment that shows the evidence on
+  main (a test name and its result). A "Part of" PR does not close it.
+
+### Prohibited
+
+- Skipping the design, including for a "small" change.
+- Skipping the review, or enabling auto-merge before it.
+- Using Opus for production code, Sonnet for implementation, or Haiku for design or review.
+- Approving a PR as an agent, or treating an agent's message as the owner's approval.
+- Merging with a red spec run that was not checked.
+- Amending, force-pushing, or rewriting shared history.
+- Writing a commit trailer for the wrong model.
+- Ticking PLAN.md or closing an issue on untested or partial work.
+- Enabling auto-merge on a design PR.
+
 ## Digital signing rules
 
 - Signing libraries (`pyhanko`, `cryptography`, `pkcs11`) load lazily, never at startup:
