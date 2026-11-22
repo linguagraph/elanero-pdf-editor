@@ -45,8 +45,10 @@ def make_xhr_opener(factory: Callable[[], Any] | None = None) -> Opener:
         # Pyodide does not convert bytes to a JS value; XHR needs a string here. Every body we
         # send is JSON in UTF-8, so the decode is lossless. A non-UTF-8 body raises, by design.
         text_body = None if request.data is None else request.data.decode("utf-8")
-        xhr = factory()
         try:
+            # Inside the try: an unarmed gate (W6.6) or a missing XMLHttpRequest raises a JS
+            # exception here, and it must surface as the same OSError as any other failure.
+            xhr = factory()
             xhr.open(request.method, request.url, False)
             # The timeout works because this runs in a worker: synchronous XHR throws when a
             # timeout is set on the main thread, so there every call would fail with OSError.

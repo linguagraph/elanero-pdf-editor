@@ -126,6 +126,16 @@ describe('translation gate (W6.6 section 3)', () => {
     expect(FakeNative.opened).toEqual([]);
   });
 
+  it('sends no credentials even if withCredentials is set true after open', () => {
+    const net = gate();
+    net.arm();
+    const xhr = net.openXhr();
+    xhr.open('GET', 'https://libretranslate.com/translate', false);
+    xhr.withCredentials = true;
+    xhr.send();
+    expect(FakeNative.calls).toEqual([['send', undefined, false]]);
+  });
+
   it('closes again on disarm, and a request already open stops at its next call', () => {
     const net = gate();
     net.arm();
