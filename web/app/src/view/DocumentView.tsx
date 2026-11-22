@@ -86,8 +86,8 @@ import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
 import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
-import { commitEdit, type EditChange } from '../edit/commit';
-import { EditLayer, type EditSelection } from '../edit/EditLayer';
+import { commitEdit, commitText, type EditChange } from '../edit/commit';
+import { EditLayer, type EditSelection, type TextEdit } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
 import { addShape, noteShapeTooSmall, type ShapeSpec, SHAPE_KIND } from '../edit/shapes';
@@ -470,11 +470,17 @@ export function DocumentView({
   // is dropped when the tool is left (its keys mean nothing to another tool).
   const editObjects = useMemo(() => new ObjectCache(rpc, handle), [rpc, handle]);
   const [editSelection, setEditSelection] = useState<EditSelection | null>(null);
+  // The paragraph open in the text editor (W6.8a 8a-1). Leaving the Edit tool drops it; the editor
+  // commits what was typed when it unmounts (ParagraphEditor), so nothing is lost.
+  const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
   const [seenTool, setSeenTool] = useState(tool);
   if (seenTool !== tool) {
     setSeenTool(tool);
     if (tool !== 'select') setCommentTool(null);
-    if (tool !== 'edit') setEditSelection(null);
+    if (tool !== 'edit') {
+      setEditSelection(null);
+      setTextEdit(null);
+    }
   }
   // A gesture the layer ended with a drag is committed here; the engine makes the change and the
   // selection it leaves is set by commitEdit (W6.7a S5).
@@ -483,6 +489,47 @@ export function DocumentView({
       void commitEdit({ rpc, handle, cache: editObjects, scheduler }, change, setEditSelection),
     [rpc, handle, editObjects, scheduler],
   );
+  // The typed paragraph is committed as one step (W6.8a 8a-1). The editor stays open while the
+  // engine is busy, and closes on any other outcome, so the caller learns whether to close.
+  const applyTextEdit = useCallback(
+    async (text: string): Promise<boolean> => {
+      const edit = textEdit;
+      if (edit === null) return true;
+      const outcome = await commitText(
+        { rpc, handle, cache: editObjects, scheduler },
+        { page: edit.page, revision: edit.revision, object: edit.object, text },
+        setEditSelection,
+      );
+      return outcome !== 'busy';
+    },
+    [textEdit, rpc, handle, editObjects, scheduler],
+  );
+  // Enter on a single selected editable paragraph opens it (W6.8a 8a-1, the keyboard path). Keys
+  // from a field, a button or a dialog keep their own meaning.
+  useEffect(() => {
+    if (tool !== 'edit' || textEdit !== null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter') return;
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (document.querySelector('.overlay-backdrop')) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, button, a, [contenteditable], [role="button"]')
+      )
+        return;
+      const sel = editSelection;
+      if (sel === null || sel.keys.length !== 1) return;
+      if (sel.revision !== scheduler.revisionOf(sel.page)) return;
+      const list = editObjects.ready(sel.page, sel.revision);
+      const object = list?.objects.find((o) => o.key === sel.keys[0]);
+      if (object === undefined || object.type !== 'text' || !object.editable) return;
+      event.preventDefault();
+      setTextEdit({ page: sel.page, revision: sel.revision, object });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [tool, textEdit, editSelection, editObjects, scheduler]);
   // The selected objects of the page are deleted as one undo step. The keys are read from the list
   // the layer shows, so nothing is asked of the engine first; with no selection, nothing is sent.
   const deleteEditSelection = useCallback(() => {
@@ -1406,6 +1453,22 @@ export function DocumentView({
                         selection={editSelection}
                         onSelect={setEditSelection}
                         onCommit={commitChange}
+                        rpc={rpc}
+                        handle={handle}
+                        editing={textEdit !== null && textEdit.page === box.index ? textEdit : null}
+                        onOpenText={(object) =>
+                          setTextEdit({
+                            page: box.index,
+                            revision: scheduler.revisionOf(box.index),
+                            object,
+                          })
+                        }
+                        onApplyText={applyTextEdit}
+                        onCloseText={() =>
+                          // Only the editor that is still open closes: a late close of an editor
+                          // replaced by another must not clear the new one.
+                          setTextEdit((current) => (current === textEdit ? null : current))
+                        }
                       />
                     ) : null}
                     {isShapeTool(tool) && sizes !== null ? (

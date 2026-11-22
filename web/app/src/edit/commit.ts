@@ -1,10 +1,17 @@
 // Committing an Edit tool gesture (W6.7a S5): a move or a resize of the selected objects is one
 // content.transform, a delete is one content.delete, each one actions.run and so one undo step on
 // the engine. The web keeps no history of its own: the Undo toast undoes the engine's last step.
-// The layer previews a gesture; this file is the only place that makes it.
+// The layer previews a gesture; this file is the only place that makes it. A typed paragraph is
+// committed here too (W6.8a 8a-1): one content.replace_text, one undo step.
 import type { PageRpc } from '../engine/engineConnection';
 import { offerUndo } from '../feedback/undoToast';
-import { reportRpcError, type ToastStore, toasts } from '../feedback/toasts';
+import {
+  reportRpcError,
+  type ToastAction,
+  type ToastKind,
+  type ToastStore,
+  toasts,
+} from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { PageObjectDto, RectDto, RunResult } from '../rpc/generated';
@@ -31,6 +38,20 @@ export type EditChange =
       readonly objects: readonly PageObjectDto[];
     };
 
+// One typed paragraph: `object` is the text block as the list showed it at `revision`, and `text`
+// is what the user typed. The style is never sent in 8a-1 (the engine keeps the block's own).
+export interface TextChange {
+  readonly page: number;
+  readonly revision: number;
+  readonly object: PageObjectDto;
+  readonly text: string;
+}
+
+// What the editor should do after a commit: `done` closes it, `busy` keeps it open with its text
+// (the engine was busy, and a retry is likely to work), `failed` closes it (the text is offered
+// with Copy text, see copyAction).
+export type TextOutcome = 'done' | 'busy' | 'failed';
+
 // The selection an edit leaves: the keys of its page at the revision they were listed at.
 export interface SettledSelection {
   readonly page: number;
@@ -44,6 +65,14 @@ export interface CommitDeps {
   readonly cache: ObjectCache;
   readonly scheduler: Pick<RenderScheduler, 'noteRevisions'>;
   readonly store?: ToastStore;
+}
+
+// The value a text commit returns for a font the engine had to substitute (W6.8a design 4.2).
+export interface FontChoice {
+  readonly name: string;
+  readonly embedded_reused: boolean;
+  readonly substituted: boolean;
+  readonly missing: string;
 }
 
 const LABELS = {
@@ -64,24 +93,47 @@ async function refreshStale(deps: CommitDeps, page: number): Promise<void> {
   }
 }
 
-// The reselection after a move or a resize: the objects now nearest to where they went. Null when
-// the list cannot be read, in which case nothing is selected.
+// The reselection after a move, a resize or a typed paragraph: the objects now nearest to the
+// given boxes. Null when the list cannot be read, in which case nothing is selected.
 async function reselected(
   deps: CommitDeps,
-  change: Extract<EditChange, { kind: 'move' | 'resize' }>,
+  page: number,
+  boxes: readonly RectDto[],
   revision: number,
 ): Promise<SettledSelection | null> {
   try {
-    const list = await deps.cache.get(change.page, revision);
+    const list = await deps.cache.get(page, revision);
     if (list.revision !== revision) return null;
     return {
-      page: change.page,
+      page,
       revision,
-      keys: reselect(list.objects, change.boxes),
+      keys: reselect(list.objects, boxes),
     };
   } catch {
     return null;
   }
+}
+
+// Offers Undo for the step a reply made, and clears the selection when the step is undone: the
+// engine's history moved back, so no list or selection of the old state is kept.
+function offerEditUndo(
+  deps: CommitDeps,
+  kind: ToastKind,
+  text: string,
+  reply: RunResult,
+  settle: (selection: SettledSelection | null) => void,
+): void {
+  offerUndo(kind, text, {
+    rpc: deps.rpc,
+    handle: deps.handle,
+    history: reply.state.history,
+    onUndone: (undone) => {
+      deps.cache.clear();
+      settle(null);
+      deps.scheduler.noteRevisions(undone.changed?.revisions ?? {});
+    },
+    store: deps.store ?? toasts,
+  });
 }
 
 // Runs the change through the engine, then notes the revisions, offers Undo, and tells the caller
@@ -133,25 +185,108 @@ export async function commitEdit(
 
   const revisions = reply.changed?.revisions ?? {};
   deps.scheduler.noteRevisions(revisions);
-  offerUndo('info', t(LABELS[change.kind]), {
-    rpc: deps.rpc,
-    handle: deps.handle,
-    history: reply.state.history,
-    onUndone: (undone) => {
-      // The engine's history moved back: no list or selection of the old state is kept.
-      deps.cache.clear();
-      settle(null);
-      deps.scheduler.noteRevisions(undone.changed?.revisions ?? {});
-    },
-    store,
-  });
+  offerEditUndo(deps, 'info', t(LABELS[change.kind]), reply, settle);
 
   if (change.kind === 'delete') {
     settle(null);
     return;
   }
   const next = revisions[String(change.page)];
-  settle(next === undefined ? null : await reselected(deps, change, next));
+  settle(next === undefined ? null : await reselected(deps, change.page, change.boxes, next));
+}
+
+// Commits a typed paragraph (W6.8a 8a-1): one content.replace_text with `style: null`, so the
+// engine keeps the block's own style, and one undo step. Errors are shown here, with Copy text
+// where the typing could be lost, so the caller only has to close (or keep open on `busy`).
+export async function commitText(
+  deps: CommitDeps,
+  change: TextChange,
+  settle: (selection: SettledSelection | null) => void,
+): Promise<TextOutcome> {
+  const store = deps.store ?? toasts;
+  const copy = copyAction(store, change.text);
+  let reply: RunResult;
+  try {
+    reply = await deps.rpc.call('actions.run', {
+      handle: deps.handle,
+      name: 'content.replace_text',
+      args: {
+        object: { page: change.page, key: change.object.key, revision: change.revision },
+        text: change.text,
+        style: null,
+      },
+    });
+  } catch (error) {
+    if (error instanceof RpcError && error.code === 'STALE_OBJECT') {
+      settle(null);
+      await refreshStale(deps, change.page);
+      store.push('warning', t('edit.text.stale'), copy);
+      return 'failed';
+    }
+    if (error instanceof RpcError && error.code === 'BUSY') {
+      reportRpcError(store, error);
+      return 'busy';
+    }
+    if (error instanceof RpcError) {
+      reportRpcError(store, error, undefined, copy);
+    } else {
+      store.push('error', t('edit.text.failed'), copy);
+    }
+    return 'failed';
+  }
+  if (!reply.executed) return 'done';
+
+  const revisions = reply.changed?.revisions ?? {};
+  deps.scheduler.noteRevisions(revisions);
+  const choice = fontChoiceOf(reply.value);
+  if (choice !== null && choice.substituted) {
+    offerEditUndo(deps, 'warning', substitutedText(choice), reply, settle);
+  } else {
+    offerEditUndo(deps, 'info', t('edit.textEdited'), reply, settle);
+  }
+
+  const next = revisions[String(change.page)];
+  settle(
+    next === undefined ? null : await reselected(deps, change.page, [change.object.bbox], next),
+  );
+  return 'done';
+}
+
+// The reply's value when it is a FontChoice, else null. RunParams.args and RunResult.value are
+// untyped in generated.ts, so the shape is checked here.
+export function fontChoiceOf(value: unknown): FontChoice | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Partial<FontChoice>;
+  if (typeof v.name !== 'string' || typeof v.substituted !== 'boolean') return null;
+  if (typeof v.missing !== 'string') return null;
+  return v as FontChoice;
+}
+
+// The warning for a substituted font, with the characters it could not show when it knows them.
+function substitutedText(choice: FontChoice): string {
+  const base = t('edit.text.substituted', { name: choice.name });
+  return choice.missing === ''
+    ? base
+    : `${base} ${t('edit.text.missing', { chars: choice.missing })}`;
+}
+
+// The recovery for a failed commit: the typed text goes to the clipboard, so nothing is lost.
+function copyAction(store: ToastStore, text: string): ToastAction {
+  return {
+    label: t('edit.text.copy'),
+    run: () => {
+      void copyToClipboard(store, text);
+    },
+  };
+}
+
+async function copyToClipboard(store: ToastStore, text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    store.push('success', t('edit.text.copied'));
+  } catch {
+    store.push('error', t('edit.text.failed'));
+  }
 }
 
 // The six numbers of the matrix as the engine's Matrix dataclass names them.

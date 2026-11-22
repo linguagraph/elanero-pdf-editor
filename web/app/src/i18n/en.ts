@@ -176,6 +176,16 @@ export const EN = {
   'edit.deleted': 'Objects deleted.',
   'edit.stale': 'The page changed, so the selection was cleared. Select the objects again.',
   'edit.failed': 'The edit could not be made.',
+  'edit.textEdited': 'Text changed.',
+  'edit.text.editorLabel': 'Edit text',
+  'edit.text.hint': 'Ctrl+Enter to apply, Escape to cancel.',
+  'edit.text.substituted':
+    "The document's font can't show this text in this style; used {name} instead.",
+  'edit.text.missing': 'Missing: {chars}',
+  'edit.text.stale': "The page changed, so your text wasn't applied.",
+  'edit.text.failed': 'The text could not be changed.',
+  'edit.text.copy': 'Copy text',
+  'edit.text.copied': 'Text copied.',
   'edit.shape.added': 'Shape added.',
   'edit.shape.layer':
     'Draw a shape: drag on the page, or press Enter for a default-size shape in the middle of the page. Esc stops.',

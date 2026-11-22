@@ -3,12 +3,15 @@
 // of a single selected object. A drag previews a move or a resize, and its release commits it (the
 // engine call is in commit.ts, through the parent's onCommit). The gestures port the desktop's
 // EditObjectsTool, with the geometry from hitTest.ts and selection.ts.
-import { type PointerEvent, useEffect, useState } from 'react';
+import { type MouseEvent, type PointerEvent, useEffect, useRef, useState } from 'react';
 import { cssBox, cssToPoints, type PageRect, rectBetween } from '../comments/coordinates';
+import type { PageRpc } from '../engine/engineConnection';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import type { ContentObjectsResult, PageObjectDto, RectDto } from '../rpc/generated';
+import type { ApplyText } from './applyText';
 import type { EditChange } from './commit';
+import { ParagraphEditor } from './ParagraphEditor';
 import {
   fitMatrix,
   HANDLE_PX,
@@ -38,6 +41,14 @@ export interface EditSelection {
   readonly keys: Selection;
 }
 
+// The paragraph being typed in (W6.8a 8a-1): the text block as the list showed it at `revision`.
+// The parent holds it, so a change of tool or of page can end the editor (the layer only shows it).
+export interface TextEdit {
+  readonly page: number;
+  readonly revision: number;
+  readonly object: PageObjectDto;
+}
+
 export interface EditLayerProps {
   readonly cache: ObjectCache;
   readonly page: number;
@@ -47,6 +58,15 @@ export interface EditLayerProps {
   readonly onSelect: (selection: EditSelection) => void;
   // A drag that ends past the click threshold: the parent makes the edit.
   readonly onCommit: (change: EditChange) => void;
+  // The text editor (8a-1): the connection and handle for the font preview, the open editor for
+  // this page (null when none), a double-click on an editable text block opens one, and the
+  // editor's commit (true when it should close) and its close.
+  readonly rpc?: PageRpc;
+  readonly handle?: string;
+  readonly editing?: TextEdit | null;
+  readonly onOpenText?: (object: PageObjectDto) => void;
+  readonly onApplyText?: ApplyText;
+  readonly onCloseText?: () => void;
 }
 
 // A press on the page. `onClick` is the selection a click (a press without a drag) leaves. A move
@@ -98,10 +118,25 @@ export function EditLayer({
   selection,
   onSelect,
   onCommit,
+  rpc,
+  handle,
+  editing = null,
+  onOpenText,
+  onApplyText,
+  onCloseText,
 }: EditLayerProps) {
   const [reply, setReply] = useState<ContentObjectsResult | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
+
+  // When the editor closes, focus returns to the page layer, so the keyboard user stays on the
+  // block they edited (design section 7).
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && editing === null) layerRef.current?.focus({ preventScroll: true });
+    wasEditing.current = editing !== null;
+  }, [editing]);
 
   // A list that fails leaves the page without outlines; the next revision asks again.
   useEffect(() => {
@@ -241,6 +276,20 @@ export function EditLayer({
     setGesture(null);
   };
 
+  // A double-click on an editable paragraph opens it in the text editor (design section 2).
+  const onDouble = (event: MouseEvent<HTMLDivElement>) => {
+    if (onOpenText === undefined) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const p = {
+      x: cssToPoints(event.clientX - box.left, zoom),
+      y: cssToPoints(event.clientY - box.top, zoom),
+    };
+    const hit = objectAt(objects, p, tol);
+    if (hit !== null && hit.type === 'text' && hit.editable && hit.style !== null) {
+      onOpenText(hit);
+    }
+  };
+
   const single = selected.length === 1 ? selected[0] : undefined;
   const radius = handleTol / 2;
   const handles = single === undefined || !single.editable ? [] : handlePoints(boxOf(single));
@@ -248,8 +297,10 @@ export function EditLayer({
 
   return (
     <div
+      ref={layerRef}
       className={blocked ? 'edit-layer edit-layer--blocked' : 'edit-layer'}
       role="presentation"
+      tabIndex={-1}
       title={hover ?? undefined}
       onPointerDown={onDown}
       onPointerMove={onMove}
@@ -258,6 +309,7 @@ export function EditLayer({
         finish(event);
         setHover(null);
       }}
+      onDoubleClick={onDouble}
     >
       {objects.map((o) => {
         const classes = ['edit-outline'];
@@ -293,6 +345,22 @@ export function EditLayer({
         <p className="edit-note" role="status">
           {t('edit.truncated')}
         </p>
+      ) : null}
+      {editing !== null &&
+      rpc !== undefined &&
+      handle !== undefined &&
+      onApplyText &&
+      onCloseText ? (
+        <ParagraphEditor
+          key={`${editing.page}:${editing.object.key}`}
+          object={editing.object}
+          page={page}
+          zoom={zoom}
+          rpc={rpc}
+          handle={handle}
+          onApply={onApplyText}
+          onClose={onCloseText}
+        />
       ) : null}
     </div>
   );
