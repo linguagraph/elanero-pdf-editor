@@ -611,6 +611,9 @@ export interface PlatformFlags {
   threads: boolean;
   pdfa: boolean;
   tiff_compression: string;
+  image_formats: string[] | null;
+  max_image_bytes: number | null;
+  max_image_pixels: number | null;
 }
 
 export interface PointDto {
@@ -1906,7 +1909,7 @@ export function decodePlatformFlags(
   path: string,
 ): PlatformFlags {
   const o = expectObject(value, path);
-  checkKeys(o, ['linearize', 'ocr', 'signing', 'system_fonts', 'office_import', 'threads', 'pdfa', 'tiff_compression'], path);
+  checkKeys(o, ['linearize', 'ocr', 'signing', 'system_fonts', 'office_import', 'threads', 'pdfa', 'tiff_compression', 'image_formats', 'max_image_bytes', 'max_image_pixels'], path);
   return {
     linearize: expectBoolean(field(o, 'linearize', path), `${path}.linearize`),
     ocr: expectBoolean(field(o, 'ocr', path), `${path}.ocr`),
@@ -1916,6 +1919,9 @@ export function decodePlatformFlags(
     threads: expectBoolean(field(o, 'threads', path), `${path}.threads`),
     pdfa: expectBoolean(field(o, 'pdfa', path), `${path}.pdfa`),
     tiff_compression: expectString(field(o, 'tiff_compression', path), `${path}.tiff_compression`),
+    image_formats: orNull(field(o, 'image_formats', path), `${path}.image_formats`, (v1, p1) => expectArray(v1, p1).map((item2, index2) => expectString(item2, `${p1}[${index2}]`))),
+    max_image_bytes: orNull(field(o, 'max_image_bytes', path), `${path}.max_image_bytes`, (v1, p1) => expectInteger(v1, p1)),
+    max_image_pixels: orNull(field(o, 'max_image_pixels', path), `${path}.max_image_pixels`, (v1, p1) => expectInteger(v1, p1)),
   };
 }
 

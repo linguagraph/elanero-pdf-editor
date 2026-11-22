@@ -614,6 +614,19 @@ def mixed_content() -> None:
     _save(doc, "mixed_content.pdf")
 
 
+def inline_image() -> None:
+    """A 2x2 red picture stored inside the page content (BI ... EI), not as an XObject: the editor
+    lists it as an image but can't replace or export it (W6.7b)."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 60), "Inline picture", fontsize=16)
+    pixels = bytes([255, 0, 0] * 4)
+    picture = b"q 120 0 0 120 72 600 cm BI /W 2 /H 2 /BPC 8 /CS /RGB ID " + pixels + b"\nEI Q\n"
+    contents = page.get_contents()[0]
+    doc.update_stream(contents, doc.xref_stream(contents) + picture)
+    _save(doc, "inline_image.pdf")
+
+
 def malformed_content() -> None:
     """A page whose content stream is broken (an operator inside an array): the content listing
     must fail on it, and the web's content.objects call must answer with no objects."""
@@ -1311,6 +1324,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "sensitive": sensitive,
     "redact_marks_preexisting": redact_marks_preexisting,
     "mixed_content": mixed_content,
+    "inline_image": inline_image,
     "malformed_content": malformed_content,
     "layers": layers,
     "hidden_layers": hidden_layers,

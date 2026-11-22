@@ -214,6 +214,10 @@ class PlatformFlags:
     threads: bool
     pdfa: bool
     tiff_compression: str
+    # A set in the model, sent as a sorted list (null when any format is accepted).
+    image_formats: tuple[str, ...] | None
+    max_image_bytes: int | None
+    max_image_pixels: int | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

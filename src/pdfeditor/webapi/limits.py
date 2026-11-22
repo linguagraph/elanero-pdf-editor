@@ -51,6 +51,12 @@ MAX_FONT_BYTES = 50 * 1024**2
 # is left to the merge job, which has its own heap and is discarded when it ends.
 MAX_PROBE_BYTES = 64 * 1024**2
 
+# An image added to a page (W6.7b). The bytes are held in the heap about twice (the transferred
+# buffer and MuPDF's copy), and a PNG decodes to up to four bytes a pixel while it is inserted, so
+# the pixel cap is well below the render ceiling. 25 MP takes a 24 MP camera photo.
+MAX_IMAGE_BYTES = 50 * 1024**2
+MAX_IMAGE_PIXELS = 25_000_000
+
 # The engine heap (W1.1 section 7): the front end warns once the wasm linear memory passes this.
 # Linear memory only grows, so this is a high-water mark, and a warning is never an error.
 HEAP_WARN_BYTES = 1536 * 1024**2  # 1.5 GiB
