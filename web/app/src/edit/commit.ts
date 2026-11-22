@@ -252,6 +252,13 @@ export async function commitText(
   return 'done';
 }
 
+// The typing of an editor that was dropped unapplied (its page scrolled out of the mounted range,
+// or its tab closed): one info toast with Copy text, so the words are not lost. Nothing is sent to
+// the engine.
+export function offerDroppedText(text: string, store: ToastStore = toasts): void {
+  store.push('info', t('edit.text.dropped'), copyAction(store, text));
+}
+
 // The reply's value when it is a FontChoice, else null. RunParams.args and RunResult.value are
 // untyped in generated.ts, so the shape is checked here.
 export function fontChoiceOf(value: unknown): FontChoice | null {

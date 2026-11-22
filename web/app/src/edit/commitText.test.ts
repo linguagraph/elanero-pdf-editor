@@ -4,7 +4,13 @@ import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { PageObjectDto, RectDto, RunResult } from '../rpc/generated';
-import { type CommitDeps, commitText, fontChoiceOf, type SettledSelection } from './commit';
+import {
+  type CommitDeps,
+  commitText,
+  fontChoiceOf,
+  offerDroppedText,
+  type SettledSelection,
+} from './commit';
 import { ObjectCache } from './objectCache';
 
 const box = (x0: number, y0: number, x1: number, y1: number): RectDto => ({ x0, y0, x1, y1 });
@@ -153,5 +159,30 @@ describe('the font choice reply', () => {
     expect(fontChoiceOf(null)).toBeNull();
     expect(fontChoiceOf({ name: 'Arial' })).toBeNull();
     expect(fontChoiceOf('Arial')).toBeNull();
+  });
+});
+
+describe('a dropped paragraph', () => {
+  it('offers the typed text as an info toast with Copy text, and sends nothing', async () => {
+    const { call, store } = setup(() => reply());
+    offerDroppedText('Kept words', store);
+    const [toast] = store.getState().visible;
+    expect(toast?.kind).toBe('info');
+    expect(toast?.text).toBe(t('edit.text.dropped'));
+    expect(toast?.action?.label).toBe(t('edit.text.copy'));
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('Copy text puts the typed text on the clipboard', async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    try {
+      const { store } = setup(() => reply());
+      offerDroppedText('Kept words', store);
+      store.getState().visible[0]?.action?.run();
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Kept words'));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

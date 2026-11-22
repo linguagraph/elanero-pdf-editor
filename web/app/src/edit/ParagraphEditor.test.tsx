@@ -57,6 +57,8 @@ function mount(options: {
   onClose?: () => void;
   zoom?: number;
   object?: PageObjectDto;
+  commitOnLeave?: () => boolean;
+  onDrop?: (text: string) => void;
 }) {
   const onApply = options.onApply ?? vi.fn(async () => true);
   const onClose = options.onClose ?? vi.fn();
@@ -70,6 +72,8 @@ function mount(options: {
       handle="h1"
       onApply={onApply}
       onClose={onClose}
+      commitOnLeave={options.commitOnLeave}
+      onDrop={options.onDrop}
     />
   );
   act(() => root.render(render(options.zoom ?? 1)));
@@ -247,5 +251,65 @@ describe('zoom and unmount', () => {
     root = createRoot(host);
     await flush();
     expect(onApply).toHaveBeenCalledWith('Left behind');
+  });
+});
+
+describe('leaving without a close (W6.8a fix)', () => {
+  // A scroll-out or a closed tab: the owner says the text is dropped.
+  it('a page scrolled out of the mounted range drops changed text: no actions.run, the owner is told', async () => {
+    const onApply = vi.fn(async () => true);
+    const onDrop = vi.fn();
+    const { area } = mount({ onApply, commitOnLeave: () => false, onDrop });
+    typeInto(area, 'Left behind');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await flush();
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onDrop).toHaveBeenCalledWith('Left behind');
+  });
+
+  it('a closed tab drops changed text the same way, with no call', async () => {
+    const onApply = vi.fn(async () => true);
+    const onDrop = vi.fn();
+    const { area, call } = mount({ onApply, commitOnLeave: () => false, onDrop });
+    typeInto(area, 'Left behind');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await flush();
+    expect(onApply).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+    expect(onDrop).toHaveBeenCalledWith('Left behind');
+  });
+
+  it('a drop with unchanged text tells the owner nothing', async () => {
+    const onDrop = vi.fn();
+    mount({ commitOnLeave: () => false, onDrop });
+    act(() => root.unmount());
+    root = createRoot(host);
+    await flush();
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  // A tool switch or a tab switch: the owner says the text is committed.
+  it('a tool switch still commits the changed text', async () => {
+    const onApply = vi.fn(async () => true);
+    const onDrop = vi.fn();
+    const { area } = mount({ onApply, commitOnLeave: () => true, onDrop });
+    typeInto(area, 'Kept');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await flush();
+    expect(onApply).toHaveBeenCalledWith('Kept');
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it('a tab switch still commits the changed text', async () => {
+    const onApply = vi.fn(async () => true);
+    const { area } = mount({ onApply, commitOnLeave: () => true });
+    typeInto(area, 'Kept');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await flush();
+    expect(onApply).toHaveBeenCalledWith('Kept');
   });
 });

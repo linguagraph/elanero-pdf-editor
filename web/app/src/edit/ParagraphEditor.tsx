@@ -36,6 +36,13 @@ export interface ParagraphEditorProps {
   readonly onApply: ApplyText;
   // Closes the editor with no further call (Escape, or after a commit that finished).
   readonly onClose: () => void;
+  // Asked when the editor unmounts without a close: true commits the typed text (a tool switch or
+  // a tab switch), false drops it (its page scrolled out of the mounted range, or its tab closed).
+  // Absent, it commits.
+  readonly commitOnLeave?: () => boolean;
+  // Told the typed text of a dropped editor, when it differs from the opening text, so the owner
+  // can offer it (Copy text). Nothing is sent to the engine for a drop.
+  readonly onDrop?: (text: string) => void;
 }
 
 export function ParagraphEditor({
@@ -46,6 +53,8 @@ export function ParagraphEditor({
   handle,
   onApply,
   onClose,
+  commitOnLeave,
+  onDrop,
 }: ParagraphEditorProps) {
   const style = object.style;
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -60,8 +69,10 @@ export function ParagraphEditor({
   const valueRef = useRef(object.text);
   const openingRef = useRef(object.text);
   const applyRef = useRef(onApply);
+  const leaveRef = useRef({ commitOnLeave, onDrop });
   useEffect(() => {
     applyRef.current = onApply;
+    leaveRef.current = { commitOnLeave, onDrop };
   });
 
   const box = cssBox(object.bbox, zoom);
@@ -123,13 +134,17 @@ export function ParagraphEditor({
     else setBusy(false);
   };
 
-  // Leaving the editor for another object or tool commits what was typed (desktop parity). The
-  // page's own pages can unmount while the editor is open; this keeps the typing rather than
-  // dropping it. Only the unmount matters: the cleanup reads the latest text through the refs.
+  // An unmount without a close either commits what was typed (a tool or tab switch, desktop parity)
+  // or drops it (a page scrolled out of the mounted range, or a closed tab). A drop sends nothing to
+  // the engine; the owner is told the text so it can be copied. Only the unmount matters: the
+  // cleanup reads the latest text and the owner's answer through the refs.
   useEffect(
     () => () => {
       if (closed.current || inFlight.current) return;
-      if (valueRef.current !== openingRef.current) void applyRef.current(valueRef.current);
+      if (valueRef.current === openingRef.current) return;
+      const { commitOnLeave: commits = () => true, onDrop: drop } = leaveRef.current;
+      if (commits()) void applyRef.current(valueRef.current);
+      else drop?.(valueRef.current);
     },
     [],
   );

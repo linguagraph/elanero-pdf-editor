@@ -86,7 +86,7 @@ import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
 import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
-import { commitEdit, commitText, type EditChange } from '../edit/commit';
+import { commitEdit, commitText, type EditChange, offerDroppedText } from '../edit/commit';
 import { EditLayer, type EditSelection, type TextEdit } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
@@ -169,6 +169,9 @@ export interface DocumentViewHandle {
   // Deletes the objects the Edit tool has selected (the Delete command and key, W6.7a S5). Nothing
   // happens with no selection.
   deleteEditSelection(): void;
+  // Drops the open paragraph editor without applying its text, for a tab that is closing: the typed
+  // text is offered as a toast instead (W6.8a fix). Called before the tab closes.
+  dropTextEdit(): void;
   // Sets the page layout (single column or two-page spreads, the cover alone or not), keeping the
   // page at the top in view (the ribbon's View commands, W4.3a S6).
   setLayout(choice: { readonly layout: ViewLayout; readonly firstAlone: boolean }): void;
@@ -473,6 +476,11 @@ export function DocumentView({
   // The paragraph open in the text editor (W6.8a 8a-1). Leaving the Edit tool drops it; the editor
   // commits what was typed when it unmounts (ParagraphEditor), so nothing is lost.
   const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
+  // How the open editor's unmount is read (ParagraphEditor's commitOnLeave): a closing tab sets
+  // textDropRef, and a page outside the mounted range (mountedPagesRef, kept by a layout effect
+  // below) drops the typing too. A tool or tab switch keeps the commit.
+  const textDropRef = useRef(false);
+  const mountedPagesRef = useRef<ReadonlySet<number>>(new Set());
   const [seenTool, setSeenTool] = useState(tool);
   if (seenTool !== tool) {
     setSeenTool(tool);
@@ -1007,6 +1015,15 @@ export function DocumentView({
   const mounted = [...layout.boxes.slice(range.first, range.end)];
   if (focusedBox !== undefined && (focusedBox.index < range.first || focusedBox.index >= range.end))
     mounted.push(focusedBox);
+  // The paragraph editor's page leaving the mounted range drops its open editor: the editor is
+  // unmounted with it, and its typing is not applied (W6.8a fix). Scrolling back reopens the object
+  // from its current state. The layout effect updates the set before the editor's cleanup reads it.
+  const textEditPageMounted =
+    textEdit === null || mounted.some((box) => box.index === textEdit.page);
+  if (textEdit !== null && !textEditPageMounted) setTextEdit(null);
+  useLayoutEffect(() => {
+    mountedPagesRef.current = new Set(mounted.map((box) => box.index));
+  });
   // The single-page layout shows one page, so the page at the viewport is that page wherever the
   // reader scrolls within it; the other layouts take the page the viewport's third falls in.
   const currentPage =
@@ -1105,6 +1122,9 @@ export function DocumentView({
         pageFieldRef.current?.select();
       },
       deleteEditSelection,
+      dropTextEdit: () => {
+        textDropRef.current = true;
+      },
       setLayout: changeLayout,
       setNight: chooseNight,
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
@@ -1464,6 +1484,11 @@ export function DocumentView({
                           })
                         }
                         onApplyText={applyTextEdit}
+                        // A tool or tab switch commits; a page that scrolled out or a closing tab drops.
+                        commitTextOnLeave={() =>
+                          !textDropRef.current && mountedPagesRef.current.has(box.index)
+                        }
+                        onDropText={(text) => offerDroppedText(text)}
                         onCloseText={() =>
                           // Only the editor that is still open closes: a late close of an editor
                           // replaced by another must not clear the new one.

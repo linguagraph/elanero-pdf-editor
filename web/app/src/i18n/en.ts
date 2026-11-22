@@ -183,6 +183,7 @@ export const EN = {
     "The document's font can't show this text in this style; used {name} instead.",
   'edit.text.missing': 'Missing: {chars}',
   'edit.text.stale': "The page changed, so your text wasn't applied.",
+  'edit.text.dropped': "The paragraph was closed, so your text wasn't applied.",
   'edit.text.failed': 'The text could not be changed.',
   'edit.text.copy': 'Copy text',
   'edit.text.copied': 'Text copied.',

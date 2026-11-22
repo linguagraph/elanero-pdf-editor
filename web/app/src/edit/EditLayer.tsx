@@ -67,6 +67,10 @@ export interface EditLayerProps {
   readonly onOpenText?: (object: PageObjectDto) => void;
   readonly onApplyText?: ApplyText;
   readonly onCloseText?: () => void;
+  // How the open editor's unmount without a close is decided, and where its dropped text goes (see
+  // ParagraphEditor's commitOnLeave and onDrop).
+  readonly commitTextOnLeave?: () => boolean;
+  readonly onDropText?: (text: string) => void;
 }
 
 // A press on the page. `onClick` is the selection a click (a press without a drag) leaves. A move
@@ -124,6 +128,8 @@ export function EditLayer({
   onOpenText,
   onApplyText,
   onCloseText,
+  commitTextOnLeave,
+  onDropText,
 }: EditLayerProps) {
   const [reply, setReply] = useState<ContentObjectsResult | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
@@ -360,6 +366,8 @@ export function EditLayer({
           handle={handle}
           onApply={onApplyText}
           onClose={onCloseText}
+          commitOnLeave={commitTextOnLeave}
+          onDrop={onDropText}
         />
       ) : null}
     </div>
