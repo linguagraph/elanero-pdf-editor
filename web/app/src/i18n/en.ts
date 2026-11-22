@@ -1155,6 +1155,8 @@ export const EN = {
   'error.INVALID_FONT': 'This font file could not be read. Choose a different font file.',
   'error.FONT_NOT_EMBEDDABLE':
     'This font cannot be added because its licence does not allow embedding. Choose a different font.',
+  'error.FONT_STORAGE_FULL':
+    'There is no room for more fonts. Remove fonts you no longer need, then try again.',
   'error.IMAGE_TOO_LARGE': 'This image is too large to add to the document. Use a smaller image.',
   'error.OUT_OF_MEMORY':
     'The browser ran out of memory. Close other documents or tabs, then try again.',

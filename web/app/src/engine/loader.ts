@@ -73,11 +73,11 @@ export const PILLOW_PACKAGE = 'pillow';
 export const FONTTOOLS_WHEEL_FILE = 'fonttools-4.62.1-py3-none-any.whl';
 const FONTTOOLS_WHEEL_PATH = `/home/pyodide/${FONTTOOLS_WHEEL_FILE}`;
 
-// The requests that need fontTools: the text edits, whose ToUnicode and glyph checks read it, and
-// the font preview, which reads the embedded program's character map (W6.8a S2). Without it the
-// first preview of a session would fall back to a generic family.
+// The requests that need fontTools: the text edits, whose ToUnicode and glyph checks read it, the
+// font preview, which reads the embedded program's character map (W6.8a S2), and the calls that
+// read an uploaded font file (W6.9). fonts.list and fonts.remove read only the store in memory.
 const FONTTOOLS_ACTIONS = new Set(['content.replace_text', 'content.add_text']);
-const FONTTOOLS_METHODS = new Set(['content.preview_font']);
+const FONTTOOLS_METHODS = new Set(['content.preview_font', 'fonts.validate', 'fonts.add']);
 
 // True when a request needs fontTools, so the worker installs it first.
 export function needsFontTools(request: string): boolean {
