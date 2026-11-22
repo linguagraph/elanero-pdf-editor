@@ -55,6 +55,16 @@ report in [Optimize and compare](optimize-compare.md#see-what-takes-up-space).
 New text becomes part of the page content, like the text around it. (To add a note that sits on
 top of the page, use the **Comment** tab instead.)
 
+In the web version, choose **Add Text** on the **Edit** tab, then click the page where the text should
+start, or drag out the box it goes in (a click makes a box 200 by 40 points). A box opens for typing:
+type, then press **Ctrl+Enter** (**Cmd+Enter** on a Mac), or click elsewhere, to add the text. A box
+left empty adds nothing. **Esc** closes the box without adding text, and the tool stays on for
+another box; with no box open, **Esc** turns the tool off. The new text is set in Helvetica 12
+point, black, left aligned, because the style controls come later. It is one undo step, and the
+tool returns to Select once the text is added. Clicking a paragraph that is already on the page
+with this tool edits that paragraph instead. On a signed document, Elanero asks first, as it does for
+the other editing tools.
+
 ## Add images
 
 1. Click **Add ▸ Image** (**Edit ▸ Add Image**).
