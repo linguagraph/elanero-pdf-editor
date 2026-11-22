@@ -33,7 +33,7 @@ from pdfeditor.engine.contentstream.objects import (
 )
 from pdfeditor.engine.contentstream.parser import ContentSyntaxError, Operation, parse, write
 from pdfeditor.engine.contentstream.spacing import LineSpacing, Spacing, apply_spacing
-from pdfeditor.engine.mupdf import annots
+from pdfeditor.engine.mupdf import annots, space
 from pdfeditor.engine.mupdf.flatten import flatten_inserted_forms
 from pdfeditor.engine.textlayout import editable_blocks
 from pdfeditor.engine.textspacing import detect_spacing, spaced_text
@@ -292,6 +292,7 @@ def _remove_text(page: MuPage, rects: Sequence[Rect]) -> None:
     fz = page.fz
     stashed = annots.stash_redactions(page)
     for r in rects:
+        # Constructor input: derotation_matrix is right here (engine/mupdf/space.py).
         unrot = (pymupdf.Rect(*r.as_tuple()) * fz.derotation_matrix).normalize()
         inner = pymupdf.Rect(unrot.x0 + 0.5, unrot.y0 + 0.5, unrot.x1 - 0.5, unrot.y1 - 0.5)
         fz.add_redact_annot(inner, fill=False)
@@ -555,7 +556,9 @@ def insert_text(
     # capture once, outside the retry loop below
     while True:
         box = Rect(rect.x0, rect.y0, rect.x1, min(page_bottom, rect.y0 + height))
-        unrot = (pymupdf.Rect(*box.as_tuple()) * fz.derotation_matrix).normalize()
+        # insert_htmlbox takes unrotated input and converts it with transformation_matrix
+        # internally, so the helper space is the one that is right (engine/mupdf/space.py).
+        unrot = (pymupdf.Rect(*box.as_tuple()) * space.helper_space(fz)).normalize()
         spare, _scale = fz.insert_htmlbox(
             unrot, f"<p>{body}</p>", css=css, archive=archive, scale_low=1, rotate=fz.rotation
         )
@@ -860,7 +863,8 @@ def _image_xref(page: MuPage, key: str) -> int:
 def add_shape(page: MuPage, spec: ShapeSpec) -> None:
     fz = page.fz
     shape = fz.new_shape()
-    m = fz.derotation_matrix
+    # Shape takes unrotated input, converted with transformation_matrix (engine/mupdf/space.py).
+    m = space.helper_space(fz)
     if spec.kind is ShapeKind.LINE:
         shape.draw_line(
             pymupdf.Point(spec.start.x, spec.start.y) * m, pymupdf.Point(spec.end.x, spec.end.y) * m

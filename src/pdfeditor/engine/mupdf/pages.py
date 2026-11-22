@@ -18,6 +18,7 @@ import pymupdf
 
 from pdfeditor.engine.base import EngineError
 from pdfeditor.engine.mupdf import content as ct
+from pdfeditor.engine.mupdf import space
 from pdfeditor.engine.mupdf.marks import marked
 from pdfeditor.engine.mupdf.pagecopy import select_with_copies
 from pdfeditor.model.fonts import FontRefKind
@@ -131,7 +132,12 @@ def _prune_dangling_outline(doc: MuDocument) -> None:
         new_level = max(1, level - len(removed_levels))
         # never deeper than one level below the previous kept item
         new_level = min(new_level, int(out[-1][0]) + 1) if out else 1  # type: ignore[call-overload]
-        out.append([new_level, *entry[1:]])
+        info = dict(entry[3])
+        if info.get("kind") == pymupdf.LINK_GOTO and info.get("to") is not None:
+            # get_toc reports the target in visible space; set_toc needs the encoded point.
+            target = doc.page(int(entry[2]) - 1).fz
+            info["to"] = space.toc_point(target, pymupdf.Point(info["to"]))
+        out.append([new_level, entry[1], entry[2], info])
     doc.fz.set_toc(out)
 
 
@@ -204,6 +210,8 @@ def set_rotation(page: MuPage, degrees: int) -> None:
 def set_crop(page: MuPage, rect: Rect) -> None:
     """Crop to ``rect`` given in the current visible space."""
     fz = page.fz
+    # Crop input is converted with derotation_matrix on purpose: set_cropbox takes top-left,
+    # MediaBox-relative coordinates, which the crop origin added below restores.
     unrot = (pymupdf.Rect(rect.x0, rect.y0, rect.x1, rect.y1) * fz.derotation_matrix).normalize()
     crop = fz.cropbox  # top-left based, relative to the MediaBox
     dx, dy = crop.x0, crop.y0
@@ -218,6 +226,8 @@ def set_crop(page: MuPage, rect: Rect) -> None:
 # -- stamps -----------------------------------------------------------------------------------
 def stamp_text(page: MuPage, stamp: TextStamp) -> None:
     fz = page.fz
+    # insert_text with morph takes unrotated input and is right with derotation_matrix (checked
+    # on rotated, cropped pages), so it keeps that matrix (engine/mupdf/space.py).
     origin = pymupdf.Point(stamp.origin.x, stamp.origin.y) * fz.derotation_matrix
     # morph angle = page rotation + visible counter-clockwise angle (keeps text upright/at angle)
     morph = (origin, pymupdf.Matrix(fz.rotation + stamp.angle))
@@ -259,7 +269,7 @@ def stamp_image(page: MuPage, stamp: ImageStamp) -> None:
     if stamp.opacity < 1:
         data = _with_opacity(data, stamp.opacity)
     fz = page.fz
-    rect = (pymupdf.Rect(*stamp.rect.as_tuple()) * fz.derotation_matrix).normalize()
+    rect = (pymupdf.Rect(*stamp.rect.as_tuple()) * space.helper_space(fz)).normalize()
     with marked(page, stamp.mark, stamp.rect.center.y < page.rect.height / 2):
         fz.insert_image(
             rect,
@@ -290,7 +300,7 @@ def fill_background(
 ) -> None:
     """Paint the whole page behind the existing content."""
     fz = page.fz
-    area = (fz.rect * fz.derotation_matrix).normalize()  # the visible page, unrotated coords
+    area = (fz.rect * space.helper_space(fz)).normalize()  # the visible page, unrotated coords
     with marked(page, mark):
         fz.draw_rect(area, color=None, fill=color, fill_opacity=opacity, overlay=False)
     page._doc.mark_page_changed(page.index)

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pymupdf
 
 from pdfeditor.engine.base import ColorMode, PageBoxes, RenderRequest, RenderResult
-from pdfeditor.engine.mupdf import annots, content, marks, ocr, pages, scan
+from pdfeditor.engine.mupdf import annots, content, marks, ocr, pages, scan, space
 from pdfeditor.engine.mupdf import convert as cv
 from pdfeditor.model.annotations import (
     STANDARD_STAMPS,
@@ -76,7 +76,9 @@ class MuPage:
 
     # MuPDF reports text, search hits, links and annotations in *unrotated* page space, while
     # rendering and ``rect`` use the visible (rotated) space. The Page contract says everything is
-    # in visible space, so outputs pass through these helpers.
+    # in visible space, so outputs pass through these helpers. Writes convert visible space in
+    # engine/mupdf/space.py, which takes the page transform from MuPDF (PyMuPDF's
+    # transformation_matrix drops the crop origin on rotated pages).
     def _vis_matrix(self) -> pymupdf.Matrix | None:
         page = self.fz
         return page.rotation_matrix if page.rotation else None
@@ -239,7 +241,7 @@ class MuPage:
     @property
     def pdf_matrix(self) -> Matrix:
         fz = self.fz
-        m = fz.derotation_matrix * ~fz.transformation_matrix
+        m = space.visible_to_pdf(fz)
         return Matrix(m.a, m.b, m.c, m.d, m.e, m.f)
 
     def add_annotation(self, model: AnnotationModel) -> AnnotationModel:
