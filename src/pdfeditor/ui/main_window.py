@@ -369,7 +369,7 @@ class MainWindow(QMainWindow):
         self._connect_panel_actions()
         self._create_start_actions()
         # after every controller has made its actions: defaults + the user's own shortcuts
-        self.shortcuts = ShortcutManager(self)
+        self.shortcuts = ShortcutManager(self, menu_keys=[s.key() for s in self._menu_shortcuts])
         self.command_search = CommandSearch(self.shortcuts, self, self._focus_page)
         self.ribbon.set_search(self.command_search)
         apply_short_labels(self.ribbon.button_actions())
