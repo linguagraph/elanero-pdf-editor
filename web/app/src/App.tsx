@@ -168,8 +168,8 @@ export function App({
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   // About Elanero (W4.3a S4), from the app menu.
   const [aboutOpen, setAboutOpen] = useState(false);
-  // Keyboard Shortcuts (W4.5 S2): from the app menu, the ribbon or Preferences. It opens above
-  // Preferences, which keeps its unsaved draft.
+  // Keyboard Shortcuts (W4.5 S2): opened from Preferences only. It opens above Preferences, which
+  // keeps its unsaved draft.
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // The ribbon's compact and collapse choices (W4.3a S2). The page keeps its own copy, so a toggle
   // works even where the browser refuses to store it; a saved change (from Preferences too) wins.

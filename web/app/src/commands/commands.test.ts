@@ -110,10 +110,10 @@ describe('registry declarations', () => {
     for (const def of REGISTRY.commands) {
       expect(Object.keys(def), def.id).not.toContain('shortcut');
       const expected = isSharedId(def.id) ? SHARED[def.id]?.keys[0] : undefined;
-      expect(REGISTRY.shortcut(def.id), def.id).toBe(expected);
+      expect(REGISTRY.defaultShortcut(def.id), def.id).toBe(expected);
     }
-    expect(REGISTRY.shortcut('save')).toBe('Ctrl+S');
-    expect(REGISTRY.shortcut('undo')).toBe('Ctrl+Z');
+    expect(REGISTRY.defaultShortcut('save')).toBe('Ctrl+S');
+    expect(REGISTRY.defaultShortcut('undo')).toBe('Ctrl+Z');
   });
 
   it('splits ids exactly into shared (in the table) and web-only', () => {

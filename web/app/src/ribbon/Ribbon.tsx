@@ -28,7 +28,7 @@ import {
   TAB_LABELS,
   type TabId,
 } from '../commands/registry';
-import { displayKeys, effectiveKeys, isMacPlatform } from '../commands/shortcuts';
+import { displayKeys, effectiveKeys, isMacPlatform, shortcutLabel } from '../commands/shortcuts';
 import { t } from '../i18n/t';
 import { layoutTierForWidth } from '../layout/breakpoints';
 import { useViewportWidth } from '../layout/useViewportWidth';
@@ -201,8 +201,8 @@ interface CollapseChevronProps {
   onPress: () => void;
 }
 
-// The chevron at the tab row's end: it collapses or shows the ribbon. Its tooltip names the
-// effective Ctrl+F1 keys, so an override from the shortcut settings shows up.
+// The chevron at the tab row's end: it collapses or shows the ribbon. Its tooltip names the keys
+// the web binds (effectiveKeys), so a change to them shows up.
 function CollapseChevron({ expanded, onPress }: CollapseChevronProps) {
   const keys = effectiveKeys('collapse-ribbon');
   const label = expanded ? t('ribbon.collapse') : t('ribbon.expand');
@@ -397,7 +397,7 @@ export function CommandButton({
   const reason = commandDisabledReason(def, state, handlers);
   const reasonId = useId();
   const shortcutId = useId();
-  const shortcut = registry.shortcut(def.id);
+  const shortcut = shortcutLabel(def.id, IS_MAC);
   const icon = registry.icon(def.id);
   const label = t(def.labelId);
   const reasonText = reason === null ? undefined : t(DISABLED_REASON_LABELS[reason]);
