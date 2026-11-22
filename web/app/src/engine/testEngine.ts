@@ -21,6 +21,7 @@ export function fakeEngine(client?: EngineClient): FakeEngine {
   let current = client;
   let waiters: ((ready: EngineClient) => void)[] = [];
   const listeners = new Set<RpcEventListener>();
+  const readyListeners = new Set<(ready: EngineClient) => void>();
   return {
     store: createEngineLoadStore(),
     client: () => current,
@@ -32,6 +33,12 @@ export function fakeEngine(client?: EngineClient): FakeEngine {
     },
     emit(events) {
       for (const listener of [...listeners]) listener(events);
+    },
+    onReady(listener) {
+      readyListeners.add(listener);
+      return () => {
+        readyListeners.delete(listener);
+      };
     },
     whenReady: () =>
       current !== undefined
@@ -49,6 +56,7 @@ export function fakeEngine(client?: EngineClient): FakeEngine {
       const ready = waiters;
       waiters = [];
       for (const resolve of ready) resolve(next);
+      for (const listener of [...readyListeners]) listener(next);
     },
   };
 }

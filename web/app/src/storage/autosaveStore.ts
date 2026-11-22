@@ -52,7 +52,7 @@ export function fitsQuota(
   return estimate.quota - estimate.usage >= size * 2;
 }
 
-function isQuotaError(error: unknown): boolean {
+export function isQuotaError(error: unknown): boolean {
   // Checked by name: a browser's DOMException is not always an instance of Error.
   return (
     typeof error === 'object' &&
@@ -76,7 +76,7 @@ async function tabFolder(
   return autosave.getDirectoryHandle(tabId, { create });
 }
 
-async function removeIfPresent(dir: DirectoryLike, name: string): Promise<void> {
+export async function removeIfPresent(dir: DirectoryLike, name: string): Promise<void> {
   try {
     await dir.removeEntry(name);
   } catch {
@@ -84,7 +84,7 @@ async function removeIfPresent(dir: DirectoryLike, name: string): Promise<void> 
   }
 }
 
-async function writeFile(dir: DirectoryLike, name: string, data: Blob): Promise<void> {
+export async function writeFile(dir: DirectoryLike, name: string, data: Blob): Promise<void> {
   // A writable stream commits on close(), so the old file stays whole until the new one is complete.
   const handle = await dir.getFileHandle(name, { create: true });
   // Older Safari has no createWritable: say so, rather than failing the same way every minute.

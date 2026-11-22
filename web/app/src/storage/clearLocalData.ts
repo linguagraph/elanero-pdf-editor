@@ -2,6 +2,7 @@
 // and nothing else: this origin can hold other apps' data (GitHub Pages shares one origin for all of
 // a user's project sites), so only the keys and folders below are touched.
 
+import { FONTS_FOLDER } from './fontStore';
 import { privateRoot, StorageUnsupportedError, type DirectoryLike } from './opfs';
 
 // Every Elanero localStorage key starts with this prefix (elanero.theme, elanero.prefs, ...).
@@ -10,7 +11,8 @@ export const LOCAL_STORAGE_PREFIX = 'elanero.';
 // The OPFS folders Clear all removes. autosave/ is deliberately not here: each open Elanero tab
 // keeps its recovery copies there, and another tab's unsaved work must survive a clear. Clear all
 // is offered only when no document is open in this tab, so its own copies are not at risk either.
-export const LOCAL_DATA_FOLDERS = ['fonts', 'secrets'] as const;
+// The fonts folder is the one the font store writes (W6.9 slice 3), so Clear all removes what it keeps.
+export const LOCAL_DATA_FOLDERS = [FONTS_FOLDER, 'secrets'] as const;
 
 export interface ClearOutcome {
   readonly keysRemoved: number;
