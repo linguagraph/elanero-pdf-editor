@@ -62,11 +62,18 @@ class ShortcutManager:
     """Remembers each command's default shortcuts, applies the user's overrides (QSettings)
     and changes them."""
 
-    def __init__(self, root: QWidget, settings: QSettings | None = None) -> None:
+    def __init__(
+        self,
+        root: QWidget,
+        settings: QSettings | None = None,
+        menu_keys: Iterable[QKeySequence] = (),
+    ) -> None:
         self.settings = settings or QSettings()
         self.actions: dict[str, QAction] = {}
         self.defaults: dict[str, tuple[str, ...]] = {}
         self.changed: list[Callable[[], None]] = []  # called after shortcuts change
+        # The Alt+letter keys that open the menu bar: a command can't take them.
+        self.menu_keys = frozenset(k.toString() for k in menu_keys)
         self.register(command_actions(root))
 
     def register(self, actions: Iterable[QAction]) -> None:
@@ -120,6 +127,20 @@ class ShortcutManager:
         wanted = QKeySequence(seq).toString()
         return [k for k in self.actions if k != key and wanted in self.current(k)]
 
+    def refusal(self, seq: str) -> str | None:
+        """Why ``seq`` can never be assigned, or None. Only the keys themselves are judged here;
+        a clash with another command is ``conflicts``.
+
+        Multi-key sequences are refused: a prefix such as Ctrl+K would hide the single key Ctrl+K
+        and the sequence's second key could never be checked on its own (W4.x design, section 5).
+        """
+        keys = QKeySequence(seq)
+        if keys.count() > 1:
+            return f"{seq} is a sequence of keys. Assign one key."
+        if keys.toString() in self.menu_keys:
+            return f"{seq} opens a menu. Choose another key."
+        return None
+
     def label(self, key: str) -> str:
         return self.actions[key].text().replace("&", "").replace("…", "").strip()
 
@@ -144,6 +165,7 @@ class ShortcutsDialog(QDialog):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.itemSelectionChanged.connect(self._selected)
         self.editor = QKeySequenceEdit(self)
+        self.editor.setMaximumSequenceLength(1)  # one key per command; see ShortcutManager.refusal
         self.editor.setAccessibleName("New shortcut")
         self.assign = QPushButton("Assign", self)
         self.assign.clicked.connect(lambda: self.apply_keys(self.editor.keySequence().toString()))
@@ -211,6 +233,10 @@ class ShortcutsDialog(QDialog):
         if key is None:
             return False
         if seq:
+            refused = self.manager.refusal(seq)
+            if refused:
+                self.message.setText(refused)
+                return False
             clash = self.manager.conflicts(key, seq)
             if clash:
                 names = ", ".join(self.manager.label(k) for k in clash)
