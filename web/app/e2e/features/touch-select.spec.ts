@@ -1,0 +1,181 @@
+// W5.4: text selection by touch under the Select tool (design W5.4-touch-select.md, sections 2 and 10).
+// A long-press on a line selects the word under the finger; the finger keeps going to extend it; a
+// quick swipe scrolls and selects nothing; after a selection the handles extend it, with 44 px
+// targets. Playwright's touchscreen only taps, so the flows drive Input.dispatchTouchEvent through a
+// CDP session, which is Chromium only, and so is the whole file. Nothing is saved, so no host check
+// is recorded. text_multipage's page 1 has a heading line, then body lines (text.spec.ts reads them
+// the same way).
+import { type CDPSession, expect, type Locator, type Page, test } from '@playwright/test';
+import {
+  captureClipboard,
+  copiedTexts,
+  fixture,
+  openApp,
+  openPdf,
+  STAGED,
+  watchPage,
+} from './support';
+
+type Point = { x: number; y: number };
+
+// The text lines of one page, as the view draws them (the text layer's spans, in reading order).
+function pageLines(page: Page, index: number): Locator {
+  return page.locator(`[data-page="${index}"] .page-text-line`);
+}
+
+function centre(box: { x: number; y: number; width: number; height: number }): Point {
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+// One touch event: touchStart and touchMove carry the finger's point, touchEnd lifts every finger.
+async function touchEvent(
+  cdp: CDPSession,
+  type: 'touchStart' | 'touchMove' | 'touchEnd',
+  at?: Point,
+): Promise<void> {
+  await cdp.send('Input.dispatchTouchEvent', {
+    type,
+    touchPoints: at === undefined ? [] : [{ x: at.x, y: at.y }],
+  });
+}
+
+// Moves the finger from one point to another in equal steps, one touchMove each.
+async function dragFinger(cdp: CDPSession, from: Point, to: Point, steps = 10): Promise<void> {
+  for (let step = 1; step <= steps; step += 1) {
+    await touchEvent(cdp, 'touchMove', {
+      x: from.x + ((to.x - from.x) * step) / steps,
+      y: from.y + ((to.y - from.y) * step) / steps,
+    });
+  }
+}
+
+// The live region's selection announcement (W5.4 section 6): the status that names the size. A test
+// polls it with expect.poll, so it waits for the state rather than for a fixed time.
+async function selectionAnnouncement(page: Page): Promise<string> {
+  const texts = await page.getByRole('status').allTextContents();
+  return texts.find((text) => /characters? selected\./.test(text)) ?? '';
+}
+
+test.describe('engine staged', () => {
+  test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
+  test.skip(
+    ({ browserName }) => browserName !== 'chromium',
+    'touch input goes through CDP, which only Chromium offers',
+  );
+  test.use({ hasTouch: true });
+
+  test('a long-press selects the word, the finger extends it, and Copy writes both lines', async ({
+    page,
+  }) => {
+    const problems = watchPage(page);
+    await captureClipboard(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+
+    const lines = pageLines(page, 0);
+    const all = await lines.allTextContents();
+    expect(all[1]?.trim(), 'second line has text').not.toBe('');
+    expect(all[2]?.trim(), 'third line has text').not.toBe('');
+    const first = await lines.nth(1).boundingBox();
+    const last = await lines.nth(2).boundingBox();
+    if (first === null || last === null) throw new Error('page 1 has no text lines to select');
+
+    const cdp = await page.context().newCDPSession(page);
+    // The press is at the start of the line, so the word under it is the line's first word.
+    const start = { x: first.x + 2, y: centre(first).y };
+    await touchEvent(cdp, 'touchStart', start);
+    // The hold is LONG_PRESS_MS (500 ms): the announcement appears when it fires, with the finger down.
+    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
+    await dragFinger(cdp, start, { x: last.x + last.width + 4, y: centre(last).y }, 12);
+    await touchEvent(cdp, 'touchEnd');
+
+    await page.keyboard.press('Control+C');
+    await expect(page.getByText('Copied to clipboard.', { exact: true })).toBeVisible();
+    const written = await copiedTexts(page);
+    expect(written).toHaveLength(1);
+    expect(written[0]).toBe(`${all[1]}\n${all[2]}`);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
+
+  test('a quick swipe on text scrolls the page and selects nothing', async ({ page }) => {
+    const problems = watchPage(page);
+    await captureClipboard(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+
+    const scroller = page.locator('.doc-view-scroll');
+    const before = await scroller.evaluate((element) => element.scrollTop);
+    const line = await pageLines(page, 0).nth(1).boundingBox();
+    if (line === null) throw new Error('page 1 has no text lines to swipe over');
+
+    // The finger leaves the slop long before LONG_PRESS_MS, so the gesture is a scroll (section 2).
+    const cdp = await page.context().newCDPSession(page);
+    const start = centre(line);
+    await touchEvent(cdp, 'touchStart', start);
+    await dragFinger(cdp, start, { x: start.x, y: start.y - 200 }, 8);
+    await touchEvent(cdp, 'touchEnd');
+
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(before);
+    await page.keyboard.press('Control+C');
+    await expect(
+      page.getByText('Select some text on a page first, then press Copy.', { exact: true }),
+    ).toBeVisible();
+    expect(await copiedTexts(page)).toHaveLength(0);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
+
+  test('the end handle extends a selection a line down, and both handles are 44 px', async ({
+    page,
+  }) => {
+    const problems = watchPage(page);
+    await captureClipboard(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+
+    const lines = pageLines(page, 0);
+    const all = await lines.allTextContents();
+    expect(all[3]?.trim(), 'fourth line has text').not.toBe('');
+    const first = await lines.nth(1).boundingBox();
+    const last = await lines.nth(2).boundingBox();
+    const target = await lines.nth(3).boundingBox();
+    if (first === null || last === null || target === null) {
+      throw new Error('page 1 has no text lines to select');
+    }
+
+    const cdp = await page.context().newCDPSession(page);
+    const start = { x: first.x + 2, y: centre(first).y };
+    await touchEvent(cdp, 'touchStart', start);
+    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
+    await dragFinger(cdp, start, { x: last.x + last.width + 4, y: centre(last).y }, 12);
+    await touchEvent(cdp, 'touchEnd');
+
+    // The handles show after a touch selection (section 3). Each one is a 44 x 44 px target.
+    const handles = page.locator('.selection-handle');
+    await expect(handles).toHaveCount(2);
+    for (const index of [0, 1]) {
+      const box = await handles.nth(index).boundingBox();
+      expect(box?.width, `handle ${index} width`).toBeGreaterThanOrEqual(44);
+      expect(box?.height, `handle ${index} height`).toBeGreaterThanOrEqual(44);
+    }
+
+    // Drag the end handle down to the fourth line's end: the selection now covers three lines.
+    const endHandle = await page.locator('.selection-handle--end').boundingBox();
+    if (endHandle === null) throw new Error('the end handle is not drawn');
+    const grip = centre(endHandle);
+    await touchEvent(cdp, 'touchStart', grip);
+    await dragFinger(cdp, grip, { x: target.x + target.width + 4, y: centre(target).y }, 12);
+    await touchEvent(cdp, 'touchEnd');
+
+    await page.keyboard.press('Control+C');
+    await expect(page.getByText('Copied to clipboard.', { exact: true })).toBeVisible();
+    const written = await copiedTexts(page);
+    expect(written).toHaveLength(1);
+    expect(written[0]).toBe(`${all[1]}\n${all[2]}\n${all[3]}`);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
+});

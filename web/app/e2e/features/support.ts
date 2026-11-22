@@ -141,3 +141,32 @@ export async function cropAllPages(page: Page, margin: number, pages: number): P
   // A toast from an earlier crop may still show the same text, so the count is checked, not one match.
   await expect(page.getByText(`Cropped ${pages} pages`, { exact: true })).not.toHaveCount(0);
 }
+
+// Records what Copy writes. The clipboard permission is not granted in every browser the suite runs
+// on, so the clipboard is replaced before the app loads: Copy still runs its own path, and the text it
+// hands to the clipboard is kept in order for the test to read (copiedTexts). A large copy writes a
+// ClipboardItem whose data is a promise (largeCopy.ts), so write reads that back too.
+export async function captureClipboard(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const copied: string[] = [];
+    Object.defineProperty(window, '__copied', { value: copied });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          copied.push(text);
+          return Promise.resolve();
+        },
+        write: async (items: ClipboardItems) => {
+          const blob = await items[0]?.getType('text/plain');
+          if (blob !== undefined) copied.push(await blob.text());
+        },
+      },
+    });
+  });
+}
+
+// The texts the clipboard received, in order (captureClipboard must run before the app loads).
+export async function copiedTexts(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
+}
