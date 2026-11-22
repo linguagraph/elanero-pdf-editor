@@ -100,7 +100,10 @@ test.describe('engine staged', () => {
     await openPdf(page, 'outline_unsorted.pdf', fixture('outline_unsorted.pdf'));
 
     const dialog = await openSplit(page);
-    await dialog.getByRole('radio', { name: 'Top-level bookmarks', exact: true }).check();
+    await dialog.getByText('Top-level bookmarks', { exact: true }).click();
+    await expect(
+      dialog.getByRole('radio', { name: 'Top-level bookmarks', exact: true }),
+    ).toBeChecked();
     await expect(dialog.locator('.split-preview-summary')).toHaveText('4 files');
     const rows = await previewRows(dialog);
     // Document order, not alphabetical: Intro, Zebra, then the two Appendix parts.
@@ -141,7 +144,8 @@ test.describe('engine staged', () => {
     await expect(dialog.locator('.split-preview-summary')).toHaveText('3 files');
     const rows = await previewRows(dialog);
 
-    await dialog.getByRole('radio', { name: 'One ZIP file', exact: true }).check();
+    await dialog.getByText('One ZIP file', { exact: true }).click();
+    await expect(dialog.getByRole('radio', { name: 'One ZIP file', exact: true })).toBeChecked();
     await dialog.getByRole('button', { name: 'Split', exact: true }).click();
     await expect(dialog.getByRole('heading', { name: 'Files (1)', exact: true })).toBeVisible({
       timeout: 120_000,
@@ -167,7 +171,8 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const dialog = await openSplit(page);
-    await dialog.getByRole('radio', { name: 'Page ranges', exact: true }).check();
+    await dialog.getByText('Page ranges', { exact: true }).click();
+    await expect(dialog.getByRole('radio', { name: 'Page ranges', exact: true })).toBeChecked();
     await dialog.getByRole('textbox', { name: /^Page ranges/ }).fill('9');
     await dialog.getByRole('button', { name: 'Split', exact: true }).click();
 
