@@ -293,6 +293,8 @@ def _with_script_and_xmp(src: Path, dst: Path) -> None:
     doc.close()
 
 
+# It compares saved bytes, which differ under Pyodide (a random /ID or object ordering difference).
+@pytest.mark.desktop_only
 def test_scrub_objects_matches_pymupdf_scrub_without_gaps(fixture_pdf, tmp_path: Path) -> None:
     """On a file with no gaps, the JavaScript and XMP pass must do what PyMuPDF's own scrub()
     does: the same bytes out. This is the no-effect-on-unsigned-files guarantee, and it also
