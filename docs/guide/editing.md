@@ -94,7 +94,7 @@ Click instead of dragging for a default-size shape (120 by 80 points). With the 
 page and press Enter for a default-size shape in the middle of the page; Esc stops the tool. The
 tool turns off after one shape. Undo removes a shape in one step.
 
-In the web version, **Shapes ▸ Shape Style…** sets the outline colour, the fill and the line width of
+In the desktop and web versions, **Shapes ▸ Shape Style…** sets the outline colour, the fill and the line width of
 the shapes you draw next. The default is a black outline of 1.5 points with no fill. A line is never
 filled, and a shape needs an outline or a fill. The style lasts for the session only, and a shape
 already on the page keeps its style.

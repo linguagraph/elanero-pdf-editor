@@ -668,6 +668,11 @@
       ],
       "icon": "mouse-pointer-2"
     },
+    "shape-style": {
+      "label": "Shape Style",
+      "keys": [],
+      "icon": "paint-bucket"
+    },
     "sign-document": {
       "label": "Sign Document",
       "keys": [],

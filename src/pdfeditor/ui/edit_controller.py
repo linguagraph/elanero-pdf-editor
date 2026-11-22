@@ -13,6 +13,7 @@ from shiboken6 import isValid
 from pdfeditor.actions import content
 from pdfeditor.actions.content import ReplaceImage
 from pdfeditor.model.objects import ObjectType, ShapeKind
+from pdfeditor.ui.dialogs.shape_style import ShapeStyleDialog
 from pdfeditor.ui.icons import icon
 from pdfeditor.ui.tools import edit
 from pdfeditor.ui.tools.base import Tool
@@ -85,6 +86,7 @@ class EditController:
         self.act_replace_image = act("Re&place Image…", "image-up", self.replace_image)
         self.act_extract_image = act("E&xport Image…", "image-down", self.export_image)
         self.act_delete_objects = act("&Delete Selected Objects", "trash-2", self.delete_objects)
+        self.act_shape_style = act("Shape &Style…", "paint-bucket", self.shape_style)
 
         # The edit tools report through module-level hooks. Another window may have been
         # closed since it set them, so they check that their window still exists.
@@ -108,6 +110,7 @@ class EditController:
             self.tool_actions["add_rectangle"],
             self.tool_actions["add_ellipse"],
             self.tool_actions["add_line"],
+            self.act_shape_style,
             title="Shapes",
         )
         r.add_group(
@@ -191,3 +194,11 @@ class EditController:
     def delete_objects(self) -> bool:
         view = self.w.current_view()
         return view is not None and edit.delete_selected(view)
+
+    def shape_style(self, dialog: ShapeStyleDialog | None = None) -> bool:
+        """Pick the style of the shapes drawn next; it lasts for the session."""
+        dialog = dialog or ShapeStyleDialog(edit.AddShapeTool.style, self.w)
+        if not dialog.exec():
+            return False
+        edit.AddShapeTool.style = dialog.shape_style()
+        return True

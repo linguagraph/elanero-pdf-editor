@@ -23,7 +23,6 @@ from pdfeditor.actions.content import (
 )
 from pdfeditor.actions.edit_geometry import HANDLE_PX, MIN_DRAG
 from pdfeditor.engine.base import EngineError, UnsupportedFeature
-from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.model.objects import (
     FontChoice,
@@ -34,6 +33,7 @@ from pdfeditor.model.objects import (
     ShapeSpec,
     TextStyle,
 )
+from pdfeditor.ui.dialogs.shape_style import DEFAULT_SHAPE_STYLE, ShapeStyle
 from pdfeditor.ui.tools.base import Tool
 from pdfeditor.ui.view.text_editor import InlineTextEditor
 
@@ -388,24 +388,25 @@ class AddShapeTool(_RectTool):
     # A click adds nothing: a default-size shape would be committed under the pointer and the
     # tool would drop back to Select, so the next drag moved that shape instead of drawing one.
     default_size = None
+    # The style of the shapes drawn next, set by Shapes > Shape Style. It is read when a shape is
+    # drawn, not when the tool is armed, so a change applies to a tool that is already active.
+    style: ShapeStyle = DEFAULT_SHAPE_STYLE
 
     def __init__(self, kind: ShapeKind) -> None:
         super().__init__()
         self.kind = kind
         self.name = f"add_{kind.value}"
-        self.stroke = Color(0, 0, 0)
-        self.fill: Color | None = None
-        self.width = 1.5
 
     def finish(self, view: DocumentView, page: int, rect: Rect, a: Point, b: Point) -> None:
+        style = AddShapeTool.style
         spec = ShapeSpec(
             self.kind,
             rect,
             a,
             b,
-            self.stroke,
-            None if self.kind is ShapeKind.LINE else self.fill,
-            self.width,
+            style.stroke,
+            None if self.kind is ShapeKind.LINE else style.fill,
+            style.width,
         )
         _used(
             view,
