@@ -72,6 +72,7 @@ const FORCED_COLOURS: Record<ColourToken, string> = {
   success: 'CanvasText',
   warning: 'CanvasText',
   brand: 'LinkText',
+  editorBg: 'Canvas',
 };
 
 function forcedColoursBlock(): string[] {

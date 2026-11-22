@@ -23,7 +23,8 @@ export type ColourToken =
   | 'danger'
   | 'success'
   | 'warning'
-  | 'brand';
+  | 'brand'
+  | 'editorBg';
 
 export const BRAND = {
   name: 'Elanero',
@@ -48,6 +49,7 @@ export const COLOURS: Record<'light' | 'dark', Record<ColourToken, string>> = {
     success: '#0f7b0f',
     warning: '#8a5100',
     brand: '#0067c0',
+    editorBg: '#fff6c4',
   },
   dark: {
     window: '#202020',
@@ -67,6 +69,7 @@ export const COLOURS: Record<'light' | 'dark', Record<ColourToken, string>> = {
     success: '#6ccb5f',
     warning: '#fce100',
     brand: '#4cc2ff',
+    editorBg: '#4a4424',
   },
 };
 
