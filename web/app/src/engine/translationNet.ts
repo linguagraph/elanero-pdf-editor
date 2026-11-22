@@ -1,5 +1,6 @@
 // The translation calls' network path (W6.6 section 3). The worker drops XMLHttpRequest after its
-// lockdown; this keeps the captured constructor and lets Python open requests only while armed.
+// lockdown; this keeps the captured constructor in a closure and lets Python open requests only
+// while armed. Python gets plain request objects, never a constructor that leads to the native class.
 
 // The origins translation may call: the CSP's connect-src minus 'self' (a Vitest test checks it).
 export const TRANSLATION_ORIGINS: readonly string[] = [
@@ -51,38 +52,55 @@ export function isTranslationUrl(url: string): boolean {
 }
 
 // The gate for one worker; ``native`` is the constructor captured before the lockdown.
-// The request object subclasses it: only open, send and the headers are checked.
+// Each request gets its own native instance, held only in the closure. The object handed to
+// Python is a plain object: its prototype chain and its constructor do not reach the native class,
+// so Python cannot make a request that skips the gate.
 export function createTranslationNet(native: XhrConstructor | undefined): TranslationNet {
   let armed = false;
   const assertArmed = (): void => {
     if (!armed) throw new Error('translation is not allowed at this time');
   };
-  // The subclass is made on first use: a worker with a stubbed XMLHttpRequest must still load.
-  let gated: XhrConstructor | undefined;
-  const gatedClass = (): XhrConstructor => {
-    if (gated !== undefined) return gated;
-    const Base = native as XhrConstructor;
-    gated = class GatedXhr extends Base {
+
+  const makeRequest = (Base: XhrConstructor): XhrLike => {
+    const xhr = new Base();
+    return {
       open(method: string, url: string, asynchronous: boolean): void {
         assertArmed();
         if (asynchronous !== false) throw new Error('translation requests must be synchronous');
         if (!ALLOWED_METHODS.has(method)) throw new Error('translation method not allowed');
         if (!isTranslationUrl(url)) throw new Error('translation host not allowed');
-        this.withCredentials = false;
-        super.open(method, url, false);
-      }
-
+        xhr.withCredentials = false;
+        xhr.open(method, url, false);
+      },
       setRequestHeader(name: string, value: string): void {
         assertArmed();
-        super.setRequestHeader(name, value);
-      }
-
+        xhr.setRequestHeader(name, value);
+      },
       send(body?: string): void {
         assertArmed();
-        super.send(body);
-      }
+        // Forced again here, so no credentials are sent whatever Python set in between.
+        xhr.withCredentials = false;
+        xhr.send(body);
+      },
+      get status(): number {
+        return xhr.status;
+      },
+      get responseText(): string {
+        return xhr.responseText;
+      },
+      get timeout(): number {
+        return xhr.timeout;
+      },
+      set timeout(value: number) {
+        xhr.timeout = value;
+      },
+      get withCredentials(): boolean {
+        return xhr.withCredentials;
+      },
+      set withCredentials(value: boolean) {
+        xhr.withCredentials = value;
+      },
     };
-    return gated;
   };
 
   return {
@@ -93,8 +111,9 @@ export function createTranslationNet(native: XhrConstructor | undefined): Transl
       armed = false;
     },
     openXhr: () => {
+      assertArmed();
       if (native === undefined) throw new Error('translation is not available in this worker');
-      return new (gatedClass())();
+      return makeRequest(native);
     },
   };
 }

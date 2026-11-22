@@ -108,6 +108,17 @@ def test_an_open_exception_is_a_network_failure(monkeypatch: pytest.MonkeyPatch)
         make_xhr_opener()(Request("https://libretranslate.com/translate", "GET", {}, None), 5.0)
 
 
+def test_a_factory_exception_is_a_network_failure() -> None:
+    """An unarmed translation gate makes the factory throw; it maps to OSError, not a raw error."""
+
+    def unarmed() -> Any:
+        raise RuntimeError("translation is not allowed at this time")
+
+    request = Request("https://libretranslate.com/translate", "GET", {}, None)
+    with pytest.raises(OSError, match="network request failed"):
+        make_xhr_opener(unarmed)(request, 5.0)
+
+
 def test_a_missing_response_text_is_an_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
     install_js(monkeypatch, FakeXHR(status=204, text=None))  # type: ignore[arg-type]
     reply = make_xhr_opener()(Request("https://libretranslate.com/translate", "GET", {}, None), 5.0)
