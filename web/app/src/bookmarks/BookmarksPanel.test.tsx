@@ -821,6 +821,53 @@ describe('bookmarks drag and drop (W5.2)', () => {
     expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
   });
 
+  it('spring-loading never opens the dragged entry itself, however long the pointer rests on it', async () => {
+    const { rpc } = editableRpc(closed);
+    openPanel('bookmarks');
+    await mount(51, rpc);
+    // Part One is closed and has children, and it is the entry being dragged.
+    pointerAt(item('Part One'), 'pointerdown', 20, rowMiddle(0));
+    // Starts the drag over Part Two, so no timer is armed before the fake clock is on.
+    pointerAt(tree(), 'pointermove', 56, rowMiddle(1));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      pointerAt(tree(), 'pointermove', 56, rowMiddle(0));
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+      expect(titles()).toEqual(['Part One', 'Part Two']);
+    } finally {
+      vi.useRealTimers();
+    }
+    act(() => {
+      tree().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+  });
+
+  it('releasing the pointer before 800 ms clears the spring-load timer: nothing expands later', async () => {
+    const { rpc } = editableRpc(closed);
+    await startDragOfPartTwo(52, rpc);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      pointerAt(tree(), 'pointermove', 56, 22);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      pointerAt(tree(), 'pointerup', 56, 22);
+      // The release ends the drag, so its timer is gone, not just ignored.
+      expect(vi.getTimerCount()).toBe(0);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // The indent per level comes from --bookmarks-indent on the list, read once per drag. The fixture
   // is `open`, so the gap below Section 1.1.1 (y = 134, row 3's top band) takes levels 1 to 3, and
   // x = 60 is level 2 at a 40 px indent but level 3 at the 20 px fallback.

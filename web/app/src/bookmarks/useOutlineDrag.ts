@@ -152,9 +152,13 @@ export function useOutlineDrag(options: OutlineDragOptions): OutlineDrag {
   }, []);
 
   // Opens the closed entry under the pointer after SPRING_LOAD_MS; any other anchor cancels it.
+  // The dragged entry never opens itself: it is moving, not a place to drop into.
   const armSpring = useCallback((press: Press, live: Live, hit: Hit): void => {
     const row = hit.kind === 'inside' ? latest.current.rows[hit.row] : undefined;
-    const wanted = row !== undefined && row.hasChildren && !row.expanded ? row.index : null;
+    const wanted =
+      row !== undefined && row.hasChildren && !row.expanded && row.index !== press.index
+        ? row.index
+        : null;
     if ((live.spring?.row ?? null) === wanted) return;
     clearSpring(live);
     if (wanted === null) return;
