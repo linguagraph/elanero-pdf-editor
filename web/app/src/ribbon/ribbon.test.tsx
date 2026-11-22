@@ -152,6 +152,13 @@ describe('Ribbon', () => {
     render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ save: vi.fn() }} />);
     expect(describedText(button('save'))).toBe('Ctrl+S');
   });
+
+  // The web binds Go to Page to Alt+G (its desktop key Ctrl+Shift+N is the browser's). The
+  // description must say what the web binds, so a screen reader never hears a key that does nothing.
+  it('describes the key the web binds, not the desktop key the browser keeps', () => {
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{ 'go-to-page': vi.fn() }} />);
+    expect(describedText(button('go-to-page'))).toBe('Alt+G');
+  });
 });
 
 describe('Ribbon in a narrow window', () => {

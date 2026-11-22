@@ -209,7 +209,7 @@ export interface Registry {
   readonly menu: readonly (readonly string[])[];
   get(id: string): CommandDef | undefined;
   // The default shortcut from the shared table, or undefined when the command has none.
-  shortcut(id: string): string | undefined;
+  defaultShortcut(id: string): string | undefined;
   // The command's icon: the override, else the shared table's desktop icon when the web has it.
   icon(id: string): IconName | undefined;
 }
@@ -273,7 +273,7 @@ export function createRegistry(
     groups,
     menu,
     get: (id) => byId.get(id),
-    shortcut: (id) => (isSharedId(id) ? SHARED_SHORTCUTS[id]?.keys[0] : undefined),
+    defaultShortcut: (id) => (isSharedId(id) ? SHARED_SHORTCUTS[id]?.keys[0] : undefined),
     icon: (id) => {
       const override = byId.get(id)?.icon;
       if (override !== undefined) return override;

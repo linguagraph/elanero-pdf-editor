@@ -70,7 +70,9 @@ export interface KeyEventLike {
 export function matchesChord(event: KeyEventLike, chord: Chord, isMac: boolean): boolean {
   const ctrlDown = isMac ? event.metaKey : event.ctrlKey;
   if (ctrlDown !== chord.ctrl) return false;
-  if (!isMac && event.metaKey) return false;
+  // The other platform's modifier is never part of a web chord: Meta on Windows and Linux, and the
+  // Control key on macOS (where Control+H is not Cmd+H and must not run the Hand tool).
+  if (isMac ? event.ctrlKey : event.metaKey) return false;
   if (event.shiftKey !== chord.shift || event.altKey !== chord.alt) return false;
   if (event.key.toLowerCase() === chord.key) return true;
   // With Alt (or Shift) on some platforms the key value changes, so a letter or digit is also
@@ -107,4 +109,11 @@ export function isMacPlatform(platform: string): boolean {
 // A binding as the user reads it: Ctrl becomes Cmd on macOS.
 export function displayKeys(keys: readonly string[], isMac: boolean): string {
   return keys.map((text) => (isMac ? text.replace(/^Ctrl\+/, 'Cmd+') : text)).join(', ');
+}
+
+// The keys a command is bound to on the web, as the user reads them, or undefined when it has none.
+// The ribbon's tooltip and description use this, so they show the key the web binds.
+export function shortcutLabel(id: string, isMac: boolean): string | undefined {
+  const keys = effectiveKeys(id);
+  return keys.length === 0 ? undefined : displayKeys(keys, isMac);
 }
