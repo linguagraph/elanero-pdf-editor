@@ -1,5 +1,6 @@
-"""Page marks in the browser (W7.3, slice A): ``marks.list`` reads the marks the document has, and
-the ``marks.*`` actions run as mutating action jobs (W1.2 section 13) with one undoable step each.
+"""Page marks in the browser (W7.3, slice A): ``marks.list`` reads the marks the document has,
+``marks.get`` reads the settings of one kind (so an Update opens with them), and the ``marks.*``
+actions run as mutating action jobs (W1.2 section 13) with one undoable step each.
 
 Every saved file is checked on its own, through ``tests.hostcheck.record``: pikepdf and pypdfium2
 are independent of MuPDF, and this module imports neither at module level (the host replay runs
@@ -17,6 +18,11 @@ import pytest
 
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model import platform as model_platform
+from pdfeditor.model.color import BLACK
+from pdfeditor.model.fonts import FontRef
+from pdfeditor.model.geometry import Point
+from pdfeditor.model.pages import MarkKind, TextStamp
+from pdfeditor.services import stamping
 from pdfeditor.webapi import dispatch, jobs, jobworker
 from pdfeditor.webapi.errors import INVALID_ARGS
 from pdfeditor.webapi.platform import configure_web
@@ -268,3 +274,174 @@ def test_bad_args_name_their_path(web: None, fixture_pdf: Any) -> None:
         assert reply["ok"] is False
         assert reply["error"]["code"] == INVALID_ARGS
         assert "path" in reply["error"]["details"]
+
+
+def mark_get(handle: str, kind: str) -> dict[str, Any]:
+    result: dict[str, Any] = ok(call_raw("marks.get", {"handle": handle, "kind": kind})[0])
+    return result
+
+
+def test_mark_get_is_not_found_for_a_plain_document(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    found = mark_get(handle, "HeaderFooter")
+    assert found == {
+        "found": False,
+        "pages": [],
+        "ranges": "",
+        "foreign": False,
+        "header_footer": None,
+        "watermark": None,
+        "background": None,
+        "font_dropped": False,
+    }
+
+
+def test_mark_get_returns_the_header_footer_settings_and_ranges(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    args = header_args()
+    args["pages"] = [0, 1, 3]
+    run_mark(handle, "marks.header_footer", args)
+
+    found = mark_get(handle, "HeaderFooter")
+    assert found["found"] is True
+    assert found["pages"] == [0, 1, 3]
+    assert found["ranges"] == "1-2, 4"
+    assert found["foreign"] is False
+    assert found["watermark"] is None and found["background"] is None
+    spec = found["header_footer"]
+    assert spec["header_left"] == "<<file>>"
+    assert spec["footer_right"] == "Page <<page>> of <<pages>>"
+    assert spec["header_center"] == "" and spec["footer_left"] == ""
+    assert spec["font"] == "tiro"
+    assert spec["font_size"] == 8.0
+    assert spec["color"] == {"r": 0.2, "g": 0.3, "b": 0.4}
+    assert spec["margin_x"] == 36.0 and spec["margin_top"] == 24.0
+    assert spec["bates_start"] == 1 and spec["bates_digits"] == 6
+
+
+def test_mark_get_reads_the_bates_kind_on_its_own(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    run_mark(handle, "marks.header_footer", bates_args())
+
+    assert mark_get(handle, "HeaderFooter")["found"] is False
+    bates = mark_get(handle, "Bates")
+    assert bates["found"] is True
+    assert bates["header_footer"]["footer_right"] == "<<bates>>"
+    assert bates["header_footer"]["bates_prefix"] == "ABC"
+
+
+def test_mark_get_returns_the_watermark_settings(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    run_mark(handle, "marks.watermark", watermark_args())
+
+    spec = mark_get(handle, "Watermark")["watermark"]
+    assert spec == {
+        "text": "CONFIDENTIAL",
+        "image": False,
+        "image_name": "",
+        "font": "hebo",
+        "font_size": 60.0,
+        "color": RED,
+        "opacity": 1.0,
+        "angle": 45.0,
+        "scale": 0.5,
+        "on_top": True,
+    }
+
+
+def test_mark_get_returns_the_background_settings(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    run_mark(handle, "marks.background", background_args())
+
+    found = mark_get(handle, "Background")
+    assert found["background"] == {"color": RED, "opacity": 1.0}
+    assert found["ranges"] == "1"
+
+
+def test_mark_get_is_not_found_after_a_remove(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    run_mark(handle, "marks.watermark", watermark_args())
+    run_mark(handle, "marks.remove", {"kind": "Watermark"})
+    assert mark_get(handle, "Watermark")["found"] is False
+
+
+def test_mark_get_reports_an_uploaded_font_as_its_family(web: None, fixture_pdf: Any) -> None:
+    # The web cannot draw an uploaded font, so a stored one is set up here on the desktop side:
+    # the mark's text uses Times-Bold, and its settings name a font file.
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    spec = stamping.Watermark(
+        text="CONFIDENTIAL", font="tibo", font_ref=FontRef.file("C:/fonts/Uploaded.ttf")
+    )
+    session = REGISTRY.get(handle)
+    with session.lock:
+        page = session.document.page(0)
+        page.stamp_text(
+            TextStamp(
+                "CONFIDENTIAL",
+                Point(100, 300),
+                60.0,
+                "tibo",
+                BLACK,
+                0.3,
+                45.0,
+                True,
+                MarkKind.WATERMARK,
+            )
+        )
+        page.set_mark_settings(MarkKind.WATERMARK, stamping.watermark_settings(spec))
+
+    found = mark_get(handle, "Watermark")
+    assert found["watermark"]["font"] == "tibo"
+    assert found["font_dropped"] is True
+
+
+def test_mark_get_leaves_unreadable_settings_out(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    session = REGISTRY.get(handle)
+    with session.lock:
+        page = session.document.page(0)
+        page.stamp_text(
+            TextStamp(
+                "CONFIDENTIAL",
+                Point(100, 300),
+                60.0,
+                "helv",
+                BLACK,
+                0.3,
+                45.0,
+                True,
+                MarkKind.WATERMARK,
+            )
+        )
+        page.set_mark_settings(MarkKind.WATERMARK, "not json")
+
+    found = mark_get(handle, "Watermark")
+    assert found["found"] is True
+    assert found["pages"] == [0]
+    assert found["watermark"] is None
+
+
+def test_mark_get_reads_no_settings_of_a_foreign_mark(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The engine reports a foreign mark with no settings, so the fixture alone would not show
+    # whether get_mark skips them. The stub gives a foreign kind VALID watermark settings: only the
+    # guard in get_mark keeps them from being read.
+    handle = open_bytes(fixture_pdf("page_marks_acrobat_like").read_bytes(), "acrobat.pdf")
+    settings = stamping.watermark_settings(stamping.Watermark(text="FOREIGN"))
+
+    def foreign_only(engine: Any, doc: Any, kinds: Any = None) -> dict[MarkKind, stamping.MarkInfo]:
+        return {MarkKind.WATERMARK: stamping.MarkInfo(MarkKind.WATERMARK, [0], settings, True)}
+
+    monkeypatch.setattr(stamping, "find_marks", foreign_only)
+    found = mark_get(handle, "Watermark")
+    assert found["found"] is True
+    assert found["foreign"] is True
+    assert found["pages"] == [0]
+    assert found["ranges"] == "1"
+    assert found["watermark"] is None
+    assert found["header_footer"] is None
+    assert found["background"] is None
+    assert found["font_dropped"] is False

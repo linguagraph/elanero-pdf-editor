@@ -8,7 +8,14 @@
 import { type ActionJobDeps, type ActionJobOutcome, runActionJob } from '../actionJob/actionJob';
 import type { PageRpc } from '../engine/engineConnection';
 import type { MessageId } from '../i18n/en';
-import type { MarkKind, MarkSummaryDto } from '../rpc/generated';
+import type {
+  BackgroundSpecDto,
+  HeaderFooterSpecDto,
+  MarkDetailResult,
+  MarkKind,
+  MarkSummaryDto,
+  WatermarkSpecDto,
+} from '../rpc/generated';
 import { type PrintScope, resolvePrintPages } from '../print/printRange';
 
 export const HEADER_FOOTER_ACTION = 'marks.header_footer';
@@ -38,6 +45,18 @@ export const MARK_KIND_LABELS: Readonly<Record<MarkKind, MessageId>> = {
   Background: 'marks.kind.Background',
 };
 
+// The ranges the desktop dialogs accept (ui/dialogs/pages.py), so a value the web refuses is one
+// the desktop refuses too. Opacity is a fraction here (the desktop shows 5 to 100 %).
+export const MARK_LIMITS = {
+  fontSize: { min: 4, max: 72 }, // header & footer text
+  watermarkSize: { min: 6, max: 400 },
+  opacity: { min: 0.05, max: 1 },
+  angle: { min: -180, max: 180 },
+  margin: { min: 0, max: 500 },
+  batesStart: { min: 0, max: 1_000_000_000 },
+  batesDigits: { min: 1, max: 15 },
+} as const;
+
 export type HeaderFooterSlot =
   | 'header_left'
   | 'header_center'
@@ -53,8 +72,8 @@ export interface HeaderFooterForm {
   readonly fontSize: number;
   readonly color: string; // #rrggbb
   readonly marginX: number;
-  readonly marginTop: number;
-  readonly marginBottom: number;
+  // One field for the top and the bottom margin, as the desktop has it (W7.3 question 6).
+  readonly marginY: number;
   readonly bates: BatesForm;
 }
 
@@ -70,9 +89,14 @@ export interface WatermarkForm {
   readonly font: MarkFont;
   readonly fontSize: number;
   readonly color: string; // #rrggbb
-  readonly opacity: number;
+  readonly opacity: number; // a fraction, 0.05 to 1
   readonly angle: number;
   readonly onTop: boolean;
+}
+
+export interface BackgroundForm {
+  readonly color: string; // #rrggbb
+  readonly opacity: number; // a fraction, 0.05 to 1
 }
 
 export interface Rgb {
@@ -100,8 +124,21 @@ export function hexToColor(hex: string): Rgb | undefined {
   return { r: (r ?? 0) / 255, g: (g ?? 0) / 255, b: (b ?? 0) / 255 };
 }
 
+// The inverse of hexToColor: a stored colour as "#rrggbb" for the colour field.
+export function colorToHex(color: Rgb): string {
+  const channel = (value: number): string =>
+    Math.round(Math.min(1, Math.max(0, value)) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(color.r)}${channel(color.g)}${channel(color.b)}`;
+}
+
 function isFiniteIn(value: number, low: number, high: number): boolean {
   return Number.isFinite(value) && value >= low && value <= high;
+}
+
+function inLimit(value: number, limit: { readonly min: number; readonly max: number }): boolean {
+  return isFiniteIn(value, limit.min, limit.max);
 }
 
 // The zero-based pages a scope names, or undefined when a typed range is not valid.
@@ -137,10 +174,10 @@ export type HeaderFooterArgs = {
     margin_x: number;
     margin_top: number;
     margin_bottom: number;
-    bates_prefix?: string;
-    bates_start?: number;
-    bates_digits?: number;
-    bates_suffix?: string;
+    bates_prefix: string;
+    bates_start: number;
+    bates_digits: number;
+    bates_suffix: string;
   };
   pages: readonly number[];
   file_name: string;
@@ -148,8 +185,9 @@ export type HeaderFooterArgs = {
   replace_existing: boolean;
 };
 
-// The argument of marks.header_footer. Bates fields are sent only in Bates mode, so the engine's
-// defaults apply to header & footer. The color must already be valid (see canRunHeaderFooter).
+// The argument of marks.header_footer. The Bates fields are always sent, as the desktop dialog
+// always sends them: a `<<bates>>` in a plain header then uses the user's prefix and start, not the
+// engine's defaults. The colour must already be valid (see canRunHeaderFooter).
 export function headerFooterArgs(
   form: HeaderFooterForm,
   pages: readonly number[],
@@ -158,22 +196,25 @@ export function headerFooterArgs(
   replace: boolean,
 ): HeaderFooterArgs {
   const color = hexToColor(form.color) ?? { r: 0, g: 0, b: 0 };
-  const spec: HeaderFooterArgs['spec'] = {
-    texts: nonEmptyTexts(form.texts),
-    font: form.font,
-    font_size: form.fontSize,
-    color,
-    margin_x: form.marginX,
-    margin_top: form.marginTop,
-    margin_bottom: form.marginBottom,
+  return {
+    spec: {
+      texts: nonEmptyTexts(form.texts),
+      font: form.font,
+      font_size: form.fontSize,
+      color,
+      margin_x: form.marginX,
+      margin_top: form.marginY,
+      margin_bottom: form.marginY,
+      bates_prefix: form.bates.prefix,
+      bates_start: form.bates.start,
+      bates_digits: form.bates.digits,
+      bates_suffix: form.bates.suffix,
+    },
+    pages,
+    file_name: fileName,
+    bates,
+    replace_existing: replace,
   };
-  if (bates) {
-    spec.bates_prefix = form.bates.prefix;
-    spec.bates_start = form.bates.start;
-    spec.bates_digits = form.bates.digits;
-    spec.bates_suffix = form.bates.suffix;
-  }
-  return { spec, pages, file_name: fileName, bates, replace_existing: replace };
 }
 
 export type WatermarkArgs = {
@@ -240,32 +281,38 @@ export function removeArgs(kind: MarkKind): { kind: MarkKind } {
 }
 
 // Whether the header & footer (or Bates) form can run. Refused: no text in any slot, no pages,
-// a font size outside 4 to 72, a colour that is not #rrggbb, Bates digits outside 1 to 15, a
-// negative start, or a margin that is negative or not a number.
+// a font size, a colour that is not #rrggbb, Bates digits or start, or a margin outside the
+// desktop's ranges (MARK_LIMITS).
 export function canRunHeaderFooter(form: HeaderFooterForm, pages: readonly number[]): boolean {
   if (pages.length === 0) return false;
   if (Object.keys(nonEmptyTexts(form.texts)).length === 0) return false;
-  if (!isFiniteIn(form.fontSize, 4, 72)) return false;
+  if (!inLimit(form.fontSize, MARK_LIMITS.fontSize)) return false;
   if (hexToColor(form.color) === undefined) return false;
-  for (const margin of [form.marginX, form.marginTop, form.marginBottom]) {
-    if (!Number.isFinite(margin) || margin < 0) return false;
+  if (!inLimit(form.marginX, MARK_LIMITS.margin)) return false;
+  if (!inLimit(form.marginY, MARK_LIMITS.margin)) return false;
+  if (
+    !Number.isInteger(form.bates.digits) ||
+    !inLimit(form.bates.digits, MARK_LIMITS.batesDigits)
+  ) {
+    return false;
   }
-  if (!Number.isInteger(form.bates.digits) || !isFiniteIn(form.bates.digits, 1, 15)) return false;
-  return Number.isInteger(form.bates.start) && form.bates.start >= 0;
+  return Number.isInteger(form.bates.start) && inLimit(form.bates.start, MARK_LIMITS.batesStart);
 }
 
-// Whether the watermark form can run: text that is not blank, pages, a valid colour, and an
-// opacity from 0 to 1.
+// Whether the watermark form can run: text that is not blank, pages, a valid colour, a size,
+// an angle and an opacity inside the desktop's ranges.
 export function canRunWatermark(form: WatermarkForm, pages: readonly number[]): boolean {
   if (pages.length === 0) return false;
   if (form.text.trim() === '') return false;
   if (hexToColor(form.color) === undefined) return false;
-  return isFiniteIn(form.opacity, 0, 1);
+  if (!inLimit(form.fontSize, MARK_LIMITS.watermarkSize)) return false;
+  if (!inLimit(form.angle, MARK_LIMITS.angle)) return false;
+  return inLimit(form.opacity, MARK_LIMITS.opacity);
 }
 
-// Whether the background colour can run: pages, a valid colour, and an opacity from 0 to 1.
+// Whether the background colour can run: pages, a valid colour, and an opacity inside the range.
 export function canRunBackground(hex: string, opacity: number, pages: readonly number[]): boolean {
-  return pages.length > 0 && hexToColor(hex) !== undefined && isFiniteIn(opacity, 0, 1);
+  return pages.length > 0 && hexToColor(hex) !== undefined && inLimit(opacity, MARK_LIMITS.opacity);
 }
 
 // The kinds of mark the document already has, with how many pages carry each. Read before the
@@ -273,6 +320,99 @@ export function canRunBackground(hex: string, opacity: number, pages: readonly n
 export async function listMarks(rpc: PageRpc, handle: string): Promise<readonly MarkSummaryDto[]> {
   const reply = await rpc.call('marks.list', { handle });
   return reply.items;
+}
+
+// One kind of mark with the settings it was added with (read-only, instant).
+export function getMark(rpc: PageRpc, handle: string, kind: MarkKind): Promise<MarkDetailResult> {
+  return rpc.call('marks.get', { handle, kind });
+}
+
+// What an Update dialog opens with: the stored settings in the dialog's form, the pages and their
+// range text, and the notes the dialog shows. Undefined when the document has no such mark.
+export interface MarkPreFill {
+  readonly pages: readonly number[];
+  readonly ranges: string;
+  readonly foreign: boolean;
+  readonly fontDropped: boolean;
+  readonly headerFooter?: HeaderFooterForm;
+  readonly watermark?: {
+    readonly form: WatermarkForm;
+    readonly image: boolean;
+    readonly imageName: string;
+    readonly scale: number;
+  };
+  readonly background?: BackgroundForm;
+}
+
+function fontOf(code: string): MarkFont {
+  const known = MARK_FONTS.find((font) => font.value === code);
+  return known?.value ?? 'helv';
+}
+
+function headerFooterForm(spec: HeaderFooterSpecDto): HeaderFooterForm {
+  return {
+    texts: {
+      header_left: spec.header_left,
+      header_center: spec.header_center,
+      header_right: spec.header_right,
+      footer_left: spec.footer_left,
+      footer_center: spec.footer_center,
+      footer_right: spec.footer_right,
+    },
+    font: fontOf(spec.font),
+    fontSize: spec.font_size,
+    color: colorToHex(spec.color),
+    marginX: spec.margin_x,
+    // The desktop has one margin field; a stored top and bottom that differ show the top one.
+    marginY: spec.margin_top,
+    bates: {
+      prefix: spec.bates_prefix,
+      start: spec.bates_start,
+      digits: spec.bates_digits,
+      suffix: spec.bates_suffix,
+    },
+  };
+}
+
+function watermarkForm(spec: WatermarkSpecDto): WatermarkForm {
+  return {
+    text: spec.text,
+    font: fontOf(spec.font),
+    fontSize: spec.font_size,
+    color: colorToHex(spec.color),
+    opacity: spec.opacity,
+    angle: spec.angle,
+    onTop: spec.on_top,
+  };
+}
+
+function backgroundForm(spec: BackgroundSpecDto): BackgroundForm {
+  return { color: colorToHex(spec.color), opacity: spec.opacity };
+}
+
+// The dialog's form from a marks.get reply (so Update opens with the stored values). Undefined
+// when the kind is not in the document; a kind whose settings cannot be read has no form part.
+export function fromMarkDetail(detail: MarkDetailResult): MarkPreFill | undefined {
+  if (!detail.found) return undefined;
+  const pre: MarkPreFill = {
+    pages: detail.pages,
+    ranges: detail.ranges,
+    foreign: detail.foreign,
+    fontDropped: detail.font_dropped,
+    ...(detail.header_footer ? { headerFooter: headerFooterForm(detail.header_footer) } : {}),
+    ...(detail.watermark
+      ? {
+          watermark: {
+            form: watermarkForm(detail.watermark),
+            image: detail.watermark.image,
+            imageName: detail.watermark.image_name,
+            scale: detail.watermark.scale,
+          },
+        }
+      : {}),
+    ...(detail.background ? { background: backgroundForm(detail.background) } : {}),
+  };
+  return pre;
 }
 
 // Runs one mark action as a mutating job. Resolves with the outcome; rejects with an RpcError or
