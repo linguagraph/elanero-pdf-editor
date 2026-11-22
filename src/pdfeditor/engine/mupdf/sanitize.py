@@ -353,6 +353,40 @@ def remove_off_page_text(doc: MuDocument) -> int:
     return total
 
 
+# -- document-wide objects ----------------------------------------------------------------------
+def scrub_objects(fz: pymupdf.Document, javascript: bool, xmp: bool) -> None:
+    """PyMuPDF's document-wide JavaScript and XMP pass from ``scrub()``, skipping object numbers
+    that no cross-reference section declares.
+
+    ``scrub()`` walks every number below ``xref_length()`` and raises on a missing one, which
+    a file can have after an incremental update that skipped a number (see
+    ``docs/web/design/sanitize-signed-crash.md``). This loop checks ``pdf_object_exists``
+    first: a gap or a declared free entry has nothing to scrub. A declared object that loads
+    empty still fails loudly, as it does in ``scrub()``.
+    """
+    if not (javascript or xmp):
+        return
+    if xmp:
+        fz.del_xml_metadata()
+    pdf = pymupdf._as_pdf_document(fz)
+    for xref in range(1, fz.xref_length()):
+        if not pymupdf.mupdf.pdf_object_exists(pdf, xref):
+            continue
+        if not fz.xref_object(xref):
+            raise ValueError(f"bad xref {xref} - clean PDF before scrubbing")
+        if javascript and fz.xref_get_key(xref, "S")[1] == "/JavaScript":
+            fz.update_object(xref, "<</S/JavaScript/JS()>>")  # a null JavaScript action
+            continue
+        if not xmp:
+            continue
+        if fz.xref_get_key(xref, "Type")[1] == "/Metadata":
+            fz.update_object(xref, "<<>>")
+            fz.update_stream(xref, b"deleted", new=True)
+            continue
+        if fz.xref_get_key(xref, "Metadata")[0] != "null":
+            fz.xref_set_key(xref, "Metadata", "null")
+
+
 # -- form values ------------------------------------------------------------------------------
 def _kids_of(fz: pymupdf.Document, xref: int, key: str) -> list[int]:
     """The references in an array key (direct or indirect) of an object."""

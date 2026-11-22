@@ -522,6 +522,49 @@ def broken_xref() -> None:
     (OUT / "broken_xref.pdf").write_bytes(bytes(data))
 
 
+def _raw_stream(entries: dict[str, str], data: bytes) -> bytes:
+    keys = "".join(f" /{k} /{v.lstrip('/')}" for k, v in entries.items())
+    head = f"<<{keys} /Length {len(data)} >>\nstream\n".encode()
+    return head + data + b"\nendstream"
+
+
+def xref_gap() -> None:
+    """A one-page file whose cross-reference table skips object 7: neither subsection declares
+    it, as after an incremental update that leaves a number out. The JavaScript action (8) and
+    the XMP stream (9) sit above the gap, so a sanitize that stops at the gap leaves them in
+    place. Written byte by byte, so no library renumbers the gap away."""
+    bodies: dict[int, bytes] = {
+        1: b"<< /Type /Catalog /Pages 2 0 R /OpenAction 8 0 R /Metadata 9 0 R >>",
+        2: b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        3: (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            b"/Resources << /Font << /F1 5 0 R >> >> >>"
+        ),
+        4: _raw_stream({}, b"BT /F1 24 Tf 72 700 Td (Visible text) Tj ET"),
+        5: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        6: b"<< /Title (Xref gap) /Author (pdfeditor fixtures) >>",
+        8: b"<< /S /JavaScript /JS (app.alert('gap secret');) >>",
+        9: _raw_stream(
+            {"Type": "/Metadata", "Subtype": "/XML"}, b"<x:xmpmeta>xmp secret</x:xmpmeta>"
+        ),
+    }
+    out = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets: dict[int, int] = {}
+    for num, body in bodies.items():
+        offsets[num] = len(out)
+        out += f"{num} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref_at = len(out)
+    out += b"xref\n0 7\n0000000000 65535 f \n"
+    for num in range(1, 7):
+        out += f"{offsets[num]:010d} 00000 n \n".encode()
+    out += b"8 2\n"
+    for num in (8, 9):
+        out += f"{offsets[num]:010d} 00000 n \n".encode()
+    out += b"trailer\n<< /Size 10 /Root 1 0 R /Info 6 0 R >>\n"
+    out += f"startxref\n{xref_at}\n%%EOF\n".encode()
+    (OUT / "xref_gap.pdf").write_bytes(bytes(out))
+
+
 def layers() -> None:
     doc = pymupdf.open()
     page = doc.new_page(width=A4.width, height=A4.height)
@@ -1318,6 +1361,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "scanned": scanned,
     "skewed_scan": skewed_scan,
     "broken_xref": broken_xref,
+    "xref_gap": xref_gap,
     "text_multipage": text_multipage,
     "images": images,
     "several_images": several_images,

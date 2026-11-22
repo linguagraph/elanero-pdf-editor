@@ -981,7 +981,9 @@ class MuDocument:
             clean_pages=True,
             embedded_files=options.attachments,
             hidden_text=options.hidden_text,
-            javascript=options.javascript,
+            # the document-wide JavaScript and XMP pass is done by scrub_objects, which skips
+            # object numbers missing from the xref (scrub() raises on them)
+            javascript=False,
             metadata=options.metadata,
             redactions=False,  # applying marks is the separate, reviewed step
             remove_links=options.links,
@@ -990,8 +992,9 @@ class MuDocument:
             reset_fields=False,
             reset_responses=options.comments,
             thumbnails=options.thumbnails,
-            xml_metadata=options.xmp,
+            xml_metadata=False,
         )
+        scrub.scrub_objects(fz, options.javascript, options.xmp)
         if options.form_data:
             # scrub() misses values held on a field's parent; see reset_form_values
             scrub.reset_form_values(fz)
