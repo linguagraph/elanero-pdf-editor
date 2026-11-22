@@ -989,6 +989,79 @@ def _page_looks_same_pdfium(data: bytes, source: str, index: int) -> None:
     assert _page_look_pdfium(data, index) == before
 
 
+@host_check("page_changed_pdfium")
+def _page_changed_pdfium(data: bytes, source: str, index: int) -> None:
+    """Page ``index`` of ``data`` differs in text or pixels from the same page of ``source``."""
+    before = _page_look_pdfium(base64.b64decode(source), index)
+    assert _page_look_pdfium(data, index) != before
+
+
+@host_check("same_annot_count_pikepdf")
+def _same_annot_count_pikepdf(data: bytes, source: str, index: int) -> None:
+    """Page ``index`` lists as many annotations in ``data`` as in ``source``."""
+    import pikepdf
+    from pikepdf import Array
+
+    def count(raw: bytes) -> int:
+        with pikepdf.open(io.BytesIO(raw)) as pdf:
+            return len(pdf.pages[index].obj.get("/Annots", Array()))
+
+    assert count(data) == count(base64.b64decode(source))
+
+
+@host_check("shares_unshared_pikepdf")
+def _shares_unshared_pikepdf(data: bytes) -> None:
+    """Nothing an edit writes to is shared between the pages; fonts and images still are."""
+    import pikepdf
+    from pikepdf import Array, Dictionary
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        a, b = (p.obj for p in pdf.pages)
+        assert not _indirect_objgens(a.Contents) & _indirect_objgens(b.Contents)
+        assert not _indirect_objgens(a.get("/Annots", Array())) & _indirect_objgens(
+            b.get("/Annots", Array())
+        )
+        assert not _indirect_objgens(a.Resources) & _indirect_objgens(b.Resources)
+        for category in ("/Font", "/XObject"):
+            assert not _indirect_objgens(a.Resources.get(category)) & _indirect_objgens(
+                b.Resources.get(category)
+            )
+        for annot in a.get("/Annots", Array()):
+            for other in b.get("/Annots", Array()):
+                if "/AP" in annot and "/AP" in other:
+                    assert annot.AP.N.objgen != other.AP.N.objgen
+        for category, name in (("/Font", "/F1"), ("/XObject", "/Im1")):
+            mine = a.Resources.get(category, Dictionary()).get(name)
+            if mine is not None:  # still used on the edited page: still the same object
+                assert mine.objgen == b.Resources[category][name].objgen
+
+
+@host_check("deleted_pages_refs_pikepdf")
+def _deleted_pages_refs_pikepdf(data: bytes) -> None:
+    """Open action, named destinations, bookmarks, links and form fields that pointed at a
+    deleted page are gone; the rest of the catalog survives."""
+    import pikepdf
+    from pikepdf import Dictionary, Name
+
+    with pikepdf.open(io.BytesIO(data)) as result:
+        root = result.Root
+        in_tree = {p.objgen for p in result.pages}
+        stray = [
+            obj.objgen
+            for obj in result.objects
+            if isinstance(obj, Dictionary) and obj.get("/Type") == Name.Page
+            if obj.objgen not in in_tree
+        ]
+        assert stray == []  # nothing refers to the deleted page any more
+        assert "/OpenAction" not in root
+        assert set(root.Dests.keys()) == {"/keep"}
+        assert [str(n) for n in root.Names.Dests.Names[::2]] == ["a-first"]
+        assert [str(n) for n in root.Names.EmbeddedFiles.Names[::2]] == ["note.txt"]
+        assert [str(f.T) for f in root.AcroForm.Fields] == ["kept"]
+        assert "/First" not in root.get("/Outlines", Dictionary())
+        assert [a.Subtype for a in result.pages[0].obj.Annots] == [Name.Widget]
+
+
 # -- action-module checks (tests/actions/) ---------------------------------------------------------
 
 

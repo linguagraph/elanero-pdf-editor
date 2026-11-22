@@ -549,7 +549,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W2.6** Web package build (#183)
 - [x] **W2.7a** Pyodide test runner and `web-pytest` CI job (#184, #185, #187; the browser run passes on `main`, 914 tests)
 - [x] **W2.7b** Host checks for Pyodide runs (C1), priority modules (#186, #188; skip budget set from the real run)
-- [x] **W2.7c** Host checks: remaining host-only modules (#189, #190, #191, #193, #194, #195). Measured on main (web-pytest run 44270714182): 34 host-only skips in 3 modules, 1065 passed, 0 failed. Accepted as counted skips: 31 cases in tests/engine/test_shared_objects.py (follow-up issue to restructure them around recorded host checks), 2 linearize-path tests in tests/services/test_optimize.py, 1 signed-save ByteRange test in tests/engine/test_font_embedding.py
+- [x] **W2.7c** Host checks: remaining host-only modules (#189, #190, #191, #193, #194, #195). Measured on main (web-pytest run 44270714182): 34 host-only skips in 3 modules, 1065 passed, 0 failed. The 31 cases in tests/engine/test_shared_objects.py were restructured around recorded host checks (#196; budget 0, the Pyodide run not yet confirmed). Accepted as counted skips: 2 linearize-path tests in tests/services/test_optimize.py, 1 signed-save ByteRange test in tests/engine/test_font_embedding.py
 
 **W3 Engine worker and RPC, #136**
 
