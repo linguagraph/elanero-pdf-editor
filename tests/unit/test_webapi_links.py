@@ -112,6 +112,7 @@ def test_rotated_page_targets_and_kinds(web: None, fixture_pdf: Any) -> None:
     second = links_of(handle, 1)["links"]
     assert sorted((link["kind"], link["uri"]) for link in second) == [
         ("unsupported", ""),  # the Launch action: no file name leaves Python
+        ("uri", "https://"),  # no host: the raw string is kept; the web judges it as malformed
         ("uri", "javascript:alert(1)"),  # the raw string; the web blocks it
     ]
 
