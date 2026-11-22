@@ -230,17 +230,19 @@ which step and why, instead of skipping it.
    Check for an existing design note and for open PRs that touch the same files. Check whether the work is
    already done on main. If it is, verify it with a test on main and close the issue with that evidence.
    Do not reimplement. Do not start work whose dependency is unmerged.
-2. **Design note approved before any implementation.** An Opus subagent writes the note on its own branch.
+2. **Design note approved before any implementation.** An Opus subagent writes the note on its own branch:
+   `phase-w-<task-id>-design` for a Phase W item, and `docs-<short-name>` for any other design PR.
    It holds the verified status (file and line evidence), the design, the slice plan, the tests and where
    each runs, the risks, and the questions for the owner, each with a recommended answer. Its status line
    reads `**Status: proposed, for owner approval; no production code in this change.**` The path is
    `docs/web/design/<id>.md` for Phase W. Other issues record their note at the path their issue or PR
    names. The owner reviews the design PR and approves it. The coordinator then merges it by hand, after
    the approval. A design PR never gets auto-merge.
-3. **One approved slice per PR, at most about 400 production lines** (tests and generated files do not
-   count). A slice that does not fit is stopped and reported, not widened or narrowed silently.
-4. **Haiku implementation** on its own branch, `phase-w-<task-id>-<short-name>` for PLAN items or
-   `fix-<name>` for bugs, created from an up-to-date `origin/main` in its own worktree. Run the checks the
+3. **One approved slice per PR, with a hard cap of 400 production lines per PR.** Lines are added or
+   changed lines in production code; tests and generated files do not count. A slice that does not fit is
+   stopped and reported, not widened or narrowed silently.
+4. **Haiku implementation** on its own branch: `phase-w-<task-id>-<short-name>` for Phase W PLAN items,
+   `phase-N-<short-name>` for other phases, or `fix-<name>` for bugs, created from an up-to-date `origin/main` in its own worktree. Run the checks the
    touched areas need. A user-facing feature also updates its page in `docs/guide/`. Tick the PLAN.md item
    only when its tests and checks pass, as the Progress tracking rule says; partial work leaves it unticked
    with a note. The PR body says `Part of #<n>`, or `Closes #<n>` only when it completes the issue, and
