@@ -164,7 +164,11 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('edit-text-images', 'command.edit-text-images.label', 'edit.edit', CAN_EDIT_CONTENT),
     checked: (state) => state.viewTool === 'edit',
   },
-  cmd('add-text', 'command.add-text.label', 'edit.add'),
+  // Add Text (W6.8a 8a-2) turns the Add Text tool on; it is checked while the tool is on.
+  {
+    ...cmd('add-text', 'command.add-text.label', 'edit.add', CAN_EDIT_CONTENT),
+    checked: (state) => state.viewTool === 'add-text',
+  },
   // Add Image (W6.7b slice 2a) picks a file, then places it with the Image tool, which is checked
   // while it is on.
   {

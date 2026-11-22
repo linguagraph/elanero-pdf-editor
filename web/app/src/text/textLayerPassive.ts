@@ -7,11 +7,17 @@ export interface GestureTools {
   readonly markToolOn: boolean;
 }
 
-// Whether the text layer lets the pointer through. The comment, redaction mark, crop box and shape
-// layers all draw with a drag and sit below the text layer, so while one is armed the text spans
-// would take the drag and start a native selection instead.
+// Whether the text layer lets the pointer through. The comment, redaction mark, crop box, shape and
+// Add Text layers all draw with a drag and sit below the text layer, so while one is armed the text
+// spans would take the drag and start a native selection instead.
 export function textLayerPassive({ commentTool, viewTool, markToolOn }: GestureTools): boolean {
-  return commentTool !== null || markToolOn || viewTool === 'cropBox' || isShapeTool(viewTool);
+  return (
+    commentTool !== null ||
+    markToolOn ||
+    viewTool === 'cropBox' ||
+    viewTool === 'add-text' ||
+    isShapeTool(viewTool)
+  );
 }
 
 // Whether the page's links take presses (W5.3): under Select and Hand only. The Edit and crop box

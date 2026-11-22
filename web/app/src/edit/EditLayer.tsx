@@ -43,10 +43,12 @@ export interface EditSelection {
 
 // The paragraph being typed in (W6.8a 8a-1): the text block as the list showed it at `revision`.
 // The parent holds it, so a change of tool or of page can end the editor (the layer only shows it).
+// A new block (Add Text, W6.8a 8a-2) has `newRect`, the box it is added in, and no key in `object`.
 export interface TextEdit {
   readonly page: number;
   readonly revision: number;
   readonly object: PageObjectDto;
+  readonly newRect?: RectDto;
 }
 
 export interface EditLayerProps {

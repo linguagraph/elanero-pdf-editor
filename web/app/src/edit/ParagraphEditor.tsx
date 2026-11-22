@@ -43,6 +43,8 @@ export interface ParagraphEditorProps {
   // Told the typed text of a dropped editor, when it differs from the opening text, so the owner
   // can offer it (Copy text). Nothing is sent to the engine for a drop.
   readonly onDrop?: (text: string) => void;
+  // A new block (Add Text, W6.8a 8a-2) is labelled as one; the owner's commit adds it.
+  readonly newBlock?: boolean;
 }
 
 export function ParagraphEditor({
@@ -55,6 +57,7 @@ export function ParagraphEditor({
   onClose,
   commitOnLeave,
   onDrop,
+  newBlock = false,
 }: ParagraphEditorProps) {
   const style = object.style;
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -191,7 +194,7 @@ export function ParagraphEditor({
       <textarea
         ref={ref}
         className="edit-editor"
-        aria-label={t('edit.text.editorLabel')}
+        aria-label={t(newBlock ? 'edit.text.newLabel' : 'edit.text.editorLabel')}
         aria-describedby={hintId}
         aria-busy={busy}
         readOnly={busy}

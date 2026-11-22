@@ -187,6 +187,8 @@ export const EN = {
   'edit.text.failed': 'The text could not be changed.',
   'edit.text.copy': 'Copy text',
   'edit.text.copied': 'Text copied.',
+  'edit.text.newLabel': 'New text',
+  'edit.textAdded': 'Text added.',
   'edit.shape.added': 'Shape added.',
   'edit.shape.layer':
     'Draw a shape: drag on the page, or press Enter for a default-size shape in the middle of the page. Esc stops.',
