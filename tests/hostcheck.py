@@ -1024,6 +1024,37 @@ def _image_filter_pikepdf(data: bytes, page: int, filter: str) -> None:
     assert filter in filters, filters
 
 
+@host_check("shared_xobject_pikepdf")
+def _shared_xobject_pikepdf(data: bytes, pages: list[int], xobject: str, width: int) -> None:
+    """Every page in ``pages`` names one and the same XObject ``name`` in its resources, and that
+    object is an image ``width`` pixels wide: a replace kept the object the pages share (W6.7b)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        found = [
+            pdf.pages[page].obj["/Resources"]["/XObject"][f"/{xobject}"].objgen for page in pages
+        ]
+        image = pdf.pages[pages[0]].obj["/Resources"]["/XObject"][f"/{xobject}"]
+        assert str(image.get("/Subtype")) == "/Image"
+        assert int(image.get("/Width")) == width
+    assert len(set(found)) == 1, found
+
+
+@host_check("image_has_smask_pikepdf")
+def _image_has_smask_pikepdf(data: bytes, page: int) -> None:
+    """The page has an image XObject with an /SMask: the picture kept its transparency (W6.7b)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        xobjects = pdf.pages[page].obj.get("/Resources", {}).get("/XObject", {})
+        masks = [
+            xobject.get("/SMask")
+            for xobject in xobjects.values()
+            if str(xobject.get("/Subtype")) == "/Image"
+        ]
+    assert any(mask is not None for mask in masks), masks
+
+
 @host_check("shape_operators_pikepdf")
 def _shape_operators_pikepdf(data: bytes, page: int, kind: str) -> None:
     """The last shape on ``page`` is one q ... Q block: its path operators (re; or four c; or m and

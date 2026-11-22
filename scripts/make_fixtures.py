@@ -1440,6 +1440,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "perf_mixed_200": lambda: perf_mixed(200),
     "perf_mixed_1000": lambda: perf_mixed(1000),
     "shared_objects_annotation": lambda: _shared_objects("annotation"),
+    "shared_objects_resources": lambda: _shared_objects("resources"),
     "shared_objects_listed_twice": shared_objects_listed_twice,
     "page_marks_acrobat_like": page_marks_acrobat_like,
     "incremental_sigflags_empty_embedded": incremental_sigflags_empty_embedded,

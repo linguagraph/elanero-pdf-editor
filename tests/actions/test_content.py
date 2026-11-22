@@ -30,7 +30,7 @@ from pdfeditor.actions.content import (
 )
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document, UnsupportedFeature
+from pdfeditor.engine.base import Document
 from pdfeditor.engine.registry import get_engine
 from pdfeditor.model import platform as model_platform
 from pdfeditor.model.color import Color
@@ -785,9 +785,14 @@ def test_inline_image_is_listed_but_cannot_be_replaced(open_copy: Opener) -> Non
     s = open_copy("inline_image")
     (picture,) = refs(s, 0, ObjectType.IMAGE)
     before = snapshot_of(s)
-    with pytest.raises(UnsupportedFeature, match="stored inside the page content"):
+    with s.lock:
+        before_revision = s.document.page(0).revision
+    with pytest.raises(Refused, match="stored inside the page content") as refusal:
         content.replace_image(s, ReplaceImage(picture, png((0, 200, 0))))
+    assert refusal.value.reason == "inline_image"
     assert snapshot_of(s) == before
+    with s.lock:
+        assert s.document.page(0).revision == before_revision
     assert not s.undo_stack.can_undo
 
 
@@ -816,3 +821,130 @@ def test_content_actions_need_the_content_edit_flag(open_copy: Opener) -> None:
     assert "content.add_shape" not in available(fake)
     assert "content.add_shape" in available(s)
     assert not s.undo_stack.can_undo
+
+
+# -- replace image (W6.7b slice 2b) --------------------------------------------------------
+
+
+def image_bbox(s: DocumentSession, page: int = 0) -> Rect:
+    """The bbox of the page's only image, in visible space."""
+    (picture,) = (o for o in objects(s, page) if o.type is ObjectType.IMAGE)
+    return picture.bbox
+
+
+def page_revision(s: DocumentSession, page: int = 0) -> int:
+    with s.lock:
+        return int(s.document.page(page).revision)
+
+
+def half_clear_png(size: tuple[int, int] = (60, 50)) -> bytes:
+    """Green, with the left half fully transparent."""
+    img = Image.new("RGBA", size, (0, 200, 0, 255))
+    img.paste((0, 0, 0, 0), (0, 0, size[0] // 2, size[1]))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_replace_image_keeps_the_box_and_stretches_a_new_aspect(open_copy: Opener) -> None:
+    s = open_copy("mixed_content")
+    box = image_bbox(s)  # 120 x 100 points
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    # 30 x 90 is 1:3, not the box's 6:5: it is stretched to fill the box, as on the desktop.
+    content.replace_image(s, ReplaceImage(picture, png((0, 200, 0), size=(30, 90))))
+    assert image_bbox(s) == box
+
+
+def test_replace_image_refuses_a_gif_and_keeps_the_picture_on_the_web(
+    open_copy: Opener, web_platform: None
+) -> None:
+    s = open_copy("mixed_content")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    before = snapshot_of(s)
+    revision = page_revision(s)
+    with pytest.raises(Refused, match="PNG and JPEG"):
+        content.replace_image(s, ReplaceImage(picture, gif()))
+    assert snapshot_of(s) == before
+    assert page_revision(s) == revision
+    assert not s.undo_stack.can_undo
+
+
+@pytest.mark.parametrize(("make", "message"), REFUSED_ON_THE_WEB)
+def test_replace_image_refuses_what_the_web_cannot_place(
+    open_copy: Opener, web_platform: None, make: Callable[[], bytes], message: str
+) -> None:
+    s = open_copy("mixed_content")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    before = snapshot_of(s)
+    with pytest.raises(Refused, match=message):
+        content.replace_image(s, ReplaceImage(picture, make()))
+    assert snapshot_of(s) == before
+    assert not s.undo_stack.can_undo
+
+
+def test_replace_image_still_takes_a_gif_on_the_desktop(open_copy: Opener) -> None:
+    s = open_copy("mixed_content")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    result = content.replace_image(s, ReplaceImage(picture, gif()))
+    assert result.executed and result.label == "Replace Image"
+
+
+def test_replace_image_undo_and_redo_restore_each_picture(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("mixed_content")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    box = image_bbox(s)
+    before = snapshot_of(s)
+    revision = page_revision(s)
+    content.replace_image(s, ReplaceImage(picture, png((255, 0, 0))))
+    replaced_at = page_revision(s)
+    assert replaced_at != revision
+    assert s.undo()
+    assert snapshot_of(s) == before
+    assert s.redo()
+    assert page_revision(s) not in {revision, replaced_at}
+    out = s.save(tmp_path / "replace_redone.pdf")
+    assert_opens_everywhere(out)
+    x, y = round((box.x0 + box.x1) / 2), round((box.y0 + box.y1) / 2)
+    record("pixel_red_pdfium", out, page=0, x=x, y=y)
+
+
+def test_round_trip_replace_keeps_the_references_of_a_shared_picture(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    """Both pages draw the one image XObject. The replace writes into that object, so both pages
+    still name it and both show the new picture (the replace is global, as on the desktop)."""
+    s = open_copy("shared_objects_resources")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    centres = []
+    for page in (0, 1):
+        box = image_bbox(s, page)
+        centres.append((round((box.x0 + box.x1) / 2), round((box.y0 + box.y1) / 2)))
+    content.replace_image(s, ReplaceImage(picture, png((0, 200, 0))))
+    out = s.save(tmp_path / "replaced_shared.pdf")
+    assert_opens_everywhere(out)
+    record("shared_xobject_pikepdf", out, pages=[0, 1], xobject="Im1", width=60)
+    for page, (x, y) in enumerate(centres):
+        record("pixel_green_pdfium", out, page=page, x=x, y=y)
+
+
+def test_round_trip_replace_with_alpha_keeps_the_transparency(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("mixed_content")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    box = image_bbox(s)
+    content.replace_image(s, ReplaceImage(picture, half_clear_png()))
+    out = s.save(tmp_path / "replaced_alpha.pdf")
+    assert_opens_everywhere(out)
+    record("image_has_smask_pikepdf", out, page=0)
+    mid_y = round((box.y0 + box.y1) / 2)
+    record("pixel_green_pdfium", out, page=0, x=round(box.x1) - 15, y=mid_y)
+    # The transparent half shows the page behind it (white), not the old gradient.
+    record(
+        "blank_region_pdfium",
+        out,
+        page=0,
+        clip=[box.x0 + 5, box.y0 + 5, box.x0 + 25, box.y1 - 5],
+    )

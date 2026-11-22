@@ -306,6 +306,10 @@ class Page(Protocol):
         """Encoded image bytes and file extension ("png", "jpeg", ...)."""
         ...
 
+    def is_inline_image(self, key: str) -> bool:
+        """True for a picture stored in the content stream (BI ... EI), which has no XObject."""
+        ...
+
     def replace_image(self, key: str, data: bytes) -> None: ...
 
     def font_program(self, name: str) -> bytes | None:

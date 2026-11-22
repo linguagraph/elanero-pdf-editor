@@ -384,6 +384,28 @@ export interface HistoryResult {
   state: DocStateDto;
 }
 
+export interface ImageDataResult {
+  /** "png", "jpeg" or the stored format; JPEG 2000 comes back as "png" */
+  ext: string;
+  /** the media type of the bytes, e.g. "image/png"; "application/octet-stream" otherwise */
+  mime: string;
+  /** pixels, as the object list reports them; 0 when the file does not say */
+  width: number;
+  height: number;
+  /** the image file's bytes, as one $bin buffer */
+  data: ArrayBuffer;
+}
+
+export interface ImageParams {
+  handle: string;
+  /** 0-based */
+  page: number;
+  /** the image's key, as content.objects lists it */
+  key: string;
+  /** the page revision the key was listed at (STALE_OBJECT when it moved) */
+  revision: number;
+}
+
 export interface JobAbortParams {
   handle: string;
   token: string;
@@ -917,6 +939,7 @@ export interface Methods {
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
+  'content.image': { params: ImageParams; result: ImageDataResult; deadline: 'io' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
   'content.preview_font': { params: PreviewFontParams; result: PreviewFontResult; deadline: 'render' };
   'fonts.validate': { params: FontValidateParams; result: FontValidateResult; deadline: 'action' };
@@ -962,6 +985,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'comments.flattenable': 'instant',
   'comments.list': 'instant',
   'comments.xfdf_preview': 'action',
+  'content.image': 'io',
   'content.objects': 'render',
   'content.preview_font': 'render',
   'fonts.validate': 'action',
@@ -1012,6 +1036,7 @@ export const RESULT_DECODERS: {
   'comments.flattenable': decodeFlattenableResult,
   'comments.list': decodeCommentListResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
+  'content.image': decodeImageDataResult,
   'content.objects': decodeContentObjectsResult,
   'content.preview_font': decodePreviewFontResult,
   'fonts.validate': decodeFontValidateResult,
@@ -1549,6 +1574,37 @@ export function decodeHistoryResult(
     label: expectString(field(o, 'label', path), `${path}.label`),
     changed: orNull(field(o, 'changed', path), `${path}.changed`, (v1, p1) => decodeChangedDto(v1, ctx, p1)),
     state: decodeDocStateDto(field(o, 'state', path), ctx, `${path}.state`),
+  };
+}
+
+export function decodeImageDataResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): ImageDataResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['ext', 'mime', 'width', 'height', 'data'], path);
+  return {
+    ext: expectString(field(o, 'ext', path), `${path}.ext`),
+    mime: expectString(field(o, 'mime', path), `${path}.mime`),
+    width: expectInteger(field(o, 'width', path), `${path}.width`),
+    height: expectInteger(field(o, 'height', path), `${path}.height`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+  };
+}
+
+export function decodeImageParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): ImageParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'page', 'key', 'revision'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    page: expectInteger(field(o, 'page', path), `${path}.page`),
+    key: expectString(field(o, 'key', path), `${path}.key`),
+    revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
   };
 }
 

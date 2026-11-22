@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import logging
 
+from pdfeditor.actions.content import INLINE_IMAGE_MESSAGE
 from pdfeditor.model.geometry import Rect
-from pdfeditor.model.objects import PageObject, TextStyle, family_of
+from pdfeditor.model.objects import ObjectType, PageObject, TextStyle, family_of
+from pdfeditor.services.export.images import browser_image
 from pdfeditor.services.font_preview import preview_font_program
-from pdfeditor.webapi import dto
-from pdfeditor.webapi.errors import INVALID_ARGS, RpcFailure
+from pdfeditor.webapi import dto, limits
+from pdfeditor.webapi.errors import FILE_TOO_LARGE, INVALID_ARGS, REFUSED, STALE_OBJECT, RpcFailure
 from pdfeditor.webapi.registry import REGISTRY
 
 log = logging.getLogger(__name__)
@@ -101,6 +103,64 @@ def preview_font(params: dto.PreviewFontParams) -> dto.PreviewFontResult:
     if usable is None or len(usable) > MAX_PREVIEW_BYTES:
         return dto.PreviewFontResult(found=False, family=family, program=None)
     return dto.PreviewFontResult(found=True, family=family, program=usable)
+
+
+# The media type of each format the export returns. Any other stored format is sent as bytes.
+_MIME = {"png": "image/png", "jpeg": "image/jpeg"}
+
+
+def export_image(params: dto.ImageParams) -> dto.ImageDataResult:
+    """One picture's file, for the Edit tab's Export Image (W6.7b slice 2b). Read-only: it issues no
+    Command, sets no dirty flag and changes no page revision, so the undo history is unchanged.
+
+    The key must still name an image on the page at the revision it was listed at (STALE_OBJECT).
+    An inline picture (BI ... EI) has no file of its own, so it is REFUSED. The size is checked
+    from the listing before any bytes are read, and then on the bytes, as attachments.get does.
+    """
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        count = session.document.page_count
+        if not 0 <= params.page < count:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "params.page: the page is out of range",
+                {"path": "params.page", "pages": count},
+            )
+        page = session.document.page(params.page)
+        if page.revision != params.revision:
+            raise RpcFailure(STALE_OBJECT, "the page changed after the image was selected")
+        listed = next(
+            (o for o in page.content_objects() if o.key == params.key),
+            None,
+        )
+        if listed is None or listed.type is not ObjectType.IMAGE:
+            raise RpcFailure(STALE_OBJECT, "the image is no longer on the page")
+        width, height = listed.image_size
+        pixels = width * height
+        if pixels > limits.MAX_RENDER_PIXELS:
+            raise RpcFailure(
+                FILE_TOO_LARGE,
+                "the image is too large to export in the browser",
+                {"max_pixels": limits.MAX_RENDER_PIXELS, "pixels": pixels},
+            )
+        if page.is_inline_image(params.key):
+            raise RpcFailure(REFUSED, INLINE_IMAGE_MESSAGE, {"reason": "inline_image"})
+        data, ext = page.image_data(params.key)
+    # Pillow decodes JPEG 2000 only; the bytes are already copied out, so no engine lock is needed.
+    data, ext = browser_image(data, ext)
+    if len(data) > limits.MAX_JOB_BYTES:
+        raise RpcFailure(
+            FILE_TOO_LARGE,
+            "the image is too large for the browser",
+            {"max_bytes": limits.MAX_JOB_BYTES, "size": len(data)},
+        )
+    return dto.ImageDataResult(
+        ext=ext,
+        mime=_MIME.get(ext, "application/octet-stream"),
+        width=width,
+        height=height,
+        data=data,
+    )
 
 
 def _log_malformed(handle: str, page: int, revision: int) -> None:
