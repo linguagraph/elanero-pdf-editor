@@ -123,26 +123,9 @@ yet: do it by hand as described, and don't invent one. The detailed Store steps 
       then read the report: it must end with `RESULT: OK`.
     - Web app: `curl -s -o /dev/null -w "%{http_code}\n" https://linguagraph.github.io/elanero-pdf-editor/app/`
       prints `200`. The landing page and guide are at https://linguagraph.github.io/elanero-pdf-editor/.
-15. **Rollback.** Never force-push, and never move or delete a pushed tag: tags are the public
-    source for the AGPL. To undo a bad change, run `git revert <sha>` on a branch, open a PR, and
-    merge it like any other. Ship the fix as a new version and tag, since the Store needs a higher
-    version. The Store job can't replace a submission still in certification, so wait for that
-    to finish.
-
-    Web rollback: `web-deploy.yml` deploys the tip of `main` only. It has no input for an older
-    commit, so you can't redeploy an old commit with it. Instead, find the last good deploy:
-
-    ```sh
-    gh run list --workflow web-deploy.yml --branch main --status success --limit 5 --json headSha,createdAt,url
-    ```
-
-    List the commits after it that touched the web app, then revert them in a PR as above:
-
-    ```sh
-    git log --oneline <headSha>..main -- web src/pdfeditor
-    ```
-
-    Merging the revert to `main` runs `web-deploy.yml` again and puts the earlier app back on Pages.
+15. **Rollback (manual).** Nothing is automated. The web app and the desktop release each have
+    their own procedure in [Rollback (manual)](#rollback-manual) below. Never force-push, and never
+    move or delete a pushed tag: tags are the public source for the AGPL.
 
 ## One-time setup
 
@@ -262,6 +245,96 @@ Its secrets live only in that environment: `MSIX_IDENTITY_JSON` (the content of
    The first submission goes to a private audience first; make it public once certified.
 8. **GitHub release.** Attach `Elanero.exe`, the installer and the `.msix` to the release for
    the tag.
+
+## Rollback (manual)
+
+No workflow redeploys an older commit or retracts a release, and no command here does it for
+you. Each step says what the repository provides and what is done by hand. The rule for both
+parts is the same: revert on `main` and ship the revert, never rewrite history.
+
+### Web app (GitHub Pages)
+
+`web-deploy.yml` deploys the tip of `main` only. Its `workflow_dispatch` takes no commit, so it
+can't redeploy an older one. The deploy runs on a push to `main` that changes its paths, on a
+manual run, and when `docs.yml` calls it. A tag does not deploy the web app. Pages replaces the
+whole site on each deploy, so a rollback brings back the guide and landing page too.
+
+1. **Find the last good deploy.** Each successful run's `headSha` is the commit it deployed. A
+   deploy started by `docs.yml` may be listed under either workflow, so check both:
+
+   ```sh
+   gh run list --workflow web-deploy.yml --branch main --status success --limit 5 --json headSha,createdAt,url
+   gh run list --workflow docs.yml --branch main --status success --limit 5 --json headSha,createdAt,url
+   ```
+
+   If neither list shows the deploy you expect, open the run in Actions and read its commit there.
+2. **List the commits to undo.** Use the paths the two workflows filter on, so the list matches
+   what triggered a deploy:
+
+   ```sh
+   git log --oneline <headSha>..main -- web src/pdfeditor scripts/build_web_wheel.py scripts/web_package.py scripts/stage_engine_assets.mjs scripts/build_site.py pyproject.toml docs/guide docs/landing mkdocs.yml .github/workflows/web-deploy.yml .github/workflows/docs.yml
+   ```
+
+   Drop the paths you don't need to revert, for example `docs/guide` for a web-only fault.
+3. **Revert in a PR.** Start a branch from the current `main` and revert each commit from step 2,
+   newest first. PRs are squash-merged, so each commit is one PR's squash commit:
+
+   ```sh
+   git fetch origin main
+   git switch -c revert-web-<name> origin/main
+   git revert <sha>
+   git push -u origin revert-web-<name>
+   gh pr create --base main --head revert-web-<name>
+   ```
+
+   Merge it like any other PR, once its checks are green.
+4. **Deploy the revert.** If the revert touches a path from step 2, the merge to `main` starts
+   `web-deploy.yml` (or `docs.yml`) by itself. Watch it with `gh run list --workflow web-deploy.yml --branch main --limit 3`
+   and `gh run watch`, and pick the run. If no path in the revert matches, start it by hand:
+
+   ```sh
+   gh workflow run web-deploy.yml --ref main
+   gh run watch
+   ```
+
+   Pass: the `web-deploy` job is green.
+5. **Check the site.** The app returns `200`:
+   `curl -s -o /dev/null -w "%{http_code}\n" https://linguagraph.github.io/elanero-pdf-editor/app/`.
+   Its service worker names the build (step 13), so the name changes with the deploy:
+   `curl -s https://linguagraph.github.io/elanero-pdf-editor/app/sw.js | grep -o '"cacheName":"[^"]*"'`.
+
+**What the user sees.** After the deploy, a page load gets the reverted app. The service worker
+(`web/app/public/sw.js`) takes over on activation and deletes the older `elanero-` caches. A tab
+that was already open keeps the code it loaded until it is reloaded.
+
+Not used: re-running an old deploy run (`gh run rerun`). The repository doesn't document it, and
+it would rebuild the old commit with today's tools, so it is not a supported rollback here.
+
+### Desktop release (exe, installer, Store)
+
+A release is a tag `vX.Y.Z`. The GitHub release holds `Elanero.exe` and the installer; the Store
+gets the MSIX. The portable and installer builds make no network call, so their users learn of a
+new release only from the release page. Store builds check the Store for updates.
+
+1. **Point people at a good version (manual).** Nothing in the repository does this:
+   - Mark the last good release as the latest one, so the repository's latest-release link
+     points to it. No workflow does this; by hand: `gh release edit vGOOD --latest` (the flag is
+     checked against `gh release edit --help`).
+   - Remove a bad release's files, if its files must not be downloaded:
+     `gh release delete vBAD --yes`. Never add `--cleanup-tag`: the tag and its source stay.
+   - The Store cannot be rolled back from the repository. The `microsoft-store` job only creates a
+     new draft submission, and it fails while another is in certification. Withdrawing or replacing
+     a submission is done in Partner Center, for Elanero. That procedure is not in the repository,
+     so read Partner Center's own options before you act.
+2. **Ship the fix as a new version.** The Store needs a higher version, and a tag is never reused:
+   - Revert the bad commits on `main` as in the web part, step 3, or land a fix. Then bump every
+     version as in the checklist's step 1, and update "What's new" in
+     `packaging/store/listing-en.md`. `release.yml` refuses a What's new that is the same as the
+     last tag.
+   - Run the checklist from step 2 onward for the new version, and push the new tag as in step 9.
+     Re-running the old tag does not fix anything: the build would be the same bad one.
+3. **Users.** A release's files stay downloadable from its page until a deletion. The Store
+   update reaches Store users once the new package is certified.
 
 ## Licensing (AGPL)
 
