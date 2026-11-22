@@ -14,11 +14,14 @@ import {
 } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
-import type { PageObjectDto, RectDto, RunResult, TextStyleDto } from '../rpc/generated';
+import type { PageObjectDto, RectDto, RunResult } from '../rpc/generated';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { Affine } from './hitTest';
 import { reselect } from './hitTest';
 import type { ObjectCache } from './objectCache';
+import { DEFAULT_TEXT_STYLE, missingChars, type TextStyleArg } from './textStyle';
+
+export { DEFAULT_TEXT_STYLE } from './textStyle';
 
 // One committed gesture. Every object is on `page`, at `revision` (the revision its keys were
 // listed at). `boxes` are where the objects are after a move or a resize, for the reselection.
@@ -48,12 +51,14 @@ export type EditChange =
     };
 
 // One typed paragraph: `object` is the text block as the list showed it at `revision`, and `text`
-// is what the user typed. The style is never sent in 8a-1 (the engine keeps the block's own).
+// is what the user typed. `style` is the style the bar changed (W6.8b slice 1), or null/absent when
+// it did not: the engine then keeps the block's own style.
 export interface TextChange {
   readonly page: number;
   readonly revision: number;
   readonly object: PageObjectDto;
   readonly text: string;
+  readonly style?: TextStyleArg | null;
 }
 
 // What the editor should do after a commit: `done` closes it, `busy` keeps it open with its text
@@ -230,9 +235,10 @@ export async function commitEdit(
   settle(next === undefined ? null : await reselected(deps, change.page, boxesOf(change), next));
 }
 
-// Commits a typed paragraph (W6.8a 8a-1): one content.replace_text with `style: null`, so the
-// engine keeps the block's own style, and one undo step. Errors are shown here, with Copy text
-// where the typing could be lost, so the caller only has to close (or keep open on `busy`).
+// Commits a typed paragraph (W6.8a 8a-1): one content.replace_text, and one undo step. The style is
+// sent only when the bar changed it (`change.style`), else null, so the engine keeps the block's own.
+// Errors are shown here, with Copy text where the typing could be lost, so the caller only has to
+// close (or keep open on `busy`).
 export async function commitText(
   deps: CommitDeps,
   change: TextChange,
@@ -248,7 +254,7 @@ export async function commitText(
       args: {
         object: { page: change.page, key: change.object.key, revision: change.revision },
         text: change.text,
-        style: null,
+        style: change.style ?? null,
       },
     });
   } catch (error) {
@@ -274,8 +280,10 @@ export async function commitText(
   const revisions = reply.changed?.revisions ?? {};
   deps.scheduler.noteRevisions(revisions);
   const choice = fontChoiceOf(reply.value);
-  if (choice !== null && choice.substituted) {
-    offerEditUndo(deps, 'warning', substitutedText(choice), reply, settle);
+  const requested = change.style?.font ?? change.object.style?.font ?? '';
+  const notice = choice !== null && choice.substituted ? substitutedText(choice, requested) : null;
+  if (notice !== null) {
+    offerEditUndo(deps, 'warning', notice, reply, settle);
   } else {
     offerEditUndo(deps, 'info', t('edit.textEdited'), reply, settle);
   }
@@ -292,21 +300,9 @@ export interface AddChange {
   readonly page: number;
   readonly rect: RectDto;
   readonly text: string;
+  // The style the bar set (W6.8b slice 1); null or absent, the default style of a new block.
+  readonly style?: TextStyleArg | null;
 }
-
-// The style a new block is set in: the desktop's DEFAULT_TEXT_STYLE (Helvetica 12, black, left,
-// line height 1.2). The engine's AddText takes a style, not null, so the default is sent in full.
-export const DEFAULT_TEXT_STYLE: TextStyleDto = {
-  font: 'Helvetica',
-  size: 12,
-  color: { r: 0, g: 0, b: 0, a: 1 },
-  bold: false,
-  italic: false,
-  align: 'left',
-  line_height: 1.2,
-  char_spacing: 0,
-  word_spacing: 0,
-};
 
 // The editor's stand-in for a block that does not exist yet: a text block at `rect`, with no key.
 export function newTextBlock(rect: RectDto): PageObjectDto {
@@ -336,7 +332,12 @@ export async function commitAdd(deps: CommitDeps, change: AddChange): Promise<Te
     reply = await deps.rpc.call('actions.run', {
       handle: deps.handle,
       name: 'content.add_text',
-      args: { page: change.page, rect: change.rect, text: change.text, style: DEFAULT_TEXT_STYLE },
+      args: {
+        page: change.page,
+        rect: change.rect,
+        text: change.text,
+        style: change.style ?? DEFAULT_TEXT_STYLE,
+      },
     });
   } catch (error) {
     if (error instanceof RpcError && error.code === 'BUSY') {
@@ -374,12 +375,25 @@ export function fontChoiceOf(value: unknown): FontChoice | null {
   return v as FontChoice;
 }
 
-// The warning for a substituted font, with the characters it could not show when it knows them.
-function substitutedText(choice: FontChoice): string {
+// The warning for a substituted font (W6.8b design section 5.1), or null when there is nothing to
+// say. Three cases: the font the text used lacks characters (the engine kept it, so the text may not
+// show them); the font could not be reused and another was used, with the missing characters when
+// the engine knows them.
+function substitutedText(choice: FontChoice, requested: string): string | null {
+  if (choice.name === requested) {
+    if (choice.missing === '') return null;
+    return t('edit.font.missingGlyphs', { font: choice.name, chars: showChars(choice.missing) });
+  }
+  if (choice.missing === '')
+    return t('edit.font.notReused', { font: requested, used: choice.name });
   const base = t('edit.text.substituted', { name: choice.name });
-  return choice.missing === ''
-    ? base
-    : `${base} ${t('edit.text.missing', { chars: choice.missing })}`;
+  return `${base} ${t('edit.text.missing', { chars: showChars(choice.missing) })}`;
+}
+
+// The missing characters as a person reads them: at most 20, then "and N more".
+function showChars(chars: string): string {
+  const { shown, more } = missingChars(chars);
+  return more > 0 ? `${shown} ${t('edit.font.moreChars', { count: more })}` : shown;
 }
 
 // The recovery for a failed commit: the typed text goes to the clipboard, so nothing is lost.

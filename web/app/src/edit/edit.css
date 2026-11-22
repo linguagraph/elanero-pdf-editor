@@ -84,6 +84,79 @@
   cursor: progress;
 }
 
+/* The style bar over the paragraph editor (W6.8b slice 1). It wraps onto a second row when narrow. */
+.edit-style-bar {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-on-accent);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+}
+
+.edit-style-bar button,
+.edit-style-bar input,
+.edit-style-bar select {
+  font: inherit;
+  color: inherit;
+}
+
+.edit-style-bar :focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.edit-style-font {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.edit-style-field,
+.edit-style-colour {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.edit-style-number {
+  width: 64px;
+}
+
+.edit-style-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.edit-style-toggle[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-editor-bg);
+}
+
+.edit-style-colour {
+  cursor: pointer;
+}
+
+.edit-style-swatch {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 /* The shape tools' page layer (W6.7b): a drag draws a preview of the shape the engine will add. */
 .shape-layer {
   position: absolute;

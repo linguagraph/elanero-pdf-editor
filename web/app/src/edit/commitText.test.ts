@@ -94,15 +94,13 @@ describe('committing a typed paragraph', () => {
     expect(store.getState().visible[0]?.action?.label).toBe(t('toast.undo'));
   });
 
-  it('warns with the name and the missing characters when the engine substituted the font', async () => {
+  it('warns that a standard font lacks the characters, when it is the font the text used', async () => {
     const value = { name: 'Helvetica', embedded_reused: false, substituted: true, missing: 'Ü€' };
     const { store, deps, settle, change } = setup(() => reply(value));
     await commitText(deps, change, settle);
     const [toast] = store.getState().visible;
     expect(toast?.kind).toBe('warning');
-    expect(toast?.text).toBe(
-      `${t('edit.text.substituted', { name: 'Helvetica' })} ${t('edit.text.missing', { chars: 'Ü€' })}`,
-    );
+    expect(toast?.text).toBe(t('edit.font.missingGlyphs', { font: 'Helvetica', chars: 'Ü€' }));
     expect(toast?.action?.label).toBe(t('toast.undo'));
   });
 

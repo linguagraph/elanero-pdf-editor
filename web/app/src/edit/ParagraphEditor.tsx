@@ -3,6 +3,7 @@
 // document's own font when the browser can load it (previewFont.ts). Typing, IME, the clipboard and
 // the textarea's undo are the browser's; nothing goes to the engine before a commit, and a commit is
 // one actions.run (commit.ts). The layer that owns the editor passes the commit in as `onApply`.
+// The style bar above the text (W6.8b slice 1) edits the style the commit sends with the text.
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -16,14 +17,26 @@ import {
 import { cssBox, pointsToCss } from '../comments/coordinates';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
-import type { PageObjectDto } from '../rpc/generated';
+import type { PageObjectDto, TextStyleDto } from '../rpc/generated';
 import type { ApplyText } from './applyText';
 import { backgroundFrom, canScrollBy, readableColour } from './editorStyle';
 import { familyOf, previewFamilyCss } from './previewFont';
+import { StyleBar } from './StyleBar';
+import { openingStyle, styleChanged, type TextStyleArg, toActionStyle } from './textStyle';
 
 // The smallest box the editor opens with, in CSS pixels (design section 2: at least 120 by 40).
 const MIN_WIDTH_PX = 120;
 const MIN_HEIGHT_PX = 40;
+// The style bar: its height about one row of controls, the gap to the text, and its least width.
+const BAR_HEIGHT_PX = 36;
+const BAR_GAP_PX = 4;
+const BAR_MIN_WIDTH_PX = 360;
+
+// The style a commit sends with the text: the bar's style when it changed the opening one, else null
+// (the engine then keeps the block's own style).
+function styleToSend(opening: TextStyleDto, current: TextStyleDto): TextStyleArg | null {
+  return styleChanged(opening, current) ? toActionStyle(current) : null;
+}
 
 export interface ParagraphEditorProps {
   readonly object: PageObjectDto;
@@ -31,8 +44,8 @@ export interface ParagraphEditorProps {
   readonly zoom: number;
   readonly rpc: PageRpc;
   readonly handle: string;
-  // Commits the typed text. Resolves true when the editor should close, false when the engine was
-  // busy and the editor stays open with its text.
+  // Commits the typed text and the style the bar changed (null when it did not). Resolves true when
+  // the editor should close, false when the engine was busy and the editor stays open with its text.
   readonly onApply: ApplyText;
   // Closes the editor with no further call (Escape, or after a commit that finished).
   readonly onClose: () => void;
@@ -61,10 +74,16 @@ export function ParagraphEditor({
 }: ParagraphEditorProps) {
   const style = object.style;
   const ref = useRef<HTMLTextAreaElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
   const [value, setValue] = useState(object.text);
   const [busy, setBusy] = useState(false);
   const [family, setFamily] = useState<string>(() => familyOf(style?.font ?? ''));
+  // The style the bar shows and the commit sends. `styleRef` is the same value, read by the keys,
+  // blurs and unmount that run between renders.
+  const [current, setCurrent] = useState<TextStyleDto>(() => openingStyle(style));
+  const styleRef = useRef<TextStyleDto>(current);
+  const openingStyleRef = useRef<TextStyleDto>(current);
   // Set once the editor has closed, or while a commit is in flight. A blur or an unmount after
   // either must not commit again.
   const closed = useRef(false);
@@ -79,8 +98,13 @@ export function ParagraphEditor({
   });
 
   const box = cssBox(object.bbox, zoom);
-  const size = style?.size ?? 12;
-  const lineHeightPt = size * (style?.line_height ?? 1.2);
+  const size = current.size;
+  const lineHeightPt = size * current.line_height;
+  // Above the text when there is room, else below it.
+  const barTop =
+    box.top >= BAR_HEIGHT_PX + BAR_GAP_PX
+      ? box.top - BAR_HEIGHT_PX - BAR_GAP_PX
+      : box.top + MIN_HEIGHT_PX + BAR_GAP_PX;
 
   // The opening text is selected, ready to be replaced.
   useEffect(() => {
@@ -114,43 +138,57 @@ export function ParagraphEditor({
     const parent = el.offsetParent;
     const room = parent instanceof HTMLElement ? parent.clientHeight - box.top : Infinity;
     el.style.height = `${Math.max(MIN_HEIGHT_PX, Math.min(el.scrollHeight, room))}px`;
-  }, [value, zoom, box.top]);
+  }, [value, zoom, box.top, size, current.line_height]);
 
   const close = () => {
     closed.current = true;
     onClose();
   };
 
-  // Commits `text` (or closes, for null and for an unchanged text). The editor stays open while the
-  // engine works, and on a busy reply.
+  const setStyle = (next: TextStyleDto) => {
+    styleRef.current = next;
+    setCurrent(next);
+  };
+
+  // Commits the text and the style (or closes, for null and for an unchanged text and style). The
+  // editor stays open while the engine works, and on a busy reply.
   const end = async (text: string | null) => {
     if (closed.current || inFlight.current) return;
-    if (text === null || text === openingRef.current) {
+    const sent = styleToSend(openingStyleRef.current, styleRef.current);
+    if (text === null || (text === openingRef.current && sent === null)) {
       close();
       return;
     }
     inFlight.current = true;
     setBusy(true);
-    const done = await applyRef.current(text);
+    const done = await applyRef.current(text, sent);
     inFlight.current = false;
     if (done) close();
     else setBusy(false);
   };
 
-  // An unmount without a close either commits what was typed (a tool or tab switch, desktop parity)
-  // or drops it (a page scrolled out of the mounted range, or a closed tab). A drop sends nothing to
-  // the engine; the owner is told the text so it can be copied. Only the unmount matters: the
-  // cleanup reads the latest text and the owner's answer through the refs.
+  // An unmount without a close either commits what was typed and styled (a tool or tab switch,
+  // desktop parity) or drops it (a page scrolled out of the mounted range, or a closed tab). A drop
+  // sends nothing to the engine; the owner is told the text so it can be copied. Only the unmount
+  // matters: the cleanup reads the latest text, style and the owner's answer through the refs.
   useEffect(
     () => () => {
       if (closed.current || inFlight.current) return;
-      if (valueRef.current === openingRef.current) return;
+      const sent = styleToSend(openingStyleRef.current, styleRef.current);
+      const textChanged = valueRef.current !== openingRef.current;
+      if (!textChanged && sent === null) return;
       const { commitOnLeave: commits = () => true, onDrop: drop } = leaveRef.current;
-      if (commits()) void applyRef.current(valueRef.current);
-      else drop?.(valueRef.current);
+      if (commits()) void applyRef.current(valueRef.current, sent);
+      else if (textChanged) drop?.(valueRef.current);
     },
     [],
   );
+
+  // Alt+F10 moves to the style bar's first control (the ARIA practice for "go to the toolbar").
+  const focusBar = () => {
+    const first = barRef.current?.querySelector('[data-stop]');
+    if (first instanceof HTMLElement) first.focus();
+  };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Keys belong to the editor: the page's shortcuts (Delete, Undo) must not act on the objects.
@@ -163,12 +201,32 @@ export function ParagraphEditor({
     } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       void end(valueRef.current);
+    } else if (event.key === 'F10' && event.altKey) {
+      event.preventDefault();
+      focusBar();
+    } else if ((event.ctrlKey || event.metaKey) && !event.altKey && /^[bi]$/i.test(event.key)) {
+      // Bold and italic toggle from the keyboard too (the bar's buttons are the other way in).
+      event.preventDefault();
+      const flip =
+        event.key.toLowerCase() === 'b'
+          ? { bold: !styleRef.current.bold }
+          : { italic: !styleRef.current.italic };
+      setStyle({ ...styleRef.current, ...flip });
     }
   };
 
   // A blur to another element of the app commits. A blur because the window lost focus does not:
-  // switching applications must not apply half-typed text.
-  const onBlur = () => {
+  // switching applications must not apply half-typed text. A focus move into the style bar stays in
+  // the editor.
+  const onBlur = (event: { relatedTarget: EventTarget | null }) => {
+    if (event.relatedTarget instanceof Node && barRef.current?.contains(event.relatedTarget))
+      return;
+    if (document.hasFocus()) void end(valueRef.current);
+  };
+
+  // The style bar's blur: a focus move to the text stays in the editor, anything else is a leave.
+  const onBarLeave = (next: EventTarget | null) => {
+    if (next === ref.current) return;
     if (document.hasFocus()) void end(valueRef.current);
   };
 
@@ -187,10 +245,24 @@ export function ParagraphEditor({
   const background = backgroundFrom(
     getComputedStyle(document.documentElement).getPropertyValue('--color-editor-bg'),
   );
-  const color = style === null ? 'var(--color-text)' : readableColour(style.color, background);
+  const color = readableColour(current.color, background);
 
   return (
     <>
+      <StyleBar
+        rootRef={barRef}
+        style={{
+          left: box.left,
+          top: barTop,
+          minWidth: BAR_MIN_WIDTH_PX,
+        }}
+        value={current}
+        font={font}
+        onChange={setStyle}
+        onCommit={() => void end(valueRef.current)}
+        onEscape={() => ref.current?.focus()}
+        onLeave={onBarLeave}
+      />
       <textarea
         ref={ref}
         className="edit-editor"
@@ -206,13 +278,13 @@ export function ParagraphEditor({
           minHeight: Math.max(MIN_HEIGHT_PX, pointsToCss(lineHeightPt, zoom)),
           fontFamily: family,
           fontSize: `${pointsToCss(size, zoom)}px`,
-          lineHeight: style?.line_height ?? 1.2,
+          lineHeight: current.line_height,
           color,
-          fontWeight: style?.bold ? 700 : 400,
-          fontStyle: style?.italic ? 'italic' : 'normal',
-          textAlign: style?.align ?? 'left',
-          letterSpacing: `${pointsToCss(style?.char_spacing ?? 0, zoom)}px`,
-          wordSpacing: `${pointsToCss(style?.word_spacing ?? 0, zoom)}px`,
+          fontWeight: current.bold ? 700 : 400,
+          fontStyle: current.italic ? 'italic' : 'normal',
+          textAlign: current.align,
+          letterSpacing: `${pointsToCss(current.char_spacing, zoom)}px`,
+          wordSpacing: `${pointsToCss(current.word_spacing, zoom)}px`,
         }}
         onChange={(event) => {
           valueRef.current = event.target.value;

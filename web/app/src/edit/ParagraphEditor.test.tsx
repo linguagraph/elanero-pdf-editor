@@ -132,7 +132,7 @@ describe('committing and cancelling', () => {
     typeInto(area, 'New words');
     keyDown(area, { key: 'Enter', ctrlKey: true });
     await flush();
-    expect(onApply).toHaveBeenCalledWith('New words');
+    expect(onApply).toHaveBeenCalledWith('New words', null);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -141,7 +141,7 @@ describe('committing and cancelling', () => {
     typeInto(area, 'New');
     keyDown(area, { key: 'Enter', metaKey: true });
     await flush();
-    expect(onApply).toHaveBeenCalledWith('New');
+    expect(onApply).toHaveBeenCalledWith('New', null);
   });
 
   it('Escape closes with no call, and the typing is dropped', async () => {
@@ -175,7 +175,7 @@ describe('committing and cancelling', () => {
     typeInto(area, 'Moved on');
     act(() => area.blur());
     await flush();
-    expect(onApply).toHaveBeenCalledWith('Moved on');
+    expect(onApply).toHaveBeenCalledWith('Moved on', null);
   });
 
   it('a blur because the window lost focus does not commit', async () => {
@@ -250,7 +250,7 @@ describe('zoom and unmount', () => {
     act(() => root.unmount());
     root = createRoot(host);
     await flush();
-    expect(onApply).toHaveBeenCalledWith('Left behind');
+    expect(onApply).toHaveBeenCalledWith('Left behind', null);
   });
 });
 
@@ -299,7 +299,7 @@ describe('leaving without a close (W6.8a fix)', () => {
     act(() => root.unmount());
     root = createRoot(host);
     await flush();
-    expect(onApply).toHaveBeenCalledWith('Kept');
+    expect(onApply).toHaveBeenCalledWith('Kept', null);
     expect(onDrop).not.toHaveBeenCalled();
   });
 
@@ -310,6 +310,6 @@ describe('leaving without a close (W6.8a fix)', () => {
     act(() => root.unmount());
     root = createRoot(host);
     await flush();
-    expect(onApply).toHaveBeenCalledWith('Kept');
+    expect(onApply).toHaveBeenCalledWith('Kept', null);
   });
 });
