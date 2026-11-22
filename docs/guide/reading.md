@@ -11,8 +11,11 @@
 - The **Pages** panel (left) shows thumbnails; click one to go to that page.
 - The **Bookmarks** panel lists the document's outline. Click an entry to go to its page.
 
-Click a link in the document to follow it. Links to other pages jump there; links to web addresses
-open in your browser.
+Click a link in the document to follow it. Links to other pages jump there. Links to web addresses
+(`http://`, `https://`) and email addresses (`mailto:`) first ask you to confirm; the address is
+shown in the question, and it opens in your browser or mail program only if you choose **Yes**. Any
+other link is not opened, and the app says so. That includes an address with no scheme, such as one
+that starts with `www.`.
 
 ## Page layouts
 
