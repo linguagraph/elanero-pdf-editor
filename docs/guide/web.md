@@ -171,8 +171,9 @@ is reloaded until you press it.
   suggested title. Clicking an entry goes to its place on the page, not only to the top of it.
   You can also drag an entry with the mouse or a pen: drop it on the line between two entries to put
   it there (move the pointer left or right to choose how far it is indented), or on an entry to put
-  it inside, as its last entry. Press Escape to cancel. An entry cannot be dropped inside itself. On
-  a touch screen, use the toolbar's Move and Indent buttons. Each open document keeps its own
+  it inside, as its last entry. Press Escape to cancel. An entry cannot be dropped inside itself.
+  Holding the drag over a closed entry for about one second opens it, so you can drop an entry
+  deeper in its branch. On a touch screen, use the toolbar's Move and Indent buttons. Each open document keeps its own
   expanded entries until you close it.
 - **Attachments.** The **Attachments** button on the left rail lists the files embedded in the
   document, with the size of each. Click a file to see its name, size and description, then press

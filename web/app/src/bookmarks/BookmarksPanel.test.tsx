@@ -750,4 +750,179 @@ describe('bookmarks drag and drop (W5.2)', () => {
     await flush();
     expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
   });
+
+  // Spring-loading (W5.2 slice B): Part One is closed, so its inside is the drop target that opens it.
+  // Part Two starts the drag; the timers are faked only after mount, so the mount's own timeout runs.
+  const closed: OutlineEntry[] = [
+    entry('Part One', 1, 0),
+    entry('Chapter 1.1', 2, 1),
+    entry('Section 1.1.1', 3, 2),
+    entry('Part Two', 1, null),
+  ];
+
+  async function startDragOfPartTwo(tabId: number, rpc: PageRpc): Promise<void> {
+    openPanel('bookmarks');
+    await mount(tabId, rpc);
+    pointerAt(item('Part Two'), 'pointerdown', 20, 150);
+    pointerAt(tree(), 'pointermove', 56, 150);
+  }
+
+  it('spring-loading opens a closed entry the pointer rests on for 800 ms, and not before', async () => {
+    const { rpc } = editableRpc(closed);
+    await startDragOfPartTwo(45, rpc);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      // y = 22 is the middle of Part One, which is closed and has children.
+      pointerAt(tree(), 'pointermove', 56, 22);
+      act(() => {
+        vi.advanceTimersByTime(799);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('true');
+      expect(titles()).toEqual(['Part One', 'Chapter 1.1', 'Part Two']);
+    } finally {
+      vi.useRealTimers();
+    }
+    act(() => {
+      tree().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+  });
+
+  it('spring-loading is cancelled when the pointer leaves the row before 800 ms', async () => {
+    const { rpc, call } = editableRpc(closed);
+    await startDragOfPartTwo(46, rpc);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      pointerAt(tree(), 'pointermove', 56, 22);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      // y = 60 is the gap above Part Two, outside Part One: the timer must be gone.
+      pointerAt(tree(), 'pointermove', 56, 60);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      vi.useRealTimers();
+    }
+    // Escape ends the drag without a move (a release here would move Part Two to the top).
+    act(() => {
+      tree().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+    await flush();
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
+  });
+
+  it('spring-loading never opens the dragged entry itself, however long the pointer rests on it', async () => {
+    const { rpc } = editableRpc(closed);
+    openPanel('bookmarks');
+    await mount(51, rpc);
+    // Part One is closed and has children, and it is the entry being dragged.
+    pointerAt(item('Part One'), 'pointerdown', 20, rowMiddle(0));
+    // Starts the drag over Part Two, so no timer is armed before the fake clock is on.
+    pointerAt(tree(), 'pointermove', 56, rowMiddle(1));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      pointerAt(tree(), 'pointermove', 56, rowMiddle(0));
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+      expect(titles()).toEqual(['Part One', 'Part Two']);
+    } finally {
+      vi.useRealTimers();
+    }
+    act(() => {
+      tree().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+  });
+
+  it('releasing the pointer before 800 ms clears the spring-load timer: nothing expands later', async () => {
+    const { rpc } = editableRpc(closed);
+    await startDragOfPartTwo(52, rpc);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      pointerAt(tree(), 'pointermove', 56, 22);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      pointerAt(tree(), 'pointerup', 56, 22);
+      // The release ends the drag, so its timer is gone, not just ignored.
+      expect(vi.getTimerCount()).toBe(0);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(item('Part One').getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The indent per level comes from --bookmarks-indent on the list, read once per drag. The fixture
+  // is `open`, so the gap below Section 1.1.1 (y = 134, row 3's top band) takes levels 1 to 3, and
+  // x = 60 is level 2 at a 40 px indent but level 3 at the 20 px fallback.
+  async function gapDepthAt(tabId: number, indent: string | null, x: number): Promise<string> {
+    const { rpc } = editableRpc(open);
+    openPanel('bookmarks');
+    await mount(tabId, rpc);
+    const list = tree();
+    if (indent !== null) list.style.setProperty('--bookmarks-indent', indent);
+    pointerAt(item('Part Two'), 'pointerdown', 20, rowMiddle(3));
+    pointerAt(list, 'pointermove', x, rowMiddle(3));
+    pointerAt(list, 'pointermove', x, 134);
+    const depth = item('Part Two').dataset.dropDepth ?? '';
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+    return depth;
+  }
+
+  it('the drop level uses the indent in --bookmarks-indent', async () => {
+    expect(await gapDepthAt(47, '40px', 60)).toBe('2');
+  });
+
+  it('without --bookmarks-indent the drop level falls back to 20 px', async () => {
+    expect(await gapDepthAt(48, null, 60)).toBe('3');
+  });
+
+  it('the drop level mirrors in a right-to-left list, at the same indent', async () => {
+    const { rpc } = editableRpc(open);
+    openPanel('bookmarks');
+    await mount(49, rpc);
+    const list = tree();
+    list.style.setProperty('--bookmarks-indent', '40px');
+    // Left to right, 60 px from the left edge is level 2.
+    pointerAt(item('Part Two'), 'pointerdown', 20, rowMiddle(3));
+    pointerAt(list, 'pointermove', 60, rowMiddle(3));
+    pointerAt(list, 'pointermove', 60, 134);
+    expect(item('Part Two').dataset.dropDepth).toBe('2');
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+    // Right to left, the same 60 px from the right edge (the list is 300 px wide) is level 2 too.
+    list.style.direction = 'rtl';
+    pointerAt(item('Part Two'), 'pointerdown', 280, rowMiddle(3));
+    pointerAt(list, 'pointermove', 240, rowMiddle(3));
+    pointerAt(list, 'pointermove', 240, 134);
+    expect(item('Part Two').dataset.dropDepth).toBe('2');
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+  });
 });
