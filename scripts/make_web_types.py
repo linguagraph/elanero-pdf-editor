@@ -62,6 +62,9 @@ DEADLINE_CLASS: dict[str, str] = {
     "content.preview_font": "render",
     "content.image": "io",  # one picture's file, up to MAX_JOB_BYTES, crosses once (W6.7b)
     "fonts.validate": "action",  # reads a whole font file (up to MAX_FONT_BYTES) under Pyodide
+    "fonts.add": "action",  # the same read, then a rescan of the store's folder (W6.9 slice 2)
+    "fonts.list": "instant",  # the store's manifest and catalogue, in memory
+    "fonts.remove": "instant",  # one file deleted, then a rescan that reads no file
     "combine.probe": "action",  # opens a whole PDF (up to MAX_PROBE_BYTES) under Pyodide (W6.3b)
     "actions.redo": "edit",
     "actions.run": "action",

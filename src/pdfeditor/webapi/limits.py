@@ -45,6 +45,11 @@ SNAPSHOT_BUDGET_BYTES = 512 * 1024 * 1024
 # buffer, the Python bytes, MuPDF's copy at embed time), so one file is bounded well below the
 # 1 GiB document ceiling. 50 MiB takes every single-weight font in common use, CJK included.
 MAX_FONT_BYTES = 50 * 1024**2
+# All uploaded fonts in one engine worker (W6.9 slice 2). MEMFS lives in the wasm heap, which only
+# grows, next to the open documents and the undo snapshots; 256 MiB takes a few large CJK
+# collections or hundreds of Latin fonts. The count bounds the catalogue and the list reply.
+MAX_FONT_STORE_BYTES = 256 * 1024**2
+MAX_UPLOADED_FONTS = 64
 
 # The Combine probe (W6.3b): combine.probe counts a PDF's pages from its bytes. The bytes stay in
 # the engine worker's heap for the length of the call, and that heap only grows, so a larger file

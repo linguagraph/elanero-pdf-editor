@@ -85,6 +85,7 @@ from pdfeditor.webapi.errors import (
     RpcFailure,
 )
 from pdfeditor.webapi.events import changed_of, state_of
+from pdfeditor.webapi.fontrefs import check_no_file_refs
 from pdfeditor.webapi.registry import REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -173,6 +174,8 @@ def _convert_action(data: object, buffers: BufferTable) -> ActionJob:
             {"path": "args.name"},
         )
     typed = from_json(action.args, spec.args, buffers, "args.args")
+    # The job worker holds no uploaded fonts, so a job can't typeset with a FILE ref (W6.9 s2 §7).
+    check_no_file_refs(typed, "args.args")
     return ActionJob(action.name, typed)
 
 

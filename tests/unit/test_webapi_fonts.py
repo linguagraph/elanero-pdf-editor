@@ -114,7 +114,7 @@ def test_an_unusable_file_is_invalid_font_with_a_reason(data: bytes, reason: str
 
 def test_the_size_is_checked_before_any_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(limits, "MAX_FONT_BYTES", 100)
-    import pdfeditor.webapi.fonts as webapi_fonts
+    import pdfeditor.webapi.fontstore as webapi_fonts  # the shared reader of fonts.add
 
     def must_not_parse(*args: object, **kwargs: object) -> None:
         raise AssertionError("an over-size font was parsed")
@@ -162,7 +162,7 @@ def test_without_fonttools_the_call_is_not_supported(monkeypatch: pytest.MonkeyP
 
 
 def test_a_memory_error_is_out_of_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    import pdfeditor.webapi.fonts as webapi_fonts
+    import pdfeditor.webapi.fontstore as webapi_fonts  # the shared reader of fonts.add
 
     def exhausted(*args: object, **kwargs: object) -> None:
         raise MemoryError

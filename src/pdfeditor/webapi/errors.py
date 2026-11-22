@@ -52,6 +52,7 @@ OUT_OF_MEMORY = "OUT_OF_MEMORY"
 ENGINE_ERROR = "ENGINE_ERROR"
 INVALID_FONT = "INVALID_FONT"
 FONT_NOT_EMBEDDABLE = "FONT_NOT_EMBEDDABLE"
+FONT_STORAGE_FULL = "FONT_STORAGE_FULL"
 TRANSLATION_OFFLINE = "TRANSLATION_OFFLINE"
 TRANSLATION_QUOTA = "TRANSLATION_QUOTA"
 TRANSLATION_AUTH = "TRANSLATION_AUTH"
@@ -85,6 +86,7 @@ ALL_CODES: tuple[str, ...] = (
     ENGINE_ERROR,
     INVALID_FONT,
     FONT_NOT_EMBEDDABLE,
+    FONT_STORAGE_FULL,
     TRANSLATION_OFFLINE,
     TRANSLATION_QUOTA,
     TRANSLATION_AUTH,
@@ -98,7 +100,7 @@ ALL_CODES: tuple[str, ...] = (
 # Declared by W1.2 but not raised yet. Each is raised by a later group (translation calls), so
 # the tests check this list against the codes the code can raise and nothing else. REFUSED, BUSY
 # and STALE_OBJECT are raised by the actions calls (W3.5); STALE_JOB and CANCELLED by the jobs
-# calls (W3.7); INVALID_FONT and FONT_NOT_EMBEDDABLE by fonts.validate (W6.9).
+# calls (W3.7); INVALID_FONT and FONT_NOT_EMBEDDABLE by fonts.validate and fonts.add (W6.9).
 UNUSED_CODES: frozenset[str] = frozenset(
     {
         IMAGE_TOO_LARGE,
