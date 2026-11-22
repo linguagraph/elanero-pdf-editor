@@ -2,8 +2,8 @@ name: Web end-to-end (W8.1)
 
 # The W8.1 feature round trips (web/app/e2e/features, their config playwright.features.config.ts)
 # on Chromium, Firefox and WebKit, one job per browser. It runs nightly, after the 03:00 CI nightly
-# has warmed the PyMuPDF wheel cache, and by hand. It is not a required check and does not run on
-# pull requests (W8.1 section 3).
+# has warmed the PyMuPDF wheel cache. By hand it runs Chromium only, unless `browsers` is `all`
+# (W8.1 section 3). It is not a required check and does not run on pull requests.
 #
 # The engine wheel comes from the cache web-pytest.yml fills (the same key, so the two share it).
 # On a cache miss this run fails with a message instead of building the wheel: a cold build takes up
@@ -13,6 +13,15 @@ on:
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
+    inputs:
+      browsers:
+        description: "Browsers to run: chromium (default) or all three"
+        type: choice
+        required: true
+        default: chromium
+        options:
+          - chromium
+          - all
 
 permissions:
   contents: read
@@ -29,7 +38,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
+        # The schedule runs all three; a dispatch runs Chromium unless its input asks for all.
+        browser: ${{ fromJSON((github.event_name == 'schedule' || inputs.browsers == 'all') && '["chromium","firefox","webkit"]' || '["chromium"]') }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,10 +120,22 @@ jobs:
 
       # One browser per job. The features config builds and previews the app itself (port 4175).
       - name: Run the feature round trips (${{ matrix.browser }})
+        id: features
         working-directory: web/app
         env:
           PLAYWRIGHT_HTML_OPEN: never
         run: npx playwright test -c playwright.features.config.ts --project=${{ matrix.browser }} --reporter=list,html
+
+      # The W5.1a engine check (e2e/long-document.spec.ts) runs under the main config, Chromium only
+      # (W8.1 section 4). Its own --output folder: Playwright clears its output folder at the start of
+      # a run, and test-results/ holds the feature run's host-checks.json, which the replay below needs.
+      # It runs after the features even when they failed, unless the features step never started.
+      - name: Run the long-document engine check (chromium only)
+        if: ${{ always() && matrix.browser == 'chromium' && steps.features.conclusion != 'skipped' }}
+        working-directory: web/app
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright test long-document.spec.ts --output=test-results/long-document
 
       # The host halves of the round trips (W1.7 section 4.2): pikepdf and pypdfium2 replay the bytes
       # each flow saved. Runs even when the browser run failed, since the manifest is written then too.
