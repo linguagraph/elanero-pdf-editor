@@ -4,24 +4,29 @@
 // reduced copy and run Lossless on it, which does not make it smaller, so the table shows with no
 // download. The run is on all three browsers (playwright.features.config.ts).
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { STAGED, fixture, openApp, openPdf, watchPage } from './support';
+import { expect, type Page, test } from '@playwright/test';
+import { recordHostCheck, STAGED, fixture, openApp, openPdf, watchPage } from './support';
+
+// Opens the command palette from the ribbon's search box and runs Reduce File Size. One fill, not
+// typed keys: the first key opens the palette, and the rest would have to reach its input in time.
+// The option's accessible name also holds its tab and shortcut, so it is matched by its start.
+async function openReduceFileSize(page: Page) {
+  await page.getByRole('searchbox', { name: 'Search tools' }).fill('Reduce File Size');
+  await page.getByRole('option', { name: /^Reduce File Size/ }).click();
+}
 
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   test('reduce a file: the space table shows, the download is smaller, and a not-smaller run shows the table with no download', async ({
     page,
-  }) => {
+  }, testInfo) => {
     const problems = watchPage(page);
     const original = fixture('images.pdf');
     await openApp(page);
     await openPdf(page, 'images.pdf', original);
 
-    // The command palette opens from the ribbon's search box; Reduce File Size is its command.
-    await page.getByRole('searchbox', { name: 'Search tools' }).click();
-    await page.keyboard.type('Reduce File Size');
-    await page.getByRole('option', { name: 'Reduce File Size', exact: true }).click();
+    await openReduceFileSize(page);
     const dialog = page.getByRole('dialog', { name: 'Reduce file size' });
     await expect(dialog).toBeVisible();
 
@@ -43,15 +48,16 @@ test.describe('engine staged', () => {
     if (!path) throw new Error(`download failed: ${await download.failure()}`);
     const reduced = readFileSync(path);
     expect(reduced.byteLength).toBeLessThan(original.byteLength);
+    // The reduced copy is one page, and it must open in pikepdf and render in pypdfium2.
+    recordHostCheck(testInfo, 'page_count_pikepdf', reduced, { pages: 1 });
+    recordHostCheck(testInfo, 'render_pdfium', reduced, { page: 0, scale: 1 });
 
     // Reopen the reduced copy and run Lossless on it: the copy is not smaller, so the message
     // says so, the table still shows, and there is no download.
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(dialog).toBeHidden();
     await openPdf(page, 'reduced.pdf', reduced);
-    await page.getByRole('searchbox', { name: 'Search tools' }).click();
-    await page.keyboard.type('Reduce File Size');
-    await page.getByRole('option', { name: 'Reduce File Size', exact: true }).click();
+    await openReduceFileSize(page);
     const again = page.getByRole('dialog', { name: 'Reduce file size' });
     await again.getByRole('radio', { name: 'Lossless', exact: true }).check();
     await again.getByRole('button', { name: 'Compress', exact: true }).click();
