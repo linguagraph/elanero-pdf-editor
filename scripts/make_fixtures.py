@@ -298,9 +298,9 @@ def links_rotated() -> None:
 
     Page 0 is rotated 90 and holds a GOTO link (to page 1), a URI link, and a link with an empty
     destination (MuPDF reports it as a named action, so the web sees it as unsupported). Page 1
-    holds a javascript: URI and a Launch action. Every link rect is taken from its anchor text
-    before the rotation, so the rect and the text layer describe the same visible-space box,
-    which the test checks.
+    holds a javascript: URI, a URI with no host (malformed) and a Launch action. Every link rect
+    is taken from its anchor text before the rotation, so the rect and the text layer describe
+    the same visible-space box, which the test checks.
     """
     doc = pymupdf.open()
     doc.new_page(width=A4.width, height=A4.height)
@@ -335,6 +335,13 @@ def links_rotated() -> None:
             "kind": pymupdf.LINK_URI,
             "from": _anchor(second, "Script link", 100),
             "uri": "javascript:alert(1)",
+        }
+    )
+    second.insert_link(
+        {
+            "kind": pymupdf.LINK_URI,
+            "from": _anchor(second, "Broken address", 130),
+            "uri": "https://",  # no host: the web reads it as malformed, not as a web link
         }
     )
     second.insert_link(
