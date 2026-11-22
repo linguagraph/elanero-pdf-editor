@@ -17,6 +17,7 @@ import {
   useState,
 } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
+import { formatNumber } from '../i18n/format';
 import { t, tp } from '../i18n/t';
 import {
   onPreferencesChanged,
@@ -59,7 +60,8 @@ import {
 import { toasts } from '../feedback/toasts';
 import { MODEL_OFF, type ModelRead, modelSelectionAreas } from '../text/selection';
 import type { PageArea } from '../text/textLayer';
-import { TextSelection } from '../text/textSelection';
+import { selectedSize, TextSelection } from '../text/textSelection';
+import type { PageTextIndex } from '../text/pageTextIndex';
 import { PageTextLayer } from '../text/PageTextLayer';
 import { useTextSelection } from '../text/useTextSelection';
 import { linksActive, textLayerPassive } from '../text/textLayerPassive';
@@ -282,6 +284,22 @@ interface LinkNoticeState {
 
 // The link under a press, with its page and its index in that page's sorted list (W5.3). Null when
 // the press is not a primary press on a link.
+// The live region's text for a selection (W5.4 section 6): the characters when one page is covered,
+// the characters and the pages when more are, and only the pages while a covered page's text is
+// still loading.
+function selectionAnnouncement(
+  selection: TextSelection,
+  indexOf: (page: number) => PageTextIndex | undefined,
+): string {
+  const size = selectedSize(selection, indexOf);
+  if (size.chars === null) return tp('text.selectionPages', size.pages);
+  if (size.pages <= 1) return tp('text.selectionChars', size.chars);
+  return t('text.selectionCharsPages', {
+    chars: formatNumber(size.chars),
+    pages: formatNumber(size.pages),
+  });
+}
+
 function linkPressAt(event: ReactPointerEvent<HTMLElement>): LinkPress | null {
   if (event.button !== 0 || !(event.target instanceof Element)) return null;
   const link = event.target.closest<HTMLElement>('.page-link');
@@ -633,14 +651,37 @@ export function DocumentView({
       viewTool: tool,
       markToolOn: redactionTools.state.active,
     });
+  // The live region's text for the selection it was made for (W5.4 section 6). It is empty once the
+  // selection is cleared or changed by anything but a gesture, since its selection is no longer current.
+  const [announced, setAnnounced] = useState<{
+    readonly selection: TextSelection;
+    readonly text: string;
+  } | null>(null);
   const textSelection = useTextSelection({
     lookup: textLayers,
     revisionOf: (page) => scheduler.revisionOf(page),
     zoom,
     scroll: scrollRef,
     enabled: selecting,
+    onGestureEnd: (selection) =>
+      setAnnounced(
+        selection === null || selection.isEmpty
+          ? null
+          : {
+              selection,
+              text: selectionAnnouncement(selection, (page) =>
+                textLayers.readyIndex(page, scheduler.revisionOf(page)),
+              ),
+            },
+      ),
+    // A long-press selected a word: lifting the finger must not follow a link under it (section 2).
+    onLongPress: () => {
+      linkPress.current = null;
+    },
   });
   const selectModel = textSelection.select;
+  const liveText =
+    announced !== null && announced.selection === textSelection.selection ? announced.text : '';
   // The model's selection as of the last render, read by Copy (copyPlan) outside the render. It
   // counts only while the Select tool is on (`selecting`): once Hand or an armed comment or redaction
   // tool takes over, a stale selection must not override the browser's native one.
@@ -1301,6 +1342,7 @@ export function DocumentView({
             if (!textSelection.startPress(event)) pan.onPointerDown(event);
           }}
           onPointerMove={pan.onPointerMove}
+          onContextMenu={textSelection.contextMenu}
           onPointerUp={(event) => {
             pan.onPointerUp(event);
             // The pan's capture sends the click to the scroller, so a link is followed here: a tap
@@ -1488,6 +1530,11 @@ export function DocumentView({
           pageFieldRef={pageFieldRef}
         />
       )}
+      {/* The selection's size, announced politely (W5.4 section 6). Last, so the view's own status
+          messages stay the first ones a screen reader meets. */}
+      <p role="status" className="visually-hidden">
+        {liveText}
+      </p>
     </section>
   );
 }

@@ -35,6 +35,8 @@
    of a page the model is in charge of. */
 .page-text-layer--model .page-text-line {
   user-select: none;
+  /* The model draws the selection, so iOS shows no callout over a long-press (W5.4 section 5). */
+  -webkit-touch-callout: none;
 }
 
 .page-selection-mark {

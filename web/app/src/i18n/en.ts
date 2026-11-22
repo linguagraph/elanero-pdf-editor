@@ -497,6 +497,16 @@ export const EN = {
     one: 'Selected the text of the page.',
     other: 'Selected the text of all {count} pages.',
   },
+  // The live region's announcement of a selection's size (W5.4 section 7).
+  'text.selectionChars': {
+    one: '1 character selected.',
+    other: '{count} characters selected.',
+  },
+  'text.selectionCharsPages': '{chars} characters selected on {pages} pages.',
+  'text.selectionPages': {
+    one: 'Text selected on 1 page.',
+    other: 'Text selected on {count} pages.',
+  },
   'redact.selectionTooLarge':
     'Mark Text works on up to 300 pages at a time. Select fewer pages, or use Mark Pages.',
   'redact.selectTextFirst': 'Select some text on a page first, then press Mark Text.',
