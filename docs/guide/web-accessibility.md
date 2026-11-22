@@ -27,8 +27,9 @@ Most controls show an outline when they have the focus.
 The ribbon is a set of tabs, and each tab's buttons are grouped in toolbars. A button that switches
 a tool on or off says whether it is on. The side rails are labelled, the document area is named
 **Document**, and each page is announced as **Page N of M**. A link to a page of the document is in
-the Tab order of its page and has a name that says where it goes, such as "Go to page iv". Enter
-follows it, and a message says when a link does nothing.
+the Tab order of its page and has a name that says where it goes, such as "Go to page iv". A web
+or mail link is in the Tab order too, and its name gives the host or the address. Enter follows a
+link, and a message says when a link does nothing.
 
 Some limits apply. A PDF page is drawn as an image, so a screen reader reads only the text layer
 over it. A scanned page with no text is announced by its page number alone. The web version does
