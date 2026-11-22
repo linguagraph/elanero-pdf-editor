@@ -55,10 +55,11 @@ side is `pdfeditor.webapi`, packed by `scripts/web_package.py`. Run the npm comm
   engine-load spec needs the engine assets first: from the repo root run
   `node scripts/stage_engine_assets.mjs --wheel <pymupdf-wasm.whl> --zip dist/web/pdfeditor-web.zip`
   (or set `PYMUPDF_WHEEL` and `WEB_ZIP`), after `npm ci` in `web/spike`.
-- Feature round trips on three browsers (W8.1): `npm run e2e:features` in `web/app`, after the same staging.
-  The `web-e2e` workflow runs them nightly and on demand; it reads the PyMuPDF wheel from the cache that a
-  `web-pytest` run on main fills, and does not build one. `web-a11y` (axe, three browsers) runs on demand
-  only. Neither is a required check.
+- Feature round trips (W8.1): `npm run e2e:features:chromium` in `web/app` runs them on Chromium, after the
+  same staging; `npm run e2e:features` runs all three browsers. The `web-e2e` workflow runs all three nightly;
+  on demand it runs Chromium only unless its `browsers` input is `all`. It reads the PyMuPDF wheel from the
+  cache that a `web-pytest` run on main fills, and does not build one. `web-a11y` (axe, three browsers) runs on
+  demand only. Neither is a required check.
 - Pyodide run (CI's `web-pytest` job, from the repo root): `npm ci` in `web/spike`,
   `python scripts/make_fixtures.py`, `python scripts/build_web_wheel.py`, then
   `PYMUPDF_WHEEL=<web/spike/dist/wheel-build/*.whl> WEB_ZIP=dist/web/pdfeditor-web.zip node web/test/pyodide/run_tests.mjs`,
