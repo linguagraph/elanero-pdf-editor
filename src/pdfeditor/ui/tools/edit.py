@@ -34,6 +34,7 @@ from pdfeditor.model.objects import (
     ShapeSpec,
     TextStyle,
 )
+from pdfeditor.ui.dialogs.shape_style import DEFAULT_SHAPE_STYLE, ShapeStyle
 from pdfeditor.ui.tools.base import Tool
 from pdfeditor.ui.view.text_editor import InlineTextEditor
 
@@ -384,14 +385,17 @@ class AddImageTool(_RectTool):
 
 class AddShapeTool(_RectTool):
     default_size = (120.0, 80.0)
+    # The style of the shapes drawn next, set by Shapes > Shape Style. A tool is rebuilt for each
+    # use, so each new shape reads it here.
+    style: ShapeStyle = DEFAULT_SHAPE_STYLE
 
     def __init__(self, kind: ShapeKind) -> None:
         super().__init__()
         self.kind = kind
         self.name = f"add_{kind.value}"
-        self.stroke = Color(0, 0, 0)
-        self.fill: Color | None = None
-        self.width = 1.5
+        self.stroke = AddShapeTool.style.stroke
+        self.fill: Color | None = AddShapeTool.style.fill
+        self.width = AddShapeTool.style.width
 
     def finish(self, view: DocumentView, page: int, rect: Rect, a: Point, b: Point) -> None:
         spec = ShapeSpec(

@@ -127,6 +127,7 @@ Commands with no shortcut can still be run from the menus, the ribbon, the comma
 | Save as PDF/A | None |
 | Select All | Ctrl+A |
 | Select Tool | V |
+| Shape Style | None |
 | Sign Document | None |
 | Single Page | None |
 | Single Page Continuous | None |
