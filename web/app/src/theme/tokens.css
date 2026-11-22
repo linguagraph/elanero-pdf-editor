@@ -18,6 +18,7 @@
   --color-success: #0f7b0f;
   --color-warning: #8a5100;
   --color-brand: #0067c0;
+  --color-editor-bg: #fff6c4;
   --accent-swatch-blue: #0067c0;
   --accent-swatch-teal: #038387;
   --accent-swatch-green: #107c10;
@@ -67,6 +68,7 @@
     --color-success: #6ccb5f;
     --color-warning: #fce100;
     --color-brand: #4cc2ff;
+    --color-editor-bg: #4a4424;
   }
 }
 
@@ -89,6 +91,7 @@
   --color-success: #6ccb5f;
   --color-warning: #fce100;
   --color-brand: #4cc2ff;
+  --color-editor-bg: #4a4424;
 }
 
 @media (forced-colors: none) {
@@ -253,6 +256,7 @@
     --color-success: CanvasText;
     --color-warning: CanvasText;
     --color-brand: LinkText;
+    --color-editor-bg: Canvas;
   }
 
   /* Forced colours recolour outlines too; a system colour keeps the focus ring visible on Canvas. */
