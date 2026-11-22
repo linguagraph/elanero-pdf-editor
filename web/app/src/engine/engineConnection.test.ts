@@ -308,6 +308,35 @@ describe('whenReady', () => {
     await settle();
     expect(ready).toHaveBeenCalledWith(engine.client());
   });
+
+  it('calls onReady for each new engine, and never for a replaced one (W6.9 slice 3)', async () => {
+    const store = createEngineLoadStore();
+    const engine = createEngineConnection({ boot: BOOT, store, startWorker });
+    const onReady = vi.fn();
+    const stop = engine.onReady(onReady);
+    engine.start();
+    const old = workers[0]!;
+    engine.start();
+    old.answerHello();
+    await settle();
+    expect(onReady).not.toHaveBeenCalled();
+
+    workers[1]!.answerHello();
+    await settle();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onReady).toHaveBeenCalledWith(engine.client());
+
+    engine.restart();
+    workers[2]!.answerHello();
+    await settle();
+    expect(onReady).toHaveBeenCalledTimes(2);
+
+    stop();
+    engine.restart();
+    workers[3]!.answerHello();
+    await settle();
+    expect(onReady).toHaveBeenCalledTimes(2);
+  });
 });
 
 const session: EngineSession = {

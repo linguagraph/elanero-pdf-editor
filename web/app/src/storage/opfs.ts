@@ -7,6 +7,8 @@
 // The parts of a file-system handle the store uses. The browser's handles satisfy them.
 export interface BlobLike {
   readonly size: number;
+  // Set on a file (the browser's File); the font store reads it to find a cut-off write's age.
+  readonly lastModified?: number;
   arrayBuffer(): Promise<ArrayBuffer>;
   text(): Promise<string>;
 }
@@ -25,6 +27,9 @@ export interface DirectoryLike {
   getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<DirectoryLike>;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<FileLike>;
   removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
+  // The names in the folder. Optional: a root without it cannot be listed, so a store on it is
+  // unavailable (the browser's FileSystemDirectoryHandle has it).
+  keys?(): AsyncIterable<string>;
 }
 
 export interface StorageEstimateLike {

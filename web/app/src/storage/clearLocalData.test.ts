@@ -3,6 +3,8 @@ import { isSecretKey } from '../prefs/store';
 import { clearLocalData, LOCAL_DATA_FOLDERS, LOCAL_STORAGE_PREFIX } from './clearLocalData';
 import type { BlobLike, DirectoryLike, FileLike, WritableLike } from './opfs';
 import { StorageUnsupportedError } from './opfs';
+import { createFontStore, FONTS_FOLDER } from './fontStore';
+import { MemoryDir as TreeDir, memoryRoot } from './testRoot';
 
 // An in-memory Storage, enough for clearLocalData (length, key, removeItem).
 class MemoryStorage {
@@ -168,6 +170,27 @@ describe('clearLocalData: OPFS folders', () => {
     expect(root.dirs.has('autosave')).toBe(true);
     expect(root.dirs.has('unrelated')).toBe(true);
     expect(root.files.has('root.txt')).toBe(true);
+  });
+
+  it('removes the fonts a font store kept, so Clear all leaves no kept font behind', async () => {
+    const root = new TreeDir();
+    const store = createFontStore(memoryRoot(root), async () => ({ quota: 10_000, usage: 0 }));
+    const id = 'c'.repeat(64);
+    const kept = await store.write(
+      { id, name: 'c.ttf', size: 3, fontFormat: 'truetype', added: '2026-01-01T00:00:00.000Z' },
+      new Blob(['ccc']),
+    );
+    expect(kept).toBe('kept');
+    expect(root.dirs.has(FONTS_FOLDER)).toBe(true);
+
+    const outcome = await clearLocalData({
+      storage: () => asStorage(new MemoryStorage()),
+      root: memoryRoot(root),
+    });
+
+    expect(outcome.complete).toBe(true);
+    expect(root.dirs.has(FONTS_FOLDER)).toBe(false);
+    expect(await store.list()).toEqual([]);
   });
 
   it('lists exactly the folders it removes, and never autosave', () => {

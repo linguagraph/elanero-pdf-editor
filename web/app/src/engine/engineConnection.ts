@@ -42,6 +42,9 @@ export interface EngineConnection {
   restart(): boolean;
   // Stops the worker. Called when the app unmounts.
   dispose(): void;
+  // Calls the listener each time an engine becomes ready (W6.9 slice 3): the first start, Try again
+  // and a restart. A replaced worker never reaches it. Returns the function that removes it.
+  onReady(listener: (client: EngineClient) => void): () => void;
   // Adds a listener of the engine's change events (state, changed, saved, ...). The listener
   // stays across a restart, and the events of a replaced worker never reach it. Returns the
   // function that removes it (W4.8 S1).
@@ -101,6 +104,7 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
   let waiters: { resolve(client: EngineClient): void; reject(error: Error): void }[] = [];
   // The event listeners outlive the workers: each new RPC client forwards to them.
   const eventListeners = new Set<RpcEventListener>();
+  const readyListeners = new Set<(client: EngineClient) => void>();
 
   const stop = (): void => {
     generation += 1;
@@ -142,6 +146,7 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
         const ready = waiters;
         waiters = [];
         for (const waiter of ready) waiter.resolve(client);
+        for (const listener of [...readyListeners]) listener(client);
       },
       (error: unknown) => {
         if (!isCurrent()) return;
@@ -201,6 +206,12 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
       eventListeners.add(listener);
       return () => {
         eventListeners.delete(listener);
+      };
+    },
+    onReady(listener) {
+      readyListeners.add(listener);
+      return () => {
+        readyListeners.delete(listener);
       };
     },
     dispose() {
