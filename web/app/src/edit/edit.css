@@ -72,6 +72,11 @@
   border-radius: 50%;
 }
 
+/* The box an image will fill (W6.7b): dashed, so it reads as a place, not a drawn outline. */
+.shape-preview--image {
+  border-style: dashed;
+}
+
 .shape-line-preview {
   position: absolute;
   inset: 0;

@@ -5,7 +5,7 @@
 import { setViewTool, type ShapeTool } from '../view/viewTool';
 
 // The tools that edit the page content, and so need the signed-document warning first.
-export type EditTool = 'edit' | ShapeTool;
+export type EditTool = 'edit' | 'image' | ShapeTool;
 
 const warnedTabs = new Set<number>();
 

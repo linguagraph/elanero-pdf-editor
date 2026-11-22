@@ -71,6 +71,7 @@ import { DocumentStatusBar } from './view/DocumentStatusBar';
 import { type ViewCommandId, runViewCommand } from './view/viewCommands';
 import { recordTabJump, stepTabHistory, useNavHistory } from './view/navHistory';
 import { setViewTool, type ShapeTool, useViewTool } from './view/viewTool';
+import { chooseImage, dropPendingImage, setPendingImage } from './edit/images';
 import { acceptSignedEdit, type EditTool, requestEditTool } from './edit/editTool';
 import { SignedWarningDialog } from './edit/signedWarning';
 import { CommentsPanel } from './comments/panel/CommentsPanel';
@@ -593,6 +594,18 @@ export function App({
     if (!requestEditTool(activeId, activeTab?.signed ?? false, tool))
       setSignedEditAsk({ tabId: activeId, tool });
   };
+  // Add Image (W6.7b slice 2a): the file is picked first, from this click, and checked. The Image
+  // tool then places it. A signed document asks once per tab, as the other edit tools do; a
+  // refused file never turns the tool on.
+  const addImageFromPicker = async () => {
+    const tab = activeId;
+    if (tab === null) return;
+    const signed = activeTab?.signed ?? false;
+    const file = await chooseImage();
+    if (file === null) return;
+    setPendingImage(tab, file);
+    if (!requestEditTool(tab, signed, 'image')) setSignedEditAsk({ tabId: tab, tool: 'image' });
+  };
   const handlers: CommandHandlers = {
     ...baseHandlers,
     ...(documentShown
@@ -688,6 +701,7 @@ export function App({
           'add-rectangle': () => toggleShapeTool('shape-rectangle'),
           'add-ellipse': () => toggleShapeTool('shape-ellipse'),
           'add-line': () => toggleShapeTool('shape-line'),
+          'add-image': () => void addImageFromPicker(),
           // Delete Objects (W6.7a S5) deletes the Edit tool's selection; with none, nothing happens.
           'delete-selected-objects': () => viewRef.current?.deleteEditSelection(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
@@ -1137,7 +1151,11 @@ export function App({
           if (signedEditAsk !== null) acceptSignedEdit(signedEditAsk.tabId, signedEditAsk.tool);
           setSignedEditAsk(null);
         }}
-        onCancel={() => setSignedEditAsk(null)}
+        onCancel={() => {
+          // Cancel leaves the Image tool off, so the file picked for it is dropped too.
+          if (signedEditAsk?.tool === 'image') dropPendingImage(signedEditAsk.tabId);
+          setSignedEditAsk(null);
+        }}
       />
       <CommandPalette registry={REGISTRY} state={state} handlers={handlers} />
       <OpenInput inputRef={docs.inputRef} onFiles={docs.openFiles} />

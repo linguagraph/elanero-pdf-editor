@@ -90,7 +90,14 @@ import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
-import { addShape, noteShapeTooSmall, type ShapeSpec, SHAPE_KIND } from '../edit/shapes';
+import { addImage, dropPendingImage, pendingImageOf } from '../edit/images';
+import {
+  addShape,
+  noteShapeTooSmall,
+  type PlacedKind,
+  type ShapeSpec,
+  SHAPE_KIND,
+} from '../edit/shapes';
 import { CachedCanvas } from './pixels';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
@@ -1209,6 +1216,34 @@ export function DocumentView({
       if (added) onToolChange?.('select', drawnOn);
     });
   };
+  // The image the Image tool placed (W6.7b slice 2a): the file the user picked for this tab goes
+  // in the box the gesture gave, and on success the tool returns to Select, as a shape does. The
+  // file stays with the tab on a failure, so the user can place it again.
+  const drawImage = (page: number, spec: ShapeSpec | null) => {
+    if (shapeInFlight.current) return;
+    const drawnOn = tabId;
+    const file = drawnOn === null ? undefined : pendingImageOf(drawnOn);
+    if (file === undefined || drawnOn === null) return;
+    if (spec?.rect === undefined) {
+      toasts.push('info', t('edit.image.tooSmall'));
+      return;
+    }
+    shapeInFlight.current = true;
+    void addImage(shapeDeps, page, spec.rect, file).then((added) => {
+      shapeInFlight.current = false;
+      if (added) {
+        dropPendingImage(drawnOn);
+        onToolChange?.('select', drawnOn);
+      }
+    });
+  };
+  // The kind the place layer draws, or null when the tool places nothing now. The image tool
+  // places only once a file is picked for this tab (the pick sets it on before the tool turns on).
+  const placeKind = ((): PlacedKind | null => {
+    if (isShapeTool(tool)) return SHAPE_KIND[tool];
+    if (tool === 'image' && tabId !== null && pendingImageOf(tabId) !== undefined) return 'image';
+    return null;
+  })();
 
   return (
     <section
@@ -1408,15 +1443,23 @@ export function DocumentView({
                         onCommit={commitChange}
                       />
                     ) : null}
-                    {isShapeTool(tool) && sizes !== null ? (
+                    {placeKind !== null && sizes !== null ? (
                       <ShapeLayer
-                        kind={SHAPE_KIND[tool]}
+                        kind={placeKind}
                         zoom={zoom}
                         widthPt={sizes[box.index]?.width ?? 0}
                         heightPt={sizes[box.index]?.height ?? 0}
                         focusable={box.index === currentPage}
-                        onDraw={(spec) => drawShape(box.index, spec)}
-                        onStop={() => onToolChange?.('select')}
+                        onDraw={(spec) =>
+                          placeKind === 'image'
+                            ? drawImage(box.index, spec)
+                            : drawShape(box.index, spec)
+                        }
+                        onStop={() => {
+                          // Escape with no drag ends the Image tool, and the picked file with it.
+                          if (tabId !== null && placeKind === 'image') dropPendingImage(tabId);
+                          onToolChange?.('select');
+                        }}
                       />
                     ) : null}
                     {tool === 'cropBox' && sizes !== null ? (

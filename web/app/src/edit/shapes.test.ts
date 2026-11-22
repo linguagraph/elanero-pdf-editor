@@ -124,6 +124,25 @@ function setup(executed = true) {
 
 const boxSpec = shapeGesture('rectangle', { x: 100, y: 500 }, { x: 200, y: 560 }, page);
 
+describe('the image box (W6.7b slice 2a)', () => {
+  it('is a rectangle of 200 x 150 points from a click or Enter', () => {
+    expect(shapeGesture('image', { x: 50, y: 60 }, { x: 50, y: 60 }, page)?.rect).toEqual({
+      x0: 50,
+      y0: 60,
+      x1: 250,
+      y1: 210,
+    });
+    expect(centredGesture('image', page)?.rect).toEqual({ x0: 200, y0: 325, x1: 400, y1: 475 });
+  });
+
+  it('keeps a dragged box as the rectangle it was drawn as', () => {
+    expect(shapeGesture('image', { x: 300, y: 200 }, { x: 100, y: 500 }, page)).toMatchObject({
+      kind: 'rectangle',
+      rect: { x0: 100, y0: 200, x1: 300, y1: 500 },
+    });
+  });
+});
+
 describe('addShape', () => {
   it('runs content.add_shape with the page and the spec', async () => {
     const { call, deps } = setup();

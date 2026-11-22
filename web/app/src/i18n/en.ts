@@ -180,6 +180,12 @@ export const EN = {
   'edit.shape.layer':
     'Draw a shape: drag on the page, or press Enter for a default-size shape in the middle of the page. Esc stops.',
   'edit.shape.tooSmall': 'The shape would be off the page. Click further from the edge.',
+  'edit.image.added': 'Image added.',
+  'edit.image.layer':
+    'Place the image: drag a box on the page, or press Enter to place it in the middle of the page. Esc cancels.',
+  'edit.image.wrongType': 'Choose a PNG or JPEG image.',
+  'edit.image.tooLarge': 'This image is too large for the browser (at most {mb} MB).',
+  'edit.image.tooSmall': 'The picture would be off the page. Click further from the edge.',
   'command.add-text.label': 'Add Text',
   'command.add-image.label': 'Add Image',
   'command.add-rectangle.label': 'Rectangle',
@@ -1093,6 +1099,11 @@ export const EN = {
   'error.REFUSED.invalidMargins': 'A margin cannot be negative.',
   'error.REFUSED.invalidPages': 'One of the chosen pages is not in this document.',
   'error.REFUSED.outlineTooDeep': 'Bookmarks cannot be nested more than 32 levels deep.',
+  'error.REFUSED.imageUnreadable': 'This file is not an image the editor can read.',
+  'error.REFUSED.imageFormat': 'Only PNG and JPEG images can be added here.',
+  'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
+  'error.REFUSED.imageTooManyPixels':
+    'This image has more pixels than the editor can add (at most 25 million).',
   'error.BUSY': 'Wait for the current task to finish, then try again.',
   'error.NOT_SUPPORTED': 'This is not available in the web version.',
   'error.STALE_OBJECT': 'The page changed since you last looked. Try again.',
