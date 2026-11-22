@@ -36,8 +36,6 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   // The Comments panel's exports are not in the shared table yet; W7.1b adds the panel entry points.
   'export-comments',
   'import-comments',
-  // The shape style dialog (W6.7b slice 3a): the desktop has no style control for its shapes.
-  'shape-style',
 ]);
 
 // Desktop commands the web does not offer (W4.3b): New Window and Exit have no meaning in a browser
@@ -130,7 +128,6 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'select-all': 'scan-text',
   'find-next': 'chevron-down',
   'find-previous': 'chevron-up',
-  'shape-style': 'sliders-horizontal',
 };
 
 const DECLARED_COMMANDS: readonly CommandDef[] = [
