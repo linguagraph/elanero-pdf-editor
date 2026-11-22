@@ -590,21 +590,21 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W5.1a** Document view: virtualised page list _(done: continuous, single and two-page layouts with fit modes and saved zoom)_
 - [x] **W5.1b** HiDPI tiles, render cache and prefetch _(done: HiDPI tiles, 256 MiB tile cache with prefetch, bounded engine page cache)_
 - [x] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
-- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails, bookmark editing, read-only attachments and layers done; pending: spring-loading and indent (see #552), Playwright bookmarks spec (see #553))_
-- [ ] **W5.3** Links, navigation history, page jump, page labels _(partial: page jump, history, labels, link layer and link confirmation done; pending: links spec and accessibility line (see #554))_
-- [ ] **W5.4** Text selection and copy; search panel _(partial: text selection, copy, touch and pen selection done; pending: Chromium specs and 1,000-page timing (see #555))_
+- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails, bookmark editing, read-only attachments and layers done; pending: spring-loading and indent (see #552); a passing Chromium run of the bookmarks spec, merged in #584 but its run has failed, see W8.1)_
+- [ ] **W5.3** Links, navigation history, page jump, page labels _(partial: page jump, history, labels, link layer and link confirmation done; pending: a passing Chromium run of the links spec (#578 merged, run failed, see W8.1); accessibility line (see #554))_
+- [ ] **W5.4** Text selection and copy; search panel _(partial: text selection, copy, touch and pen selection done; pending: a passing Chromium run of the touch and 1,000-page specs (#581 merged, run failed, see W8.1); 1,000-page timing (see #555))_
 
 **W6 Required features, #139**
 
 - [x] **W6.1** R2 Page organizer _(done: organizer with thumbnails, multi-select, undoable edits and drag reorder)_
-- [ ] **W6.2** R3 Split dialog _(partial: split dialog (#251); preview, ZIP output, part names and document order (#530); pending: the Playwright split feature spec)_
+- [ ] **W6.2** R3 Split dialog _(partial: split dialog (#251); preview, ZIP output, part names and document order (#530); pending: a passing Chromium run of the split spec (#579 merged, run failed, see W8.1))_
 - [ ] **W6.3** R6 Combine dialog _(partial: sources, reordering, progress, page ranges and preview done; pending: password entry, waiting on the W1.2 decision (see #557); shared range rule (see #558))_
-- [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job, result with both sizes (#262, #288, #270, #434, #427); space audit before and after (#527); pending: the Playwright compress spec, which failed on its first CI run (see W8.1))_
-- [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi; multi-page print (#522); streamed pages with progress, the 200-page question and 300 dpi (#536); pending: the two-page end-to-end test, still test.fixme)_
+- [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job, result with both sizes (#262, #288, #270, #434, #427); space audit before and after (#527); pending: a passing Chromium run of the compress spec (#576 merged, run failed, see W8.1))_
+- [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi; multi-page print (#522); streamed pages with progress, the 200-page question and 300 dpi (#536); pending: a passing Chromium run of the two-page test (#577 removed the fixme; no passing run yet, see W8.1))_
 - [ ] **W6.6** R4 Translate
 - [x] **W6.7a** R1a select, move and delete page objects _(done: select, move and delete objects, with previews and undo)_
 - [ ] **W6.7b** R1a add shapes; add, replace and export images _(partial: shapes (#529); add an image (#547); the rotated and cropped offset fixed (#548); pending: replace and export (slice 2b, in review), shape styling)_
-- [ ] **W6.8a** R1b in-place paragraph editor and add text _(partial: editing existing paragraphs in place (#550); pending: Add Text (slice 8a-2))_
+- [x] **W6.8a** R1b in-place paragraph editor and add text _(Add Text, slice 8a-2 (#573), merged)_
 - [ ] **W6.8b** R1b font picker
 - [ ] **W6.9** R1c Font upload _(partial: fonts.validate (#525); the security guard on font references (#544); pending: worker storage and catalogue (slice 2), OPFS persistence, the upload UI, docs/guide page)_
 
@@ -624,7 +624,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W8 Quality, #141**
 
-- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow and feature specs done; pending: failing specs from first CI run (see #567), new bookmarks, links, split and print specs)_
+- [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow and feature specs done; pending: a passing web-e2e run: the engine does not load in CI, so the feature specs fail (see #567); specs merged before a passing run: bookmarks, links, touch, split, compress, print)_
 - [ ] **W8.2** Visual golden tests for rendering
 - [ ] **W8.3** Performance tests in CI
 - [x] **W8.4** Fuzz and robustness tests
@@ -636,7 +636,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W9.1** CI: build wheels and front end _(partial: ci_changes.py skips desktop CI for web-only PRs (#145), the web gate and web-pytest always report (#229, #240), and the docs workflow ignores docs/web; web build jobs pending)_
 - [x] **W9.2** Deploy to GitHub Pages under `/app/` _(done: app deployed to GitHub Pages; gzip sizes within the 40 MB budget)_
 - [ ] **W9.3** User guide: "Web version" page _(partial: the page is written (#231) and its claims are checked against main (#432); pending: the desktop guide pages are not yet updated for the web, and the parity table lists features that are not built yet)_
-- [ ] **W9.4** `PRIVACY.md` and landing page _(partial: web section of PRIVACY.md and landing link done; pending: re-verify the desktop section)_
+- [x] **W9.4** `PRIVACY.md` and landing page
 - [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: web section and licence notice generator done; pending: confirm Pyodide (MPL-2.0) and npm licence entries)_
 - [ ] **W9.6** Release checklist in `RELEASING.md` _(partial: checklist, commands and web deploy steps done; pending: rollback is documented, not automated)_
 
