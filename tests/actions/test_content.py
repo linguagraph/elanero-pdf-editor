@@ -555,14 +555,6 @@ def test_round_trip_filled_shape_on_rotated_page(open_copy: Opener, tmp_path: Pa
 
 
 @pytest.mark.desktop_only  # a pixel check on a render the Pyodide run cannot make
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known engine bug: on a page that is both rotated and cropped, shapes land offset by the"
-        " crop origin (PyMuPDF's transformation_matrix drops the crop offset). See"
-        " docs/web/design/W6.7b-shapes.md section 2.3. Remove this xfail when the engine fix lands."
-    ),
-)
 def test_shape_on_rotated_cropped_page(open_copy: Opener, tmp_path: Path) -> None:
     s = open_copy("off_page_text")  # page 1: /Rotate 90, CropBox (50, 50, 550, 750)
     red = Color(1, 0, 0)
@@ -570,6 +562,52 @@ def test_shape_on_rotated_cropped_page(open_copy: Opener, tmp_path: Path) -> Non
     content.add_shape(s, AddShape(1, spec))
     out = s.save(tmp_path / "rotated_cropped_shape.pdf")
     record("pixel_red_pdfium", out, page=1, x=150, y=130)
+
+
+# -- rotated and cropped pages (issue #537): the writer, the lister and the pixels must agree --
+
+
+@pytest.mark.desktop_only  # pixel checks on renders the Pyodide run cannot make
+@pytest.mark.parametrize("page", range(8))
+def test_round_trip_shape_rotated_cropped(open_copy: Opener, tmp_path: Path, page: int) -> None:
+    s = open_copy("rotated_cropped")
+    red = Color(1, 0, 0)
+    box = Rect(100, 100, 200, 160)
+    content.add_shape(s, AddShape(page, ShapeSpec(ShapeKind.RECTANGLE, box, stroke=red, fill=red)))
+    out = s.save(tmp_path / f"shape_{page}.pdf")
+    assert_opens_everywhere(out)
+    record("red_bbox_pdfium", out, page=page, expected=[100, 100, 200, 160], tol=2)
+    with reopened(out) as doc:
+        paths = [o for o in doc.page(page).content_objects() if o.type is ObjectType.PATH]
+    assert len(paths) == 1
+    b = paths[0].bbox
+    assert [b.x0, b.y0, b.x1, b.y1] == pytest.approx([100, 100, 200, 160], abs=2)
+
+
+@pytest.mark.desktop_only
+@pytest.mark.parametrize("page", range(8))
+def test_round_trip_resize_image_rotated_cropped(
+    open_copy: Opener, tmp_path: Path, page: int
+) -> None:
+    """Scale the anchor image x2 about its top-left corner: the pixels and the lister agree."""
+    s = open_copy("rotated_cropped")
+    with s.lock:
+        (image,) = (
+            o for o in s.document.page(page).content_objects() if o.type is ObjectType.IMAGE
+        )
+    x0, y0, w, h = image.bbox.x0, image.bbox.y0, image.bbox.width, image.bbox.height
+    scale_about_top_left = Matrix(2, 0, 0, 2, -x0, -y0)
+    refs_now = refs(s, page, ObjectType.IMAGE)
+    result = content.transform(s, TransformObjects(refs_now, scale_about_top_left, resize=True))
+    assert result.executed
+    out = s.save(tmp_path / f"resize_{page}.pdf")
+    assert_opens_everywhere(out)
+    record("green_bbox_pdfium", out, page=page, expected=[x0, y0, x0 + 2 * w, y0 + 2 * h], tol=2)
+    with reopened(out) as doc:
+        images = [o for o in doc.page(page).content_objects() if o.type is ObjectType.IMAGE]
+    assert len(images) == 1
+    b = images[0].bbox
+    assert [b.x0, b.y0, b.x1, b.y1] == pytest.approx([x0, y0, x0 + 2 * w, y0 + 2 * h], abs=2)
 
 
 def test_round_trip_replace_image(open_copy: Opener, tmp_path: Path) -> None:
