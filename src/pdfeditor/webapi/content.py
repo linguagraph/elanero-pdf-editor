@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from PIL import Image
+
 from pdfeditor.actions.content import INLINE_IMAGE_MESSAGE
 from pdfeditor.model.geometry import Rect
 from pdfeditor.model.objects import ObjectType, PageObject, TextStyle, family_of
@@ -25,6 +27,10 @@ log = logging.getLogger(__name__)
 # The most objects one reply holds (W6.7a decision D2). When the page has more, the reply says so
 # with ``truncated``; the outlines of the objects it does hold are still usable.
 MAX_PAGE_OBJECTS = 5000
+
+# The English text of the refusal for an image no decoder can read; the web words it from the
+# reason (image_unreadable), as it does for the actions' refusal.
+UNREADABLE_IMAGE_MESSAGE = "This file is not an image the editor can read."
 
 # Pages whose malformed content was already logged, as (handle, page, revision). The web polls
 # this call, so a page that stays malformed would otherwise log a traceback on every poll. The set
@@ -155,7 +161,13 @@ def export_image(params: dto.ImageParams) -> dto.ImageDataResult:
             {"max_bytes": limits.MAX_JOB_BYTES, "size": len(data)},
         )
     # Pillow decodes JPEG 2000 only; the bytes are already copied out, so no engine lock is needed.
-    data, ext = browser_image(data, ext)
+    try:
+        data, ext = browser_image(data, ext)
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):
+        # Corrupt JPEG 2000 data: the same refusal the actions give for an unreadable image.
+        raise RpcFailure(
+            REFUSED, UNREADABLE_IMAGE_MESSAGE, {"reason": "image_unreadable"}
+        ) from None
     if len(data) > limits.MAX_JOB_BYTES:
         raise RpcFailure(
             FILE_TOO_LARGE,

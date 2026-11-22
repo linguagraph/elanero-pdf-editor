@@ -313,6 +313,25 @@ def test_export_of_an_unknown_size_over_the_byte_cap_is_refused_before_any_decod
     assert err["details"]["size"] > 16
 
 
+def test_export_of_corrupt_jpeg2000_is_refused_as_unreadable(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bytes with the JPEG 2000 signature but no decodable picture refuse as an unreadable image,
+    not as an internal error."""
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    corrupt = b"\x00\x00\x00\x0cjP  \r\n\x87\n" + b"\x00" * 40 + b"not a picture"
+
+    def jpeg2000(self: Any, key: str) -> tuple[bytes, str]:
+        return corrupt, "jpx"
+
+    monkeypatch.setattr(page_class(handle), "image_data", jpeg2000)
+    reply, _ = export(handle, pictures[0]["key"], revision)
+    err = error(reply)
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "image_unreadable"}
+
+
 def test_export_of_a_missing_page_is_invalid_args(web: None, fixture_pdf: Any) -> None:
     handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
     reply, _ = export(handle, "image:0", 0, page=9)
