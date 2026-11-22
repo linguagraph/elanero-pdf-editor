@@ -50,6 +50,10 @@ top of the page, use the **Comment** tab instead.)
 2. Choose a PNG or JPEG file.
 3. Click the page to place it, then drag to move or resize it.
 
+In the web version, choose the file first, then click or drag on the page to place it. The picture
+keeps its proportions inside the box you drew, and is centred in it. The web version adds PNG and
+JPEG files up to 50 MB and 25 megapixels.
+
 To swap an existing picture for another, select it and click **Objects ▸ Replace** (**Replace
 Image**). To save a picture to a file, select it and click **Objects ▸ Export** (**Export Image**).
 
@@ -93,8 +97,10 @@ so its text can be changed. To turn this off, clear **Recognize text when editin
 - Results depend on the source document. Text in unusual fonts, text inside pictures and text in
   complex layouts can't always be edited cleanly.
 - Existing images have no rotation handle in the interface.
-- On a page that is both rotated and cropped, a new shape can appear offset from where you drew it,
-  by the crop box's offset. This is a known engine issue, to be fixed separately.
+- Pictures stored inside the page content (inline images) can be moved and deleted, but not replaced
+  or exported.
+- On a page that is both rotated and cropped, a new shape or picture can appear offset from where
+  you drew it, by the crop box's offset. This is a known engine issue, to be fixed separately.
 - Text added as a comment (a FreeText annotation) uses standard fonts.
 - Elanero does not create or edit interactive form fields. Existing forms still display and are
   kept when you save.
