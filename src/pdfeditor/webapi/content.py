@@ -146,6 +146,14 @@ def export_image(params: dto.ImageParams) -> dto.ImageDataResult:
         if page.is_inline_image(params.key):
             raise RpcFailure(REFUSED, INLINE_IMAGE_MESSAGE, {"reason": "inline_image"})
         data, ext = page.image_data(params.key)
+    # The raw bytes are checked before Pillow decodes them. A picture of unknown size (0 x 0)
+    # passes the pixel ceiling above, so the byte cap is the only bound on a JPEG 2000 decode.
+    if len(data) > limits.MAX_JOB_BYTES:
+        raise RpcFailure(
+            FILE_TOO_LARGE,
+            "the image is too large for the browser",
+            {"max_bytes": limits.MAX_JOB_BYTES, "size": len(data)},
+        )
     # Pillow decodes JPEG 2000 only; the bytes are already copied out, so no engine lock is needed.
     data, ext = browser_image(data, ext)
     if len(data) > limits.MAX_JOB_BYTES:

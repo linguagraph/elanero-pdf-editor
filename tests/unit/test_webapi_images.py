@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import io
 from collections.abc import Iterator
+from dataclasses import replace as dc_replace
 from typing import Any
 
 import pytest
 from PIL import Image, features
 
 from pdfeditor.model import platform as model_platform
+from pdfeditor.model.objects import ObjectType
 from pdfeditor.services.export.images import browser_image
-from pdfeditor.webapi import limits
+from pdfeditor.webapi import content, limits
 from pdfeditor.webapi.errors import FILE_TOO_LARGE, INVALID_ARGS, REFUSED, STALE_OBJECT
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
@@ -276,6 +278,39 @@ def test_export_over_the_pixel_ceiling_is_too_large_before_any_bytes(
     err = error(reply)
     assert err["code"] == FILE_TOO_LARGE
     assert err["details"] == {"max_pixels": 100, "pixels": 120 * 100}
+
+
+def page_class(handle: str) -> Any:
+    """The engine's page class, so a test can stand in for one method of every page."""
+    return type(REGISTRY.get(handle).document.page(0))
+
+
+def test_export_of_an_unknown_size_over_the_byte_cap_is_refused_before_any_decode(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A picture of unknown size (0 x 0) passes the pixel ceiling, so its raw bytes must be
+    checked against the byte cap before anything decodes them."""
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    listed = page_class(handle).content_objects
+
+    def unknown_size(self: Any) -> list[Any]:
+        return [
+            dc_replace(o, image_size=(0, 0)) if o.type is ObjectType.IMAGE else o
+            for o in listed(self)
+        ]
+
+    def decode_must_not_run(data: bytes, ext: str) -> tuple[bytes, str]:
+        raise AssertionError("the bytes were decoded before the byte cap")
+
+    monkeypatch.setattr(page_class(handle), "content_objects", unknown_size)
+    monkeypatch.setattr(content, "browser_image", decode_must_not_run)
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", 16)
+    reply, _ = export(handle, pictures[0]["key"], revision)
+    err = error(reply)
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"]["max_bytes"] == 16
+    assert err["details"]["size"] > 16
 
 
 def test_export_of_a_missing_page_is_invalid_args(web: None, fixture_pdf: Any) -> None:
