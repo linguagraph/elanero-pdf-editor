@@ -6,9 +6,10 @@ import { useSyncExternalStore } from 'react';
 
 // cropBox draws a crop box on a page (W4.11 S5); the crop dialog is closed while it is on. edit
 // outlines and selects the content objects of each page (W6.7a S4). The shape tools draw one
-// rectangle, ellipse or line on a page, then return to Select (W6.7b).
+// rectangle, ellipse or line on a page, then return to Select (W6.7b). The image tool places one
+// picture the user has picked (W6.7b slice 2a), then returns to Select the same way.
 export type ShapeTool = 'shape-rectangle' | 'shape-ellipse' | 'shape-line';
-export type ViewTool = 'select' | 'hand' | 'cropBox' | 'edit' | ShapeTool;
+export type ViewTool = 'select' | 'hand' | 'cropBox' | 'edit' | 'image' | ShapeTool;
 
 export function isShapeTool(tool: ViewTool): tool is ShapeTool {
   return tool === 'shape-rectangle' || tool === 'shape-ellipse' || tool === 'shape-line';

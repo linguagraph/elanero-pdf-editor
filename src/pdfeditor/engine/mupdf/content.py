@@ -849,6 +849,13 @@ def replace_image(page: MuPage, key: str, data: bytes) -> None:
 def _image_xref(page: MuPage, key: str) -> int:
     _ops_list, objects = _content_objects(page)
     obj = next((o for o in objects if o.key == key), None)
+    # An inline image (BI ... EI) is stored in the page content, with no XObject to swap or read
+    # back. It is reported as an image so it can be moved and deleted, so say why it can't be
+    # replaced or exported instead of failing as a missing XObject.
+    if obj is not None and obj.kind is ObjectKind.INLINE_IMAGE:
+        raise UnsupportedFeature(
+            "This picture is stored inside the page content and can't be replaced or exported."
+        )
     if obj is None or obj.kind is not ObjectKind.IMAGE:
         raise EngineError(f"{key!r} is not an image XObject")
     for entry in page.fz.get_images(full=True):

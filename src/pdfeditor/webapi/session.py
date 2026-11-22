@@ -111,7 +111,21 @@ def document_capabilities(params: dto.HandleParams) -> dto.CapabilitiesResult:
     engine = {
         name: bool(value) for name, value in dataclasses.asdict(session.engine.capabilities).items()
     }
-    platform = dto.PlatformFlags(**dataclasses.asdict(platform_current()))
+    caps = platform_current()
+    formats = None if caps.image_formats is None else tuple(sorted(caps.image_formats))
+    platform = dto.PlatformFlags(
+        linearize=caps.linearize,
+        ocr=caps.ocr,
+        signing=caps.signing,
+        system_fonts=caps.system_fonts,
+        office_import=caps.office_import,
+        threads=caps.threads,
+        pdfa=caps.pdfa,
+        tiff_compression=caps.tiff_compression,
+        image_formats=formats,
+        max_image_bytes=caps.max_image_bytes,
+        max_image_pixels=caps.max_image_pixels,
+    )
     return dto.CapabilitiesResult(engine=engine, platform=platform)
 
 

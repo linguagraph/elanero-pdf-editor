@@ -1002,6 +1002,28 @@ def _pixel_red_pdfium(data: bytes, page: int, x: int, y: int) -> None:
     assert r > 200 and g < 80 and b < 80
 
 
+@host_check("pixel_blue_pdfium")
+def _pixel_blue_pdfium(data: bytes, page: int, x: int, y: int) -> None:
+    r, g, b = _pixel_pdfium(data, page, x, y)
+    assert b > 200 and r < 80 and g < 80
+
+
+@host_check("image_filter_pikepdf")
+def _image_filter_pikepdf(data: bytes, page: int, filter: str) -> None:
+    """The page has an image XObject whose /Filter is ``filter`` (for a JPEG, /DCTDecode): the
+    file's own bytes were placed, not decoded and encoded again (W6.7b)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        xobjects = pdf.pages[page].obj.get("/Resources", {}).get("/XObject", {})
+        filters = [
+            str(xobject.get("/Filter"))
+            for xobject in xobjects.values()
+            if str(xobject.get("/Subtype")) == "/Image"
+        ]
+    assert filter in filters, filters
+
+
 @host_check("shape_operators_pikepdf")
 def _shape_operators_pikepdf(data: bytes, page: int, kind: str) -> None:
     """The last shape on ``page`` is one q ... Q block: its path operators (re; or four c; or m and

@@ -165,7 +165,12 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     checked: (state) => state.viewTool === 'edit',
   },
   cmd('add-text', 'command.add-text.label', 'edit.add'),
-  cmd('add-image', 'command.add-image.label', 'edit.add'),
+  // Add Image (W6.7b slice 2a) picks a file, then places it with the Image tool, which is checked
+  // while it is on.
+  {
+    ...cmd('add-image', 'command.add-image.label', 'edit.add', CAN_EDIT_CONTENT),
+    checked: (state) => state.viewTool === 'image',
+  },
   // The shape tools (W6.7b) are toggles: the one that is on is checked, and a second press returns
   // to Select.
   {

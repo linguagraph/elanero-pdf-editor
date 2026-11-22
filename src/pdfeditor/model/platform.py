@@ -23,6 +23,11 @@ class PlatformCapabilities:
     # Pillow's name for the TIFF writer's compression. The web build must not use deflate: a
     # failed deflate write aborts the Pyodide runtime (docs/web/spikes/W0.4-results.md).
     tiff_compression: str = "tiff_deflate"
+    # The image formats an added image may have (Pillow's names), or None for whatever the engine
+    # reads. The size caps, in bytes and in pixels, are None for no cap.
+    image_formats: frozenset[str] | None = None
+    max_image_bytes: int | None = None
+    max_image_pixels: int | None = None
 
 
 _current = PlatformCapabilities()

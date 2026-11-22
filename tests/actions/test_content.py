@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import io
 import math
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -30,8 +30,9 @@ from pdfeditor.actions.content import (
 )
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.engine.base import Document
+from pdfeditor.engine.base import Document, UnsupportedFeature
 from pdfeditor.engine.registry import get_engine
+from pdfeditor.model import platform as model_platform
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.model.objects import (
@@ -43,6 +44,8 @@ from pdfeditor.model.objects import (
     ShapeSpec,
     TextStyle,
 )
+from pdfeditor.webapi.limits import MAX_IMAGE_BYTES
+from pdfeditor.webapi.platform import WEB_PLATFORM
 from tests.actions.conftest import Opener
 from tests.hostcheck import record
 
@@ -474,6 +477,161 @@ def test_round_trip_add_image(open_copy: Opener, tmp_path: Path) -> None:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.IMAGE) == 1
 
 
+def jpeg(color: tuple[int, int, int], size: tuple[int, int] = (60, 50)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, format="JPEG", quality=95)
+    return buf.getvalue()
+
+
+def test_add_image_redo_restores_it_at_a_new_revision(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    content.add_image(s, AddImage(0, Rect(100, 100, 200, 200), png((0, 200, 0))))
+    with s.lock:
+        added_at = s.document.page(0).revision
+    added = snapshot_of(s)
+    assert s.undo()
+    with s.lock:
+        undone_at = s.document.page(0).revision
+    assert undone_at != added_at
+    assert s.redo()
+    with s.lock:
+        redone_at = s.document.page(0).revision
+    assert redone_at not in {added_at, undone_at}
+    assert snapshot_of(s) == added
+
+
+def test_add_image_keeps_the_aspect_inside_the_box(open_copy: Opener, tmp_path: Path) -> None:
+    # A 60 x 50 picture in a 200 x 200 box is fitted to 200 x 166.7, centred: its top edge is at
+    # y 316.7, so the strip above it stays blank, and the centre is green. rotated_pages page 0 has
+    # only its heading (near the top) on the page, so the strip is blank.
+    s = open_copy("rotated_pages")
+    content.add_image(s, AddImage(0, Rect(100, 300, 300, 500), png((0, 200, 0))))
+    out = s.save(tmp_path / "fitted_image.pdf")
+    assert_opens_everywhere(out)
+    record("pixel_green_pdfium", out, page=0, x=200, y=400)
+    record("blank_region_pdfium", out, page=0, clip=[110, 305, 290, 312])
+
+
+def test_add_image_stretches_when_keep_proportion_is_off(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("text_multipage")
+    content.add_image(
+        s, AddImage(0, Rect(100, 100, 300, 300), png((0, 200, 0)), keep_proportion=False)
+    )
+    out = s.save(tmp_path / "stretched_image.pdf")
+    assert_opens_everywhere(out)
+    record("pixel_green_pdfium", out, page=0, x=110, y=110)
+    record("pixel_green_pdfium", out, page=0, x=290, y=290)
+
+
+def test_round_trip_add_jpeg_is_passed_through(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("text_multipage")
+    content.add_image(s, AddImage(0, Rect(100, 100, 300, 300), jpeg((255, 0, 0))))
+    out = s.save(tmp_path / "added_jpeg.pdf")
+    assert_opens_everywhere(out)
+    record("pixel_red_pdfium", out, page=0, x=200, y=200)
+    record("image_filter_pikepdf", out, page=0, filter="/DCTDecode")
+
+
+def test_round_trip_add_image_on_rotated_page(open_copy: Opener, tmp_path: Path) -> None:
+    # Two colours, left red and right blue, placed upright on a page with /Rotate 90.
+    left_right = Image.new("RGB", (40, 20), (255, 0, 0))
+    left_right.paste((0, 0, 255), (20, 0, 40, 20))
+    buf = io.BytesIO()
+    left_right.save(buf, format="PNG")
+    s = open_copy("rotated_pages")  # page 1: /Rotate 90, no crop box
+    content.add_image(s, AddImage(1, Rect(100, 100, 300, 200), buf.getvalue()))
+    out = s.save(tmp_path / "rotated_image.pdf")
+    assert_opens_everywhere(out)
+    record("pixel_red_pdfium", out, page=1, x=150, y=150)
+    record("pixel_blue_pdfium", out, page=1, x=250, y=150)
+
+
+@pytest.mark.desktop_only  # a pixel check on a render the Pyodide run cannot make
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Known engine bug (issue #537): on a page that is both rotated and cropped, added shapes"
+        " and images land offset by the crop origin (PyMuPDF's transformation_matrix drops the"
+        " crop offset). See docs/web/design/W6.7b-shapes.md section 2.3 and"
+        " docs/web/design/W6.7b-s2-images.md section 6. Remove this xfail when the engine fix"
+        " lands."
+    ),
+)
+def test_image_on_rotated_cropped_page(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("off_page_text")  # page 1: /Rotate 90, CropBox (50, 50, 550, 750)
+    content.add_image(s, AddImage(1, Rect(100, 100, 200, 160), png((200, 0, 0), (40, 20))))
+    out = s.save(tmp_path / "rotated_cropped_image.pdf")
+    record("pixel_red_pdfium", out, page=1, x=150, y=130)
+
+
+def gif(size: tuple[int, int] = (60, 50)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, (0, 0, 200)).save(buf, format="GIF")
+    return buf.getvalue()
+
+
+def tiff(size: tuple[int, int] = (60, 50)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, (0, 0, 200)).save(buf, format="TIFF")
+    return buf.getvalue()
+
+
+def png_with_pixels(width: int, height: int) -> bytes:
+    """A 1-bit PNG with ``width x height`` pixels: the file stays small, the header declares more
+    pixels than the web's cap."""
+    buf = io.BytesIO()
+    Image.new("1", (width, height), 0).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.fixture
+def web_platform() -> Iterator[None]:
+    """The browser's image rules (formats and caps) for the test, then the desktop's again."""
+    previous = model_platform.current()
+    model_platform.configure(WEB_PLATFORM)
+    try:
+        yield
+    finally:
+        model_platform.configure(previous)
+
+
+# Each refused image, with the words of the refusal. The data is built inside the test.
+REFUSED_ON_THE_WEB = [
+    pytest.param(gif, "PNG and JPEG", id="gif"),
+    pytest.param(tiff, "PNG and JPEG", id="tiff"),
+    pytest.param(lambda: b"", "not an image the editor can read", id="empty"),
+    pytest.param(lambda: b"this is plainly not an image", "not an image the editor", id="garbage"),
+    pytest.param(
+        lambda: b"\x89PNG\r\n\x1a\n" + b"\0" * MAX_IMAGE_BYTES,
+        "larger than 50 MB",
+        id="too_many_bytes",
+    ),
+    pytest.param(
+        lambda: png_with_pixels(5000, 5001), "more than 25 million pixels", id="too_many_pixels"
+    ),
+]
+
+
+@pytest.mark.parametrize(("make", "message"), REFUSED_ON_THE_WEB)
+def test_add_image_refuses_what_the_web_cannot_add(
+    open_copy: Opener, web_platform: None, make: Callable[[], bytes], message: str
+) -> None:
+    s = open_copy("text_multipage")
+    with s.lock:
+        before = s.document.page(0).revision
+    with pytest.raises(Refused, match=message):
+        content.add_image(s, AddImage(0, Rect(100, 100, 200, 200), make()))
+    with s.lock:
+        assert s.document.page(0).revision == before
+    assert not s.undo_stack.can_undo
+
+
+def test_add_image_still_takes_a_gif_on_the_desktop(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    content.add_image(s, AddImage(0, Rect(100, 100, 200, 200), gif()))
+    assert [o.type for o in objects(s)].count(ObjectType.IMAGE) == 1
+
+
 def test_round_trip_add_shape(open_copy: Opener, tmp_path: Path) -> None:
     s = open_copy("text_multipage")
     red = Color(1, 0, 0)
@@ -581,6 +739,18 @@ def test_round_trip_replace_image(open_copy: Opener, tmp_path: Path) -> None:
     record("pixel_green_pdfium", out, page=0, x=480, y=130)
     with reopened(out) as doc:
         assert [o.type for o in doc.page(0).content_objects()].count(ObjectType.IMAGE) == 1
+
+
+def test_inline_image_is_listed_but_cannot_be_replaced(open_copy: Opener) -> None:
+    # A picture inside the page content (BI ... EI) has no XObject to swap: it is an IMAGE in the
+    # object list, so it can be moved and deleted, but a replace says why it is refused.
+    s = open_copy("inline_image")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    before = snapshot_of(s)
+    with pytest.raises(UnsupportedFeature, match="stored inside the page content"):
+        content.replace_image(s, ReplaceImage(picture, png((0, 200, 0))))
+    assert snapshot_of(s) == before
+    assert not s.undo_stack.can_undo
 
 
 def test_round_trip_delete(open_copy: Opener, tmp_path: Path) -> None:

@@ -139,4 +139,23 @@ describe('the shape layer on a page', () => {
     expect(layer().getAttribute('aria-label')).toBe(t('edit.shape.layer'));
     expect(layer().getAttribute('role')).toBe('application');
   });
+
+  it('an image box is labelled for placing, and its preview is dashed', () => {
+    render({ kind: 'image' });
+    expect(layer().getAttribute('aria-label')).toBe(t('edit.image.layer'));
+    const el = layer();
+    act(() => pointer(el, 'pointerdown', 72 * px, 72 * px));
+    act(() => pointer(el, 'pointermove', 144 * px, 144 * px));
+    expect(container.querySelector('.shape-preview--image')).not.toBeNull();
+  });
+
+  it('a click places the image box at its default size (200 x 150 points)', () => {
+    const { onDraw } = render({ kind: 'image' });
+    const el = layer();
+    act(() => pointer(el, 'pointerdown', 72 * px, 72 * px));
+    act(() => pointer(el, 'pointerup', 72 * px, 72 * px));
+    expect(onDraw).toHaveBeenCalledWith(
+      expect.objectContaining({ rect: { x0: 72, y0: 72, x1: 272, y1: 222 } }),
+    );
+  });
 });

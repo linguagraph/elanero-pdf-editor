@@ -384,6 +384,29 @@ describe('the shape tools (W6.7b)', () => {
   });
 });
 
+describe('the Add Image command (W6.7b slice 2a)', () => {
+  const editable = state({ hasDocument: true, capabilities: ALL_CAPABILITIES, contentEdit: true });
+
+  it('needs a document whose engine can edit content, with the reason', () => {
+    expect(commandDisabledReasonOf('add-image', state())).toBe('needsDocument');
+    expect(commandDisabledReasonOf('add-image', withDoc)).toBe('contentEditOff');
+    expect(commandDisabledReasonOf('add-image', editable)).toBeNull();
+  });
+
+  it('is shown as pressed only while the Image tool is on', () => {
+    expect(REGISTRY.get('add-image')?.checked?.(state({ ...editable, viewTool: 'image' }))).toBe(
+      true,
+    );
+    expect(REGISTRY.get('add-image')?.checked?.(editable)).toBe(false);
+  });
+
+  it('runs its handler through the registry', () => {
+    const addImage = vi.fn();
+    expect(runCommand(REGISTRY, 'add-image', editable, { 'add-image': addImage })).toBe(true);
+    expect(addImage).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the comment and redaction tools (W4.3a S7)', () => {
   it('shows each comment tool as pressed only while it is the tool on', () => {
     const on = state({ hasDocument: true, commentTool: 'rectangle' });

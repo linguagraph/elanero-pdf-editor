@@ -74,6 +74,12 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   invalid_margins: 'error.REFUSED.invalidMargins',
   invalid_pages: 'error.REFUSED.invalidPages',
   outline_too_deep: 'error.REFUSED.outlineTooDeep',
+  // The image refusals of content.add_image (W6.7b slice 2a): worded here, since the engine's own
+  // text is never shown.
+  image_unreadable: 'error.REFUSED.imageUnreadable',
+  image_format: 'error.REFUSED.imageFormat',
+  image_too_large: 'error.REFUSED.imageTooLarge',
+  image_too_many_pixels: 'error.REFUSED.imageTooManyPixels',
 };
 
 function refusedReason(details: Details): Variant | undefined {

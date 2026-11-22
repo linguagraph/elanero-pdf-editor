@@ -22,6 +22,7 @@ from pdfeditor.actions.base import (
 )
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.engine.base import Document, EngineError
+from pdfeditor.model import platform
 from pdfeditor.model.geometry import Matrix, Rect
 from pdfeditor.model.objects import (
     FontChoice,
@@ -32,6 +33,7 @@ from pdfeditor.model.objects import (
     TextStyle,
 )
 from pdfeditor.model.pages import ImageStamp
+from pdfeditor.services.image_input import ImageTooManyPixels, probe_image
 
 # -- argument types ------------------------------------------------------------------------
 
@@ -65,6 +67,8 @@ class AddImage:
     page: int
     rect: Rect
     data: bytes
+    # The picture is fitted inside ``rect``, centred, at its own aspect. False stretches it to fill.
+    keep_proportion: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +115,43 @@ def _check_page(session: DocumentSession, page: int) -> None:
     """Refuse a creation on a page that doesn't exist. Call under the lock."""
     if not 0 <= page < session.document.page_count:
         raise Refused(f"Page {page + 1} doesn't exist.")
+
+
+# Each image refusal carries a stable reason, which the web words from its own catalogue
+# (rpc/errors.ts REFUSED_REASON); the English message is what the desktop shows.
+def _check_image(data: bytes) -> None:
+    """Refuse bytes that are not an image this platform adds (the flags in model.platform). The
+    web sends untrusted input, so the size is checked before Pillow reads the header, and the
+    header before the engine is asked to insert anything. Desktop limits are None, so the desktop
+    only gets the readable check."""
+    caps = platform.current()
+    if not data:
+        raise Refused("This file is not an image the editor can read.", reason="image_unreadable")
+    if caps.max_image_bytes is not None and len(data) > caps.max_image_bytes:
+        raise Refused(
+            f"This image is larger than {caps.max_image_bytes // 1024**2} MB.",
+            reason="image_too_large",
+        )
+    try:
+        probe = probe_image(data)
+    except ImageTooManyPixels:
+        raise Refused(
+            _too_many_pixels(caps.max_image_pixels), reason="image_too_many_pixels"
+        ) from None
+    if probe is None:
+        raise Refused("This file is not an image the editor can read.", reason="image_unreadable")
+    if caps.image_formats is not None and probe.format not in caps.image_formats:
+        raise Refused("Only PNG and JPEG images can be added here.", reason="image_format")
+    if caps.max_image_pixels is not None and probe.width * probe.height > caps.max_image_pixels:
+        raise Refused(_too_many_pixels(caps.max_image_pixels), reason="image_too_many_pixels")
+
+
+def _too_many_pixels(limit: int | None) -> str:
+    if limit is None:
+        return "This image has too many pixels for the editor."
+    return (
+        f"This image has more than {limit // 1_000_000} million pixels, the most the editor adds."
+    )
 
 
 _SHAPE_LABELS = {
@@ -210,10 +251,13 @@ def add_image(session: DocumentSession, args: AddImage) -> ActionResult[None]:
     label = "Add Image"
     with session.lock:
         _check_page(session, args.page)
+    _check_image(args.data)
     snapshot(
         session,
         label,
-        lambda doc: doc.page(args.page).stamp_image(ImageStamp(args.data, args.rect)),
+        lambda doc: doc.page(args.page).stamp_image(
+            ImageStamp(args.data, args.rect, keep_proportion=args.keep_proportion)
+        ),
     )
     return ActionResult(label, None)
 

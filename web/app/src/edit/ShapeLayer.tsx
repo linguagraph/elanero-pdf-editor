@@ -8,14 +8,15 @@ import { t } from '../i18n/t';
 import {
   centredGesture,
   type PageSize,
-  type ShapeKind,
+  type PlacedKind,
   type ShapeSpec,
   shapeGesture,
 } from './shapes';
 import './edit.css';
 
 export interface ShapeLayerProps {
-  readonly kind: ShapeKind;
+  // A shape, or 'image' for the box an image is placed in (its own label and dashed preview).
+  readonly kind: PlacedKind;
   // The page's zoom and size in points: the mapping from pointer offsets to page points.
   readonly zoom: number;
   readonly widthPt: number;
@@ -26,6 +27,13 @@ export interface ShapeLayerProps {
   readonly onDraw: (spec: ShapeSpec | null) => void;
   // Escape with nothing being dragged: the tool is turned off.
   readonly onStop: () => void;
+}
+
+// The preview's class: an ellipse is round, an image box is dashed, a rectangle is solid.
+function previewClass(kind: PlacedKind): string {
+  if (kind === 'ellipse') return 'shape-preview shape-preview--ellipse';
+  if (kind === 'image') return 'shape-preview shape-preview--image';
+  return 'shape-preview';
 }
 
 export function ShapeLayer({
@@ -100,7 +108,7 @@ export function ShapeLayer({
     <div
       className="shape-layer"
       role="application"
-      aria-label={t('edit.shape.layer')}
+      aria-label={kind === 'image' ? t('edit.image.layer') : t('edit.shape.layer')}
       tabIndex={focusable ? 0 : -1}
       onPointerDown={onDown}
       onPointerMove={onMove}
@@ -109,10 +117,7 @@ export function ShapeLayer({
       onKeyDown={onKey}
     >
       {preview?.rect !== undefined ? (
-        <div
-          className={kind === 'ellipse' ? 'shape-preview shape-preview--ellipse' : 'shape-preview'}
-          style={cssBox(preview.rect, zoom)}
-        />
+        <div className={previewClass(kind)} style={cssBox(preview.rect, zoom)} />
       ) : null}
       {preview?.start !== undefined && preview.end !== undefined ? (
         <svg className="shape-line-preview" aria-hidden="true">
