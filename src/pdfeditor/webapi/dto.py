@@ -851,6 +851,19 @@ class CombineProbeResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class CombineUnlockParams:
+    name: str  # the file name with .pdf, as for combine.probe; never a path
+    data: bytes  # the whole file, one $bin buffer (at most limits.MAX_PROBE_BYTES)
+    password: str  # used for this one open; never echoed, logged or kept
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CombineUnlockResult:
+    page_count: int  # at least 1
+    data: bytes  # an unprotected copy of the whole file, to stand in for it in the merge
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class JobPrepareParams:
     handle: str
     job: str  # a job type name (W1.2 section 13), such as "action" or "reduce_size"

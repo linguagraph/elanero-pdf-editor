@@ -200,6 +200,22 @@ export interface CombineProbeResult {
   needed_password: boolean;
 }
 
+export interface CombineUnlockParams {
+  /** the file name with .pdf, as for combine.probe; never a path */
+  name: string;
+  /** the whole file, one $bin buffer (at most limits.MAX_PROBE_BYTES) */
+  data: ArrayBuffer;
+  /** used for this one open; never echoed, logged or kept */
+  password: string;
+}
+
+export interface CombineUnlockResult {
+  /** at least 1 */
+  page_count: number;
+  /** an unprotected copy of the whole file, to stand in for it in the merge */
+  data: ArrayBuffer;
+}
+
 /**
  * One comment or reply (W7.1b S1). ``name`` is the /NM or the engine's synthetic name, which
  * the annotation actions take as ``AnnotRef.name``. Dates are ISO 8601 strings, or null.
@@ -1011,6 +1027,7 @@ export interface Methods {
   'attachments.get': { params: AttachmentParams; result: AttachmentData; deadline: 'io' };
   'attachments.list': { params: HandleParams; result: AttachmentsResult; deadline: 'instant' };
   'combine.probe': { params: CombineProbeParams; result: CombineProbeResult; deadline: 'action' };
+  'combine.unlock': { params: CombineUnlockParams; result: CombineUnlockResult; deadline: 'action' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
@@ -1061,6 +1078,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'attachments.get': 'io',
   'attachments.list': 'instant',
   'combine.probe': 'action',
+  'combine.unlock': 'action',
   'comments.flattenable': 'instant',
   'comments.list': 'instant',
   'comments.xfdf_preview': 'action',
@@ -1116,6 +1134,7 @@ export const RESULT_DECODERS: {
   'attachments.get': decodeAttachmentData,
   'attachments.list': decodeAttachmentsResult,
   'combine.probe': decodeCombineProbeResult,
+  'combine.unlock': decodeCombineUnlockResult,
   'comments.flattenable': decodeFlattenableResult,
   'comments.list': decodeCommentListResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
@@ -1379,6 +1398,33 @@ export function decodeCombineProbeResult(
     page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
     encrypted: expectBoolean(field(o, 'encrypted', path), `${path}.encrypted`),
     needed_password: expectBoolean(field(o, 'needed_password', path), `${path}.needed_password`),
+  };
+}
+
+export function decodeCombineUnlockParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CombineUnlockParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'data', 'password'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+    password: expectString(field(o, 'password', path), `${path}.password`),
+  };
+}
+
+export function decodeCombineUnlockResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CombineUnlockResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['page_count', 'data'], path);
+  return {
+    page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
   };
 }
 

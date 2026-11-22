@@ -44,6 +44,7 @@ from pdfeditor.model.metadata import EncryptionMethod, SpaceUsage
 from pdfeditor.services.assembly import (
     SUPPORTED_SUFFIXES,
     MergeSource,
+    SourceLockedError,
     SourcePagesError,
     SplitMode,
     SplitPlan,
@@ -573,7 +574,8 @@ def _range_pages(engine: Engine, path: Path, text: str, index: int) -> list[int]
     try:
         source = engine.open(path, None)
     except PasswordRequired as exc:
-        raise RpcFailure(REFUSED, "a source is encrypted", {"reason": "encrypted_source"}) from exc
+        locked: dict[str, object] = {"reason": "encrypted_source", "path": f"args.sources[{index}]"}
+        raise RpcFailure(REFUSED, "a source is encrypted", locked) from exc
     try:
         count = source.page_count
     finally:
@@ -705,6 +707,12 @@ def _run_merge(session: DocumentSession | None, args: dto.MergeArgs, ctx: JobCon
                 sources[index].pages = _range_pages(engine, sources[index].path, item.ranges, index)
         try:
             merged = merge(engine, sources, args.bookmarks, ctx.token, report)
+        except SourceLockedError as exc:  # the source's place tells the page which row to mark
+            raise RpcFailure(
+                REFUSED,
+                "a source is encrypted",
+                {"reason": "encrypted_source", "path": f"args.sources[{exc.index}]"},
+            ) from exc
         except PasswordRequired as exc:
             raise RpcFailure(
                 REFUSED, "a source is encrypted", {"reason": "encrypted_source"}
