@@ -104,13 +104,6 @@ ALL_CODES: tuple[str, ...] = (
 UNUSED_CODES: frozenset[str] = frozenset(
     {
         IMAGE_TOO_LARGE,
-        TRANSLATION_OFFLINE,
-        TRANSLATION_QUOTA,
-        TRANSLATION_AUTH,
-        TRANSLATION_CONFIG,
-        TRANSLATION_TOO_LONG,
-        TRANSLATION_SAME_LANGUAGE,
-        TRANSLATION_SERVICE,
     }
 )
 

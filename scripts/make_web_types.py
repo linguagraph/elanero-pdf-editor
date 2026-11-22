@@ -98,6 +98,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "text.extract": "slice",
     "text.layer": "render",
     "text.search": "slice",
+    "translation.info": "instant",  # the lists and limits of the clients; no request is sent
 }
 # W1.2 section 10: the io class adds one second per 4 MB of the file. Client-side only.
 IO_EXTRA_BYTES = 4 * 1024 * 1024

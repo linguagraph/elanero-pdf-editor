@@ -147,9 +147,11 @@ def translate_each(
     done: list[Translation] = []
     current = source
     for text in texts:
-        if token is not None:
-            token.check()
         try:
+            # Inside the try: a token that stops with a TranslationError (the web deadline, W6.6)
+            # keeps the texts done so far, as a failed request does.
+            if token is not None:
+                token.check()
             result = translator.translate(text, current, target, token)
         except TranslationError as exc:
             exc.done = list(done)

@@ -1,6 +1,7 @@
 import { EngineLoadError } from './errors';
 import { PYMUPDF_WHEEL_FILE, WEB_ZIP_FILE, WEBAPI_PROTOCOL } from './pins';
 import type { FailedStage, Stage } from './protocol';
+import type { TranslationNet } from './translationNet';
 
 // The slice of the Pyodide API this loader uses. The real object has far more.
 export interface PyProxyLike {
@@ -14,6 +15,7 @@ export interface PyodideLike {
   toPy(value: unknown): PyProxyLike;
   globals: { get(name: string): unknown };
   FS: { writeFile(path: string, data: Uint8Array): void };
+  registerJsModule(name: string, module: unknown): void;
 }
 
 export interface PyodideModule {
@@ -29,6 +31,8 @@ export interface LoadOptions {
   // Runs after the packages are in place and before any engine code runs. The job worker
   // removes its network globals here: Pyodide itself still needs fetch to load packages.
   beforeEngine?: () => void;
+  // The translation gate of the engine worker (W6.6). Python imports it as ``elanero_net``.
+  translationNet?: TranslationNet;
   importPyodide?: (url: string) => Promise<PyodideModule>;
   fetchBytes?: (url: string) => Promise<ArrayBuffer>;
 }
@@ -356,6 +360,11 @@ export async function loadEngine(options: LoadOptions): Promise<EngineHandle> {
   emit('engine');
   const dispatch = await attempt('engine', async () => {
     options.beforeEngine?.();
+    const net = options.translationNet;
+    if (!isJob && net !== undefined) {
+      // Only the engine worker has the gate; the job worker's Python cannot import it.
+      pyodide.registerJsModule('elanero_net', { open_xhr: () => net.openXhr() });
+    }
     await pyodide.runPythonAsync(isJob ? JOB_ADAPTER_PY : ADAPTER_PY);
     const call = pyodide.globals.get(isJob ? '_pdfeditor_job_call' : '_pdfeditor_call');
     if (typeof call !== 'function') throw new Error('the adapter did not load');

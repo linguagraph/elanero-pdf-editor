@@ -256,3 +256,39 @@ describe('serveEngine render bitmaps (W5.1b S5)', () => {
     expect(createImageBitmap).not.toHaveBeenCalled();
   });
 });
+
+describe('serveEngine translation gate (W6.6)', () => {
+  it('arms the gate only during a translation call, and disarms it when the call throws', async () => {
+    const { scope, send } = fakeScope();
+    const armed = { value: false };
+    const seen: boolean[] = [];
+    const translation = {
+      arm: () => {
+        armed.value = true;
+      },
+      disarm: () => {
+        armed.value = false;
+      },
+      openXhr: () => {
+        throw new Error('not used here');
+      },
+    };
+    serveEngine(scope, {
+      load: async () => ({
+        dispatch: (request: string) => {
+          seen.push(armed.value);
+          if (request.includes('boom')) throw new Error('boom');
+          return { reply: '{}' };
+        },
+      }),
+      translation,
+    });
+    send({ kind: 'init', baseUrl: 'http://localhost/engine/' });
+    send({ id: 1, method: 'dispatch', request: '{"method":"translation.translate"}' });
+    send({ id: 2, method: 'dispatch', request: '{"method":"session.info"}' });
+    send({ id: 3, method: 'dispatch', request: '{"method":"translation.test","boom":1}' });
+    await flush();
+    expect(seen).toEqual([true, false, true]);
+    expect(armed.value).toBe(false);
+  });
+});

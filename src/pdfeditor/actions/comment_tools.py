@@ -17,7 +17,7 @@ from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
-from pdfeditor.model.geometry import Point, Quad, Rect
+from pdfeditor.model.geometry import PageRects, Point, Quad, Rect
 
 # The size of a sticky note's icon, in points (the desktop's NoteTool uses the same).
 NOTE_SIZE = 20.0
@@ -57,9 +57,15 @@ def build_shape(kind: AnnotationType, page: int, rect: Rect, author: str = "") -
 
 
 def build_markup(
-    kind: AnnotationType, page: int, rect: Rect, text: str = "", author: str = ""
+    kind: AnnotationType,
+    page: int,
+    rect: Rect,
+    text: str = "",
+    author: str = "",
+    quads: tuple[Quad, ...] | None = None,
 ) -> AnnotationModel:
-    """A text-markup comment (highlight) covering ``rect``, with the desktop's default colour."""
+    """A text-markup comment (highlight) covering ``rect``, with the desktop's default colour.
+    ``quads`` gives one quad per line; the default is one quad for ``rect``."""
     style = DEFAULT_STYLES[kind]
     return AnnotationModel(
         kind,
@@ -70,7 +76,7 @@ def build_markup(
         opacity=style.opacity,
         author=author,
         contents=text,
-        quads=(Quad.from_rect(rect),),
+        quads=quads or (Quad.from_rect(rect),),
     )
 
 
@@ -136,3 +142,60 @@ def create(session: DocumentSession, args: CreateAnnotation) -> ActionResult[tup
     if not execute_all(session, [command], label):
         return ActionResult(label, (), False)
     return ActionResult(label, (AnnotRef(args.page, command.model.name),), True)
+
+
+# The most rectangles one highlight call takes (a selection's lines, over all its pages).
+MAX_HIGHLIGHT_RECTS = 2000
+_HIGHLIGHT_LABEL = "Add Note to Text"
+
+
+@dataclass(frozen=True, slots=True)
+class HighlightText:
+    """A highlight over a text selection (W6.6 Add as note). The note goes on the first highlight
+    only, as on the desktop, so a multi-page selection carries one note, not one per page."""
+
+    pages: tuple[PageRects, ...]
+    note: str = ""
+    author: str = ""
+
+
+@action("annotations.highlight_text", HighlightText, requires=WRITE)
+def highlight_text(
+    session: DocumentSession, args: HighlightText
+) -> ActionResult[tuple[AnnotRef, ...]]:
+    """One highlight per page, a quad per line, all in one undo step. Lines off the page are
+    clipped away; a page left with none gets no highlight."""
+    ensure_idle(session)
+    if sum(len(entry.rects) for entry in args.pages) > MAX_HIGHLIGHT_RECTS:
+        raise Refused(f"a highlight takes at most {MAX_HIGHLIGHT_RECTS:,} rectangles")
+    commands: list[AddAnnotationCommand] = []
+    pages: list[int] = []  # the page of each command, in order
+    with session.lock:
+        for entry in args.pages:
+            if not 0 <= entry.page < session.document.page_count:
+                raise Refused(f"page {entry.page + 1} does not exist")
+            page_rect = session.document.page(entry.page).rect
+            lines = [box for rect in entry.rects if (box := _clipped(rect, page_rect)) is not None]
+            if not lines:
+                continue
+            bounds = Rect(
+                min(r.x0 for r in lines),
+                min(r.y0 for r in lines),
+                max(r.x1 for r in lines),
+                max(r.y1 for r in lines),
+            )
+            note = args.note if not commands else ""
+            model = build_markup(
+                AnnotationType.HIGHLIGHT,
+                entry.page,
+                bounds,
+                note,
+                args.author,
+                quads=tuple(Quad.from_rect(line) for line in lines),
+            )
+            commands.append(AddAnnotationCommand(model, _HIGHLIGHT_LABEL))
+            pages.append(entry.page)
+    if not commands or not execute_all(session, commands, _HIGHLIGHT_LABEL):
+        return ActionResult(_HIGHLIGHT_LABEL, (), False)
+    refs = tuple(AnnotRef(page, cmd.model.name) for page, cmd in zip(pages, commands, strict=True))
+    return ActionResult(_HIGHLIGHT_LABEL, refs, True)

@@ -30,6 +30,7 @@ from pdfeditor.webapi import (
     save,
     session,
     text,
+    translate,
 )
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
@@ -105,6 +106,9 @@ METHODS: dict[str, Method] = {
     "jobs.prepare": Method(dto.JobPrepareParams, jobs.prepare, takes_buffers=True),
     "jobs.apply": Method(dto.JobApplyParams, jobs.apply),
     "jobs.abort": Method(dto.JobAbortParams, jobs.abort),
+    # translation.translate and translation.test are not in the table until slice S3 (the bubble):
+    # the engine worker's network gate is armed for them, so no request can start before then.
+    "translation.info": Method(dto.Empty, translate.info),
 }
 
 

@@ -1,6 +1,7 @@
 import { EngineLoadError } from './errors';
 import { needsFontTools, type CallResult, type LoadEngine, type WorkerRole } from './loader';
 import type { DispatchMessage, ErrorMessage, NoticeMessage, ReplyMessage, Stage } from './protocol';
+import { TRANSLATION_METHODS, type TranslationNet } from './translationNet';
 
 // The slice of a dedicated worker's global scope that the server uses.
 export interface WorkerScope {
@@ -13,6 +14,8 @@ export interface ServeOptions {
   beforeEngine?: () => void;
   // The Python entry point this worker answers with (the job worker's is 'job').
   role?: WorkerRole;
+  // The translation gate (W6.6). Armed for the duration of each translation call, and only then.
+  translation?: TranslationNet;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,7 +99,17 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
         if (buffer === undefined) scope.postMessage(noticeMessage);
         else scope.postMessage(noticeMessage, [buffer]);
       };
-      const result = handle.dispatch(message.request, message.buffers ?? [], onNotice);
+      // The gate is armed only while this call runs (W6.6 section 3), and disarmed on a throw too.
+      const net = options.translation;
+      const gated =
+        net !== undefined && TRANSLATION_METHODS.has(methodOf(message.request) as string);
+      if (gated) net.arm();
+      let result: CallResult;
+      try {
+        result = handle.dispatch(message.request, message.buffers ?? [], onNotice);
+      } finally {
+        if (gated) net.disarm();
+      }
       const drawn = await bitmapReply(message.request, result);
       if (drawn !== undefined) {
         // The bitmap is transferred; the reply's buffer is empty and only satisfies the $bin marker.
@@ -136,6 +149,7 @@ export function serveEngine(scope: WorkerScope, options: ServeOptions): void {
           onStage: reportStage,
           beforeEngine: options.beforeEngine,
           role: options.role,
+          translationNet: options.translation,
         });
         // A failed load is reported by each call, so this handler must not leave it unhandled.
         engine.catch(() => undefined);
