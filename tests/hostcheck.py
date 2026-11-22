@@ -1056,9 +1056,17 @@ def _image_has_smask_pikepdf(data: bytes, page: int) -> None:
 
 
 @host_check("shape_operators_pikepdf")
-def _shape_operators_pikepdf(data: bytes, page: int, kind: str) -> None:
+def _shape_operators_pikepdf(
+    data: bytes,
+    page: int,
+    kind: str,
+    width: float = 1.5,
+    stroke: list[float] | None = None,
+    fill: list[float] | None = None,
+) -> None:
     """The last shape on ``page`` is one q ... Q block: its path operators (re; or four c; or m and
-    l), the stroke width 1.5, a black stroke colour and the stroke paint S, and no fill."""
+    l), the stroke width ``width`` (1.5), the stroke colour ``stroke`` (black), and either the
+    stroke paint S with no fill, or, given a ``fill`` colour, the fill colour and the paint B."""
     import pikepdf
 
     with pikepdf.open(io.BytesIO(data)) as pdf:
@@ -1075,11 +1083,17 @@ def _shape_operators_pikepdf(data: bytes, page: int, kind: str) -> None:
         assert names.count("c") == 4 and names.count("m") == 1 and "re" not in names
     else:
         raise AssertionError(f"unknown shape kind {kind}")
-    (width,) = (float(operands[0]) for operands, name in block if name == "w")
-    assert math.isclose(width, 1.5, abs_tol=1e-6)
-    (stroke,) = ([float(v) for v in operands] for operands, name in block if name == "RG")
-    assert stroke == [0.0, 0.0, 0.0]
-    assert names.count("S") == 1 and "f" not in names and "B" not in names
+    (drawn_width,) = (float(operands[0]) for operands, name in block if name == "w")
+    assert math.isclose(drawn_width, width, abs_tol=1e-6)
+    (outline,) = ([float(v) for v in operands] for operands, name in block if name == "RG")
+    assert outline == (stroke or [0.0, 0.0, 0.0])
+    if fill is None:
+        assert names.count("S") == 1 and "f" not in names and "B" not in names
+        assert "rg" not in names
+    else:
+        (filled,) = ([float(v) for v in operands] for operands, name in block if name == "rg")
+        assert filled == fill
+        assert names.count("B") == 1 and "S" not in names and "f" not in names
 
 
 @host_check("crop_box_size_pikepdf")

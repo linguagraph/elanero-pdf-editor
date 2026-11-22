@@ -194,6 +194,21 @@ export const EN = {
   'edit.shape.layer':
     'Draw a shape: drag on the page, or press Enter for a default-size shape in the middle of the page. Esc stops.',
   'edit.shape.tooSmall': 'The shape would be off the page. Click further from the edge.',
+  'edit.shape.styleSummary': '{outline} outline, {width} pt, {fill}',
+  'edit.shape.noFill': 'no fill',
+  'edit.shape.filled': 'filled {colour}',
+  'edit.shapeStyle.title': 'Shape Style',
+  'edit.shapeStyle.intro':
+    'The style of the shapes you draw next. Shapes already on the page keep theirs.',
+  'edit.shapeStyle.outline': 'Outline colour',
+  'edit.shapeStyle.fill': 'Fill',
+  'edit.shapeStyle.fillColour': 'Fill colour',
+  'edit.shapeStyle.lineNoFill': 'Lines are never filled.',
+  'edit.shapeStyle.width': 'Line width (pt)',
+  'edit.shapeStyle.widthInvalid': 'Enter a width above 0 and at most 72 points.',
+  'edit.shapeStyle.preview': 'Preview',
+  'edit.shapeStyle.ok': 'OK',
+  'edit.shapeStyle.cancel': 'Cancel',
   'edit.image.added': 'Image added.',
   'edit.image.replaced':
     'Image replaced. Every place it appears in the document shows the new image.',
@@ -208,6 +223,7 @@ export const EN = {
   'command.add-rectangle.label': 'Rectangle',
   'command.add-ellipse.label': 'Ellipse',
   'command.add-line.label': 'Line',
+  'command.shape-style.label': 'Shape Style…',
   'command.replace-image.label': 'Replace Image',
   'command.extract-image.label': 'Export Image',
   'command.delete-selected-objects.label': 'Delete Objects',
@@ -1138,6 +1154,8 @@ export const EN = {
   'error.REFUSED.imageFormat': 'Only PNG and JPEG images can be added here.',
   'error.REFUSED.inlineImage':
     "This picture is stored inside the page content, so it can't be replaced or exported.",
+  'error.REFUSED.shapeNoPaint': 'A shape needs an outline or a fill.',
+  'error.REFUSED.shapeWidth': "A shape's line width must be above 0 and at most 72 points.",
   'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',

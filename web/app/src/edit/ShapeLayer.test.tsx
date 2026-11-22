@@ -4,6 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CSS_PX_PER_POINT } from '../view/zoom';
 import { t } from '../i18n/t';
 import { ShapeLayer, type ShapeLayerProps } from './ShapeLayer';
+import {
+  currentShapeStyle,
+  DEFAULT_SHAPE_STYLE,
+  setShapeStyle,
+  shapeStyleSummary,
+} from './shapeStyle';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -157,5 +163,15 @@ describe('the shape layer on a page', () => {
     expect(onDraw).toHaveBeenCalledWith(
       expect.objectContaining({ rect: { x0: 72, y0: 72, x1: 272, y1: 222 } }),
     );
+  });
+
+  it('the layer is described by the style the next shape takes, and follows a change', () => {
+    render();
+    const el = layer();
+    const described = document.getElementById(el.getAttribute('aria-describedby') ?? '');
+    expect(described?.textContent).toBe(shapeStyleSummary(currentShapeStyle()));
+    act(() => setShapeStyle({ outline: { r: 1, g: 0, b: 0 }, fill: null, width: 4 }));
+    expect(described?.textContent).toBe(shapeStyleSummary(currentShapeStyle()));
+    act(() => setShapeStyle(DEFAULT_SHAPE_STYLE));
   });
 });

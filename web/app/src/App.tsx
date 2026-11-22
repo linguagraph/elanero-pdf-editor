@@ -65,6 +65,7 @@ import { copySelectedText } from './text/copy';
 import { copyLarge } from './text/largeCopy';
 import { RedactionsPanel } from './redaction/RedactionsPanel';
 import { RedactionPropertiesDialog } from './redaction/RedactionPropertiesDialog';
+import { ShapeStyleDialog } from './edit/ShapeStyleDialog';
 import { useRedactionState } from './redaction/useRedaction';
 import { type DocumentViewHandle, type DocumentViewState, DocumentView } from './view/DocumentView';
 import { DocumentStatusBar } from './view/DocumentStatusBar';
@@ -204,6 +205,8 @@ export function App({
   const [removeSecurityOpen, setRemoveSecurityOpen] = useState(false);
   // Redaction Properties (W4.14): the style of new marks. It needs no document.
   const [redactionPropsOpen, setRedactionPropsOpen] = useState(false);
+  // Shape Style (W6.7b slice 3a): the outline, fill and width of the shapes drawn next. No document.
+  const [shapeStyleOpen, setShapeStyleOpen] = useState(false);
   // Mark Pages (W4.13): the dialog that marks whole pages. Opens only with a document.
   const [markPagesOpen, setMarkPagesOpen] = useState(false);
   // The comment tool on in the open document (W7.1a), as the view reports it for the ribbon's
@@ -288,6 +291,7 @@ export function App({
     'encrypt-with-password': () => setEncryptOpen(true),
     'remove-security': () => setRemoveSecurityOpen(true),
     'redaction-properties': () => setRedactionPropsOpen(true),
+    'shape-style': () => setShapeStyleOpen(true),
     'sanitize-document': () => setSanitizeOpen(true),
     'compare-files': () => setCompareOpen(true),
     'flatten-all-comments': () => setFlattenOpen(true),
@@ -961,6 +965,7 @@ export function App({
         isOpen={redactionPropsOpen}
         onClose={() => setRedactionPropsOpen(false)}
       />
+      <ShapeStyleDialog isOpen={shapeStyleOpen} onClose={() => setShapeStyleOpen(false)} />
       <ApplyConfirm
         isOpen={applyOpen}
         count={redactionState?.marks.length ?? 0}

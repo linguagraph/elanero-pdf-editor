@@ -221,10 +221,6 @@ def test_add_shape_labels_and_undo(open_copy: Opener, spec: ShapeSpec, label: st
 
 
 REFUSED_SHAPES = [
-    pytest.param(ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 200, 560), width=0.0), id="width0"),
-    pytest.param(
-        ShapeSpec(ShapeKind.ELLIPSE, Rect(100, 500, 200, 560), width=100.0), id="width100"
-    ),
     pytest.param(ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 100, 560)), id="empty_rect"),
     pytest.param(ShapeSpec(ShapeKind.ELLIPSE, Rect(200, 500, 100, 560)), id="flipped_box"),
     pytest.param(
@@ -250,6 +246,78 @@ def test_add_shape_refuses_bad_specs(open_copy: Opener, spec: ShapeSpec) -> None
         content.add_shape(s, AddShape(0, spec))
     assert snapshot_of(s) == before
     assert not s.undo_stack.can_undo
+
+
+NO_PAINT_OR_BAD_WIDTH = [
+    pytest.param(
+        ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 200, 560), stroke=None),
+        "shape_no_paint",
+        id="no_paint_box",
+    ),
+    pytest.param(
+        ShapeSpec(ShapeKind.LINE, start=Point(100, 600), end=Point(300, 600), stroke=None),
+        "shape_no_paint",
+        id="no_stroke_line",
+    ),
+    pytest.param(
+        ShapeSpec(ShapeKind.RECTANGLE, Rect(100, 500, 200, 560), width=0.0),
+        "shape_width",
+        id="width0",
+    ),
+    pytest.param(
+        ShapeSpec(ShapeKind.ELLIPSE, Rect(100, 500, 200, 560), width=100.0),
+        "shape_width",
+        id="width100",
+    ),
+]
+
+
+@pytest.mark.parametrize(("spec", "reason"), NO_PAINT_OR_BAD_WIDTH)
+def test_add_shape_refuses_with_a_reason(open_copy: Opener, spec: ShapeSpec, reason: str) -> None:
+    s = open_copy("text_multipage")
+    before = snapshot_of(s)
+    with pytest.raises(Refused) as caught:
+        content.add_shape(s, AddShape(0, spec))
+    assert caught.value.reason == reason
+    assert snapshot_of(s) == before
+    assert not s.undo_stack.can_undo
+
+
+@pytest.mark.parametrize("kind", [ShapeKind.RECTANGLE, ShapeKind.ELLIPSE, ShapeKind.LINE])
+def test_round_trip_styled_shape(open_copy: Opener, tmp_path: Path, kind: ShapeKind) -> None:
+    """A red outline 6 pt wide, and a blue fill for a box. A line has no fill: the one it is given
+    is dropped, so the file has neither a fill colour nor a fill paint."""
+    s = open_copy("text_multipage")
+    red, blue = Color(1, 0, 0), Color(0, 0, 1)
+    if kind is ShapeKind.LINE:
+        spec = ShapeSpec(
+            kind, start=Point(100, 600), end=Point(300, 640), stroke=red, fill=blue, width=6
+        )
+        spot = (200, 620)  # the middle of the segment
+        fill = None
+    else:
+        spec = ShapeSpec(kind, Rect(100, 500, 200, 560), stroke=red, fill=blue, width=6)
+        spot = (100, 530)  # the middle of the left edge, on the outline
+        fill = [0.0, 0.0, 1.0]
+    content.add_shape(s, AddShape(0, spec))
+    out = s.save(tmp_path / f"styled_{kind.value}.pdf")
+    assert_opens_everywhere(out)
+    with reopened(out) as doc:
+        (path,) = (o for o in doc.page(0).content_objects() if o.type is ObjectType.PATH)
+    assert path.stroke is True
+    assert path.fill == (fill is not None)
+    record(
+        "shape_operators_pikepdf",
+        out,
+        page=0,
+        kind=kind.value,
+        width=6.0,
+        stroke=[1.0, 0.0, 0.0],
+        fill=fill,
+    )
+    record("pixel_red_pdfium", out, page=0, x=spot[0], y=spot[1])
+    if fill is not None:
+        record("pixel_blue_pdfium", out, page=0, x=150, y=530)
 
 
 def test_add_shape_redo_restores_it_at_a_new_revision(open_copy: Opener) -> None:

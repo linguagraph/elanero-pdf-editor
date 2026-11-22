@@ -36,6 +36,8 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   // The Comments panel's exports are not in the shared table yet; W7.1b adds the panel entry points.
   'export-comments',
   'import-comments',
+  // The shape style dialog (W6.7b slice 3a): the desktop has no style control for its shapes.
+  'shape-style',
 ]);
 
 // Desktop commands the web does not offer (W4.3b): New Window and Exit have no meaning in a browser
@@ -128,6 +130,7 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'select-all': 'scan-text',
   'find-next': 'chevron-down',
   'find-previous': 'chevron-up',
+  'shape-style': 'sliders-horizontal',
 };
 
 const DECLARED_COMMANDS: readonly CommandDef[] = [
@@ -193,6 +196,9 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('add-line', 'command.add-line.label', 'edit.shapes', CAN_EDIT_CONTENT),
     checked: (state) => state.viewTool === 'shape-line',
   },
+  // Shape Style (W6.7b slice 3a) sets the outline, fill and width of the shapes drawn next. It is
+  // a dialog, not a tool, so it is never checked.
+  cmd('shape-style', 'command.shape-style.label', 'edit.shapes', CAN_EDIT_CONTENT),
   cmd('replace-image', 'command.replace-image.label', 'edit.objects', REPLACE_IMAGE),
   cmd('extract-image', 'command.extract-image.label', 'edit.objects', SINGLE_IMAGE),
   cmd(

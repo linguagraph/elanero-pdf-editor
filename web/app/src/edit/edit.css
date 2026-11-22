@@ -121,6 +121,38 @@
   stroke-width: 1.5px;
 }
 
+/* Shape Style (W6.7b slice 3a): the form in two columns, and the swatch under it. The swatch keeps
+   the colours the PDF will get, so it is not themed. */
+.shape-style {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shape-style-form {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.shape-style-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shape-style-note {
+  grid-column: 2;
+}
+
+.shape-style-preview {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  forced-color-adjust: none;
+}
+
 /* The Add Text layer (W6.8a 8a-2): it covers the page like the edit layer and takes the pointer
    while the tool is on. The paragraph editor is placed inside it. */
 .text-box-layer {

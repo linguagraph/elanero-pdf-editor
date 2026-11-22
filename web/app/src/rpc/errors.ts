@@ -82,6 +82,9 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   image_too_many_pixels: 'error.REFUSED.imageTooManyPixels',
   // Replace and Export of a picture stored in the page content (W6.7b slice 2b).
   inline_image: 'error.REFUSED.inlineImage',
+  // The shape style refusals (W6.7b slice 3a): no outline and no fill, or a width out of range.
+  shape_no_paint: 'error.REFUSED.shapeNoPaint',
+  shape_width: 'error.REFUSED.shapeWidth',
 };
 
 function refusedReason(details: Details): Variant | undefined {
