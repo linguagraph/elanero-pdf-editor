@@ -21,7 +21,7 @@ import os
 import platform
 import re
 import struct
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -55,6 +55,7 @@ __all__ = [
     "installed_ref_for_font_name",
     "normalize_font_name",
     "read_faces",
+    "read_upload_faces",
     "system_font_dirs",
     "text_scripts",
     "validate_font_bytes",
@@ -524,23 +525,40 @@ def _face_from_json(path: str, data: dict[str, object]) -> FontFace:
     )
 
 
+def read_upload_faces(path: Path) -> list[FontFace]:
+    """The embeddable faces of an uploaded font file, by :func:`validate_font_bytes`'s rules.
+
+    The web's catalogue reads with these rules, not :func:`read_faces`'s looser ones, so it lists
+    only faces an action may use. A file the validator refuses gives ``[]``, and so does one that
+    can't be read. A ``MemoryError`` is never swallowed.
+    """
+    try:
+        _fmt, faces, _refused = validate_font_bytes(path.read_bytes(), str(path))
+    except (FontRejected, ImportError, OSError):
+        return []
+    return faces
+
+
 class FontCatalog:
     """An indexed view of the font files on disk, cached in ``data_dir()/fonts.json``.
 
     ``folders`` replaces the system font folders as the default for :meth:`scan`, for hosts
     with no system fonts (the web scans the fonts the user uploaded). ``cache_path`` replaces
-    the cache file's location; ``None`` keeps the desktop's.
+    the cache file's location; ``None`` keeps the desktop's. ``reader`` reads one file's faces:
+    ``None`` is :func:`read_faces` (the desktop), and the web passes :func:`read_upload_faces`.
     """
 
     def __init__(
         self,
         folders: Sequence[Path] | None = None,
         cache_path: Path | None = None,
+        reader: Callable[[Path], list[FontFace]] | None = None,
     ) -> None:
         self._faces: list[FontFace] = []
         self._by_path: dict[str, list[FontFace]] = {}
         self._folders = list(folders) if folders is not None else None
         self._cache_path = cache_path
+        self._reader = reader
 
     def _cache_file(self) -> Path:
         return self._cache_path if self._cache_path is not None else _cache_path()
@@ -630,6 +648,8 @@ class FontCatalog:
         else:
             search_dirs = system_font_dirs()
         token = token or CancelToken()
+        # Resolved here, not at construction, so a replaced read_faces is the one used.
+        reader = self._reader if self._reader is not None else read_faces
 
         path = self._cache_file()
         cached_entries: dict[str, dict[str, object]] = {}
@@ -663,9 +683,9 @@ class FontCatalog:
                     assert isinstance(cached_faces, list)
                     face_list = [_face_from_json(str_path, item) for item in cached_faces]
                 except (KeyError, TypeError, ValueError, AssertionError):
-                    face_list = read_faces(file_path)
+                    face_list = reader(file_path)
             else:
-                face_list = read_faces(file_path)
+                face_list = reader(file_path)
             new_entries[str_path] = {
                 "size": size,
                 "mtime": mtime,

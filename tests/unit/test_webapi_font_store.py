@@ -87,7 +87,10 @@ def _spy_validate(monkeypatch: pytest.MonkeyPatch) -> list[int]:
 
 
 def _files(root: Path) -> list[str]:
-    return sorted(p.name for p in root.iterdir()) if root.exists() else []
+    """The font files in the store's folder (the catalogue's cache file is not a font)."""
+    if not root.exists():
+        return []
+    return sorted(p.name for p in root.iterdir() if p.name != fontstore.CATALOG_CACHE)
 
 
 # -- fonts.add ----------------------------------------------------------------------------------
@@ -302,6 +305,21 @@ def _add_text(handle: str, font_ref: dict[str, Any]) -> dict[str, Any]:
         "style": {"font_ref": font_ref},
     }
     return call("actions.run", {"handle": handle, "name": "content.add_text", "args": args})
+
+
+def test_a_face_the_catalogue_no_longer_reads_is_refused(
+    store_root: Path, web: None, fixture_pdf: Any
+) -> None:
+    # The manifest still lists the font, but its file now reads as junk, so the rescan that the
+    # second add makes drops its faces: the list shows none and the guard refuses the ref.
+    font = _added(SANS, _fixture(SANS))["font"]
+    (store_root / f"{font['id']}.ttf").write_bytes(_fixture("Garbage.ttf"))
+    _added(SANS_BOLD, _fixture(SANS_BOLD))
+    listed = {f["id"]: f for f in ok(call("fonts.list", {}))["fonts"]}
+    assert listed[font["id"]]["faces"] == []
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    err = error(_add_text(handle, _ref(font["path"])))
+    assert err["code"] == INVALID_ARGS
 
 
 def test_a_ref_to_a_stored_face_passes_the_guard(web: None, fixture_pdf: Any) -> None:

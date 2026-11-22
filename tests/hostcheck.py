@@ -848,6 +848,29 @@ def _font_names_complete_pikepdf(data: bytes, family: str) -> None:
     assert any(family in n and "+" not in n for n in names), names
 
 
+@host_check("font_embedded_family_pikepdf")
+def _font_embedded_family_pikepdf(data: bytes, family: str) -> None:
+    """Page 0 embeds a TrueType program (FontFile2) whose BaseFont names ``family``. The subset tag
+    and the spaces in the family name don't count, so "Test Sans" matches "ABCDEF+TestSans"."""
+    import pikepdf
+
+    def embedded_family(font: Any) -> str | None:
+        if "/DescendantFonts" in font:  # a composite (Type0) font keeps its descriptor below
+            font = font.DescendantFonts[0]
+        if "/FontFile2" not in font.get("/FontDescriptor", {}):
+            return None
+        return str(font.get("/BaseFont", "")).replace(" ", "")
+
+    wanted = family.replace(" ", "")
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        names = [
+            name
+            for font in pdf.pages[0].Resources.get("/Font", {}).values()
+            if (name := embedded_family(font)) is not None
+        ]
+    assert any(wanted in name for name in names), names
+
+
 @host_check("font_program_sha256_pikepdf")
 def _font_program_sha256_pikepdf(data: bytes, resource: str, sha256: str) -> None:
     """The FontFile2 stream of page 0's font ``resource`` (a composite font's descendant) has

@@ -3,7 +3,7 @@
 A ``FILE`` font ref names a path that the engine reads as a font. Without this guard a request
 could name any file in the worker's in-memory file system. An argument is accepted only when each
 ``FILE`` ref names a face of an uploaded font: a path of the form ``/fonts/<sha256>.<ext>`` that
-the font store holds. ``STANDARD`` and ``DOCUMENT`` refs are not touched.
+the font store's catalogue holds. ``STANDARD`` and ``DOCUMENT`` refs are not touched.
 
 Long-running jobs run in a worker that holds no uploaded fonts, so :func:`check_no_file_refs`
 refuses any ``FILE`` ref in a job's arguments.
@@ -26,7 +26,8 @@ UPLOAD_PATH = re.compile(r"/fonts/[0-9a-f]{64}\.(ttf|otf|ttc)")
 
 
 def face_in_catalogue(path: str, index: int) -> bool:
-    """Whether the worker's font store holds a usable face ``index`` of the file at ``path``."""
+    """Whether the catalogue of the worker's font store holds a usable face ``index`` of the file
+    at ``path``. A face the catalogue no longer reads is refused, even if the manifest lists it."""
     return fontstore.store().has_face(path, index)
 
 
