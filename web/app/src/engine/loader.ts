@@ -73,13 +73,20 @@ export const PILLOW_PACKAGE = 'pillow';
 export const FONTTOOLS_WHEEL_FILE = 'fonttools-4.62.1-py3-none-any.whl';
 const FONTTOOLS_WHEEL_PATH = `/home/pyodide/${FONTTOOLS_WHEEL_FILE}`;
 
-// The requests that need fontTools: the text edits, whose ToUnicode and glyph checks read it.
+// The requests that need fontTools: the text edits, whose ToUnicode and glyph checks read it, and
+// the font preview, which reads the embedded program's character map (W6.8a S2). Without it the
+// first preview of a session would fall back to a generic family.
 const FONTTOOLS_ACTIONS = new Set(['content.replace_text', 'content.add_text']);
+const FONTTOOLS_METHODS = new Set(['content.preview_font']);
 
-// True when a request is an action that needs fontTools, so the worker installs it first.
+// True when a request needs fontTools, so the worker installs it first.
 export function needsFontTools(request: string): boolean {
   try {
-    const parsed = JSON.parse(request) as { method?: unknown; params?: { name?: unknown } };
+    const parsed = JSON.parse(request) as {
+      method?: unknown;
+      params?: { name?: unknown };
+    };
+    if (typeof parsed.method === 'string' && FONTTOOLS_METHODS.has(parsed.method)) return true;
     return (
       parsed.method === 'actions.run' &&
       typeof parsed.params?.name === 'string' &&
