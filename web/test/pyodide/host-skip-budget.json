@@ -1,6 +1,6 @@
 {
-  "note": "Measured from web-pytest run 44270714182 on main: 34 host-only skips in 3 modules; 1065 passed, 0 failed. The 31 test_shared_objects cases are accepted as counted skips (follow-up issue). Lower any module when its count drops; never raise.",
-  "max_total": 34,
+  "note": "Measured from web-pytest run 44270714182 on main: 34 host-only skips in 3 modules; 1065 passed, 0 failed. The 31 test_shared_objects cases were converted to recorded host checks (issue #196), so its budget is 0 (not yet confirmed by a Pyodide run). Lower any module when its count drops; never raise.",
+  "max_total": 3,
   "modules": {
     "tests/actions/test_comments.py": 0,
     "tests/actions/test_content.py": 0,
@@ -23,7 +23,7 @@
     "tests/engine/test_page_ops.py": 0,
     "tests/engine/test_redaction.py": 0,
     "tests/engine/test_security.py": 0,
-    "tests/engine/test_shared_objects.py": 31,
+    "tests/engine/test_shared_objects.py": 0,
     "tests/engine/test_structure.py": 0,
     "tests/engine/test_text_columns.py": 0,
     "tests/engine/test_text_edit_forms.py": 0,

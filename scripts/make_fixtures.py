@@ -1136,6 +1136,88 @@ def shared_objects_listed_twice() -> None:
     pdf.save(OUT / "shared_objects_listed_twice.pdf")
 
 
+def deleted_pages_destinations() -> None:
+    """Three pages whose last one is deleted, with every kind of reference to it: open action,
+    named destinations (both kinds), bookmark, link, and form fields. A copy of the builder in
+    tests/engine/test_shared_objects.py, so the bytes match what that test built."""
+    import pikepdf
+    from pikepdf import Array, Dictionary, Name, String
+
+    pdf = pikepdf.new()
+    for _ in range(3):
+        pdf.add_blank_page(page_size=(300, 300))
+    p0, p1, gone = (p.obj for p in pdf.pages)
+
+    def widget(name: str, page: pikepdf.Dictionary) -> pikepdf.Dictionary:
+        return pdf.make_indirect(
+            Dictionary(
+                Type=Name.Annot,
+                Subtype=Name.Widget,
+                FT=Name.Tx,
+                T=String(name),
+                Rect=[10, 10, 100, 30],
+                P=page,
+            )
+        )
+
+    kept_field, gone_field = widget("kept", p0), widget("gone", gone)
+    gone_kid = widget("kid", gone)
+    del gone_kid["/T"]
+    parent = pdf.make_indirect(Dictionary(FT=Name.Tx, T=String("parent"), Kids=Array([gone_kid])))
+    gone_kid.Parent = parent
+    p0.Annots = Array(
+        [
+            kept_field,
+            pdf.make_indirect(
+                Dictionary(
+                    Type=Name.Annot,
+                    Subtype=Name.Link,
+                    Rect=[0, 0, 50, 50],
+                    Dest=Array([gone, Name.Fit]),
+                )
+            ),
+        ]
+    )
+    gone.Annots = Array([gone_field, gone_kid])
+    pdf.Root.AcroForm = Dictionary(Fields=Array([kept_field, gone_field, parent]))
+    pdf.Root.OpenAction = Dictionary(S=Name.GoTo, D=Array([gone, Name.Fit]))
+    pdf.Root.Dests = pdf.make_indirect(
+        Dictionary(old=Array([gone, Name.Fit]), keep=Array([p1, Name.Fit]))
+    )
+    pdf.Root.Names = Dictionary(
+        Dests=Dictionary(
+            Names=Array(
+                [
+                    String("a-first"),
+                    Array([p0, Name.Fit]),
+                    String("b-gone"),
+                    pdf.make_indirect(Dictionary(D=Array([gone, Name.XYZ, 0, 0, 0]))),
+                ]
+            )
+        ),
+        EmbeddedFiles=Dictionary(
+            Names=Array(
+                [
+                    String("note.txt"),
+                    Dictionary(
+                        Type=Name.Filespec,
+                        F=String("note.txt"),
+                        EF=Dictionary(F=pdf.make_stream(b"hello", Type=Name.EmbeddedFile)),
+                    ),
+                ]
+            )
+        ),
+    )
+    outline = pdf.make_indirect(Dictionary(Type=Name.Outlines))
+    item = pdf.make_indirect(
+        Dictionary(Title=String("Gone"), Parent=outline, Dest=Array([gone, Name.Fit]))
+    )
+    outline.First = outline.Last = item
+    outline.Count = 1
+    pdf.Root.Outlines = outline
+    pdf.save(OUT / "deleted_pages_destinations.pdf")
+
+
 def page_marks_acrobat_like() -> None:
     """A page with an Acrobat-style watermark (an artifact drawing a form XObject whose piece
     info names it), a word processor's running header (a plain pagination artifact) and
@@ -1450,6 +1532,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "shared_objects_resources": lambda: _shared_objects("resources"),
     "shared_objects_contents": lambda: _shared_objects("contents"),
     "shared_objects_listed_twice": shared_objects_listed_twice,
+    "deleted_pages_destinations": deleted_pages_destinations,
     "page_marks_acrobat_like": page_marks_acrobat_like,
     "incremental_sigflags_empty_embedded": incremental_sigflags_empty_embedded,
     "structure_indirect_values": structure_indirect_values,
