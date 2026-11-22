@@ -51,6 +51,14 @@ async function expandChapters(page: Page, titles: string[]): Promise<void> {
   }
 }
 
+// Closes every toast on screen with its Dismiss button, so the next toast is shown at once instead
+// of waiting for a free place.
+async function dismissToasts(page: Page): Promise<void> {
+  const dismiss = page.locator('.toast .toast-dismiss');
+  while ((await dismiss.count()) > 0) await dismiss.first().click();
+  await expect(page.locator('.toast')).toHaveCount(0);
+}
+
 function toolbarButton(page: Page, name: string) {
   return page
     .getByRole('toolbar', { name: 'Bookmark actions' })
@@ -132,7 +140,10 @@ test.describe('engine staged', () => {
     await toolbarButton(page, 'Set to Current Page').click();
     await expect(page.getByText('Bookmark now goes to page 2.', { exact: true })).toBeVisible();
 
-    // 4. Delete Section 1.2, then Undo from its toast: the row is back in its place.
+    // 4. Delete Section 1.2, then Undo from its toast: the row is back in its place. At most three
+    // toasts show at once (VISIBLE_TOASTS) and steps 1 to 3 left three Undo toasts, each on screen
+    // for 8 s, so the delete's toast would wait in the queue. They are dismissed first.
+    await dismissToasts(page);
     await focusRow(page, 'Section 1.2');
     await toolbarButton(page, 'Delete').click();
     const deleted = page.locator('.toast', { hasText: 'Deleted "Section 1.2".' });
