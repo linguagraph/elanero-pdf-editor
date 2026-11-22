@@ -85,9 +85,9 @@ def test_the_catalogue_over_a_folder_agrees_with_the_validator(tmp_path: Path) -
         except FontRejected:
             pass
         listed = [face for face in catalog.faces() if face.path == str(path)]
-        assert [(f.index, f.family) for f in listed] == [
-            (f.index, f.family) for f in expected
-        ], name
+        got = [(f.index, f.family) for f in listed]
+        want = [(f.index, f.family) for f in expected]
+        assert got == want, name
 
 
 def test_the_catalogue_resolves_a_file_ref_to_its_upload_face(tmp_path: Path) -> None:
