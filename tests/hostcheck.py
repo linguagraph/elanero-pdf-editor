@@ -1597,3 +1597,67 @@ def _outline_pdfium(data: bytes, rows: list[list[Any]], password: str = "") -> N
     finally:
         pd.close()
     assert found == rows, found
+
+
+# -- rotated and cropped pages (issue #537) ----------------------------------------------------
+
+
+def _bbox_pdfium(data: bytes, page: int, expected: list[float], tol: float, keep: Any) -> None:
+    """The bounding box of the pixels ``keep(r, g, b)`` on a scale-1 render (visible points)."""
+    rgb = _pdfium_rgb(data, page)
+    width = rgb.size[0]
+    raw = rgb.tobytes()
+    x0 = y0 = None
+    x1 = y1 = 0
+    for pixel in range(len(raw) // 3):
+        if keep(raw[3 * pixel], raw[3 * pixel + 1], raw[3 * pixel + 2]):
+            x, y = pixel % width, pixel // width
+            x0 = x if x0 is None else min(x0, x)
+            y0 = y if y0 is None else min(y0, y)
+            x1 = max(x1, x + 1)
+            y1 = max(y1, y + 1)
+    assert x0 is not None, "no matching pixels on the page"
+    found = [x0, y0, x1, y1]
+    assert all(abs(a - b) <= tol for a, b in zip(found, expected, strict=True)), found
+
+
+@host_check("red_bbox_pdfium")
+def _red_bbox_pdfium(data: bytes, page: int, expected: list[float], tol: float = 2) -> None:
+    """The red pixels on a scale-1 render span ``expected`` (visible points), within ``tol``."""
+    _bbox_pdfium(data, page, expected, tol, lambda r, g, b: r > 150 and g < 110 and b < 110)
+
+
+@host_check("green_bbox_pdfium")
+def _green_bbox_pdfium(data: bytes, page: int, expected: list[float], tol: float = 2) -> None:
+    """The green pixels on a scale-1 render span ``expected`` (visible points), within ``tol``."""
+    _bbox_pdfium(data, page, expected, tol, lambda r, g, b: g > 150 and r < 80 and b < 80)
+
+
+@host_check("outline_dest_pikepdf")
+def _outline_dest_pikepdf(
+    data: bytes, index: int, page: int, left: float, top: float, tol: float = 0.5
+) -> None:
+    """The ``index``-th bookmark (depth-first order) is an XYZ destination on ``page`` at
+    (left, top) in PDF user space, read straight from the file."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        items: list[Any] = []
+
+        def walk(parent: Any) -> None:
+            node = parent.get("/First")
+            while node is not None:
+                items.append(node)
+                walk(node)
+                node = node.get("/Next")
+
+        walk(pdf.Root.Outlines)
+        node = items[index]
+        dest = node.get("/Dest")
+        if dest is None:
+            dest = node["/A"]["/D"]
+        target = dest[0]
+        assert target.objgen == pdf.pages[page].objgen, (target.objgen, page)
+        assert str(dest[1]) == "/XYZ", str(dest[1])
+        assert abs(float(dest[2]) - left) <= tol, (float(dest[2]), left)
+        assert abs(float(dest[3]) - top) <= tol, (float(dest[3]), top)

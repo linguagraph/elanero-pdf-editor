@@ -28,7 +28,7 @@ from pdfeditor.engine.base import (
     SaveError,
     SaveOptions,
 )
-from pdfeditor.engine.mupdf import autotag, pages
+from pdfeditor.engine.mupdf import autotag, pages, space
 from pdfeditor.engine.mupdf import convert as cv
 from pdfeditor.engine.mupdf import optimize as opt
 from pdfeditor.engine.mupdf import sanitize as scrub
@@ -436,7 +436,9 @@ class MuDocument:
             elif item.dest is not None:
                 info["kind"] = pymupdf.LINK_GOTO
                 if item.dest.point is not None:
-                    info["to"] = cv.to_fz_point(item.dest.point)
+                    # set_toc encodes the point itself; toc_point makes it come out right.
+                    target = self.page(item.dest.page_index).fz
+                    info["to"] = space.toc_point(target, cv.to_fz_point(item.dest.point))
                 if item.dest.zoom:
                     info["zoom"] = item.dest.zoom
                 toc.append([level, item.title, item.dest.page_index + 1, info])

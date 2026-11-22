@@ -638,6 +638,46 @@ def off_page_text() -> None:
     _save(doc, "off_page_text.pdf")
 
 
+def rotated_cropped() -> None:
+    """Rotated pages whose crop box does not start at (0, 0) (issue #537).
+
+    Each page holds a blue "Anchor" text run, a small green image and two lines of "SECRET" text
+    (a multi-line redaction target), drawn in the crop box's top-left coordinates before /Rotate is
+    set. Pages 0-3: CropBox [36 50 559 806], /Rotate 0,
+    90, 180, 270. Pages 4-7: MediaBox [-50 -50 562 792] and no CropBox, /Rotate 0, 90, 180, 270.
+    Page 8: CropBox [0 0 559 806] at /Rotate 270, the bookmark regression page.
+    """
+    doc = pymupdf.open()
+    swatch = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 8, 8), False)
+    swatch.set_rect(swatch.irect, (0, 200, 0))
+    green = swatch.tobytes("png")
+    layouts: list[tuple[str | None, str | None, int]] = [
+        (None, "[36 50 559 806]", 0),
+        (None, "[36 50 559 806]", 90),
+        (None, "[36 50 559 806]", 180),
+        (None, "[36 50 559 806]", 270),
+        ("[-50 -50 562 792]", None, 0),
+        ("[-50 -50 562 792]", None, 90),
+        ("[-50 -50 562 792]", None, 180),
+        ("[-50 -50 562 792]", None, 270),
+        (None, "[0 0 559 806]", 270),
+    ]
+    for media, crop, rotation in layouts:
+        doc.new_page(width=612, height=842)
+        index = doc.page_count - 1
+        if media is not None:
+            doc.xref_set_key(doc[index].xref, "MediaBox", media)
+        if crop is not None:
+            doc.xref_set_key(doc[index].xref, "CropBox", crop)
+        page = doc.load_page(index)  # reload: the boxes above are read from the page dict
+        page.insert_text((72, 120), "Anchor", fontsize=24, color=(0, 0, 1))
+        page.insert_image(pymupdf.Rect(300, 300, 340, 320), stream=green)
+        page.insert_text((72, 300), "SECRETONE", fontsize=14)
+        page.insert_text((72, 318), "SECRETTWO", fontsize=14)
+        page.set_rotation(rotation)
+    _save(doc, "rotated_cropped.pdf")
+
+
 def mixed_content() -> None:
     """Paragraphs, an image, a vector shape and a form XObject: content-editing tests."""
     doc = pymupdf.open()
@@ -1372,6 +1412,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "layers": layers,
     "hidden_layers": hidden_layers,
     "off_page_text": off_page_text,
+    "rotated_cropped": rotated_cropped,
     "scanned": scanned,
     "skewed_scan": skewed_scan,
     "broken_xref": broken_xref,

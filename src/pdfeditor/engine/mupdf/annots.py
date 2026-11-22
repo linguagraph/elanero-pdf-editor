@@ -2,7 +2,9 @@
 
 Models arrive in visible page space. MuPDF's annotation constructors take *unrotated* page
 coordinates, and raw PDF arrays (QuadPoints, InkList, ...) use PDF user space, so every
-geometry goes through one of the conversions below.
+geometry goes through one of the conversions below. Visible-to-PDF conversions take the page
+transform from ``engine/mupdf/space.py``; the constructors' unrotated input stays
+``derotation_matrix``, which MuPDF's annotation API converts itself.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import pymupdf
 
 from pdfeditor.engine.base import EngineError, UnsupportedFeature
 from pdfeditor.engine.mupdf import convert as cv
+from pdfeditor.engine.mupdf import space
 from pdfeditor.model.annotations import (
     FLAG_HIDDEN,
     FLAG_LOCKED,
@@ -90,8 +93,10 @@ class _Geo:
     """Coordinate conversions for one page."""
 
     def __init__(self, page: pymupdf.Page) -> None:
+        # Constructors take unrotated coordinates and convert them with MuPDF's real transform,
+        # so they keep derotation_matrix. Raw PDF arrays need the full visible-to-PDF matrix.
         self.vis_to_unrot = page.derotation_matrix
-        self.vis_to_pdf = page.derotation_matrix * ~page.transformation_matrix
+        self.vis_to_pdf = space.visible_to_pdf(page)
 
     def point(self, p: Point) -> pymupdf.Point:
         return pymupdf.Point(p.x, p.y) * self.vis_to_unrot
