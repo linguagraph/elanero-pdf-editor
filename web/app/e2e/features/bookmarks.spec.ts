@@ -51,6 +51,18 @@ async function expandChapters(page: Page, titles: string[]): Promise<void> {
   }
 }
 
+// Dismisses the toast with this text, once its step has checked it. The region shows three toasts at
+// once and queues the rest (VISIBLE_TOASTS), so without this the fourth edit's toast (the delete's,
+// whose Undo step 4 clicks) would wait in the queue behind the first three. The toast may also time
+// out on its own while this runs, so the click is retried until the toast is gone either way.
+async function dismissToast(page: Page, text: string): Promise<void> {
+  const toast = page.locator('.toast', { hasText: text });
+  await expect(async () => {
+    if ((await toast.count()) > 0) await toast.locator('.toast-dismiss').click({ timeout: 1000 });
+    await expect(toast).toHaveCount(0, { timeout: 1000 });
+  }).toPass();
+}
+
 function toolbarButton(page: Page, name: string) {
   return page
     .getByRole('toolbar', { name: 'Bookmark actions' })
@@ -102,6 +114,7 @@ test.describe('engine staged', () => {
       [2, 'Section 3.1'],
       [2, 'Section 3.2'],
     ]);
+    await dismissToast(page, 'Bookmark renamed.');
 
     // 2. Move Section 3.2 up: it becomes the first child of Chapter 3.
     await focusRow(page, 'Section 3.2');
@@ -120,6 +133,7 @@ test.describe('engine staged', () => {
       [2, 'Section 3.2'],
       [2, 'Section 3.1'],
     ]);
+    await dismissToast(page, 'Moved "Section 3.2" to level 2, position 1 of 2.');
 
     // 3. Re-target Section 2.2 to page 2. The page field moves the view to page 2 first; the row is
     // focused, not clicked, because a click would open its own page (page 4). The field shows the
@@ -131,6 +145,7 @@ test.describe('engine staged', () => {
     await focusRow(page, 'Section 2.2');
     await toolbarButton(page, 'Set to Current Page').click();
     await expect(page.getByText('Bookmark now goes to page 2.', { exact: true })).toBeVisible();
+    await dismissToast(page, 'Bookmark now goes to page 2.');
 
     // 4. Delete Section 1.2, then Undo from its toast: the row is back in its place.
     await focusRow(page, 'Section 1.2');
