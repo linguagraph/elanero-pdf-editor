@@ -378,7 +378,7 @@ full policy, with what the desktop app stores, is in the
 | Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
 | Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and the command palette (Ctrl+Shift+P) work, with some keys; the full shortcut list is coming soon |
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
-| Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; style fixed to a black 1.5-point outline |
+| Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; Shape Style… sets the outline, fill and width of the next shapes for the session (shapes already on the page keep theirs; no opacity yet) |
 | Edit the words of a paragraph, add text | Yes | Coming soon |
 | Add, replace and export images (PNG and JPEG) | Yes | Yes, with undo; up to 50 MB and 25 megapixels per image; choose the file first, then click or drag to place it; Replace keeps the picture's box and changes every place it appears; Export Image downloads the selected picture as its own file |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |

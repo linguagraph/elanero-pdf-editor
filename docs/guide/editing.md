@@ -92,8 +92,12 @@ to draw; a shape stays in the page content, so it prints and displays like the r
 
 Click instead of dragging for a default-size shape (120 by 80 points). With the keyboard, Tab to the
 page and press Enter for a default-size shape in the middle of the page; Esc stops the tool. The
-tool turns off after one shape. In the web version, a shape is always a black 1.5-point outline with
-no fill, and Undo removes it in one step.
+tool turns off after one shape. Undo removes a shape in one step.
+
+In the web version, **Shapes ▸ Shape Style…** sets the outline colour, the fill and the line width of
+the shapes you draw next. The default is a black outline of 1.5 points with no fill. A line is never
+filled, and a shape needs an outline or a fill. The style lasts for the session only, and a shape
+already on the page keeps its style.
 
 Do not confuse these with the **Drawing** comments on the **Comment** tab, which are review marks
 that sit on top of the page. See [Comments and review](comments.md).

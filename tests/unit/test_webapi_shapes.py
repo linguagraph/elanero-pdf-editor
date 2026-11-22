@@ -92,6 +92,56 @@ def test_a_zero_width_outline_is_refused_and_changes_nothing(web: None, fixture_
     assert paths_on(handle) == []
 
 
+RED = {"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0}
+BLUE = {"r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0}
+
+
+def test_a_styled_box_is_saved_with_its_outline_and_fill(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("text_multipage").read_bytes(), "pages.pdf")
+    spec = {"kind": "rectangle", "rect": BOX, "stroke": RED, "fill": BLUE, "width": 6.0}
+    assert ok(add(handle, spec))["label"] == "Add Rectangle"
+
+    _, saved = saved_bytes(handle, "copy")
+    record("opens_pikepdf", saved)
+    record(
+        "shape_operators_pikepdf",
+        saved,
+        page=0,
+        kind="rectangle",
+        width=6.0,
+        stroke=[1.0, 0.0, 0.0],
+        fill=[0.0, 0.0, 1.0],
+    )
+    record("pixel_red_pdfium", saved, page=0, x=100, y=530)
+    record("pixel_blue_pdfium", saved, page=0, x=150, y=530)
+
+
+def test_a_line_is_drawn_without_the_fill_it_was_given(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("text_multipage").read_bytes(), "pages.pdf")
+    spec = {"kind": "line", "start": {"x": 100.0, "y": 600.0}, "end": {"x": 300.0, "y": 640.0}}
+    assert ok(add(handle, {**spec, "stroke": RED, "fill": BLUE, "width": 6.0}))["executed"]
+
+    _, saved = saved_bytes(handle, "copy")
+    record(
+        "shape_operators_pikepdf",
+        saved,
+        page=0,
+        kind="line",
+        width=6.0,
+        stroke=[1.0, 0.0, 0.0],
+    )
+
+
+def test_an_unpainted_box_is_refused_with_its_reason(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("text_multipage").read_bytes(), "pages.pdf")
+    before = revision_of(handle)
+    err = error(add(handle, {"kind": "rectangle", "rect": BOX, "stroke": None, "fill": None}))
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "shape_no_paint"}
+    assert revision_of(handle) == before
+    assert paths_on(handle) == []
+
+
 def test_the_shape_on_a_missing_page_is_refused(web: None, fixture_pdf: Any) -> None:
     handle = open_data(fixture_pdf("text_multipage").read_bytes(), "pages.pdf")
     err = error(add(handle, {"kind": "rectangle", "rect": BOX}, page=99))

@@ -13,6 +13,7 @@ import type { RenderScheduler } from '../view/renderScheduler';
 import type { ShapeTool } from '../view/viewTool';
 import { isClick } from './hitTest';
 import type { ObjectCache } from './objectCache';
+import { currentShapeStyle, paintOf, type ShapePaint } from './shapeStyle';
 
 export type ShapeKind = 'rectangle' | 'ellipse' | 'line';
 
@@ -38,13 +39,6 @@ export function defaultSize(kind: PlacedKind): { width: number; height: number }
   return { width: DEFAULT_SHAPE_WIDTH, height: DEFAULT_SHAPE_HEIGHT };
 }
 
-// The outline every web shape has: black, 1.5 pt, no fill. The desktop has no style UI either.
-const SHAPE_STYLE = {
-  stroke: { r: 0, g: 0, b: 0, a: 1 },
-  fill: null,
-  width: 1.5,
-} as const;
-
 export interface PageSize {
   readonly widthPt: number;
   readonly heightPt: number;
@@ -57,13 +51,8 @@ export interface ShapeSpec {
   readonly rect?: PageRect;
   readonly start?: PagePoint;
   readonly end?: PagePoint;
-  readonly stroke: {
-    readonly r: number;
-    readonly g: number;
-    readonly b: number;
-    readonly a: number;
-  };
-  readonly fill: null;
+  readonly stroke: ShapePaint['stroke'];
+  readonly fill: ShapePaint['fill'];
   readonly width: number;
 }
 
@@ -90,11 +79,13 @@ export function shapeGesture(
 ): ShapeSpec | null {
   const size = defaultSize(kind);
   const end = isClick(a, b) ? { x: a.x + size.width, y: a.y + size.height } : b;
+  const paint = paintOf(currentShapeStyle());
   if (kind === 'line') {
     const start = onPage(a, page);
     const stop = onPage(end, page);
     if (start.x === stop.x && start.y === stop.y) return null;
-    return { kind, start, end: stop, ...SHAPE_STYLE };
+    // A line has no area, so it is never filled.
+    return { kind, start, end: stop, ...paint, fill: null };
   }
   const rect = {
     x0: clamp(Math.min(a.x, end.x), 0, page.widthPt),
@@ -103,7 +94,7 @@ export function shapeGesture(
     y1: clamp(Math.max(a.y, end.y), 0, page.heightPt),
   };
   if (rect.x1 <= rect.x0 || rect.y1 <= rect.y0) return null;
-  return { kind: kind === 'image' ? 'rectangle' : kind, rect, ...SHAPE_STYLE };
+  return { kind: kind === 'image' ? 'rectangle' : kind, rect, ...paint };
 }
 
 // The default-size shape centred on the page, for the keyboard (Enter).

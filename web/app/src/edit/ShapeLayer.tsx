@@ -2,7 +2,13 @@
 // segment of the shape, a click draws the default size from the press point, and Enter places a
 // default-size shape in the middle of the page. The layer only reports the spec it worked out; the
 // engine adds the shape (edit/shapes.ts).
-import { type KeyboardEvent, type PointerEvent, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  useId,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { cssBox, type PagePoint, pagePointAt, pointsToCss } from '../comments/coordinates';
 import { t } from '../i18n/t';
 import {
@@ -12,6 +18,7 @@ import {
   type ShapeSpec,
   shapeGesture,
 } from './shapes';
+import { currentShapeStyle, shapeStyleSummary, subscribeShapeStyle } from './shapeStyle';
 import './edit.css';
 
 export interface ShapeLayerProps {
@@ -48,6 +55,10 @@ export function ShapeLayer({
   const [start, setStart] = useState<PagePoint | null>(null);
   const [current, setCurrent] = useState<PagePoint | null>(null);
   const page: PageSize = { widthPt, heightPt };
+  // The style the next shape takes, said in words for the screen reader (the layer is focused
+  // while a shape tool is on, so Enter draws in this style).
+  const styleId = useId();
+  const style = useSyncExternalStore(subscribeShapeStyle, currentShapeStyle);
 
   // The pointer offset is taken from the layer, which covers exactly the page box.
   const pointOf = (event: PointerEvent<HTMLDivElement>): PagePoint => {
@@ -110,12 +121,16 @@ export function ShapeLayer({
       role="application"
       aria-label={kind === 'image' ? t('edit.image.layer') : t('edit.shape.layer')}
       tabIndex={focusable ? 0 : -1}
+      aria-describedby={styleId}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onCancel}
       onKeyDown={onKey}
     >
+      <span id={styleId} hidden>
+        {shapeStyleSummary(style)}
+      </span>
       {preview?.rect !== undefined ? (
         <div className={previewClass(kind)} style={cssBox(preview.rect, zoom)} />
       ) : null}

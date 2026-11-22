@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from pdfeditor.actions import action
 from pdfeditor.actions.base import (
@@ -171,12 +171,16 @@ _SHAPE_LABELS = {
 MAX_SHAPE_WIDTH = 72.0
 
 
-def _check_shape(spec: ShapeSpec) -> None:
-    """Refuse a spec that would draw nothing, or an outline no one can see. The web sends untrusted
-    input, and an empty box would still cost an undo snapshot. Coordinates off the page are not
-    refused: a PDF may draw outside its crop box, and the web clamps before it sends."""
+def _check_shape(spec: ShapeSpec) -> ShapeSpec:
+    """Refuse a spec that would draw nothing, and return the spec to draw. The web sends untrusted
+    input, and an empty box would still cost an undo snapshot. A line has no area, so its fill is
+    dropped, as the desktop tool drops it. Coordinates off the page are not refused: a PDF may draw
+    outside its crop box, and the web clamps before it sends."""
     if not 0 < spec.width <= MAX_SHAPE_WIDTH:
-        raise Refused(f"A shape's line width must be above 0 and at most {MAX_SHAPE_WIDTH:g}.")
+        raise Refused(
+            f"A shape's line width must be above 0 and at most {MAX_SHAPE_WIDTH:g}.",
+            reason="shape_width",
+        )
     # NaN fails every comparison and infinity passes the box and line checks, so every coordinate
     # is checked for finiteness first.
     if spec.kind is ShapeKind.LINE:
@@ -188,10 +192,15 @@ def _check_shape(spec: ShapeSpec) -> None:
     if spec.kind is ShapeKind.LINE:
         if spec.start == spec.end:
             raise Refused("A line needs two different ends.")
-        return
+        if spec.stroke is None:
+            raise Refused("A line needs an outline.", reason="shape_no_paint")
+        return replace(spec, fill=None)
     box = spec.rect
     if box.x1 <= box.x0 or box.y1 <= box.y0:
         raise Refused("A rectangle or ellipse needs a box with area.")
+    if spec.stroke is None and spec.fill is None:
+        raise Refused("A shape needs an outline or a fill.", reason="shape_no_paint")
+    return spec
 
 
 # -- actions -------------------------------------------------------------------------------
@@ -275,8 +284,8 @@ def add_shape(session: DocumentSession, args: AddShape) -> ActionResult[None]:
     label = _SHAPE_LABELS[args.spec.kind]
     with session.lock:
         _check_page(session, args.page)
-    _check_shape(args.spec)
-    snapshot(session, label, lambda doc: doc.page(args.page).add_shape(args.spec))
+    spec = _check_shape(args.spec)
+    snapshot(session, label, lambda doc: doc.page(args.page).add_shape(spec))
     return ActionResult(label, None)
 
 
