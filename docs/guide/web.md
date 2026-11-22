@@ -126,7 +126,7 @@ is reloaded until you press it.
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is
   not kept when you reload the page.
-- **Copy and Select All.** Drag over the text of a page to select it, then choose **Copy** in the
+- **Copy and Select All.** Drag over the text of a page to select it. On a touch screen, or with a pen, press and hold a word to select it, then keep your finger down and drag. A quick swipe still scrolls. Then choose **Copy** in the
   Home tab's Tools group or press **Ctrl+C**: the selected text goes to the clipboard, with a line
   break where each line ends and between pages. **Select All** (Ctrl+A, also in the Home tab) selects
   the text of the whole document, as on the desktop, and says how many pages it selected. Copy then

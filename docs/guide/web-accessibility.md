@@ -58,6 +58,9 @@ On a touch screen, the ribbon buttons and tabs and the buttons of the document v
 least 44 × 44 pixels, and the document tabs are at least 44 pixels high. Other controls are not
 yet held to that size.
 
+When you select text, the size of the selection (its characters, and its pages when it covers more
+than one) is announced to a screen reader, politely, after each selection is made.
+
 ## Known limits
 
 - The page image has no accessible content of its own; a screen reader reads only its text layer
