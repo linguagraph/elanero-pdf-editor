@@ -117,6 +117,13 @@ def _check_page(session: DocumentSession, page: int) -> None:
         raise Refused(f"Page {page + 1} doesn't exist.")
 
 
+# A picture inside the page content (BI ... EI) has no XObject to swap or export. The web words the
+# refusal from its reason (inline_image); the desktop shows this text.
+INLINE_IMAGE_MESSAGE = (
+    "This picture is stored inside the page content and can't be replaced or exported."
+)
+
+
 # Each image refusal carries a stable reason, which the web words from its own catalogue
 # (rpc/errors.ts REFUSED_REASON); the English message is what the desktop shows.
 def _check_image(data: bytes) -> None:
@@ -303,8 +310,12 @@ def replace_image(session: DocumentSession, args: ReplaceImage) -> ActionResult[
     ensure_idle(session)
     ref = args.object
     label = "Replace Image"
+    _check_image(args.data)
     # One lock across the check and the edit, so nothing can change the page in between.
     with session.lock:
         _check_fresh(session, [ref])
+        # Checked before the snapshot: a failed snapshot op reloads the document (new revisions).
+        if session.document.page(ref.page).is_inline_image(ref.key):
+            raise Refused(INLINE_IMAGE_MESSAGE, reason="inline_image")
         snapshot(session, label, lambda doc: doc.page(ref.page).replace_image(ref.key, args.data))
     return ActionResult(label, None)

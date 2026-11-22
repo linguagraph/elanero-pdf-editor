@@ -115,6 +115,7 @@ export const EN = {
   'disabled.maxZoom': 'The zoom is at its largest.',
   'disabled.minZoom': 'The zoom is at its smallest.',
   'disabled.notAvailableYet': 'This command is not available yet.',
+  'disabled.selectOneImage': 'Select one picture first.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
   // Search aliases (W4.3b D3): the palette also matches these words. They are never shown.
@@ -192,6 +193,9 @@ export const EN = {
     'Draw a shape: drag on the page, or press Enter for a default-size shape in the middle of the page. Esc stops.',
   'edit.shape.tooSmall': 'The shape would be off the page. Click further from the edge.',
   'edit.image.added': 'Image added.',
+  'edit.image.replaced':
+    'Image replaced. Every place it appears in the document shows the new image.',
+  'edit.image.exportTooLarge': 'This image is too large to export in the browser.',
   'edit.image.layer':
     'Place the image: drag a box on the page, or press Enter to place it in the middle of the page. Esc cancels.',
   'edit.image.wrongType': 'Choose a PNG or JPEG image.',
@@ -203,7 +207,7 @@ export const EN = {
   'command.add-ellipse.label': 'Ellipse',
   'command.add-line.label': 'Line',
   'command.replace-image.label': 'Replace Image',
-  'command.extract-image.label': 'Extract Image',
+  'command.extract-image.label': 'Export Image',
   'command.delete-selected-objects.label': 'Delete Objects',
   'command.organize-pages.label': 'Organize Pages',
   'command.insert-pages.label': 'Insert',
@@ -1130,6 +1134,8 @@ export const EN = {
   'error.REFUSED.outlineTooDeep': 'Bookmarks cannot be nested more than 32 levels deep.',
   'error.REFUSED.imageUnreadable': 'This file is not an image the editor can read.',
   'error.REFUSED.imageFormat': 'Only PNG and JPEG images can be added here.',
+  'error.REFUSED.inlineImage':
+    "This picture is stored inside the page content, so it can't be replaced or exported.",
   'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',

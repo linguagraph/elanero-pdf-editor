@@ -128,6 +128,23 @@ class AttachmentData:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class ImageParams:
+    handle: str
+    page: int  # 0-based
+    key: str  # the image's key, as content.objects lists it
+    revision: int  # the page revision the key was listed at (STALE_OBJECT when it moved)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ImageDataResult:
+    ext: str  # "png", "jpeg" or the stored format; JPEG 2000 comes back as "png"
+    mime: str  # the media type of the bytes, e.g. "image/png"; "application/octet-stream" otherwise
+    width: int  # pixels, as the object list reports them; 0 when the file does not say
+    height: int
+    data: bytes  # the image file's bytes, as one $bin buffer
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class OpenResult:
     handle: str  # opaque; every later call on the document names it
     info: DocInfo

@@ -87,6 +87,7 @@ METHODS: dict[str, Method] = {
     "combine.probe": Method(dto.CombineProbeParams, combine.probe),
     "content.objects": Method(dto.PageParams, content.list_objects),
     "content.preview_font": Method(dto.PreviewFontParams, content.preview_font),
+    "content.image": Method(dto.ImageParams, content.export_image),
     "attachments.list": Method(dto.HandleParams, attachments.list_attachments),
     "attachments.get": Method(dto.AttachmentParams, attachments.get_attachment),
     "layers.list": Method(dto.HandleParams, layers.list_layers),

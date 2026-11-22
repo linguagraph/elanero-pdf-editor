@@ -384,6 +384,25 @@ describe('the shape tools (W6.7b)', () => {
   });
 });
 
+describe('the Replace and Export commands (W6.7b slice 2b)', () => {
+  const editable = state({ hasDocument: true, capabilities: ALL_CAPABILITIES, contentEdit: true });
+  const oneImage = { ...editable, singleImageSelected: true };
+
+  it('Replace needs the content edit and exactly one picture selected', () => {
+    expect(commandDisabledReasonOf('replace-image', state())).toBe('needsDocument');
+    expect(commandDisabledReasonOf('replace-image', withDoc)).toBe('contentEditOff');
+    expect(commandDisabledReasonOf('replace-image', editable)).toBe('selectOneImage');
+    expect(commandDisabledReasonOf('replace-image', oneImage)).toBeNull();
+  });
+
+  it('Export needs exactly one picture selected, and is named Export Image', () => {
+    expect(commandDisabledReasonOf('extract-image', withDoc)).toBe('selectOneImage');
+    expect(commandDisabledReasonOf('extract-image', oneImage)).toBeNull();
+    expect(EN['command.extract-image.label']).toBe('Export Image');
+    expect(EN[DISABLED_REASON_LABELS.selectOneImage]).toMatch(/Select one picture/);
+  });
+});
+
 describe('the Add Image command (W6.7b slice 2a)', () => {
   const editable = state({ hasDocument: true, capabilities: ALL_CAPABILITIES, contentEdit: true });
 

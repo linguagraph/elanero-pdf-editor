@@ -142,6 +142,16 @@ def oversized_images(
     return sum(1 for i in _selected_images(doc, pages, min_size) if i.width * i.height > max_pixels)
 
 
+def browser_image(data: bytes, ext: str) -> tuple[bytes, str]:
+    """The bytes and extension a file or a browser shows: JPEG 2000 ("jpx") becomes PNG, since
+    viewers handle it poorly. Other formats are returned as stored."""
+    if ext != "jpx":
+        return data, ext
+    buf = io.BytesIO()
+    Image.open(io.BytesIO(data)).save(buf, format="PNG")
+    return buf.getvalue(), "png"
+
+
 def extract_images(
     doc: Document,
     folder: Path,
@@ -166,11 +176,7 @@ def extract_images(
     for n, info in enumerate(infos):
         if token is not None:
             token.check()
-        data, ext = doc.extract_image(info.ref)
-        if ext == "jpx":  # JPEG 2000 is poorly supported by viewers
-            buf = io.BytesIO()
-            Image.open(io.BytesIO(data)).save(buf, format="PNG")
-            data, ext = buf.getvalue(), "png"
+        data, ext = browser_image(*doc.extract_image(info.ref))
         name = f"page{info.pages[0] + 1}-image{n + 1}.{'jpg' if ext == 'jpeg' else ext}"
         path = _unique(folder, name)
         path.write_bytes(data)

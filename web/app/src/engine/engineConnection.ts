@@ -240,6 +240,7 @@ export interface PageRpc {
       | 'actions.redo'
       | 'content.objects'
       | 'content.preview_font'
+      | 'content.image'
       | 'jobs.prepare'
       | 'jobs.apply'
       | 'jobs.abort'

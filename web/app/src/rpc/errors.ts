@@ -80,6 +80,8 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   image_format: 'error.REFUSED.imageFormat',
   image_too_large: 'error.REFUSED.imageTooLarge',
   image_too_many_pixels: 'error.REFUSED.imageTooManyPixels',
+  // Replace and Export of a picture stored in the page content (W6.7b slice 2b).
+  inline_image: 'error.REFUSED.inlineImage',
 };
 
 function refusedReason(details: Details): Variant | undefined {
