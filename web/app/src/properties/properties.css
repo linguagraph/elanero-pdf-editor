@@ -58,3 +58,34 @@
 .properties-hint {
   margin: 0;
 }
+
+/* The tabs (W7.6 slice A): Description and Advanced share the body above Apply and Cancel. */
+.properties-tablist {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid currentColor;
+}
+
+.properties-tab {
+  padding: 4px 10px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.properties-tab[data-selected] {
+  font-weight: 600;
+  border-bottom-color: currentColor;
+}
+
+.properties-tab[data-focus-visible] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.properties-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  outline: none;
+}

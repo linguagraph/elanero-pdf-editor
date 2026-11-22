@@ -167,3 +167,117 @@ describe('the document properties dialog', () => {
     expect(store.getState().visible[0]?.action?.label).toBe(t('toast.undo'));
   });
 });
+
+function tabNamed(label: string): HTMLElement {
+  const tab = [...document.body.querySelectorAll('[role="tab"]')].find(
+    (el) => el.textContent === label,
+  );
+  if (tab === undefined) throw new Error(`no tab ${label}`);
+  return tab as HTMLElement;
+}
+
+function pressKey(target: HTMLElement, key: string): void {
+  act(() => {
+    target.focus();
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  });
+}
+
+// The value shown next to a label in the properties' definition lists.
+function factValue(label: string): string | undefined {
+  const dt = [...document.body.querySelectorAll('dt')].find((el) => el.textContent === label);
+  return dt?.nextElementSibling?.textContent ?? undefined;
+}
+
+function openDialog(rpc: PageRpc, store?: ReturnType<typeof createToastStore>): void {
+  act(() => {
+    root.render(
+      <PropertiesDialog isOpen onClose={() => undefined} rpc={rpc} handle="h1" store={store} />,
+    );
+  });
+}
+
+describe('the properties tabs (W7.6 slice A)', () => {
+  it('offers Description and Advanced, with Description selected first', async () => {
+    const { rpc } = fakeRpc();
+    openDialog(rpc);
+    await flush();
+    const list = document.body.querySelector('[role="tablist"]');
+    expect(list?.getAttribute('aria-label')).toBe(t('properties.tabs.label'));
+    expect(tabNamed(t('properties.tab.description')).getAttribute('aria-selected')).toBe('true');
+    expect(tabNamed(t('properties.tab.advanced')).getAttribute('aria-selected')).toBe('false');
+    expect(field(t('properties.field.title')).value).toBe('Report');
+  });
+
+  it('the selected tab controls the visible panel and the panel names it', async () => {
+    const { rpc } = fakeRpc();
+    openDialog(rpc);
+    await flush();
+    const tab = tabNamed(t('properties.tab.description'));
+    const panel = document.getElementById(tab.getAttribute('aria-controls') ?? '');
+    expect(panel?.getAttribute('role')).toBe('tabpanel');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id);
+  });
+
+  it('arrow keys move between the tabs and Home and End go to the ends', async () => {
+    const { rpc } = fakeRpc();
+    openDialog(rpc);
+    await flush();
+    const description = tabNamed(t('properties.tab.description'));
+    const advanced = tabNamed(t('properties.tab.advanced'));
+    pressKey(description, 'ArrowRight');
+    expect(advanced.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(advanced);
+    pressKey(advanced, 'ArrowLeft');
+    expect(description.getAttribute('aria-selected')).toBe('true');
+    pressKey(description, 'End');
+    expect(advanced.getAttribute('aria-selected')).toBe('true');
+    pressKey(advanced, 'Home');
+    expect(description.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('Apply sends the Description edits made before switching to Advanced', async () => {
+    const { call, rpc } = fakeRpc();
+    const onClose = vi.fn();
+    act(() => {
+      root.render(<PropertiesDialog isOpen onClose={onClose} rpc={rpc} handle="h1" />);
+    });
+    await flush();
+    act(() => typeInto(field(t('properties.field.author')), 'Finance'));
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    await act(async () => {
+      applyButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const calls = call.mock.calls as unknown as [string, unknown][];
+    const runs = calls.filter(([method]) => method === 'actions.run');
+    expect(runs[0]?.[1]).toMatchObject({ args: { metadata: { author: 'Finance' } } });
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('the PDF version on the Advanced tab', () => {
+  it('shows the version as text, read with session.info, and no input', async () => {
+    const { call, rpc } = fakeRpc();
+    openDialog(rpc);
+    await flush();
+    expect(call).toHaveBeenCalledWith('session.info', { handle: 'h1' });
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    expect(factValue(t('properties.version'))).toBe('1.7');
+    expect(factValue(t('properties.pages'))).toBe('2');
+    expect(factValue(t('properties.tagged'))).toBe(t('properties.no'));
+    const panel = document.querySelector('[role="tabpanel"]:not([hidden])') as HTMLElement;
+    expect(panel.querySelector('input')).toBeNull();
+  });
+
+  it('a file that reports no version shows "Not set"', async () => {
+    const blank = { ...info, pdf_version: '' };
+    const emptyRpc = {
+      call: vi.fn(async (method: string) => (method === 'session.info' ? blank : {})),
+    } as unknown as PageRpc;
+    openDialog(emptyRpc);
+    await flush();
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    expect(factValue(t('properties.version'))).toBe(t('properties.empty'));
+  });
+});

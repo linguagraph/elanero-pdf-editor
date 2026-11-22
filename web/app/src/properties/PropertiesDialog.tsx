@@ -1,17 +1,19 @@
-// The document properties dialog (W7.6): title, author, subject and keywords to edit, and the
-// dates, application and producer read-only. The values come from session.info when the dialog
-// opens; Apply runs one document.set_metadata with the changed fields (apply.ts).
+// The document properties dialog (W7.6): Description (title, author, subject and keywords to edit,
+// with the dates, application and producer read-only) and Advanced (the file facts, PDF version
+// included). The values come from session.info when the dialog opens; Apply runs one
+// document.set_metadata with the changed fields (apply.ts). Fonts and Security tabs follow.
 import { useEffect, useState } from 'react';
-import { Button } from 'react-aria-components';
+import { Button, Tab, TabList, TabPanel, Tabs } from 'react-aria-components';
 import type { PageRpc } from '../engine/engineConnection';
-import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import { toasts, type ToastStore } from '../feedback/toasts';
 import { Overlay } from '../layout/Overlay';
 import type { DocInfo } from '../rpc/generated';
+import { AdvancedPanel } from './AdvancedPanel';
 import { applyProperties, loadProperties } from './apply';
+import { DescriptionPanel } from './DescriptionPanel';
+import { FIELD_LABEL } from './facts';
 import {
-  EDITABLE_FIELDS,
   type EditableField,
   type EditableValues,
   editableValues,
@@ -19,13 +21,6 @@ import {
   overLongFields,
 } from './metadata';
 import './properties.css';
-
-const FIELD_LABEL: Record<EditableField, MessageId> = {
-  title: 'properties.field.title',
-  author: 'properties.field.author',
-  subject: 'properties.field.subject',
-  keywords: 'properties.field.keywords',
-};
 
 export interface PropertiesDialogProps {
   isOpen: boolean;
@@ -70,6 +65,7 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<'description' | 'advanced'>('description');
 
   useEffect(() => {
     let live = true;
@@ -123,32 +119,28 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
       </p>
     );
   }
-  const shown = (value: string): string => (value === '' ? t('properties.empty') : value);
   return (
     <div className="properties">
-      <div className="properties-fields">
-        {EDITABLE_FIELDS.map((field) => (
-          <label key={field} className="properties-field">
-            <span>{t(FIELD_LABEL[field])}</span>
-            <input
-              type="text"
-              value={values[field]}
-              disabled={busy}
-              onChange={(event) => setField(field, event.currentTarget.value)}
-            />
-          </label>
-        ))}
-      </div>
-      <dl className="properties-readonly">
-        <dt>{t('properties.created')}</dt>
-        <dd>{shown(info.creation_date)}</dd>
-        <dt>{t('properties.modified')}</dt>
-        <dd>{shown(info.mod_date)}</dd>
-        <dt>{t('properties.application')}</dt>
-        <dd>{shown(info.creator)}</dd>
-        <dt>{t('properties.producer')}</dt>
-        <dd>{shown(info.producer)}</dd>
-      </dl>
+      <Tabs
+        className="properties-tabs"
+        selectedKey={tab}
+        onSelectionChange={(key) => setTab(key === 'advanced' ? 'advanced' : 'description')}
+      >
+        <TabList aria-label={t('properties.tabs.label')} className="properties-tablist">
+          <Tab id="description" className="properties-tab">
+            {t('properties.tab.description')}
+          </Tab>
+          <Tab id="advanced" className="properties-tab">
+            {t('properties.tab.advanced')}
+          </Tab>
+        </TabList>
+        <TabPanel id="description" className="properties-panel">
+          <DescriptionPanel info={info} values={values} busy={busy} onField={setField} />
+        </TabPanel>
+        <TabPanel id="advanced" className="properties-panel">
+          <AdvancedPanel info={info} />
+        </TabPanel>
+      </Tabs>
       {message === null ? null : (
         <p className="properties-message" role="alert">
           {message}
