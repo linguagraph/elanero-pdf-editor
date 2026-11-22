@@ -34,6 +34,23 @@ async function focusRow(page: Page, title: string): Promise<void> {
     .focus();
 }
 
+// Opens each named chapter that is closed. The panel starts an entry closed unless the file flags it
+// open, and outline.pdf does not, so the sections are only in the tree after this. Right on a closed
+// row opens it (the tree pattern); a row already open is left alone, so the helper is safe to run on
+// a file that does flag its chapters.
+async function expandChapters(page: Page, titles: string[]): Promise<void> {
+  const tree = page.getByRole('tree', { name: 'Document bookmarks' });
+  for (const title of titles) {
+    const row = tree.getByRole('treeitem', { name: title, exact: true });
+    await expect(row).toHaveAttribute('aria-expanded', /^(true|false)$/);
+    if ((await row.getAttribute('aria-expanded')) === 'false') {
+      await focusRow(page, title);
+      await page.keyboard.press('ArrowRight');
+      await expect(row).toHaveAttribute('aria-expanded', 'true');
+    }
+  }
+}
+
 function toolbarButton(page: Page, name: string) {
   return page
     .getByRole('toolbar', { name: 'Bookmark actions' })
@@ -53,6 +70,7 @@ test.describe('engine staged', () => {
 
     // The panel opens from the rail's Bookmarks button.
     await page.getByRole('button', { name: 'Bookmarks', exact: true }).click();
+    await expandChapters(page, ['Chapter 1', 'Chapter 2', 'Chapter 3']);
     await expectTree(page, [
       [1, 'Chapter 1'],
       [2, 'Section 1.1'],
@@ -190,6 +208,8 @@ test.describe('engine staged', () => {
     await openApp(reopened);
     await openPdf(reopened, saved.name, saved.bytes);
     await reopened.getByRole('button', { name: 'Bookmarks', exact: true }).click();
+    // The saved file may not flag the chapters open, so they are opened the same way as before.
+    await expandChapters(reopened, ['Chapter 1', 'Part Two', 'Chapter 3']);
     await expectTree(reopened, finalRows);
 
     expect(problems).toEqual([]);
