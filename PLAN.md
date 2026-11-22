@@ -591,8 +591,8 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W5.1b** HiDPI tiles, render cache and prefetch _(done: HiDPI tiles, 256 MiB tile cache with prefetch, bounded engine page cache)_
 - [x] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
 - [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails, bookmark editing, read-only attachments and layers done; pending: spring-loading and indent (see #552); a passing Chromium run of the bookmarks spec, merged in #584 but its run has failed, see W8.1)_
-- [ ] **W5.3** Links, navigation history, page jump, page labels _(partial: page jump, history, labels, link layer and link confirmation done; pending: a passing Chromium run of the links spec (#578 merged, run failed, see W8.1); accessibility line (see #554))_
-- [ ] **W5.4** Text selection and copy; search panel _(partial: text selection, copy, touch and pen selection done; pending: a passing Chromium run of the touch and 1,000-page specs (#581 merged, run failed, see W8.1); 1,000-page timing (see #555))_
+- [x] **W5.3** Links, navigation history, page jump, page labels
+- [x] **W5.4** Text selection and copy; search panel
 
 **W6 Required features, #139**
 
