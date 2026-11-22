@@ -11,6 +11,11 @@
   touch-action: none;
 }
 
+/* The layer takes focus when an editor closes; the outline it would show is the selection's. */
+.edit-layer:focus {
+  outline: none;
+}
+
 .edit-layer--blocked {
   cursor: not-allowed;
 }
@@ -52,6 +57,31 @@
   font-size: var(--font-size-small);
   background: var(--color-on-accent);
   color: var(--color-text-muted);
+}
+
+/* The paragraph editor (W6.8a 8a-1): a textarea over the block. Its background hides the page text
+   beneath; the block's own font, size and colour are set inline from the object's style. */
+.edit-editor {
+  position: absolute;
+  box-sizing: border-box;
+  width: 120px;
+  margin: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-accent);
+  border-radius: 0;
+  background: var(--color-editor-bg);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  resize: none;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+  touch-action: auto;
+}
+
+.edit-editor[aria-busy='true'] {
+  cursor: progress;
 }
 
 /* The shape tools' page layer (W6.7b): a drag draws a preview of the shape the engine will add. */

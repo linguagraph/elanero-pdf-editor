@@ -116,6 +116,11 @@ describe('fontTools on the web (W6.8a)', () => {
     expect(needsFontTools(run('content.add_text'))).toBe(true);
     expect(needsFontTools(run('content.transform'))).toBe(false);
     expect(needsFontTools(JSON.stringify({ v: 1, id: 4, method: 'content.objects' }))).toBe(false);
+    expect(
+      needsFontTools(
+        JSON.stringify({ v: 1, id: 5, method: 'content.preview_font', params: { handle: 'h' } }),
+      ),
+    ).toBe(true);
     expect(needsFontTools('not json')).toBe(false);
   });
 

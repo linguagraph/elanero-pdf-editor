@@ -88,8 +88,8 @@ import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
 import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
-import { commitEdit, type EditChange } from '../edit/commit';
-import { EditLayer, type EditSelection } from '../edit/EditLayer';
+import { commitEdit, commitText, type EditChange, offerDroppedText } from '../edit/commit';
+import { EditLayer, type EditSelection, type TextEdit } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
 import { addImage, dropPendingImage, pendingImageOf } from '../edit/images';
@@ -178,6 +178,9 @@ export interface DocumentViewHandle {
   // Deletes the objects the Edit tool has selected (the Delete command and key, W6.7a S5). Nothing
   // happens with no selection.
   deleteEditSelection(): void;
+  // Drops the open paragraph editor without applying its text, for a tab that is closing: the typed
+  // text is offered as a toast instead (W6.8a fix). Called before the tab closes.
+  dropTextEdit(): void;
   // Sets the page layout (single column or two-page spreads, the cover alone or not), keeping the
   // page at the top in view (the ribbon's View commands, W4.3a S6).
   setLayout(choice: { readonly layout: ViewLayout; readonly firstAlone: boolean }): void;
@@ -495,11 +498,22 @@ export function DocumentView({
   // is dropped when the tool is left (its keys mean nothing to another tool).
   const editObjects = useMemo(() => new ObjectCache(rpc, handle), [rpc, handle]);
   const [editSelection, setEditSelection] = useState<EditSelection | null>(null);
+  // The paragraph open in the text editor (W6.8a 8a-1). Leaving the Edit tool drops it; the editor
+  // commits what was typed when it unmounts (ParagraphEditor), so nothing is lost.
+  const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
+  // How the open editor's unmount is read (ParagraphEditor's commitOnLeave): a closing tab sets
+  // textDropRef, and a page outside the mounted range (mountedPagesRef, kept by a layout effect
+  // below) drops the typing too. A tool or tab switch keeps the commit.
+  const textDropRef = useRef(false);
+  const mountedPagesRef = useRef<ReadonlySet<number>>(new Set());
   const [seenTool, setSeenTool] = useState(tool);
   if (seenTool !== tool) {
     setSeenTool(tool);
     if (tool !== 'select') setCommentTool(null);
-    if (tool !== 'edit') setEditSelection(null);
+    if (tool !== 'edit') {
+      setEditSelection(null);
+      setTextEdit(null);
+    }
   }
   // A gesture the layer ended with a drag is committed here; the engine makes the change and the
   // selection it leaves is set by commitEdit (W6.7a S5).
@@ -508,6 +522,47 @@ export function DocumentView({
       void commitEdit({ rpc, handle, cache: editObjects, scheduler }, change, setEditSelection),
     [rpc, handle, editObjects, scheduler],
   );
+  // The typed paragraph is committed as one step (W6.8a 8a-1). The editor stays open while the
+  // engine is busy, and closes on any other outcome, so the caller learns whether to close.
+  const applyTextEdit = useCallback(
+    async (text: string): Promise<boolean> => {
+      const edit = textEdit;
+      if (edit === null) return true;
+      const outcome = await commitText(
+        { rpc, handle, cache: editObjects, scheduler },
+        { page: edit.page, revision: edit.revision, object: edit.object, text },
+        setEditSelection,
+      );
+      return outcome !== 'busy';
+    },
+    [textEdit, rpc, handle, editObjects, scheduler],
+  );
+  // Enter on a single selected editable paragraph opens it (W6.8a 8a-1, the keyboard path). Keys
+  // from a field, a button or a dialog keep their own meaning.
+  useEffect(() => {
+    if (tool !== 'edit' || textEdit !== null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter') return;
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (document.querySelector('.overlay-backdrop')) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, button, a, [contenteditable], [role="button"]')
+      )
+        return;
+      const sel = editSelection;
+      if (sel === null || sel.keys.length !== 1) return;
+      if (sel.revision !== scheduler.revisionOf(sel.page)) return;
+      const list = editObjects.ready(sel.page, sel.revision);
+      const object = list?.objects.find((o) => o.key === sel.keys[0]);
+      if (object === undefined || object.type !== 'text' || !object.editable) return;
+      event.preventDefault();
+      setTextEdit({ page: sel.page, revision: sel.revision, object });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [tool, textEdit, editSelection, editObjects, scheduler]);
   // The selected objects of the page are deleted as one undo step. The keys are read from the list
   // the layer shows, so nothing is asked of the engine first; with no selection, nothing is sent.
   const deleteEditSelection = useCallback(() => {
@@ -1008,6 +1063,15 @@ export function DocumentView({
   const mounted = [...layout.boxes.slice(range.first, range.end)];
   if (focusedBox !== undefined && (focusedBox.index < range.first || focusedBox.index >= range.end))
     mounted.push(focusedBox);
+  // The paragraph editor's page leaving the mounted range drops its open editor: the editor is
+  // unmounted with it, and its typing is not applied (W6.8a fix). Scrolling back reopens the object
+  // from its current state. The layout effect updates the set before the editor's cleanup reads it.
+  const textEditPageMounted =
+    textEdit === null || mounted.some((box) => box.index === textEdit.page);
+  if (textEdit !== null && !textEditPageMounted) setTextEdit(null);
+  useLayoutEffect(() => {
+    mountedPagesRef.current = new Set(mounted.map((box) => box.index));
+  });
   // The single-page layout shows one page, so the page at the viewport is that page wherever the
   // reader scrolls within it; the other layouts take the page the viewport's third falls in.
   const currentPage =
@@ -1106,6 +1170,9 @@ export function DocumentView({
         pageFieldRef.current?.select();
       },
       deleteEditSelection,
+      dropTextEdit: () => {
+        textDropRef.current = true;
+      },
       setLayout: changeLayout,
       setNight: chooseNight,
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
@@ -1483,6 +1550,27 @@ export function DocumentView({
                         selection={editSelection}
                         onSelect={setEditSelection}
                         onCommit={commitChange}
+                        rpc={rpc}
+                        handle={handle}
+                        editing={textEdit !== null && textEdit.page === box.index ? textEdit : null}
+                        onOpenText={(object) =>
+                          setTextEdit({
+                            page: box.index,
+                            revision: scheduler.revisionOf(box.index),
+                            object,
+                          })
+                        }
+                        onApplyText={applyTextEdit}
+                        // A tool or tab switch commits; a page that scrolled out or a closing tab drops.
+                        commitTextOnLeave={() =>
+                          !textDropRef.current && mountedPagesRef.current.has(box.index)
+                        }
+                        onDropText={(text) => offerDroppedText(text)}
+                        onCloseText={() =>
+                          // Only the editor that is still open closes: a late close of an editor
+                          // replaced by another must not clear the new one.
+                          setTextEdit((current) => (current === textEdit ? null : current))
+                        }
                       />
                     ) : null}
                     {placeKind !== null && sizes !== null ? (

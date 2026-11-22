@@ -448,6 +448,8 @@ export function App({
   // Closing a tab closes the confirmation too, whichever tab it is.
   const closeTab = (id: number) => {
     setApplyOpen(false);
+    // The shown tab's paragraph editor drops its typing (it is offered as a toast), not commits it.
+    if (id === activeId) viewRef.current?.dropTextEdit();
     docs.closeTab(id);
   };
   // Save writes the document as a download under its own name, and marks it clean (W4.8).

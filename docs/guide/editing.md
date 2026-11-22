@@ -23,6 +23,17 @@ Elanero then says why in a message rather than changing the text.
     Text is edited a paragraph at a time. To fix one word, double-click its paragraph and change the
     word in place.
 
+In the web version, double-click a paragraph, or click it and press **Enter**, to edit it in place.
+The box shows the document's own font when your browser can use it, and a similar font otherwise.
+**Ctrl+Enter** (**Cmd+Enter** on a Mac), or a click on another part of the app, applies the change,
+and **Esc** cancels it. One change is one undo step. A paragraph is set in its main style, so a
+paragraph with several fonts or sizes takes one style when it is applied, and its lines can wrap a
+little differently from the box you typed in. If the document's font has no character for something
+you typed, a notice names the font that was used instead. If a change can't be applied, for example
+because the page changed in the meantime, the box closes and the message has a **Copy text** button
+that puts your text on the clipboard. When Elanero is busy with another task, the box stays open so
+you can apply the change again.
+
 ### Fonts
 
 When you edit text, the font picker lists the document's own fonts first, then recent fonts,
