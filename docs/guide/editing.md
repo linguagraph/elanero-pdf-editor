@@ -57,6 +57,13 @@ JPEG files up to 50 MB and 25 megapixels.
 To swap an existing picture for another, select it and click **Objects ▸ Replace** (**Replace
 Image**). To save a picture to a file, select it and click **Objects ▸ Export** (**Export Image**).
 
+In the web version, select exactly one picture with **Edit Text & Images** on, then choose **Replace
+Image** or **Export Image** from the Objects group. Replace asks for a PNG or JPEG file and puts it in
+the picture's box, so a picture with a different shape is stretched to fit. The change is one undo
+step. A picture that appears in several places (for example, a logo on every page) is replaced in
+all of them, as on the desktop. Export Image downloads the picture as it is stored in the file, named
+after the document, the page and the picture, and changes nothing in the document.
+
 ## Add shapes
 
 **Shapes ▸ Rectangle**, **Ellipse** and **Line** draw shapes into the page content. Drag on the page
@@ -98,7 +105,7 @@ so its text can be changed. To turn this off, clear **Recognize text when editin
   complex layouts can't always be edited cleanly.
 - Existing images have no rotation handle in the interface.
 - Pictures stored inside the page content (inline images) can be moved and deleted, but not replaced
-  or exported.
+  or exported. The web version says so when you try.
 - On a page that is both rotated and cropped, a new shape or picture can appear offset from where
   you drew it, by the crop box's offset. This is a known engine issue, to be fixed separately.
 - Text added as a comment (a FreeText annotation) uses standard fonts.

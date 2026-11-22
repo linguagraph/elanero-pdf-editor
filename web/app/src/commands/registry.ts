@@ -58,6 +58,9 @@ export interface CommandState {
   // The open document's engine has the content_edit capability (W6.7a): false when it lacks it, and
   // false when no document is open. The Edit tool's commands read it.
   readonly contentEdit: boolean;
+  // The Edit tool has exactly one picture selected (W6.7b slice 2b): the target of Replace and
+  // Export. Optional, so a state without it reads as no picture selected.
+  readonly singleImageSelected?: boolean;
   // There are marks to apply and no apply is running (W7.4). False when no document is open.
   readonly canApplyRedactions: boolean;
   // An apply is running (W7.4). Optional, so a state without it reads as not busy.
@@ -88,6 +91,7 @@ export type DisabledReason =
   | 'noRecentFiles'
   | 'noRedactionMarks'
   | 'contentEditOff'
+  | 'selectOneImage'
   | 'redactionBusy'
   | 'cannotGoBack'
   | 'cannotGoForward'
@@ -104,6 +108,7 @@ export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>>
   noRecentFiles: 'disabled.noRecentFiles',
   noRedactionMarks: 'disabled.noRedactionMarks',
   contentEditOff: 'disabled.contentEditOff',
+  selectOneImage: 'disabled.selectOneImage',
   redactionBusy: 'disabled.redactionBusy',
   cannotGoBack: 'disabled.cannotGoBack',
   cannotGoForward: 'disabled.cannotGoForward',
@@ -138,6 +143,9 @@ export const CAN_EDIT_CONTENT: Enabled = (state) => {
   return state.contentEdit ? null : 'contentEditOff';
 };
 export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'noRecentFiles');
+// Replace and Export work on exactly one selected picture (W6.7b slice 2b).
+export const SINGLE_IMAGE: Enabled = (state) =>
+  state.singleImageSelected === true ? null : 'selectOneImage';
 // Back and Forward need an open document, then an entry in the history that way (W5.3).
 export const CAN_GO_BACK: Enabled = (state) => {
   if (!state.hasDocument) return 'needsDocument';

@@ -70,7 +70,7 @@ import { PageLinkLayer } from '../links/PageLinkLayer';
 import { LinkConfirmDialog } from '../links/LinkConfirmDialog';
 import { classifyLink, type LinkConfirm, type LinkNotice } from '../links/linkTarget';
 import { isTap, type LinkPress } from '../links/linkTap';
-import type { LinkDto } from '../rpc/generated';
+import type { ContentObjectsResult, LinkDto, PageObjectDto } from '../rpc/generated';
 import { useHandPan } from './useHandPan';
 import { isShapeTool, type ViewTool } from './viewTool';
 import { CropLayer } from '../crop/CropLayer';
@@ -92,7 +92,7 @@ import { commitEdit, type EditChange } from '../edit/commit';
 import { EditLayer, type EditSelection } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
-import { addImage, dropPendingImage, pendingImageOf } from '../edit/images';
+import { addImage, dropPendingImage, exportImage, pendingImageOf } from '../edit/images';
 import {
   addShape,
   noteShapeTooSmall,
@@ -165,6 +165,19 @@ function watchRange(
 
 // What the parent can ask the view to do: the ribbon's View and Home commands and the shortcuts reach
 // the view through here (W4.2a S6), as the canvas pill does from inside.
+// The one picture a selection names, from the list it was made on; null unless the selection is
+// exactly one object, that object is an image, and the list is at the selection's revision. Replace
+// and Export act on exactly one picture (W6.7b slice 2b).
+function selectedPicture(
+  list: ContentObjectsResult | undefined,
+  selection: EditSelection | null,
+): PageObjectDto | null {
+  if (list === undefined || selection === null || selection.keys.length !== 1) return null;
+  if (list.revision !== selection.revision) return null;
+  const found = list.objects.find((o) => o.key === selection.keys[0]);
+  return found !== undefined && found.type === 'image' ? found : null;
+}
+
 export interface DocumentViewHandle {
   // Scrolls so the page's top edge is at the top of the viewport. Out-of-range indexes do nothing.
   // A link's target passes its height in points (top), which lands that point at the top instead.
@@ -178,6 +191,12 @@ export interface DocumentViewHandle {
   // Deletes the objects the Edit tool has selected (the Delete command and key, W6.7a S5). Nothing
   // happens with no selection.
   deleteEditSelection(): void;
+  // Replaces the one picture the Edit tool has selected with the file (Replace Image, W6.7b slice
+  // 2b). Nothing happens unless exactly one picture is selected and its list is current.
+  replaceEditImage(file: Blob): void;
+  // Downloads the one picture the Edit tool has selected as its own file (Export Image, W6.7b
+  // slice 2b). `stem` names the file; the page and the format are added.
+  exportEditImage(stem: string): void;
   // Sets the page layout (single column or two-page spreads, the cover alone or not), keeping the
   // page at the top in view (the ribbon's View commands, W4.3a S6).
   setLayout(choice: { readonly layout: ViewLayout; readonly firstAlone: boolean }): void;
@@ -242,6 +261,9 @@ export interface DocumentViewProps {
   // Called when the page or the zoom changes, and once when the view mounts. Give it a stable
   // function (a state setter, for one) so the view does not report again on each render.
   readonly onViewChange?: (state: DocumentViewState) => void;
+  // Tells the host whether the Edit tool has exactly one picture selected (the Replace and Export
+  // commands read it, W6.7b slice 2b). Called with false when the view goes away.
+  readonly onEditImageChange?: (single: boolean) => void;
   // The search hits to draw on the pages, and the selected one (W5.4).
   readonly searchMarks?: SearchMarks;
   // Starts the job worker for the redaction apply (W7.4). Tests leave it out; applying then fails.
@@ -389,6 +411,7 @@ export function DocumentView({
   scheduler: shared,
   ref,
   onViewChange,
+  onEditImageChange,
   searchMarks,
   startWorker,
   redaction,
@@ -519,6 +542,63 @@ export function DocumentView({
     const objects = list.objects.filter((o) => sel.keys.includes(o.key));
     commitChange({ kind: 'delete', page: sel.page, revision: sel.revision, objects });
   }, [editSelection, editObjects, scheduler, commitChange]);
+  // Replace Image (W6.7b slice 2b): the picked file replaces the selected picture, which keeps its
+  // box. The change goes through commitEdit, as a move or a delete does.
+  const replaceEditImage = useCallback(
+    (file: Blob) => {
+      const sel = editSelection;
+      if (sel === null || sel.revision !== scheduler.revisionOf(sel.page)) return;
+      const picture = selectedPicture(editObjects.ready(sel.page, sel.revision), sel);
+      if (picture === null) return;
+      commitChange({
+        kind: 'replace',
+        page: sel.page,
+        revision: sel.revision,
+        objects: [picture],
+        file,
+      });
+    },
+    [editSelection, editObjects, scheduler, commitChange],
+  );
+  // Export Image (W6.7b slice 2b): downloads the selected picture. Nothing in the document changes.
+  const exportEditImage = useCallback(
+    (stem: string) => {
+      const sel = editSelection;
+      if (sel === null || sel.revision !== scheduler.revisionOf(sel.page)) return;
+      const picture = selectedPicture(editObjects.ready(sel.page, sel.revision), sel);
+      if (picture === null) return;
+      void exportImage(
+        { rpc, handle, cache: editObjects, scheduler },
+        { page: sel.page, key: picture.key, revision: sel.revision },
+        stem,
+      );
+    },
+    [rpc, handle, editSelection, editObjects, scheduler],
+  );
+  // The host learns whether one picture is selected, for Replace and Export. The list is read from
+  // the cache, or fetched, so the answer is the one the list gives.
+  useEffect(() => {
+    if (onEditImageChange === undefined) return;
+    if (tool !== 'edit' || editSelection === null || editSelection.keys.length !== 1) {
+      onEditImageChange(false);
+      return;
+    }
+    const sel = editSelection;
+    let live = true;
+    void editObjects.get(sel.page, sel.revision).then(
+      (list) => {
+        if (live) onEditImageChange(selectedPicture(list, sel) !== null);
+      },
+      () => {
+        if (live) onEditImageChange(false);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [tool, editSelection, editObjects, onEditImageChange]);
+  // The view is keyed by tab, so leaving it (a tab change or a close) clears the host's answer.
+  useEffect(() => () => onEditImageChange?.(false), [onEditImageChange]);
   // Delete and Backspace delete the Edit tool's selection, unless a field or a dialog has the key.
   useEffect(() => {
     if (tool !== 'edit') return;
@@ -1106,6 +1186,8 @@ export function DocumentView({
         pageFieldRef.current?.select();
       },
       deleteEditSelection,
+      replaceEditImage,
+      exportEditImage,
       setLayout: changeLayout,
       setNight: chooseNight,
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
@@ -1217,6 +1299,8 @@ export function DocumentView({
       textLayers,
       scheduler,
       deleteEditSelection,
+      replaceEditImage,
+      exportEditImage,
       chooseCommentTool,
       chooseRedacting,
       changeLayout,
