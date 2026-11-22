@@ -23,7 +23,6 @@ from pdfeditor.actions.content import (
 )
 from pdfeditor.actions.edit_geometry import HANDLE_PX, MIN_DRAG
 from pdfeditor.engine.base import EngineError, UnsupportedFeature
-from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.model.objects import (
     FontChoice,
@@ -385,27 +384,25 @@ class AddImageTool(_RectTool):
 
 class AddShapeTool(_RectTool):
     default_size = (120.0, 80.0)
-    # The style of the shapes drawn next, set by Shapes > Shape Style. A tool is rebuilt for each
-    # use, so each new shape reads it here.
+    # The style of the shapes drawn next, set by Shapes > Shape Style. It is read when a shape is
+    # drawn, not when the tool is armed, so a change applies to a tool that is already active.
     style: ShapeStyle = DEFAULT_SHAPE_STYLE
 
     def __init__(self, kind: ShapeKind) -> None:
         super().__init__()
         self.kind = kind
         self.name = f"add_{kind.value}"
-        self.stroke = AddShapeTool.style.stroke
-        self.fill: Color | None = AddShapeTool.style.fill
-        self.width = AddShapeTool.style.width
 
     def finish(self, view: DocumentView, page: int, rect: Rect, a: Point, b: Point) -> None:
+        style = AddShapeTool.style
         spec = ShapeSpec(
             self.kind,
             rect,
             a,
             b,
-            self.stroke,
-            None if self.kind is ShapeKind.LINE else self.fill,
-            self.width,
+            style.stroke,
+            None if self.kind is ShapeKind.LINE else style.fill,
+            style.width,
         )
         _used(
             view,

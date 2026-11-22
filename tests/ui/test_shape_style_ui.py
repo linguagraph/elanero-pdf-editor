@@ -89,6 +89,9 @@ def test_shape_style_action_stores_the_style(qtbot, window: MainWindow, view) ->
 
 
 def test_next_shape_uses_the_chosen_style(qtbot, window: MainWindow, view, tmp_path: Path) -> None:
+    # Arm the ellipse tool first, then change the style: the tool that is already active uses it.
+    window.set_tool("add_ellipse")
+    assert isinstance(view.tool, edit.AddShapeTool)
     dialog = ShapeStyleDialog(edit.AddShapeTool.style, window)
     qtbot.addWidget(dialog)
     dialog.outline.set(RED)
@@ -97,11 +100,8 @@ def test_next_shape_uses_the_chosen_style(qtbot, window: MainWindow, view, tmp_p
     dialog.line_width.setValue(6)
     dialog.exec = lambda: 1
     window.edit.shape_style(dialog)
+    assert edit.AddShapeTool.style == ShapeStyle(stroke=RED, fill=BLUE, width=6)
 
-    window.set_tool("add_ellipse")
-    tool = view.tool
-    assert isinstance(tool, edit.AddShapeTool)
-    assert (tool.stroke, tool.fill, tool.width) == (RED, BLUE, 6.0)
     drag(qtbot, view, (300, 700), (400, 780))  # the ellipse's left edge is at x = 300, y = 740
     window.save()
 
