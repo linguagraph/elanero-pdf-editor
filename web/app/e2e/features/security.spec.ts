@@ -50,10 +50,11 @@ test.describe('engine staged', () => {
       .getAttribute('content');
     expect(meta).toBe(CSP_POLICY);
 
-    // The engine worker is a blob worker, so it inherits the page's connect-src.
+    // The engine worker is a blob worker. Its network globals are removed once the engine has
+    // booted (engine.worker.ts, lockDownGlobals), so the probe reports 'undefined' there.
     const engine = workers.find((worker) => worker.url().startsWith('blob:'));
     expect(engine, 'the engine worker was seen by Playwright').toBeDefined();
-    expect(await engine!.evaluate(PROBE)).toBe('rejected');
+    expect(await engine!.evaluate(PROBE)).toBe('undefined');
     expect(await page.evaluate(PROBE)).toBe('rejected');
 
     // A job worker starts on save. Its fetch is removed, so the probe reports 'undefined'.

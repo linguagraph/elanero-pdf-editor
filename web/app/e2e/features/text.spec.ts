@@ -93,7 +93,8 @@ test.describe('engine staged', () => {
 
     // Ctrl+A selects the text of the whole document (W5.4), and Ctrl+C copies it in slices. The
     // pages are not all mounted, so the check is on the order of their headings, not on every line.
-    expect(await lineTexts(pageLines(page, 0))).toContain('Page 1 heading');
+    // The lines arrive after the tab opens, so the check waits for them rather than reading once.
+    await expect.poll(() => lineTexts(pageLines(page, 0))).toContain('Page 1 heading');
     await page.locator('[data-page="0"]').click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Control+A');
     // Select All reads the last page's text before it reports, so Copy waits for that toast.

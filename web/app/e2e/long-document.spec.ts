@@ -78,7 +78,10 @@ function isInView(page: Page, label: string): Promise<boolean> {
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
-  test('a 300-page document renders its last page and keeps the place through a zoom', async ({
+  // fixme (#567): on the CI run of 2026-11-22 (run 45023921190) the last page was not in view after the
+  // zoom to 6400 % (the isInView expect after setZoom(6400)); the same test passed on other runs. The
+  // cause is not found yet, so it is not run until it is. The assertions are unchanged.
+  test.fixme('a 300-page document renders its last page and keeps the place through a zoom', async ({
     page,
   }) => {
     test.setTimeout(10 * 60_000);

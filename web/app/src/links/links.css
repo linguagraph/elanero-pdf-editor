@@ -2,13 +2,17 @@
    outline shows only on hover and focus, so pages look as their authors made them. The boxes are set
    inline from the layout. */
 
+/* The layer covers the page and is drawn after the text layer, so it must let the pointer through:
+   a press on text has to reach the text spans for the selection (W5.4). Only the links take presses. */
 .page-link-layer {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 
 .page-link {
   position: absolute;
+  pointer-events: auto;
   cursor: pointer;
   border-radius: 2px;
 }
