@@ -4,13 +4,14 @@
 // deletes, moves and re-targets entries, by keys (Alt+Shift+N, F2, Delete, Alt+Shift+Arrow) or a
 // toolbar of text buttons. Each edit is one engine action with an Undo toast; the outline then
 // reloads. A new entry's title opens for typing (S3), so it can be named at once.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import type { HistoryResult, OutlineEntry } from '../rpc/generated';
 import type { ViewPlace } from '../view/layout';
 import { expandedOf, fingerprintOf, setExpandedOf } from './expansion';
+import type { Resolved } from './drop';
 import { runBookmarkEdit, type BookmarkEditOutcome } from './runEdit';
 import {
   applyAdd,
@@ -19,13 +20,16 @@ import {
   childrenOf,
   defaultTitle,
   deleteFocus,
+  MAX_OUTLINE_DEPTH,
   moveTarget,
   parentOf,
   remapExpanded,
   subtreeEnd,
   type MoveDirection,
+  type MoveTarget,
 } from './outlineEdit';
 import { initialExpanded, treeAction, visibleRows, type BookmarkAction } from './tree';
+import { useOutlineDrag } from './useOutlineDrag';
 import './bookmarks.css';
 
 export interface BookmarksPanelProps {
@@ -55,9 +59,6 @@ export interface BookmarksPanelProps {
 // The deepest indent the stylesheet has a rule for; deeper entries share its indent.
 const MAX_DEPTH = 8;
 
-// The deepest level an outline may reach (the engine's MAX_OUTLINE_DEPTH): Add Child is off there.
-const MAX_OUTLINE_LEVEL = 32;
-
 // The key of each edit, as the toolbar's tooltip and aria-keyshortcuts show it.
 const KEYS = {
   add: 'Alt+Shift+N',
@@ -73,6 +74,8 @@ type EditKind =
   | { readonly kind: 'rename'; readonly title: string }
   | { readonly kind: 'delete' }
   | { readonly kind: 'move'; readonly direction: MoveDirection }
+  // A drag's drop (W5.2 drag and drop): the same move, to a target the drag worked out.
+  | { readonly kind: 'moveTo'; readonly target: MoveTarget }
   | { readonly kind: 'page'; readonly place: ViewPlace };
 
 // A toolbar button's click: an add (after the row, or as its child), opening the rename field, the
@@ -150,27 +153,60 @@ function planEdit(
     }
     case 'move': {
       const target = moveTarget(entries, index, edit.direction);
-      if (target === null) return null;
-      const plan = applyMove(entries, index, target.parent, target.position);
-      const siblings = childrenOf(plan.entries, parentOf(plan.entries, plan.moved));
-      const nextExpanded = remapExpanded(expanded, plan.order);
-      // The entry's new parent opens, so the moved entry stays visible.
-      const parent = parentOf(plan.entries, plan.moved);
-      if (parent !== null) nextExpanded.add(parent);
-      return {
-        name: 'outline.move',
-        args: { index, expect_title, parent: target.parent, position: target.position },
-        text: t('bookmarks.moved', {
-          title: entry.title,
-          level: plan.entries[plan.moved]?.level ?? 1,
-          position: siblings.indexOf(plan.moved) + 1,
-          count: siblings.length,
-        }),
-        next: plan.entries,
-        nextExpanded,
-        focus: plan.moved,
-      };
+      return target === null ? null : planMoveTo(entries, expanded, index, target);
     }
+    case 'moveTo':
+      return planMoveTo(entries, expanded, index, edit.target);
+  }
+}
+
+// The engine call that moves entry `index` to `target` (S2's move, and a drag's drop).
+function planMoveTo(
+  entries: readonly OutlineEntry[],
+  expanded: ReadonlySet<number>,
+  index: number,
+  target: MoveTarget,
+): PlannedEdit {
+  const expect_title = entries[index]?.title ?? '';
+  const plan = applyMove(entries, index, target.parent, target.position);
+  const siblings = childrenOf(plan.entries, parentOf(plan.entries, plan.moved));
+  const nextExpanded = remapExpanded(expanded, plan.order);
+  // The entry's new parent opens, so the moved entry stays visible.
+  const parent = parentOf(plan.entries, plan.moved);
+  if (parent !== null) nextExpanded.add(parent);
+  return {
+    name: 'outline.move',
+    args: { index, expect_title, parent: target.parent, position: target.position },
+    text: t('bookmarks.moved', {
+      title: expect_title,
+      level: plan.entries[plan.moved]?.level ?? 1,
+      position: siblings.indexOf(plan.moved) + 1,
+      count: siblings.length,
+    }),
+    next: plan.entries,
+    nextExpanded,
+    focus: plan.moved,
+  };
+}
+
+// What a drag's release would do, as the live region says it (W5.2 drag and drop). Empty when no
+// drag points anywhere.
+function dropMessage(entries: readonly OutlineEntry[], resolved: Resolved | null): string {
+  if (resolved === null) return '';
+  const { result, label, level } = resolved;
+  if (result.kind === 'same') return t('bookmarks.drop.same');
+  if (result.kind === 'own') return t('bookmarks.drop.own');
+  if (result.kind === 'deep') return t('error.REFUSED.outlineTooDeep');
+  const title = label.ref === null ? '' : (entries[label.ref]?.title ?? '');
+  switch (label.message) {
+    case 'inside':
+      return t('bookmarks.drop.inside', { title });
+    case 'first':
+      return t('bookmarks.drop.first', { title });
+    case 'after':
+      return t('bookmarks.drop.after', { title, level });
+    case 'top':
+      return t('bookmarks.drop.top');
   }
 }
 
@@ -284,6 +320,9 @@ function BookmarkTree({
   const [editing, setEditing] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  // Set when Escape cancels a drag, so the live region says so once; cleared by the next drag.
+  const [cancelNote, setCancelNote] = useState(false);
+  const hintId = useId();
   const listRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   // Set by an edit: the row to focus once the reloaded outline has rendered (null index: none).
@@ -413,6 +452,26 @@ function BookmarkTree({
     void runEdit(planAdd(entries, expanded, after, asChild, place, title));
   };
 
+  // The visible rows, and the drag (hooks run before the early returns below, so they run every render).
+  const rows = entries === null ? [] : visibleRows(entries, expanded);
+  const outlineDrag = useOutlineDrag({
+    listRef,
+    entries,
+    rows,
+    enabled: editable && !busy && editing === null,
+    busy,
+    revision,
+    onStart: (index) => {
+      setCancelNote(false);
+      setFocusIndex(index);
+    },
+    onDrop: (index, target) => {
+      if (entries !== null)
+        void runEdit(planEdit(entries, expanded, index, { kind: 'moveTo', target }));
+    },
+    onCancel: () => setCancelNote(true),
+  });
+
   if (loadFailed) {
     return (
       <p role="alert" className="bookmarks-status">
@@ -449,7 +508,6 @@ function BookmarkTree({
     );
   }
 
-  const rows = visibleRows(entries, expanded);
   // The focus stays on a visible row; when the focused row is hidden, the first row takes it.
   const activeIndex = rows.some((row) => row.index === focusIndex) ? focusIndex : rows[0]?.index;
   const locked = busy || editing !== null;
@@ -540,7 +598,7 @@ function BookmarkTree({
         id: 'addChild',
         label: t('bookmarks.addChild'),
         keys: '',
-        disabled: level >= MAX_OUTLINE_LEVEL,
+        disabled: level >= MAX_OUTLINE_DEPTH,
         hint: t('bookmarks.addChild.tooDeep'),
         action: { kind: 'add', asChild: true },
       },
@@ -645,9 +703,27 @@ function BookmarkTree({
         className="bookmarks-list panel-fill"
         aria-label={t('bookmarks.list')}
         aria-busy={busy || undefined}
+        aria-describedby={editable ? hintId : undefined}
+        data-drag={
+          outlineDrag.drag === null
+            ? undefined
+            : outlineDrag.drag.resolved?.result.kind === 'own' ||
+                outlineDrag.drag.resolved?.result.kind === 'deep'
+              ? 'refused'
+              : 'active'
+        }
+        {...outlineDrag.handlers}
       >
-        {rows.map((row) => {
+        {rows.map((row, position) => {
           const isCurrent = row.index === activeIndex;
+          // The dragged entry and its subtree are dimmed; the mark is the line or highlight of the drop.
+          const dragging = outlineDrag.drag;
+          const dragged =
+            dragging !== null &&
+            row.index >= dragging.index &&
+            row.index < subtreeEnd(entries, dragging.index);
+          const mark = dragging?.resolved?.result.kind === 'move' ? dragging.resolved.mark : null;
+          const marked = mark !== null && mark.row === position;
           return (
             <div
               key={row.index}
@@ -655,6 +731,9 @@ function BookmarkTree({
               className={isCurrent ? 'bookmarks-row bookmarks-row--current' : 'bookmarks-row'}
               data-index={row.index}
               data-depth={Math.min(row.entry.level, MAX_DEPTH)}
+              data-dragged={dragged ? 'true' : undefined}
+              data-drop={marked ? mark.edge : undefined}
+              data-drop-depth={marked ? Math.min(mark.depth, MAX_DEPTH) : undefined}
               aria-level={row.entry.level}
               aria-expanded={row.hasChildren ? row.expanded : undefined}
               aria-disabled={row.entry.page === null ? true : undefined}
@@ -695,6 +774,18 @@ function BookmarkTree({
             </div>
           );
         })}
+      </div>
+      {editable ? (
+        <p id={hintId} className="visually-hidden">
+          {t('bookmarks.drag.hint')}
+        </p>
+      ) : null}
+      <div className="visually-hidden" aria-live="polite">
+        {outlineDrag.drag !== null
+          ? dropMessage(entries, outlineDrag.drag.resolved)
+          : cancelNote
+            ? t('bookmarks.drop.cancelled')
+            : ''}
       </div>
     </>
   );

@@ -981,6 +981,14 @@ export const EN = {
   'bookmarks.addFirst': 'Add Bookmark',
   'bookmarks.newTitle': 'Page {page}',
   'bookmarks.added': 'Added "{title}" for page {page}.',
+  'bookmarks.drag.hint': 'Drag a bookmark to move it, or use Alt+Shift with the arrow keys.',
+  'bookmarks.drop.inside': 'Move into "{title}", as its last entry',
+  'bookmarks.drop.first': 'Move to the start of "{title}"',
+  'bookmarks.drop.after': 'Move after "{title}", level {level}',
+  'bookmarks.drop.top': 'Move to the top of the list',
+  'bookmarks.drop.same': 'Release to leave it where it is',
+  'bookmarks.drop.own': 'A bookmark cannot go inside itself',
+  'bookmarks.drop.cancelled': 'Move cancelled',
 
   // Page organizer side panel (W6.1). Rotate and delete reuse the command labels; the undo labels
   // are the engine's, shown in English in v1.

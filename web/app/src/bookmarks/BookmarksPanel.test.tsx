@@ -607,3 +607,147 @@ describe('bookmarks adding (W5.2 S3)', () => {
     expect(onSelect).toHaveBeenLastCalledWith(0, 40);
   });
 });
+
+// Drag and drop (W5.2): jsdom has no layout, so the list spans 400 px, each row is 44 px tall and the
+// rows are stacked from the list's top (all open, so row position and flat index agree). The pointer
+// is driven with mouse or touch events that carry a pointer id and type, sent to the tree as the
+// browser does while the pointer is captured.
+describe('bookmarks drag and drop (W5.2)', () => {
+  const open: OutlineEntry[] = [
+    entry('Part One', 1, 0, true),
+    entry('Chapter 1.1', 2, 1, true),
+    entry('Section 1.1.1', 3, 2),
+    entry('Part Two', 1, null),
+  ];
+
+  function tree(): HTMLElement {
+    const el = document.querySelector<HTMLElement>('[role="tree"]');
+    if (el === null) throw new Error('no tree');
+    return el;
+  }
+
+  function pointerAt(target: Element, type: string, x: number, y: number, pointerType = 'mouse') {
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+      button: 0,
+    });
+    Object.defineProperties(event, {
+      pointerId: { value: 1 },
+      pointerType: { value: pointerType },
+    });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+  }
+
+  // The pointer's position on row `index`, its middle band.
+  const rowMiddle = (index: number) => index * 44 + 22;
+
+  beforeEach(() => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const rect = (top: number, bottom: number) =>
+        ({ left: 0, top, bottom, right: 300, width: 300, height: bottom - top }) as DOMRect;
+      if (this === tree()) return rect(0, 400);
+      const index = this instanceof HTMLElement ? Number(this.dataset.index) : Number.NaN;
+      return Number.isInteger(index) ? rect(index * 44, index * 44 + 44) : rect(0, 0);
+    });
+    // The auto-scroll frames are not run; the edge tests do not need them.
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('drops a bookmark on the line below an open entry, one level deeper, as its first child', async () => {
+    const { rpc, call } = editableRpc(open);
+    const onSelect = vi.fn();
+    openPanel('bookmarks');
+    await mount(40, rpc, onSelect);
+    pointerAt(item('Part Two'), 'pointerdown', 20, rowMiddle(3));
+    pointerAt(tree(), 'pointermove', 56, 140);
+    // y = 82 is the bottom band of Chapter 1.1 (rows are 44 px), x = 56 picks level 3.
+    pointerAt(tree(), 'pointermove', 56, 82);
+    pointerAt(tree(), 'pointerup', 56, 82);
+    await flush();
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.move',
+      args: { index: 3, expect_title: 'Part Two', parent: 1, position: 0 },
+    });
+    // The release ends the press without a navigation.
+    act(() => {
+      item('Part Two').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('drops a bookmark inside a row as its last child', async () => {
+    const { rpc, call } = editableRpc(open);
+    openPanel('bookmarks');
+    await mount(41, rpc);
+    pointerAt(item('Part Two'), 'pointerdown', 20, rowMiddle(3));
+    pointerAt(tree(), 'pointermove', 56, 40);
+    pointerAt(tree(), 'pointermove', 56, rowMiddle(0));
+    pointerAt(tree(), 'pointerup', 56, rowMiddle(0));
+    await flush();
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h',
+      name: 'outline.move',
+      args: { index: 3, expect_title: 'Part Two', parent: 0, position: 1 },
+    });
+  });
+
+  it('refuses a drop into the own subtree: the tree says so and nothing is sent', async () => {
+    const { rpc, call } = editableRpc(open);
+    openPanel('bookmarks');
+    await mount(42, rpc);
+    pointerAt(item('Part One'), 'pointerdown', 20, rowMiddle(0));
+    pointerAt(tree(), 'pointermove', 56, 30);
+    // The middle of Section 1.1.1, which sits inside Part One.
+    pointerAt(tree(), 'pointermove', 56, rowMiddle(2));
+    expect(tree().dataset.drag).toBe('refused');
+    expect(document.body.textContent).toContain(t('bookmarks.drop.own'));
+    pointerAt(tree(), 'pointerup', 56, rowMiddle(2));
+    await flush();
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
+  });
+
+  it('Escape cancels a running drag, announces it, and sends nothing', async () => {
+    const { rpc, call } = editableRpc(open);
+    openPanel('bookmarks');
+    await mount(43, rpc);
+    pointerAt(item('Part Two'), 'pointerdown', 20, rowMiddle(3));
+    pointerAt(tree(), 'pointermove', 56, 140);
+    pointerAt(tree(), 'pointermove', 56, 82);
+    act(() => {
+      tree().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+    expect(document.body.textContent).toContain(t('bookmarks.drop.cancelled'));
+    // The panel stays open: only a drag consumes the Escape.
+    expect(tree().isConnected).toBe(true);
+    pointerAt(tree(), 'pointerup', 56, 82);
+    await flush();
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
+  });
+
+  it('a touch press and move does nothing: touch keeps the toolbar', async () => {
+    const { rpc, call } = editableRpc(open);
+    openPanel('bookmarks');
+    await mount(44, rpc);
+    pointerAt(item('Part Two'), 'pointerdown', 20, rowMiddle(3), 'touch');
+    pointerAt(tree(), 'pointermove', 56, 140, 'touch');
+    pointerAt(tree(), 'pointermove', 56, 82, 'touch');
+    pointerAt(tree(), 'pointerup', 56, 82, 'touch');
+    await flush();
+    expect(call.mock.calls.filter(([method]) => method === 'actions.run')).toEqual([]);
+  });
+});
