@@ -929,6 +929,26 @@ def test_round_trip_replace_keeps_the_references_of_a_shared_picture(
         record("pixel_green_pdfium", out, page=page, x=x, y=y)
 
 
+def test_round_trip_replace_keeps_a_shared_picture_when_the_contents_are_shared(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    """The same as the resources case, but the two pages share one /Contents array. The engine's
+    replace adds a stream to the calling page and blanks it, which touches that shared array; both
+    pages must still name one image and show the new picture."""
+    s = open_copy("shared_objects_contents")
+    (picture,) = refs(s, 0, ObjectType.IMAGE)
+    centres = []
+    for page in (0, 1):
+        box = image_bbox(s, page)
+        centres.append((round((box.x0 + box.x1) / 2), round((box.y0 + box.y1) / 2)))
+    content.replace_image(s, ReplaceImage(picture, png((0, 200, 0))))
+    out = s.save(tmp_path / "replaced_shared_contents.pdf")
+    assert_opens_everywhere(out)
+    record("shared_xobject_pikepdf", out, pages=[0, 1], xobject="Im1", width=60)
+    for page, (x, y) in enumerate(centres):
+        record("pixel_green_pdfium", out, page=page, x=x, y=y)
+
+
 def test_round_trip_replace_with_alpha_keeps_the_transparency(
     open_copy: Opener, tmp_path: Path
 ) -> None:
