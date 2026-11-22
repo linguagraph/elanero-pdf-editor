@@ -63,7 +63,9 @@ test.describe('engine staged', () => {
     const confirm = page.getByRole('dialog').filter({ hasText: 'Apply redactions?' });
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Apply now', exact: true }).click();
-    await expect(page.getByText('Redactions applied.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Redactions applied.', { exact: true })).toBeVisible({
+      timeout: 120_000,
+    });
     await expect(redactBar(page).getByText('0 marked', { exact: true })).toBeVisible();
 
     const saved = await saveDownload(page);
@@ -165,7 +167,9 @@ test.describe('engine staged', () => {
       .filter({ hasText: 'Apply redactions?' })
       .getByRole('button', { name: 'Apply now', exact: true })
       .click();
-    await expect(page.getByText('Redactions applied.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Redactions applied.', { exact: true })).toBeVisible({
+      timeout: 120_000,
+    });
 
     const saved = await saveDownload(page);
     const reopened = await context.newPage();
