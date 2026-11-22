@@ -638,7 +638,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W9.3** User guide: "Web version" page _(partial: the page is written (#231) and its claims are checked against main (#432); pending: the desktop guide pages are not yet updated for the web, and the parity table lists features that are not built yet)_
 - [x] **W9.4** `PRIVACY.md` and landing page
 - [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: web section and licence notice generator done; Pyodide 314.0.8 and its MPL-2.0 licence checked against node_modules/pyodide, its copyright line not in the package; npm entries checked with --verify-installed except client-only; pending: "To confirm" copyright lines for Pyodide and client-only)_
-- [ ] **W9.6** Release checklist in `RELEASING.md` _(partial: checklist, commands and web deploy steps done; pending: rollback is documented, not automated)_
+- [x] **W9.6** Release checklist in `RELEASING.md`
 
 ### Later / not in current scope
 - AcroForm creation and editing. Rendering and keeping existing forms and signatures intact is covered above; creating and checking signatures is Phase S.
