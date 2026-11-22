@@ -423,11 +423,19 @@ def test_mark_get_leaves_unreadable_settings_out(web: None, fixture_pdf: Any) ->
     assert found["watermark"] is None
 
 
-def test_mark_get_reports_acrobat_marks_as_foreign_with_no_settings(
-    web: None, fixture_pdf: Any
+def test_mark_get_reads_no_settings_of_a_foreign_mark(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The Acrobat-style watermark is another tool's: it is found, but none of its settings is read.
+    # The engine reports a foreign mark with no settings, so the fixture alone would not show
+    # whether get_mark skips them. The stub gives a foreign kind VALID watermark settings: only the
+    # guard in get_mark keeps them from being read.
     handle = open_bytes(fixture_pdf("page_marks_acrobat_like").read_bytes(), "acrobat.pdf")
+    settings = stamping.watermark_settings(stamping.Watermark(text="FOREIGN"))
+
+    def foreign_only(engine: Any, doc: Any, kinds: Any = None) -> dict[MarkKind, stamping.MarkInfo]:
+        return {MarkKind.WATERMARK: stamping.MarkInfo(MarkKind.WATERMARK, [0], settings, True)}
+
+    monkeypatch.setattr(stamping, "find_marks", foreign_only)
     found = mark_get(handle, "Watermark")
     assert found["found"] is True
     assert found["foreign"] is True
