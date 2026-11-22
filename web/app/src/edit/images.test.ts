@@ -3,11 +3,15 @@ import type { PageRpc } from '../engine/engineConnection';
 import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
+import { downloadBytes } from '../files/downloads';
 import { pickFile } from '../files/pickFile';
+import type { ObjectCache } from './objectCache';
 import {
   addImage,
   chooseImage,
   dropPendingImage,
+  exportImage,
+  imageFileName,
   isPngOrJpeg,
   MAX_IMAGE_BYTES,
   pendingImageOf,
@@ -15,6 +19,7 @@ import {
 } from './images';
 
 vi.mock('../files/pickFile', () => ({ pickFile: vi.fn() }));
+vi.mock('../files/downloads', () => ({ downloadBytes: vi.fn() }));
 
 const PNG_HEAD = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_HEAD = [0xff, 0xd8, 0xff, 0xe0];
@@ -169,5 +174,105 @@ describe('addImage', () => {
     expect(await addImage(deps, 0, rect, fileOf(PNG_HEAD))).toBe(false);
     await settle();
     expect(store.getState().visible).toHaveLength(0);
+  });
+});
+
+describe('imageFileName', () => {
+  it('names the picture after the document, its page and its format (a JPEG is .jpg)', () => {
+    expect(imageFileName('Report', 2, 'png')).toBe('Report-page3-image.png');
+    expect(imageFileName('Report', 0, 'jpeg')).toBe('Report-page1-image.jpg');
+  });
+});
+
+describe('exportImage', () => {
+  const ref = { page: 1, key: 'image:4', revision: 6 };
+
+  function setup(options: { ext?: string; rejection?: unknown } = {}) {
+    const bytes = new Uint8Array([1, 2, 3]).buffer;
+    const call = vi.fn(async () => {
+      if (options.rejection !== undefined) throw options.rejection;
+      return {
+        ext: options.ext ?? 'png',
+        mime: options.ext === 'jpeg' ? 'image/jpeg' : 'image/png',
+        width: 60,
+        height: 50,
+        data: bytes,
+      };
+    });
+    const noteRevisions = vi.fn();
+    const clear = vi.fn();
+    const store = createToastStore();
+    const deps = {
+      rpc: { call } as unknown as PageRpc,
+      handle: 'h1',
+      cache: { clear } as unknown as ObjectCache,
+      scheduler: { noteRevisions },
+      store,
+    };
+    return { call, clear, noteRevisions, store, deps, bytes };
+  }
+
+  beforeEach(() => {
+    vi.mocked(downloadBytes).mockReset();
+  });
+
+  it('reads the picture with content.image and downloads it as its own file', async () => {
+    const { call, deps, bytes } = setup();
+    expect(await exportImage(deps, ref, 'Report')).toBe(true);
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call).toHaveBeenCalledWith('content.image', {
+      handle: 'h1',
+      page: 1,
+      key: 'image:4',
+      revision: 6,
+    });
+    expect(downloadBytes).toHaveBeenCalledWith('Report-page2-image.png', bytes, 'image/png');
+  });
+
+  it('changes nothing in the document: no action, no revision, no cache clear', async () => {
+    const { call, clear, noteRevisions, deps } = setup();
+    await exportImage(deps, ref, 'Report');
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call).toHaveBeenCalledWith('content.image', expect.anything());
+    expect(clear).not.toHaveBeenCalled();
+    expect(noteRevisions).not.toHaveBeenCalled();
+  });
+
+  it('a file over the browser limit shows the export message and downloads nothing', async () => {
+    const { store, deps } = setup({
+      rejection: new RpcError('FILE_TOO_LARGE', 'too large', { max_pixels: 100, pixels: 9000 }),
+    });
+    expect(await exportImage(deps, ref, 'Report')).toBe(false);
+    expect(downloadBytes).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('edit.image.exportTooLarge'));
+  });
+
+  it('an inline picture is refused with its own words', async () => {
+    const { store, deps } = setup({
+      rejection: new RpcError('REFUSED', 'stored inside', { reason: 'inline_image' }),
+    });
+    expect(await exportImage(deps, ref, 'Report')).toBe(false);
+    expect(downloadBytes).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('error.REFUSED.inlineImage'));
+  });
+
+  it('a stale picture clears the lists and shows the stale warning', async () => {
+    const { clear, store, deps } = setup({
+      rejection: new RpcError('STALE_OBJECT', 'changed'),
+    });
+    expect(await exportImage(deps, ref, 'Report')).toBe(false);
+    expect(clear).toHaveBeenCalled();
+    expect(downloadBytes).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('edit.stale'));
+  });
+
+  it('a JPEG is downloaded as a .jpg with the JPEG media type', async () => {
+    const { deps } = setup({ ext: 'jpeg' });
+    await exportImage(deps, ref, 'Report');
+    expect(downloadBytes).toHaveBeenCalledWith(
+      'Report-page2-image.jpg',
+      expect.any(ArrayBuffer),
+      'image/jpeg',
+    );
   });
 });

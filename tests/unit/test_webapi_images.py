@@ -1,24 +1,28 @@
-"""The web's image adds (W6.7b slice 2a): content.add_image through actions.run, as the Edit tab
-sends it after a file is picked and placed. The bytes travel as a $bin buffer. Each test edits
-through the same dispatch, then saves and checks the file with the host checks (pikepdf reads the
-XObject, pypdfium2 renders the page; ``tests.hostcheck.record``).
+"""The web's image calls: content.add_image (W6.7b slice 2a), content.replace_image and the
+read-only content.image export (slice 2b), through actions.run and the RPC dispatch, as the Edit
+tab sends them. The bytes travel as a $bin buffer. Each edit test saves and checks the file with
+the host checks (pikepdf reads the XObject, pypdfium2 renders the page; ``tests.hostcheck.record``).
 """
 
 from __future__ import annotations
 
 import io
 from collections.abc import Iterator
+from dataclasses import replace as dc_replace
 from typing import Any
 
 import pytest
-from PIL import Image
+from PIL import Image, features
 
 from pdfeditor.model import platform as model_platform
-from pdfeditor.webapi.errors import INVALID_ARGS, REFUSED
+from pdfeditor.model.objects import ObjectType
+from pdfeditor.services.export.images import browser_image
+from pdfeditor.webapi import content, limits
+from pdfeditor.webapi.errors import FILE_TOO_LARGE, INVALID_ARGS, REFUSED, STALE_OBJECT
 from pdfeditor.webapi.platform import configure_web
 from pdfeditor.webapi.registry import REGISTRY
 from tests.hostcheck import record
-from tests.unit.test_webapi_jobs import call, error, ok, open_data
+from tests.unit.test_webapi_jobs import binary, call, call_raw, error, ok, open_data
 from tests.unit.test_webapi_save import saved_bytes
 
 PLACED = {"x0": 100.0, "y0": 300.0, "x1": 300.0, "y1": 500.0}
@@ -107,3 +111,242 @@ def test_a_missing_buffer_is_invalid_args(web: None, fixture_pdf: Any) -> None:
     err = error(add_image(handle, None, buffers=False))
     assert err["code"] == INVALID_ARGS
     assert images_on(handle) == []
+
+
+# -- replace and export (W6.7b slice 2b) ------------------------------------------------------
+
+
+def listing(handle: str, page: int = 0) -> tuple[int, list[dict[str, Any]]]:
+    """The page's revision and its images, as content.objects lists them."""
+    reply = ok(call("content.objects", {"handle": handle, "page": page}))
+    return int(reply["revision"]), [o for o in reply["objects"] if o["type"] == "image"]
+
+
+def replace(
+    handle: str, key: str, revision: int, data: bytes | None, page: int = 0
+) -> dict[str, Any]:
+    args: dict[str, Any] = {"object": {"page": page, "key": key, "revision": revision}}
+    if data is None:
+        return call(
+            "actions.run", {"handle": handle, "name": "content.replace_image", "args": args}
+        )
+    args["data"] = {"$bin": 0}
+    return call(
+        "actions.run",
+        {"handle": handle, "name": "content.replace_image", "args": args},
+        [data],
+    )
+
+
+def export(
+    handle: str, key: str, revision: int, page: int = 0
+) -> tuple[dict[str, Any], list[bytes]]:
+    return call_raw(
+        "content.image", {"handle": handle, "page": page, "key": key, "revision": revision}
+    )
+
+
+def decoded(data: bytes) -> Image.Image:
+    return Image.open(io.BytesIO(data)).convert("RGB")
+
+
+def test_replace_then_export_round_trip(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    (picture,) = pictures
+    reply = ok(replace(handle, picture["key"], revision, png()))
+    assert reply["label"] == "Replace Image" and reply["executed"] is True
+    replaced_at = int(reply["changed"]["revisions"]["0"])
+    assert replaced_at > revision
+
+    _, saved = saved_bytes(handle, "copy")
+    record("opens_pikepdf", saved)
+    # The box is the old picture's (420..540, 80..180): its centre is green in the saved file.
+    record("pixel_green_pdfium", saved, page=0, x=480, y=130)
+
+    moved_to, pictures = listing(handle)
+    assert moved_to == replaced_at
+    result_reply, out = export(handle, pictures[0]["key"], moved_to)
+    result = ok(result_reply)
+    assert result["ext"] == "png" and result["mime"] == "image/png"
+    assert (result["width"], result["height"]) == (60, 50)
+    assert decoded(binary(result["data"], out)).getpixel((30, 25)) == (0, 200, 0)
+
+
+def test_export_of_an_added_jpeg_is_a_jpeg(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("rotated_pages").read_bytes(), "pages.pdf")
+    buf = io.BytesIO()
+    Image.new("RGB", (60, 50), (200, 40, 40)).save(buf, format="JPEG")
+    ok(add_image(handle, buf.getvalue()))
+    revision, pictures = listing(handle)
+    result_reply, out = export(handle, pictures[0]["key"], revision)
+    result = ok(result_reply)
+    assert result["ext"] == "jpeg" and result["mime"] == "image/jpeg"
+    data = binary(result["data"], out)
+    assert data[:3] == b"\xff\xd8\xff"
+    assert decoded(data).size == (60, 50)
+
+
+def test_export_is_the_engine_bytes_and_changes_nothing(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    session = REGISTRY.get(handle)
+    revision, pictures = listing(handle)
+    with session.lock:
+        expected, expected_ext = session.document.page(0).image_data(pictures[0]["key"])
+    result_reply, out = export(handle, pictures[0]["key"], revision)
+    result = ok(result_reply)
+    assert binary(result["data"], out) == expected
+    assert result["ext"] == expected_ext
+    assert listing(handle)[0] == revision
+    assert not session.is_dirty
+    assert not session.undo_stack.can_undo
+
+
+def test_export_with_a_stale_revision_is_stale(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    reply, _ = export(handle, pictures[0]["key"], revision - 1)
+    assert error(reply)["code"] == STALE_OBJECT
+
+
+def test_replace_with_a_stale_revision_is_stale_and_changes_nothing(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    err = error(replace(handle, pictures[0]["key"], revision - 1, png()))
+    assert err["code"] == STALE_OBJECT
+    assert listing(handle)[0] == revision
+    assert not REGISTRY.get(handle).undo_stack.can_undo
+
+
+def test_export_of_an_inline_picture_is_refused(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("inline_image").read_bytes(), "inline.pdf")
+    revision, pictures = listing(handle)
+    (picture,) = pictures
+    reply, _ = export(handle, picture["key"], revision)
+    err = error(reply)
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "inline_image"}
+
+
+def test_replace_of_an_inline_picture_is_refused_with_no_undo_step(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle = open_data(fixture_pdf("inline_image").read_bytes(), "inline.pdf")
+    revision, pictures = listing(handle)
+    err = error(replace(handle, pictures[0]["key"], revision, png()))
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "inline_image"}
+    assert listing(handle)[0] == revision
+    assert not REGISTRY.get(handle).undo_stack.can_undo
+
+
+def test_replace_refuses_a_gif_on_the_web(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    err = error(replace(handle, pictures[0]["key"], revision, gif()))
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "image_format"}
+    assert listing(handle)[0] == revision
+
+
+def test_replace_without_a_buffer_is_invalid_args(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    reply = call(
+        "actions.run",
+        {
+            "handle": handle,
+            "name": "content.replace_image",
+            "args": {
+                "object": {"page": 0, "key": pictures[0]["key"], "revision": revision},
+                "data": {"$bin": 0},
+            },
+        },
+    )
+    assert error(reply)["code"] == INVALID_ARGS
+
+
+def test_export_over_the_pixel_ceiling_is_too_large_before_any_bytes(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    monkeypatch.setattr(limits, "MAX_RENDER_PIXELS", 100)
+    reply, _ = export(handle, pictures[0]["key"], revision)
+    err = error(reply)
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"] == {"max_pixels": 100, "pixels": 120 * 100}
+
+
+def page_class(handle: str) -> Any:
+    """The engine's page class, so a test can stand in for one method of every page."""
+    return type(REGISTRY.get(handle).document.page(0))
+
+
+def test_export_of_an_unknown_size_over_the_byte_cap_is_refused_before_any_decode(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A picture of unknown size (0 x 0) passes the pixel ceiling, so its raw bytes must be
+    checked against the byte cap before anything decodes them."""
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    listed = page_class(handle).content_objects
+
+    def unknown_size(self: Any) -> list[Any]:
+        return [
+            dc_replace(o, image_size=(0, 0)) if o.type is ObjectType.IMAGE else o
+            for o in listed(self)
+        ]
+
+    def decode_must_not_run(data: bytes, ext: str) -> tuple[bytes, str]:
+        raise AssertionError("the bytes were decoded before the byte cap")
+
+    monkeypatch.setattr(page_class(handle), "content_objects", unknown_size)
+    monkeypatch.setattr(content, "browser_image", decode_must_not_run)
+    monkeypatch.setattr(limits, "MAX_JOB_BYTES", 16)
+    reply, _ = export(handle, pictures[0]["key"], revision)
+    err = error(reply)
+    assert err["code"] == FILE_TOO_LARGE
+    assert err["details"]["max_bytes"] == 16
+    assert err["details"]["size"] > 16
+
+
+def test_export_of_corrupt_jpeg2000_is_refused_as_unreadable(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bytes with the JPEG 2000 signature but no decodable picture refuse as an unreadable image,
+    not as an internal error."""
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    revision, pictures = listing(handle)
+    corrupt = b"\x00\x00\x00\x0cjP  \r\n\x87\n" + b"\x00" * 40 + b"not a picture"
+
+    def jpeg2000(self: Any, key: str) -> tuple[bytes, str]:
+        return corrupt, "jpx"
+
+    monkeypatch.setattr(page_class(handle), "image_data", jpeg2000)
+    reply, _ = export(handle, pictures[0]["key"], revision)
+    err = error(reply)
+    assert err["code"] == REFUSED
+    assert err["details"] == {"reason": "image_unreadable"}
+
+
+def test_export_of_a_missing_page_is_invalid_args(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("mixed_content").read_bytes(), "mixed.pdf")
+    reply, _ = export(handle, "image:0", 0, page=9)
+    assert error(reply)["code"] == INVALID_ARGS
+
+
+def test_browser_image_turns_jpeg2000_into_png() -> None:
+    if not features.check("jpg_2000"):
+        pytest.skip("this Pillow has no JPEG 2000 support")
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (0, 0, 200)).save(buf, format="JPEG2000")
+    data, ext = browser_image(buf.getvalue(), "jpx")
+    assert ext == "png"
+    assert decoded(data).getpixel((8, 8)) == (0, 0, 200)
+
+
+def test_browser_image_keeps_other_formats_as_stored() -> None:
+    assert browser_image(b"\x00\x01", "jbig2") == (b"\x00\x01", "jbig2")

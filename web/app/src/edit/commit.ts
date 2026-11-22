@@ -36,6 +36,15 @@ export type EditChange =
       readonly page: number;
       readonly revision: number;
       readonly objects: readonly PageObjectDto[];
+    }
+  | {
+      // One picture swapped for the file (W6.7b slice 2b). The engine keeps its box and stretches
+      // the new picture to it. The file is read only when the change is sent.
+      readonly kind: 'replace';
+      readonly page: number;
+      readonly revision: number;
+      readonly objects: readonly PageObjectDto[];
+      readonly file: Blob;
     };
 
 // One typed paragraph: `object` is the text block as the list showed it at `revision`, and `text`
@@ -79,11 +88,12 @@ const LABELS = {
   move: 'edit.moved',
   resize: 'edit.resized',
   delete: 'edit.deleted',
+  replace: 'edit.image.replaced',
 } as const;
 
 // Asks the engine for the page's objects again after a stale reply and moves the scheduler to the
 // revision it names, so the layer lists the page afresh. A failed ask is left to the next change.
-async function refreshStale(deps: CommitDeps, page: number): Promise<void> {
+export async function refreshStale(deps: CommitDeps, page: number): Promise<void> {
   deps.cache.clear();
   try {
     const fresh = await deps.rpc.call('content.objects', { handle: deps.handle, page });
@@ -112,6 +122,46 @@ async function reselected(
   } catch {
     return null;
   }
+}
+
+// Where the objects of a change are after it, for the reselection. A replace keeps the box it had.
+function boxesOf(change: Exclude<EditChange, { kind: 'delete' }>): readonly RectDto[] {
+  return change.kind === 'replace' ? change.objects.map((o) => o.bbox) : change.boxes;
+}
+
+// The one engine call a change makes. The file of a replace is read here, so an unreadable file
+// fails like any other failed edit.
+async function runChange(
+  deps: CommitDeps,
+  change: EditChange,
+  refs: readonly { page: number; key: string; revision: number }[],
+): Promise<RunResult> {
+  if (change.kind === 'replace') {
+    const [object] = refs;
+    if (object === undefined) throw new Error('a replace names one picture');
+    const data = await change.file.arrayBuffer();
+    return deps.rpc.call('actions.run', {
+      handle: deps.handle,
+      name: 'content.replace_image',
+      args: { object, data },
+    });
+  }
+  if (change.kind === 'delete') {
+    return deps.rpc.call('actions.run', {
+      handle: deps.handle,
+      name: 'content.delete',
+      args: { objects: refs },
+    });
+  }
+  return deps.rpc.call('actions.run', {
+    handle: deps.handle,
+    name: 'content.transform',
+    args: {
+      objects: refs,
+      matrix: toMatrix(change.matrix),
+      resize: change.kind === 'resize',
+    },
+  });
 }
 
 // Offers Undo for the step a reply made, and clears the selection when the step is undone: the
@@ -153,22 +203,7 @@ export async function commitEdit(
   }));
   let reply: RunResult;
   try {
-    reply =
-      change.kind === 'delete'
-        ? await deps.rpc.call('actions.run', {
-            handle: deps.handle,
-            name: 'content.delete',
-            args: { objects: refs },
-          })
-        : await deps.rpc.call('actions.run', {
-            handle: deps.handle,
-            name: 'content.transform',
-            args: {
-              objects: refs,
-              matrix: toMatrix(change.matrix),
-              resize: change.kind === 'resize',
-            },
-          });
+    reply = await runChange(deps, change, refs);
   } catch (error) {
     if (error instanceof RpcError && error.code === 'STALE_OBJECT') {
       settle(null);
@@ -192,7 +227,7 @@ export async function commitEdit(
     return;
   }
   const next = revisions[String(change.page)];
-  settle(next === undefined ? null : await reselected(deps, change.page, change.boxes, next));
+  settle(next === undefined ? null : await reselected(deps, change.page, boxesOf(change), next));
 }
 
 // Commits a typed paragraph (W6.8a 8a-1): one content.replace_text with `style: null`, so the

@@ -225,3 +225,53 @@ describe('a stale object', () => {
     expect(store.getState().visible).toHaveLength(1);
   });
 });
+
+describe('committing a replace', () => {
+  const file = () =>
+    new File([new Uint8Array([137, 80, 78, 71, 1, 2])], 'p.png', { type: 'image/png' });
+
+  it('sends content.replace_image with the picture ref and the file bytes', async () => {
+    const { call, deps, settle } = setup({ objects: [photo] });
+    await commitEdit(
+      deps,
+      { kind: 'replace', page: 0, revision: 4, objects: [photo], file: file() },
+      settle,
+    );
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h1',
+      name: 'content.replace_image',
+      args: { object: { page: 0, key: 'img1', revision: 4 }, data: expect.any(ArrayBuffer) },
+    });
+    const [, params] = call.mock.calls[0] as unknown as [string, { args: { data: ArrayBuffer } }];
+    expect(new Uint8Array(params.args.data)).toEqual(new Uint8Array([137, 80, 78, 71, 1, 2]));
+  });
+
+  it('offers Undo with the replace message and keeps the picture selected at its box', async () => {
+    const { store, deps, settle } = setup({ revision: 5, objects: [photo] });
+    await commitEdit(
+      deps,
+      { kind: 'replace', page: 0, revision: 4, objects: [photo], file: file() },
+      settle,
+    );
+    await flush();
+    const [toast] = store.getState().visible;
+    expect(toast?.text).toBe(t('edit.image.replaced'));
+    expect(toast?.action?.label).toBe(t('toast.undo'));
+    expect(settle).toHaveBeenLastCalledWith({ page: 0, revision: 5, keys: ['img1'] });
+  });
+
+  it('a refused replace shows its message and keeps the selection', async () => {
+    const { store, deps, settle } = setup({
+      run: () => {
+        throw new RpcError('REFUSED', 'stored inside', { reason: 'inline_image' });
+      },
+    });
+    await commitEdit(
+      deps,
+      { kind: 'replace', page: 0, revision: 4, objects: [photo], file: file() },
+      settle,
+    );
+    expect(store.getState().visible[0]?.text).toBe(t('error.REFUSED.inlineImage'));
+    expect(settle).not.toHaveBeenCalled();
+  });
+});

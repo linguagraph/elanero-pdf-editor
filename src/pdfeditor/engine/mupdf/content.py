@@ -839,6 +839,12 @@ def image_data(page: MuPage, key: str) -> tuple[bytes, str]:
     return bytes(info["image"]), str(info["ext"])
 
 
+def is_inline_image(page: MuPage, key: str) -> bool:
+    _ops_list, objects = _content_objects(page)
+    obj = next((o for o in objects if o.key == key), None)
+    return obj is not None and obj.kind is ObjectKind.INLINE_IMAGE
+
+
 def replace_image(page: MuPage, key: str, data: bytes) -> None:
     """Swap the picture (every place this image is drawn in the document shows the new one)."""
     xref = _image_xref(page, key)

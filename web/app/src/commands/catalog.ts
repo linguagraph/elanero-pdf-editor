@@ -16,6 +16,7 @@ import {
   createRegistry,
   CAN_APPLY_REDACTIONS,
   HAS_RECENT,
+  SINGLE_IMAGE,
   NEEDS_DOCUMENT,
   NOT_FIRST_PAGE,
   NOT_LAST_PAGE,
@@ -103,6 +104,9 @@ function cmd(
 // Commands that work with no document open.
 const OPEN_ANYTIME = ALWAYS;
 
+// Replace Image needs the Edit tool's content edit and exactly one picture selected.
+const REPLACE_IMAGE: Enabled = (state) => CAN_EDIT_CONTENT(state) ?? SINGLE_IMAGE(state);
+
 // Icons for the commands the shared table gives no icon: the web-only ids and the desktop commands
 // with none. Each name is checked against the bundled set when the registry is built.
 const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
@@ -189,8 +193,8 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('add-line', 'command.add-line.label', 'edit.shapes', CAN_EDIT_CONTENT),
     checked: (state) => state.viewTool === 'shape-line',
   },
-  cmd('replace-image', 'command.replace-image.label', 'edit.objects'),
-  cmd('extract-image', 'command.extract-image.label', 'edit.objects'),
+  cmd('replace-image', 'command.replace-image.label', 'edit.objects', REPLACE_IMAGE),
+  cmd('extract-image', 'command.extract-image.label', 'edit.objects', SINGLE_IMAGE),
   cmd(
     'delete-selected-objects',
     'command.delete-selected-objects.label',

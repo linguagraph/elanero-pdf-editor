@@ -497,6 +497,9 @@ export function App({
     nightRef.current = next.night;
     setViewState(next);
   }, []);
+  // Whether the Edit tool has exactly one picture selected, as the view reports it (W6.7b slice 2b).
+  const [editImageOne, setEditImageOne] = useState(false);
+  const onEditImageChange = useCallback((single: boolean) => setEditImageOne(single), []);
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).
   const history = useNavHistory(activeId);
@@ -517,6 +520,11 @@ export function App({
     const page = stepTabHistory(activeId, direction);
     if (page !== null) viewRef.current?.scrollToPage(page);
   };
+  // The document's name without its .pdf suffix, for the name of an exported picture.
+  const documentStem = pdfFileName(activeTab?.name ?? '', t('save.untitled')).replace(
+    /\.pdf$/i,
+    '',
+  );
   // The commands read the document as it is shown now, so the ribbon enables the document commands
   // only while one is open.
   const state: CommandState = {
@@ -539,6 +547,8 @@ export function App({
     redactionBusy: documentShown && (redactionState?.busy ?? false),
     // The engine's content_edit flag (W6.7a): the Edit tool's commands are off without it.
     contentEdit: documentShown && (activeTab?.contentEdit ?? false),
+    // Exactly one picture selected in the Edit tool (W6.7b slice 2b): Replace and Export need it.
+    singleImageSelected: documentShown && editImageOne,
     canGoBack: canGoBack(history),
     canGoForward: canGoForward(history),
     view: documentShown
@@ -595,6 +605,12 @@ export function App({
     }
     if (!requestEditTool(activeId, activeTab?.signed ?? false, tool))
       setSignedEditAsk({ tabId: activeId, tool });
+  };
+  // Replace Image (W6.7b slice 2b): the file is picked from this click and checked, then the Edit
+  // tool replaces its one selected picture with it. A refused file changes nothing.
+  const replaceImageFromPicker = async () => {
+    const file = await chooseImage();
+    if (file !== null) viewRef.current?.replaceEditImage(file);
   };
   // Add Image (W6.7b slice 2a): the file is picked first, from this click, and checked. The Image
   // tool then places it. A signed document asks once per tab, as the other edit tools do; a
@@ -706,6 +722,10 @@ export function App({
           // Add Text (W6.8a 8a-2): a click or drag places one text block, then the tool returns to Select.
           'add-text': () => toggleEditTool('add-text'),
           'add-image': () => void addImageFromPicker(),
+          // Replace and Export (W6.7b slice 2b) act on the Edit tool's one selected picture. Export
+          // names its file after the document.
+          'replace-image': () => void replaceImageFromPicker(),
+          'extract-image': () => viewRef.current?.exportEditImage(documentStem),
           // Delete Objects (W6.7a S5) deletes the Edit tool's selection; with none, nothing happens.
           'delete-selected-objects': () => viewRef.current?.deleteEditSelection(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
@@ -1191,6 +1211,7 @@ export function App({
             scheduler={scheduler}
             redaction={redaction ?? undefined}
             onViewChange={onViewChange}
+            onEditImageChange={onEditImageChange}
             startWorker={jobs.acquire}
             tool={viewTool}
             tabId={activeId}

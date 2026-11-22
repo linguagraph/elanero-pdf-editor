@@ -60,6 +60,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "comments.flattenable": "instant",
     "content.objects": "render",
     "content.preview_font": "render",
+    "content.image": "io",  # one picture's file, up to MAX_JOB_BYTES, crosses once (W6.7b)
     "fonts.validate": "action",  # reads a whole font file (up to MAX_FONT_BYTES) under Pyodide
     "combine.probe": "action",  # opens a whole PDF (up to MAX_PROBE_BYTES) under Pyodide (W6.3b)
     "actions.redo": "edit",

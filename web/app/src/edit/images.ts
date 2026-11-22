@@ -3,11 +3,13 @@
 // content.add_image adds the picture. The engine checks the file again and is the check that counts
 // (actions/content.py `_check_image`). Nothing here decodes the picture.
 import type { PageRect } from '../comments/coordinates';
+import { downloadBytes } from '../files/downloads';
 import { pickFile } from '../files/pickFile';
 import { reportRpcError, type ToastStore, toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
-import type { RunResult } from '../rpc/generated';
+import type { ImageDataResult, RunResult } from '../rpc/generated';
+import { type CommitDeps, refreshStale } from './commit';
 import { offerAddUndo, type ShapeDeps } from './shapes';
 
 // The picker's filter: the two formats the web adds.
@@ -91,5 +93,48 @@ export async function addImage(
   deps.cache.clear();
   deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
   offerAddUndo(deps, t('edit.image.added'), reply);
+  return true;
+}
+
+// The one picture an export names: its page, its key and the page revision the key was listed at.
+export interface ImageRef {
+  readonly page: number;
+  readonly key: string;
+  readonly revision: number;
+}
+
+// The name an exported picture is saved under: the document's stem, the page and the format. A
+// JPEG is saved as .jpg, the usual name.
+export function imageFileName(stem: string, page: number, ext: string): string {
+  const suffix = ext === 'jpeg' ? 'jpg' : ext;
+  return `${stem}-page${page + 1}-image.${suffix}`;
+}
+
+// Export Image (W6.7b slice 2b): the picture's own file, downloaded. The document does not change,
+// so there is no undo step and no revision moves. A stale ref refreshes the page's list.
+export async function exportImage(deps: CommitDeps, ref: ImageRef, stem: string): Promise<boolean> {
+  const store = deps.store ?? toasts;
+  let reply: ImageDataResult;
+  try {
+    reply = await deps.rpc.call('content.image', {
+      handle: deps.handle,
+      page: ref.page,
+      key: ref.key,
+      revision: ref.revision,
+    });
+  } catch (error) {
+    if (error instanceof RpcError && error.code === 'STALE_OBJECT') {
+      await refreshStale(deps, ref.page);
+      store.push('warning', t('edit.stale'));
+    } else if (error instanceof RpcError && error.code === 'FILE_TOO_LARGE') {
+      store.push('error', t('edit.image.exportTooLarge'));
+    } else if (error instanceof RpcError) {
+      reportRpcError(store, error);
+    } else {
+      store.push('error', t('edit.failed'));
+    }
+    return false;
+  }
+  downloadBytes(imageFileName(stem, ref.page, reply.ext), reply.data, reply.mime);
   return true;
 }
