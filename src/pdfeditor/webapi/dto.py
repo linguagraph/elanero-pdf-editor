@@ -595,6 +595,72 @@ class MarksResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class MarkGetParams:
+    handle: str
+    kind: MarkKind  # the kind to read (marks.get reads one kind)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RgbDto:
+    r: float  # 0..1 per channel
+    g: float
+    b: float
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class HeaderFooterSpecDto:
+    # The stored header & footer (or Bates) settings, as the web's dialog holds them.
+    header_left: str  # "" for an empty slot
+    header_center: str
+    header_right: str
+    footer_left: str
+    footer_center: str
+    footer_right: str
+    font: str  # one of the six base-14 codes (helv, hebo, tiro, tibo, cour, cobo)
+    font_size: float
+    color: RgbDto
+    margin_x: float
+    margin_top: float
+    margin_bottom: float
+    bates_prefix: str
+    bates_start: int
+    bates_digits: int
+    bates_suffix: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class WatermarkSpecDto:
+    text: str  # "" for an image watermark
+    image: bool  # the stored watermark was an image (its picture is not stored)
+    image_name: str  # the picture's file name, "" for a text watermark
+    font: str
+    font_size: float
+    color: RgbDto
+    opacity: float  # a fraction, 0.05 to 1
+    angle: float  # degrees; text only
+    scale: float  # image width as a fraction of the page width; image only
+    on_top: bool
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class BackgroundSpecDto:
+    color: RgbDto
+    opacity: float  # a fraction, 0.05 to 1
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MarkDetailResult:
+    found: bool  # False: no mark of this kind is in the document
+    pages: tuple[int, ...]  # 0-based, ascending
+    ranges: str  # the pages as the range field shows them, 1-based ("1-3, 5")
+    foreign: bool  # only other tools' marks of this kind were found (Acrobat's)
+    header_footer: HeaderFooterSpecDto | None  # kind HeaderFooter or Bates, when readable
+    watermark: WatermarkSpecDto | None  # kind Watermark, when readable
+    background: BackgroundSpecDto | None  # kind Background, when readable
+    font_dropped: bool  # the stored font was an uploaded file: shown as its base-14 family
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class ColorDto:
     r: float  # 0..1 per channel
     g: float

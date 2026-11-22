@@ -28,7 +28,9 @@ describe('message catalogue (W4.7)', () => {
   });
 
   it('keeps messages free of markup, so the UI can render them as text', () => {
-    for (const id of ids) {
+    // marks.hf.tokens shows the engine's token syntax, <<page>>, as plain text (React escapes it).
+    const EXEMPT_ANGLE_BRACKETS = new Set<string>(['marks.hf.tokens']);
+    for (const id of ids.filter((id) => !EXEMPT_ANGLE_BRACKETS.has(id))) {
       for (const form of formsOf(id)) {
         expect(form, id).not.toMatch(/[<>]/);
       }

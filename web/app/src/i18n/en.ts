@@ -1444,7 +1444,8 @@ export const EN = {
   'marks.hf.left': 'Left',
   'marks.hf.center': 'Center',
   'marks.hf.right': 'Right',
-  'marks.hf.tokens': 'Insert tokens such as {page}, {pages}, {label}, {date}, {file} or {bates}.',
+  'marks.hf.tokens':
+    'Insert tokens such as <<page>>, <<pages>>, <<label>>, <<date>>, <<file>> or <<bates>>.',
   'marks.hf.marginX': 'Side margin',
   'marks.hf.marginTop': 'Top margin',
   'marks.hf.marginBottom': 'Bottom margin',

@@ -13,16 +13,19 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from pathlib import PureWindowsPath
 
 from pdfeditor import actions as layer
 from pdfeditor.core.commands.base import Change
 from pdfeditor.core.session import EventKind, SessionEvent
 from pdfeditor.model.annotations import AnnotationModel
 from pdfeditor.model.color import Color
-from pdfeditor.model.pages import MarkKind
+from pdfeditor.model.fonts import FontRef, FontRefKind
+from pdfeditor.model.pages import FONTS, MarkKind
 from pdfeditor.services import stamping
 from pdfeditor.services.comments import comment_threads
 from pdfeditor.services.comments import flattenable as flattenable_comments
+from pdfeditor.services.pages import format_page_ranges
 from pdfeditor.services.redaction import redaction_marks
 from pdfeditor.services.xfdf import XfdfTooLarge, preview_xfdf
 from pdfeditor.webapi import dto
@@ -119,6 +122,114 @@ def list_marks(params: dto.HandleParams) -> dto.MarksResult:
         if kind in found
     )
     return dto.MarksResult(items=items)
+
+
+def _rgb(color: Color) -> dto.RgbDto:
+    return dto.RgbDto(color.r, color.g, color.b)
+
+
+def _base14(font: str, font_ref: FontRef | None) -> tuple[str, bool]:
+    """The family a stored mark is shown with, and whether an uploaded font was dropped for it.
+
+    The desktop sets ``font`` from the family it used (ui/dialogs/pages.py), so the code is kept
+    as it is. The web's jobs cannot draw an uploaded font, so that one is shown as its family."""
+    dropped = font_ref is not None and font_ref.kind is FontRefKind.FILE
+    return (font if font in FONTS else "helv"), dropped
+
+
+def _header_dto(spec: stamping.HeaderFooter) -> tuple[dto.HeaderFooterSpecDto, bool]:
+    font, dropped = _base14(spec.font, spec.font_ref)
+    texts = {slot: spec.texts.get(slot, "") for slot in stamping.Slot}
+    return (
+        dto.HeaderFooterSpecDto(
+            header_left=texts[stamping.Slot.HEADER_LEFT],
+            header_center=texts[stamping.Slot.HEADER_CENTER],
+            header_right=texts[stamping.Slot.HEADER_RIGHT],
+            footer_left=texts[stamping.Slot.FOOTER_LEFT],
+            footer_center=texts[stamping.Slot.FOOTER_CENTER],
+            footer_right=texts[stamping.Slot.FOOTER_RIGHT],
+            font=font,
+            font_size=spec.font_size,
+            color=_rgb(spec.color),
+            margin_x=spec.margin_x,
+            margin_top=spec.margin_top,
+            margin_bottom=spec.margin_bottom,
+            bates_prefix=spec.bates_prefix,
+            bates_start=spec.bates_start,
+            bates_digits=spec.bates_digits,
+            bates_suffix=spec.bates_suffix,
+        ),
+        dropped,
+    )
+
+
+def _watermark_dto(text: str) -> tuple[dto.WatermarkSpecDto, bool] | None:
+    spec = stamping.watermark_from_settings(text)
+    if spec is None:
+        return None
+    font, dropped = _base14(spec.font, spec.font_ref)
+    return (
+        dto.WatermarkSpecDto(
+            text=spec.text,
+            image=stamping.is_image_watermark(text),
+            # The web has no paths: only the picture's file name is shown.
+            image_name=PureWindowsPath(spec.image_path).name if spec.image_path else "",
+            font=font,
+            font_size=spec.font_size,
+            color=_rgb(spec.color),
+            opacity=spec.opacity,
+            angle=spec.angle,
+            scale=spec.scale,
+            on_top=spec.on_top,
+        ),
+        dropped,
+    )
+
+
+def get_mark(params: dto.MarkGetParams) -> dto.MarkDetailResult:
+    """One kind of page mark with the settings it was added with, so the web's Update opens with
+    them (the desktop reads the same, ui/organize.py). Read-only, under the session lock."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        info = stamping.find_marks(session.engine, session.document, [params.kind]).get(params.kind)
+    if info is None:
+        return dto.MarkDetailResult(
+            found=False,
+            pages=(),
+            ranges="",
+            foreign=False,
+            header_footer=None,
+            watermark=None,
+            background=None,
+            font_dropped=False,
+        )
+    header: dto.HeaderFooterSpecDto | None = None
+    watermark: dto.WatermarkSpecDto | None = None
+    background: dto.BackgroundSpecDto | None = None
+    dropped = False
+    if params.kind in (MarkKind.HEADER_FOOTER, MarkKind.BATES):
+        spec = stamping.header_footer_from_settings(info.settings)
+        if spec is not None:
+            header, dropped = _header_dto(spec)
+    elif params.kind is MarkKind.WATERMARK:
+        found_wm = _watermark_dto(info.settings)
+        if found_wm is not None:
+            watermark, dropped = found_wm
+    elif params.kind is MarkKind.BACKGROUND:
+        read = stamping.background_from_settings(info.settings)
+        if read is not None:
+            color, opacity = read
+            background = dto.BackgroundSpecDto(color=_rgb(color), opacity=opacity)
+    return dto.MarkDetailResult(
+        found=True,
+        pages=tuple(info.pages),
+        ranges=format_page_ranges(info.pages),
+        foreign=info.foreign,
+        header_footer=header,
+        watermark=watermark,
+        background=background,
+        font_dropped=dropped,
+    )
 
 
 # The most marks one list reply holds (W7.4b section 4.1): a redaction mark is about 200 bytes of

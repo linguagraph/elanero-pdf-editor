@@ -257,6 +257,7 @@ export interface PageRpc {
       | 'jobs.abort'
       | 'comments.flattenable'
       | 'comments.xfdf_preview'
+      | 'marks.get'
       | 'marks.list'
       | 'attachments.list'
       | 'attachments.get'

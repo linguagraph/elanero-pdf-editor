@@ -356,6 +356,12 @@ def watermark_settings(spec: Watermark) -> str:
     )
 
 
+def is_image_watermark(text: str) -> bool:
+    """Whether stored watermark settings were for a picture (the picture itself is not stored)."""
+    data = _load(text, "watermark")
+    return data is not None and bool(data.get("image"))
+
+
 def watermark_from_settings(text: str) -> Watermark | None:
     """A stored watermark's settings. An image watermark comes back with ``image_path`` set
     but without the picture (the file is read again when it's applied)."""
