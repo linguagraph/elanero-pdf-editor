@@ -224,3 +224,104 @@ export function applyAdd(
   const entries = [...e.slice(0, added), entry, ...e.slice(added)];
   return { entries, order, added };
 }
+
+// The deepest level an outline may reach (the engine's MAX_OUTLINE_DEPTH): a move past it is refused.
+export const MAX_OUTLINE_DEPTH = 32;
+
+// Where a drag points (W5.2 drag and drop): at an entry's middle (`inside`, the entry becomes the
+// last child), or at the line between `above` and `below`, the visible rows around it (null at the
+// ends of the list), at `level`. Both are flat indices.
+export type DropAnchor =
+  | { readonly kind: 'inside'; readonly row: number }
+  | {
+      readonly kind: 'gap';
+      readonly above: number | null;
+      readonly below: number | null;
+      readonly level: number;
+    };
+
+// What a release there would do: one outline.move, or nothing (`same`, the entry stays; `own`, into
+// its own subtree; `deep`, over MAX_OUTLINE_DEPTH).
+export type DropResult =
+  | { readonly kind: 'move'; readonly target: MoveTarget }
+  | { readonly kind: 'same' }
+  | { readonly kind: 'own' }
+  | { readonly kind: 'deep' };
+
+// The levels a line between two visible rows can take: at most one deeper than `above` when `above`
+// is open (its first child is `below`), at most `above`'s level when it is closed, and at least
+// `below`'s level, never deeper than the row above allows.
+export function gapLevels(
+  e: readonly OutlineEntry[],
+  above: number | null,
+  below: number | null,
+  aboveOpen: boolean,
+): { readonly min: number; readonly max: number } {
+  const max = above === null ? 1 : aboveOpen ? (e[above]?.level ?? 0) + 1 : (e[above]?.level ?? 1);
+  const min = below === null ? 1 : Math.min(e[below]?.level ?? 1, max);
+  return { min, max };
+}
+
+// The entry's level, 0 for the top level (null).
+function levelOf(e: readonly OutlineEntry[], i: number | null): number {
+  return i === null ? 0 : (e[i]?.level ?? 0);
+}
+
+// The parent and the slot of a drop, counted in the parent's child list before `i` leaves it, with
+// `after`: the entry the line sits after, when the drop is a sibling (null for a first child, the top
+// and an inside drop).
+function placeOf(
+  e: readonly OutlineEntry[],
+  anchor: DropAnchor,
+): { readonly parent: number | null; readonly slot: number; readonly after: number | null } {
+  if (anchor.kind === 'inside') {
+    return { parent: anchor.row, slot: childrenOf(e, anchor.row).length, after: null };
+  }
+  const above = anchor.above;
+  if (above === null) return { parent: null, slot: 0, after: null };
+  if (anchor.level === levelOf(e, above) + 1) return { parent: above, slot: 0, after: null };
+  // The ancestor-or-self of `above` at the line's level: the line goes after its whole subtree.
+  let x = above;
+  for (let up = parentOf(e, x); up !== null && levelOf(e, x) > anchor.level; up = parentOf(e, x)) {
+    x = up;
+  }
+  return { parent: parentOf(e, x), slot: slotOf(e, x) + 1, after: x };
+}
+
+// What a release at `anchor` does with entry `i` (the table in docs/web/design/W5.2-drag-drop.md,
+// section 4). The position follows the engine's rule: counted after the entry has left its parent.
+export function dropTarget(e: readonly OutlineEntry[], i: number, anchor: DropAnchor): DropResult {
+  const { parent, slot } = placeOf(e, anchor);
+  const end = subtreeEnd(e, i);
+  if (parent !== null && i <= parent && parent < end) return { kind: 'own' };
+  const current = parentOf(e, i);
+  let position = slot;
+  if (current === parent) {
+    const from = slotOf(e, i);
+    if (from < slot) position = slot - 1;
+    if (position === from) return { kind: 'same' };
+  }
+  // The engine refuses a move past the depth limit only when it also goes deeper than the outline.
+  let deepest = e[i]?.level ?? 0;
+  let outlineDeepest = 0;
+  e.forEach((entry, k) => {
+    outlineDeepest = Math.max(outlineDeepest, entry.level);
+    if (k >= i && k < end) deepest = Math.max(deepest, entry.level);
+  });
+  const newDeepest = levelOf(e, parent) + 1 + (deepest - (e[i]?.level ?? 0));
+  if (newDeepest > MAX_OUTLINE_DEPTH && newDeepest > outlineDeepest) return { kind: 'deep' };
+  return { kind: 'move', target: { parent, position } };
+}
+
+// The row a drop's message names, for the live region: the entry the line sits after (or the parent of
+// a first child, or the row an inside drop goes into), and the level the line is at.
+export function dropLabel(
+  e: readonly OutlineEntry[],
+  anchor: DropAnchor,
+): { readonly message: 'inside' | 'first' | 'after' | 'top'; readonly ref: number | null } {
+  if (anchor.kind === 'inside') return { message: 'inside', ref: anchor.row };
+  if (anchor.above === null) return { message: 'top', ref: null };
+  const { parent, after } = placeOf(e, anchor);
+  if (after === null) return { message: 'first', ref: parent };
+  return { message: 'after', ref: after };
+}
