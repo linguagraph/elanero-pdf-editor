@@ -36,6 +36,15 @@ class MergeSource:
     password: str | PasswordCallback | None = None
 
 
+class SourceLockedError(PasswordRequired):
+    """A merge source is encrypted and no password was given. ``index`` is its place in the merge.
+    It is a PasswordRequired, so callers that catch that still catch this."""
+
+    def __init__(self, index: int) -> None:
+        super().__init__(f"source {index + 1} is password protected")
+        self.index = index
+
+
 class SourcePagesError(ValueError):
     """A source's chosen pages are empty or not in its document. ``index`` is the source's place
     in the merge; ``page_count`` is the document's, so the caller can say what fits."""
@@ -145,7 +154,10 @@ def merge(
                 if bookmarks:
                     outline.append(OutlineItem(source.path.stem, dest=Destination(start)))
             else:
-                doc = engine.open(source.path, source.password)
+                try:
+                    doc = engine.open(source.path, source.password)
+                except PasswordRequired as exc:
+                    raise SourceLockedError(n) from exc
                 try:
                     pages = (
                         list(range(doc.page_count)) if source.pages is None else list(source.pages)

@@ -66,6 +66,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "fonts.list": "instant",  # the store's manifest and catalogue, in memory
     "fonts.remove": "instant",  # one file deleted, then a rescan that reads no file
     "combine.probe": "action",  # opens a whole PDF (up to MAX_PROBE_BYTES) under Pyodide (W6.3b)
+    "combine.unlock": "action",  # the same open, then one unprotected copy written (W6.3b P1)
     "actions.redo": "edit",
     "actions.run": "action",
     "actions.undo": "edit",
@@ -75,6 +76,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "jobs.apply": "action",
     "comments.xfdf_preview": "action",  # parsing up to 8 MiB under Pyodide can pass 3 s
     "jobs.prepare": "action",
+    "marks.get": "instant",
     "marks.list": "instant",
     "redaction.list": "instant",
     "comments.list": "instant",

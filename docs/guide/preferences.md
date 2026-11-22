@@ -64,6 +64,8 @@ sends.
 Click **Customize Keyboard Shortcuts…** to open the shortcut editor. Select a command, press the new
 keys, and click **Assign**. **Remove** clears a command's shortcut, **Default** restores its default
 shortcut, and **Reset All** restores all of them. Elanero warns you if the shortcut is already used
-by another command. The defaults are listed in [Keyboard shortcuts](keyboard-shortcuts.md).
+by another command. A shortcut is one key, not a sequence of keys (such as Ctrl+K, then Ctrl+S),
+and it can't be Alt with a letter that opens a menu (such as Alt+F for File). The defaults are
+listed in [Keyboard shortcuts](keyboard-shortcuts.md).
 
 You can also find a command by name with **Ctrl+Shift+P** (the command palette).

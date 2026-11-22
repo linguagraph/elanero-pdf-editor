@@ -30,7 +30,10 @@ describe('message catalogue (W4.7)', () => {
   it('keeps messages free of markup, so the UI can render them as text', () => {
     for (const id of ids) {
       for (const form of formsOf(id)) {
-        expect(form, id).not.toMatch(/[<>]/);
+        // marks.hf.tokens names the engine's <<token>> syntax, shown as plain text (React
+        // escapes it). Once those tokens are removed, no angle bracket may be left.
+        const plain = id === 'marks.hf.tokens' ? form.replace(/<<\w+>>/g, '') : form;
+        expect(plain, id).not.toMatch(/[<>]/);
       }
     }
   });

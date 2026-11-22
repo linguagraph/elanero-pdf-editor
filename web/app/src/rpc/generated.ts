@@ -136,6 +136,12 @@ export interface AvailableResult {
   names: string[];
 }
 
+export interface BackgroundSpecDto {
+  color: RgbDto;
+  /** a fraction, 0.05 to 1 */
+  opacity: number;
+}
+
 export interface BlockedEvent {
   handle: string;
   /** the busy label when the session refused an edit; the call fails with BUSY */
@@ -198,6 +204,22 @@ export interface CombineProbeResult {
   encrypted: boolean;
   /** it opened only with the password sent */
   needed_password: boolean;
+}
+
+export interface CombineUnlockParams {
+  /** the file name with .pdf, as for combine.probe; never a path */
+  name: string;
+  /** the whole file, one $bin buffer (at most limits.MAX_PROBE_BYTES) */
+  data: ArrayBuffer;
+  /** used for this one open; never echoed, logged or kept */
+  password: string;
+}
+
+export interface CombineUnlockResult {
+  /** at least 1 */
+  page_count: number;
+  /** an unprotected copy of the whole file, to stand in for it in the merge */
+  data: ArrayBuffer;
 }
 
 /**
@@ -395,6 +417,27 @@ export interface HandleParams {
   handle: string;
 }
 
+export interface HeaderFooterSpecDto {
+  /** "" for an empty slot */
+  header_left: string;
+  header_center: string;
+  header_right: string;
+  footer_left: string;
+  footer_center: string;
+  footer_right: string;
+  /** one of the six base-14 codes (helv, hebo, tiro, tibo, cour, cobo) */
+  font: string;
+  font_size: number;
+  color: RgbDto;
+  margin_x: number;
+  margin_top: number;
+  margin_bottom: number;
+  bates_prefix: string;
+  bates_start: number;
+  bates_digits: number;
+  bates_suffix: string;
+}
+
 export interface HelloResult {
   /** PROTOCOL_VERSION; the client compares it with its own build */
   protocol: number;
@@ -526,6 +569,31 @@ export interface LinksResult {
   links: LinkDto[];
   /** true when the page has more links than the call returns */
   truncated: boolean;
+}
+
+export interface MarkDetailResult {
+  /** False: no mark of this kind is in the document */
+  found: boolean;
+  /** 0-based, ascending */
+  pages: number[];
+  /** the pages as the range field shows them, 1-based ("1-3, 5") */
+  ranges: string;
+  /** only other tools' marks of this kind were found (Acrobat's) */
+  foreign: boolean;
+  /** kind HeaderFooter or Bates, when readable */
+  header_footer: HeaderFooterSpecDto | null;
+  /** kind Watermark, when readable */
+  watermark: WatermarkSpecDto | null;
+  /** kind Background, when readable */
+  background: BackgroundSpecDto | null;
+  /** the stored font was an uploaded file: shown as its base-14 family */
+  font_dropped: boolean;
+}
+
+export interface MarkGetParams {
+  handle: string;
+  /** the kind to read (marks.get reads one kind) */
+  kind: MarkKind;
 }
 
 /**
@@ -774,6 +842,13 @@ export interface RenderTileParams {
   tile_px: number;
 }
 
+export interface RgbDto {
+  /** 0..1 per channel */
+  r: number;
+  g: number;
+  b: number;
+}
+
 export interface RunParams {
   handle: string;
   /** a stable action name (W1.3 "Names") */
@@ -987,6 +1062,25 @@ export interface UploadedFontDto {
   refused: RefusedFaceDto[];
 }
 
+export interface WatermarkSpecDto {
+  /** "" for an image watermark */
+  text: string;
+  /** the stored watermark was an image (its picture is not stored) */
+  image: boolean;
+  /** the picture's file name, "" for a text watermark */
+  image_name: string;
+  font: string;
+  font_size: number;
+  color: RgbDto;
+  /** a fraction, 0.05 to 1 */
+  opacity: number;
+  /** degrees; text only */
+  angle: number;
+  /** image width as a fraction of the page width; image only */
+  scale: number;
+  on_top: boolean;
+}
+
 export interface XfdfPreviewParams {
   handle: string;
   /** the XFDF file's text, as annotations.import_xfdf takes it (at most 8 MiB) */
@@ -1011,6 +1105,7 @@ export interface Methods {
   'attachments.get': { params: AttachmentParams; result: AttachmentData; deadline: 'io' };
   'attachments.list': { params: HandleParams; result: AttachmentsResult; deadline: 'instant' };
   'combine.probe': { params: CombineProbeParams; result: CombineProbeResult; deadline: 'action' };
+  'combine.unlock': { params: CombineUnlockParams; result: CombineUnlockResult; deadline: 'action' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
@@ -1026,6 +1121,7 @@ export interface Methods {
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'layers.list': { params: HandleParams; result: LayersResult; deadline: 'instant' };
+  'marks.get': { params: MarkGetParams; result: MarkDetailResult; deadline: 'instant' };
   'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
   'redaction.list': { params: HandleParams; result: RedactionListResult; deadline: 'instant' };
   'render.page': { params: RenderPageParams; result: PageImage; deadline: 'render' };
@@ -1061,6 +1157,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'attachments.get': 'io',
   'attachments.list': 'instant',
   'combine.probe': 'action',
+  'combine.unlock': 'action',
   'comments.flattenable': 'instant',
   'comments.list': 'instant',
   'comments.xfdf_preview': 'action',
@@ -1076,6 +1173,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
   'layers.list': 'instant',
+  'marks.get': 'instant',
   'marks.list': 'instant',
   'redaction.list': 'instant',
   'render.page': 'render',
@@ -1116,6 +1214,7 @@ export const RESULT_DECODERS: {
   'attachments.get': decodeAttachmentData,
   'attachments.list': decodeAttachmentsResult,
   'combine.probe': decodeCombineProbeResult,
+  'combine.unlock': decodeCombineUnlockResult,
   'comments.flattenable': decodeFlattenableResult,
   'comments.list': decodeCommentListResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
@@ -1131,6 +1230,7 @@ export const RESULT_DECODERS: {
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
   'layers.list': decodeLayersResult,
+  'marks.get': decodeMarkDetailResult,
   'marks.list': decodeMarksResult,
   'redaction.list': decodeRedactionListResult,
   'render.page': decodePageImage,
@@ -1261,6 +1361,19 @@ export function decodeAvailableResult(
   };
 }
 
+export function decodeBackgroundSpecDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): BackgroundSpecDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['color', 'opacity'], path);
+  return {
+    color: decodeRgbDto(field(o, 'color', path), ctx, `${path}.color`),
+    opacity: expectNumber(field(o, 'opacity', path), `${path}.opacity`),
+  };
+}
+
 export function decodeBlockedEvent(
   value: unknown,
   ctx: DecodeContext,
@@ -1379,6 +1492,33 @@ export function decodeCombineProbeResult(
     page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
     encrypted: expectBoolean(field(o, 'encrypted', path), `${path}.encrypted`),
     needed_password: expectBoolean(field(o, 'needed_password', path), `${path}.needed_password`),
+  };
+}
+
+export function decodeCombineUnlockParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CombineUnlockParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['name', 'data', 'password'], path);
+  return {
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
+    password: expectString(field(o, 'password', path), `${path}.password`),
+  };
+}
+
+export function decodeCombineUnlockResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CombineUnlockResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['page_count', 'data'], path);
+  return {
+    page_count: expectInteger(field(o, 'page_count', path), `${path}.page_count`),
+    data: takeBinary(field(o, 'data', path), ctx, `${path}.data`),
   };
 }
 
@@ -1689,6 +1829,33 @@ export function decodeHandleParams(
   };
 }
 
+export function decodeHeaderFooterSpecDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): HeaderFooterSpecDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['header_left', 'header_center', 'header_right', 'footer_left', 'footer_center', 'footer_right', 'font', 'font_size', 'color', 'margin_x', 'margin_top', 'margin_bottom', 'bates_prefix', 'bates_start', 'bates_digits', 'bates_suffix'], path);
+  return {
+    header_left: expectString(field(o, 'header_left', path), `${path}.header_left`),
+    header_center: expectString(field(o, 'header_center', path), `${path}.header_center`),
+    header_right: expectString(field(o, 'header_right', path), `${path}.header_right`),
+    footer_left: expectString(field(o, 'footer_left', path), `${path}.footer_left`),
+    footer_center: expectString(field(o, 'footer_center', path), `${path}.footer_center`),
+    footer_right: expectString(field(o, 'footer_right', path), `${path}.footer_right`),
+    font: expectString(field(o, 'font', path), `${path}.font`),
+    font_size: expectNumber(field(o, 'font_size', path), `${path}.font_size`),
+    color: decodeRgbDto(field(o, 'color', path), ctx, `${path}.color`),
+    margin_x: expectNumber(field(o, 'margin_x', path), `${path}.margin_x`),
+    margin_top: expectNumber(field(o, 'margin_top', path), `${path}.margin_top`),
+    margin_bottom: expectNumber(field(o, 'margin_bottom', path), `${path}.margin_bottom`),
+    bates_prefix: expectString(field(o, 'bates_prefix', path), `${path}.bates_prefix`),
+    bates_start: expectInteger(field(o, 'bates_start', path), `${path}.bates_start`),
+    bates_digits: expectInteger(field(o, 'bates_digits', path), `${path}.bates_digits`),
+    bates_suffix: expectString(field(o, 'bates_suffix', path), `${path}.bates_suffix`),
+  };
+}
+
 export function decodeHelloResult(
   value: unknown,
   ctx: DecodeContext,
@@ -1902,6 +2069,38 @@ export function decodeLinksResult(
     revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
     links: expectArray(field(o, 'links', path), `${path}.links`).map((item1, index1) => decodeLinkDto(item1, ctx, `${`${path}.links`}[${index1}]`)),
     truncated: expectBoolean(field(o, 'truncated', path), `${path}.truncated`),
+  };
+}
+
+export function decodeMarkDetailResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): MarkDetailResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['found', 'pages', 'ranges', 'foreign', 'header_footer', 'watermark', 'background', 'font_dropped'], path);
+  return {
+    found: expectBoolean(field(o, 'found', path), `${path}.found`),
+    pages: expectArray(field(o, 'pages', path), `${path}.pages`).map((item1, index1) => expectInteger(item1, `${`${path}.pages`}[${index1}]`)),
+    ranges: expectString(field(o, 'ranges', path), `${path}.ranges`),
+    foreign: expectBoolean(field(o, 'foreign', path), `${path}.foreign`),
+    header_footer: orNull(field(o, 'header_footer', path), `${path}.header_footer`, (v1, p1) => decodeHeaderFooterSpecDto(v1, ctx, p1)),
+    watermark: orNull(field(o, 'watermark', path), `${path}.watermark`, (v1, p1) => decodeWatermarkSpecDto(v1, ctx, p1)),
+    background: orNull(field(o, 'background', path), `${path}.background`, (v1, p1) => decodeBackgroundSpecDto(v1, ctx, p1)),
+    font_dropped: expectBoolean(field(o, 'font_dropped', path), `${path}.font_dropped`),
+  };
+}
+
+export function decodeMarkGetParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): MarkGetParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'kind'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    kind: expectOneOf(field(o, 'kind', path), ['HeaderFooter', 'Bates', 'Watermark', 'Background'] as const, `${path}.kind`),
   };
 }
 
@@ -2291,6 +2490,20 @@ export function decodeRenderTileParams(
   };
 }
 
+export function decodeRgbDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): RgbDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['r', 'g', 'b'], path);
+  return {
+    r: expectNumber(field(o, 'r', path), `${path}.r`),
+    g: expectNumber(field(o, 'g', path), `${path}.g`),
+    b: expectNumber(field(o, 'b', path), `${path}.b`),
+  };
+}
+
 export function decodeRunParams(
   value: unknown,
   ctx: DecodeContext,
@@ -2627,6 +2840,27 @@ export function decodeUploadedFontDto(
     path: expectString(field(o, 'path', path), `${path}.path`),
     faces: expectArray(field(o, 'faces', path), `${path}.faces`).map((item1, index1) => decodeFontFaceDto(item1, ctx, `${`${path}.faces`}[${index1}]`)),
     refused: expectArray(field(o, 'refused', path), `${path}.refused`).map((item1, index1) => decodeRefusedFaceDto(item1, ctx, `${`${path}.refused`}[${index1}]`)),
+  };
+}
+
+export function decodeWatermarkSpecDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): WatermarkSpecDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['text', 'image', 'image_name', 'font', 'font_size', 'color', 'opacity', 'angle', 'scale', 'on_top'], path);
+  return {
+    text: expectString(field(o, 'text', path), `${path}.text`),
+    image: expectBoolean(field(o, 'image', path), `${path}.image`),
+    image_name: expectString(field(o, 'image_name', path), `${path}.image_name`),
+    font: expectString(field(o, 'font', path), `${path}.font`),
+    font_size: expectNumber(field(o, 'font_size', path), `${path}.font_size`),
+    color: decodeRgbDto(field(o, 'color', path), ctx, `${path}.color`),
+    opacity: expectNumber(field(o, 'opacity', path), `${path}.opacity`),
+    angle: expectNumber(field(o, 'angle', path), `${path}.angle`),
+    scale: expectNumber(field(o, 'scale', path), `${path}.scale`),
+    on_top: expectBoolean(field(o, 'on_top', path), `${path}.on_top`),
   };
 }
 

@@ -48,7 +48,7 @@ import { FlattenDialog } from './flatten/FlattenDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto, HistoryResult } from './rpc/generated';
-import { type HistoryDirection, runHistoryStep } from './history/runHistory';
+import { type HistoryDirection, historyRefresh, runHistoryStep } from './history/runHistory';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
 import { SplitDialog } from './split/SplitDialog';
@@ -168,8 +168,8 @@ export function App({
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   // About Elanero (W4.3a S4), from the app menu.
   const [aboutOpen, setAboutOpen] = useState(false);
-  // Keyboard Shortcuts (W4.5 S2): from the app menu, the ribbon or Preferences. It opens above
-  // Preferences, which keeps its unsaved draft.
+  // Keyboard Shortcuts (W4.5 S2): opened from Preferences only. It opens above Preferences, which
+  // keeps its unsaved draft.
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // The ribbon's compact and collapse choices (W4.3a S2). The page keeps its own copy, so a toggle
   // works even where the browser refuses to store it; a saved change (from Preferences too) wins.
@@ -370,6 +370,9 @@ export function App({
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
+  // Bumped after an Undo or Redo that changed only the outline: the bookmarks reload, and the view
+  // stays where the reader is (a remount would put it back on page 1).
+  const [outlineRevision, setOutlineRevision] = useState(0);
   // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
@@ -582,13 +585,14 @@ export function App({
     scheduler?.noteRevisions(changed?.revisions ?? {});
   };
   // Undo and Redo (W4.3a S8) run the engine's own history. A step that changed pages redraws them;
-  // one that changed the structure or the outline remounts the lists, as a crop does.
+  // one that changed the structure remounts the view and the lists, as a crop does; one that changed
+  // only the outline reloads the bookmarks.
   const onHistoryStep = (reply: HistoryResult) => {
     scheduler?.noteRevisions(reply.changed?.revisions ?? {});
     comments?.noteChange();
-    if (reply.changed?.changes.some((c) => c.kind === 'structure' || c.kind === 'outline')) {
-      setStructureRevision((value) => value + 1);
-    }
+    const refresh = historyRefresh(reply.changed);
+    if (refresh.structure) setStructureRevision((value) => value + 1);
+    else if (refresh.outline) setOutlineRevision((value) => value + 1);
   };
   const runHistory = (direction: HistoryDirection) => {
     if (session !== null) {
@@ -844,7 +848,8 @@ export function App({
             handle={session.handle}
             tabId={activeId}
             currentPage={viewState.page - 1}
-            revision={structureRevision}
+            // Both counters only grow, so their sum changes whenever either does.
+            revision={structureRevision + outlineRevision}
             onHistoryStep={onHistoryStep}
             // A bookmark lands where it points, like a link: the same path, with the offset (W5.2 S3).
             onSelect={onLinkGoTo}

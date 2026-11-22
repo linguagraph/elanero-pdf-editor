@@ -122,11 +122,12 @@ test.describe('engine staged', () => {
     ]);
 
     // 3. Re-target Section 2.2 to page 2. The page field moves the view to page 2 first; the row is
-    // focused, not clicked, because a click would open its own page (page 4).
+    // focused, not clicked, because a click would open its own page (page 4). The field shows the
+    // current page's label, and outline.pdf's labels are Roman, so page 2 reads "ii".
     const jump = page.getByRole('textbox', { name: 'Go to page' });
     await jump.fill('2');
     await jump.press('Enter');
-    await expect(jump).toHaveValue('2');
+    await expect(jump).toHaveValue('ii');
     await focusRow(page, 'Section 2.2');
     await toolbarButton(page, 'Set to Current Page').click();
     await expect(page.getByText('Bookmark now goes to page 2.', { exact: true })).toBeVisible();

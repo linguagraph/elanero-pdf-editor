@@ -14,6 +14,7 @@ from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView, QInputDialog, QMessageBox
 
 from pdfeditor.actions import comments
+from pdfeditor.actions.comment_tools import default_box
 from pdfeditor.actions.comments import DEFAULT_STYLES, AddAnnotations, CommentStyle
 from pdfeditor.model.annotations import (
     IMAGE_STAMP,
@@ -477,7 +478,7 @@ class CalloutTool(AnnotationTool):
         if self._box_start is not None:
             self._show(view, Rect.from_points([self._box_start, now]))
         elif self._pressed_at is not None:  # dragging from the tip
-            self._show(view, _default_box(self._tip[1], now))
+            self._show(view, default_box(self._tip[1], now))
         return True
 
     def release(self, view: DocumentView, event: QMouseEvent) -> bool:
@@ -489,9 +490,9 @@ class CalloutTool(AnnotationTool):
             pressed, self._pressed_at = self._pressed_at, None
             if pressed is None or _is_click(pressed, end):
                 return True  # the point is set; now drag out the box
-            box = _default_box(tip, end)
+            box = default_box(tip, end)
         elif _is_click(self._box_start, end):
-            box = _default_box(tip, end)
+            box = default_box(tip, end)
         else:
             box = Rect.from_points([self._box_start, end])
         self._reset()
@@ -524,13 +525,6 @@ class CalloutTool(AnnotationTool):
 
 def _is_click(a: Point, b: Point) -> bool:
     return abs(b.x - a.x) < MIN_DRAG and abs(b.y - a.y) < MIN_DRAG
-
-
-def _default_box(tip: Point, at: Point) -> Rect:
-    """A default-size box placed at ``at``, extending away from the tip."""
-    w, h = 180.0, 40.0
-    x0 = at.x if at.x >= tip.x else at.x - w
-    return Rect(x0, at.y - h / 2, x0 + w, at.y + h / 2)
 
 
 class AttachTool(AnnotationTool):

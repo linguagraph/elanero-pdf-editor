@@ -2,7 +2,7 @@
 // one undo stack; the web keeps no history of its own. The tab's can-undo and can-redo flags come
 // from the engine's state events (tabs/tabState.ts), so the commands' enable state follows it.
 import type { PageRpc } from '../engine/engineConnection';
-import type { HistoryResult } from '../rpc/generated';
+import type { ChangedDto, HistoryResult } from '../rpc/generated';
 import { RpcError } from '../rpc/client';
 import { t } from '../i18n/t';
 import { reportRpcError, toasts, type ToastStore } from '../feedback/toasts';
@@ -20,6 +20,17 @@ export interface HistoryTarget {
   // Redraws the changed pages and reloads the lists after a step that went through.
   readonly onDone?: (reply: HistoryResult) => unknown;
   readonly store?: ToastStore;
+}
+
+// What a step's changes ask the app to refresh. A structure change (pages added, moved, cropped)
+// remounts the view and the lists; an outline change only reloads the bookmarks, so undoing a
+// bookmark edit leaves the reader on the page they were reading (#553).
+export function historyRefresh(changed: ChangedDto | null): {
+  readonly structure: boolean;
+  readonly outline: boolean;
+} {
+  const kinds = new Set(changed?.changes.map((change) => change.kind) ?? []);
+  return { structure: kinds.has('structure'), outline: kinds.has('outline') };
 }
 
 export async function runHistoryStep(

@@ -63,6 +63,41 @@ def test_shortcuts_dialog(window: MainWindow) -> None:
     d.close()
 
 
+def test_shortcut_rule_refuses_alt_menu_keys(window: MainWindow) -> None:
+    m = window.shortcuts
+    assert "Alt+F" in m.menu_keys  # the File menu's mnemonic
+    assert m.refusal("Alt+F") is not None
+    assert m.refusal("alt+f") is not None  # Qt normalises the letter case
+    assert m.refusal("Ctrl+Alt+F") is None  # a modifier beside Alt is not the menu key
+    d = ShortcutsDialog(m, window)
+    d.select("fit-width")
+    assert not d.apply_keys("Alt+F")
+    assert "opens a menu" in d.message.text()
+    assert m.current("fit-width") == ("Ctrl+2",)
+    d.close()
+
+
+def test_shortcut_rule_refuses_key_sequences(window: MainWindow) -> None:
+    m = window.shortcuts
+    assert m.refusal("Ctrl+K, Ctrl+S") is not None
+    assert m.refusal("Ctrl+K") is None
+    d = ShortcutsDialog(m, window)
+    assert d.editor.maximumSequenceLength() == 1  # the editor takes one key at a time
+    d.select("fit-width")
+    assert not d.apply_keys("Ctrl+K, Ctrl+S")
+    assert "sequence" in d.message.text()
+    assert m.current("fit-width") == ("Ctrl+2",)
+    d.close()
+
+
+def test_shortcut_rule_keeps_existing_defaults(window: MainWindow) -> None:
+    # The new rules refuse only new assignments; every shipped default must still pass them.
+    m = window.shortcuts
+    for key, seqs in m.defaults.items():
+        for seq in seqs:
+            assert m.refusal(seq) is None, f"{key}: default {seq} is refused"
+
+
 def test_command_palette(window: MainWindow, fixture_pdf) -> None:
     view = window.open_path(fixture_pdf("report"))
     palette = CommandPalette(window.shortcuts, window)

@@ -23,6 +23,12 @@ function pageLines(page: Page, index: number): Locator {
   return page.locator(`[data-page="${index}"] .page-text-line`);
 }
 
+// The selection's marks on one page (SelectionMarks): one per selected line. A long-press marks the
+// word under the finger at once; the live region speaks only when the gesture ends (section 6).
+function selectionMarks(page: Page, index: number): Locator {
+  return page.locator(`[data-page="${index}"] .page-selection-mark`);
+}
+
 function centre(box: { x: number; y: number; width: number; height: number }): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
@@ -49,8 +55,9 @@ async function dragFinger(cdp: CDPSession, from: Point, to: Point, steps = 10): 
   }
 }
 
-// The live region's selection announcement (W5.4 section 6): the status that names the size. A test
-// polls it with expect.poll, so it waits for the state rather than for a fixed time.
+// The live region's selection announcement (W5.4 section 6): the status that names the size, set when
+// a gesture ends (the finger lifts), not while it runs. A test polls it with expect.poll, so it waits
+// for the state rather than for a fixed time.
 async function selectionAnnouncement(page: Page): Promise<string> {
   const texts = await page.getByRole('status').allTextContents();
   return texts.find((text) => /characters? selected\./.test(text)) ?? '';
@@ -73,9 +80,11 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const lines = pageLines(page, 0);
+    // allTextContents does not wait, so the lines must be drawn before they are read.
+    await expect(lines.nth(2)).toBeVisible();
     const all = await lines.allTextContents();
-    expect(all[1]?.trim(), 'second line has text').not.toBe('');
-    expect(all[2]?.trim(), 'third line has text').not.toBe('');
+    expect(all[1]?.trim() ?? '', 'second line has text').not.toBe('');
+    expect(all[2]?.trim() ?? '', 'third line has text').not.toBe('');
     const first = await lines.nth(1).boundingBox();
     const last = await lines.nth(2).boundingBox();
     if (first === null || last === null) throw new Error('page 1 has no text lines to select');
@@ -84,10 +93,12 @@ test.describe('engine staged', () => {
     // The press is at the start of the line, so the word under it is the line's first word.
     const start = { x: first.x + 2, y: centre(first).y };
     await touchEvent(cdp, 'touchStart', start);
-    // The hold is LONG_PRESS_MS (500 ms): the announcement appears when it fires, with the finger down.
-    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
+    // The hold is LONG_PRESS_MS (500 ms): the word is marked when it fires, with the finger down.
+    await expect(selectionMarks(page, 0)).toHaveCount(1);
     await dragFinger(cdp, start, { x: last.x + last.width + 4, y: centre(last).y }, 12);
     await touchEvent(cdp, 'touchEnd');
+    // The live region announces the size when the gesture ends, at the lift (section 6).
+    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
 
     await page.keyboard.press('Control+C');
     await expect(page.getByText('Copied to clipboard.', { exact: true })).toBeVisible();
@@ -137,8 +148,9 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const lines = pageLines(page, 0);
+    await expect(lines.nth(3)).toBeVisible();
     const all = await lines.allTextContents();
-    expect(all[3]?.trim(), 'fourth line has text').not.toBe('');
+    expect(all[3]?.trim() ?? '', 'fourth line has text').not.toBe('');
     const first = await lines.nth(1).boundingBox();
     const last = await lines.nth(2).boundingBox();
     const target = await lines.nth(3).boundingBox();
@@ -149,9 +161,10 @@ test.describe('engine staged', () => {
     const cdp = await page.context().newCDPSession(page);
     const start = { x: first.x + 2, y: centre(first).y };
     await touchEvent(cdp, 'touchStart', start);
-    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
+    await expect(selectionMarks(page, 0)).toHaveCount(1);
     await dragFinger(cdp, start, { x: last.x + last.width + 4, y: centre(last).y }, 12);
     await touchEvent(cdp, 'touchEnd');
+    await expect.poll(() => selectionAnnouncement(page)).toMatch(/characters? selected\./);
 
     // The handles show after a touch selection (section 3). Each one is a 44 x 44 px target.
     const handles = page.locator('.selection-handle');
@@ -162,12 +175,19 @@ test.describe('engine staged', () => {
       expect(box?.height, `handle ${index} height`).toBeGreaterThanOrEqual(44);
     }
 
-    // Drag the end handle down to the fourth line's end: the selection now covers three lines.
+    // Drag the end handle down to the fourth line's end: the selection now covers three lines. The
+    // handle hangs below its line and keeps the press's offset from the line's middle (section 3), so
+    // the finger moves down by the distance between the lines, not onto the fourth line itself.
     const endHandle = await page.locator('.selection-handle--end').boundingBox();
     if (endHandle === null) throw new Error('the end handle is not drawn');
     const grip = centre(endHandle);
     await touchEvent(cdp, 'touchStart', grip);
-    await dragFinger(cdp, grip, { x: target.x + target.width + 4, y: centre(target).y }, 12);
+    await dragFinger(
+      cdp,
+      grip,
+      { x: target.x + target.width + 4, y: grip.y + centre(target).y - centre(last).y },
+      12,
+    );
     await touchEvent(cdp, 'touchEnd');
 
     await page.keyboard.press('Control+C');

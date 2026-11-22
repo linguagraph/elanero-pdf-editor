@@ -1025,7 +1025,19 @@ export function DocumentView({
   // The tap on a link: the release follows the link the press started on, at the list's index.
   const followPress = (press: LinkPress) => {
     const link = linkLists.ready(press.page, scheduler.revisionOf(press.page))?.[press.index];
-    if (link !== undefined) followLink(link);
+    if (link === undefined) return;
+    // The pan's pointer capture keeps the press from focusing the link, so a web or mail link is
+    // focused here before its dialog opens: the dialog returns the focus to the link it came from,
+    // as it does after Enter. A jump or a notice leaves the focus where it was, so the scroller keeps
+    // its keys after a jump.
+    if (classifyLink(link).action === 'confirm') {
+      scrollRef.current
+        ?.querySelector<HTMLElement>(
+          `.doc-page[data-page="${press.page}"] .page-link[data-link="${press.index}"]`,
+        )
+        ?.focus({ preventScroll: true });
+    }
+    followLink(link);
   };
 
   // Whether the links take presses now (W5.3): only under Select and Hand, with no gesture tool on.

@@ -4,7 +4,35 @@ import { t } from '../i18n/t';
 import { RpcError, type RpcErrorCode } from '../rpc/client';
 import type { HistoryResult } from '../rpc/generated';
 import { createToastStore } from '../feedback/toasts';
-import { runHistoryStep, type HistoryTarget } from './runHistory';
+import { historyRefresh, runHistoryStep, type HistoryTarget } from './runHistory';
+
+describe('historyRefresh', () => {
+  const changed = (...kinds: string[]) => ({
+    changes: kinds.map((kind) => ({ kind, pages: [] })),
+    revisions: {},
+  });
+
+  it('asks only for the bookmarks reload when a step changed the outline alone', () => {
+    // An Undo of a bookmark edit must not remount the view, which would put the reader on page 1.
+    expect(historyRefresh(changed('outline'))).toEqual({ structure: false, outline: true });
+  });
+
+  it('asks for the remount when a step changed the structure', () => {
+    expect(historyRefresh(changed('structure', 'outline'))).toEqual({
+      structure: true,
+      outline: true,
+    });
+    expect(historyRefresh(changed('structure'))).toEqual({ structure: true, outline: false });
+  });
+
+  it('asks for neither when a step changed only content, or reported nothing', () => {
+    expect(historyRefresh(changed('content', 'annotations'))).toEqual({
+      structure: false,
+      outline: false,
+    });
+    expect(historyRefresh(null)).toEqual({ structure: false, outline: false });
+  });
+});
 
 const reply = (done: boolean): HistoryResult =>
   ({ done, label: 'Rotate pages', changed: null, state: {} }) as unknown as HistoryResult;

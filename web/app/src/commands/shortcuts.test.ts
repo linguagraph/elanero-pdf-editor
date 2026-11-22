@@ -12,6 +12,7 @@ import {
   matchesChord,
   PALETTE_SHORTCUT_ID,
   parseChord,
+  shortcutLabel,
 } from './shortcuts';
 
 const SHARED: Record<string, { keys: string[] }> = shortcutTable.commands;
@@ -160,5 +161,29 @@ describe('parsing and matching', () => {
     expect(displayKeys(['Ctrl+Shift+P'], true)).toBe('Cmd+Shift+P');
     expect(isMacPlatform('MacIntel')).toBe(true);
     expect(isMacPlatform('Win32')).toBe(false);
+  });
+
+  it('does not match Control+H on macOS, so the Hand tool keeps its plain H only', () => {
+    const hand = parseChord('H');
+    const control = event({ key: 'h', code: 'KeyH', ctrlKey: true });
+    expect(matchesChord(control, hand, true)).toBe(false);
+    expect(matchesChord(event({ key: 'h', code: 'KeyH', metaKey: true }), hand, true)).toBe(false);
+    expect(matchesChord(event({ key: 'h', code: 'KeyH' }), hand, true)).toBe(true);
+    expect(matchesChord(control, hand, false)).toBe(false);
+    expect(
+      matchesChord(event({ key: 's', ctrlKey: true, metaKey: true }), parseChord('Ctrl+S'), false),
+    ).toBe(false);
+  });
+
+  it('labels a ribbon command with the key the web binds, not the desktop key', () => {
+    expect(shortcutLabel('go-to-page', false)).toBe('Alt+G');
+    expect(shortcutLabel('go-to-page', true)).toBe('Alt+G');
+    expect(shortcutLabel('save', false)).toBe('Ctrl+S');
+    expect(shortcutLabel('save', true)).toBe('Cmd+S');
+    // A command the web has unbound (its override is empty) has no label, even though the desktop
+    // binds it.
+    expect(shortcutLabel('crop-pages', false)).toBeUndefined();
+    expect(shortcutLabel('insert-pages', true)).toBeUndefined();
+    expect(shortcutLabel('comments-list', false)).toBeUndefined();
   });
 });
