@@ -14,7 +14,7 @@ from enum import StrEnum
 from pdfeditor.actions import action
 from pdfeditor.actions.base import ActionResult, Refused, ensure_idle, execute_all
 from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
-from pdfeditor.actions.edit_geometry import is_click
+from pdfeditor.actions.edit_geometry import MIN_DRAG
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef, callout_line
@@ -237,8 +237,9 @@ _UNDO_LABELS = {
     CommentTool.POLYLINE: "Add Polyline",
 }
 
-# Tools whose comment is text: a blank text adds nothing.
-_TEXT_TOOLS = {CommentTool.NOTE, CommentTool.TEXTBOX, CommentTool.CALLOUT}
+# Tools whose comment is a box of text: a blank one adds nothing. A sticky note may be blank (the
+# desktop's NoteTool allows it), so it is not here.
+_TEXT_TOOLS = {CommentTool.TEXTBOX, CommentTool.CALLOUT}
 
 
 def _clipped(rect: Rect, page: Rect) -> Rect | None:
@@ -250,9 +251,16 @@ def _clipped(rect: Rect, page: Rect) -> Rect | None:
     return Rect(x0, y0, x1, y1)
 
 
+def _is_click(a: Point, b: Point) -> bool:
+    """Whether a press at ``a`` released at ``b`` is a click. The design says a drag under
+    ``MIN_DRAG`` on both axes adds nothing, so exactly ``MIN_DRAG`` draws (the desktop's
+    ``annotate._is_click`` is strict too; the shared ``edit_geometry.is_click`` is not)."""
+    return abs(b.x - a.x) < MIN_DRAG and abs(b.y - a.y) < MIN_DRAG
+
+
 def _is_drag(rect: Rect) -> bool:
     """Whether ``rect`` was drawn as a drag rather than a click."""
-    return not is_click(Point(rect.x0, rect.y0), Point(rect.x1, rect.y1))
+    return not _is_click(Point(rect.x0, rect.y0), Point(rect.x1, rect.y1))
 
 
 def _clamped(points: tuple[Point, ...], page: Rect) -> list[Point]:
@@ -280,7 +288,7 @@ def _build_point_tool(args: CreateAnnotation, page: Rect) -> AnnotationModel | N
         if len(pts) != 2:
             raise Refused("a line takes exactly 2 points")
         a, b = pts
-        if is_click(a, b):
+        if _is_click(a, b):
             return None
         return build_line(args.page, a, b, args.tool is CommentTool.ARROW, args.author)
     kind = AnnotationType.POLYGON if args.tool is CommentTool.POLYGON else AnnotationType.POLYLINE
@@ -296,7 +304,11 @@ def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
     small, or a text tool with no text). Raises Refused for input the web can't legitimately send.
     """
     tool = args.tool
-    if len(args.text.encode("utf-8")) > MAX_TEXT_BYTES:
+    try:
+        size = len(args.text.encode("utf-8"))
+    except UnicodeEncodeError:  # JSON can carry a lone surrogate; UTF-8 cannot store it
+        raise Refused("a comment's text must be valid Unicode") from None
+    if size > MAX_TEXT_BYTES:
         raise Refused(f"a comment's text takes at most {MAX_TEXT_BYTES // 1024} KiB")
     if tool in _TEXT_TOOLS and not args.text.strip():
         return None

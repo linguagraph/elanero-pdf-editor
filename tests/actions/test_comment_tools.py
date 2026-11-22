@@ -476,3 +476,70 @@ def test_round_trip_of_each_new_comment(open_copy: Opener, tmp_path: Path, tool:
     if tool in ("polygon", "polyline"):
         record("annot_keys_pikepdf", out, subtype=subtype, present=["/Vertices"])
     record("render_first_page_pdfium", out)
+
+
+@pytest.mark.parametrize("text", ["", "   "])
+def test_an_empty_sticky_note_is_created(open_copy: Opener, text: str) -> None:
+    """A sticky note may be blank (the desktop's NoteTool allows it); only the box tools refuse
+    a blank text."""
+    s = open_copy("annotations")
+    before = len(on_page(s))
+    result = make(s, CreateAnnotation(CommentTool.NOTE, 0, Rect(300, 300, 300, 300), text))
+    assert result.executed  # type: ignore[attr-defined]
+    assert result.label == "Add Sticky Note"  # type: ignore[attr-defined]
+    made = made_on_page(s, result)
+    assert made.type is AnnotationType.TEXT and made.contents == text
+    assert len(on_page(s)) == before + 1
+    assert s.undo_stack.undo_label == "Add Sticky Note"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        CreateAnnotation(CommentTool.NOTE, 0, Rect(300, 300, 300, 300), "a\ud800b"),
+        CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 420, 340), "a\udc00"),
+    ],
+    ids=["note", "text-box"],
+)
+def test_text_with_a_lone_surrogate_is_refused_and_changes_nothing(
+    open_copy: Opener, args: CreateAnnotation
+) -> None:
+    """JSON can carry a lone surrogate, which UTF-8 can't store: the action refuses it before
+    the byte-count check, with no comment added and no undo step."""
+    s = open_copy("annotations")
+    before = len(on_page(s))
+    with pytest.raises(Refused):
+        make(s, args)
+    assert len(on_page(s)) == before
+    assert not s.undo_stack.can_undo
+
+
+def test_a_drag_of_exactly_three_points_draws(open_copy: Opener) -> None:
+    """The design: drags under 3 pt add nothing, so a drag of exactly 3.0 pt draws."""
+    s = open_copy("annotations")
+    line = make(
+        s,
+        CreateAnnotation(
+            CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(100, 100), Point(103, 100))
+        ),
+    )
+    assert line.executed  # type: ignore[attr-defined]
+    assert made_on_page(s, line).type is AnnotationType.LINE
+
+    box = make(s, CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 303, 303), "Tiny"))
+    assert box.executed  # type: ignore[attr-defined]
+    assert made_on_page(s, box).rect == Rect(300, 300, 303, 303)
+
+
+def test_a_drag_under_three_points_is_a_click(open_copy: Opener) -> None:
+    """Just under 3 pt is a click: a line adds nothing, a text box gets the default size."""
+    s = open_copy("annotations")
+    line = make(
+        s,
+        CreateAnnotation(
+            CommentTool.LINE, 0, Rect(0, 0, 0, 0), points=(Point(100, 100), Point(102.9, 100))
+        ),
+    )
+    assert not line.executed  # type: ignore[attr-defined]
+    box = make(s, CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 302.9, 302.9), "Tiny"))
+    assert made_on_page(s, box).rect == Rect(300, 300, 480, 340)
