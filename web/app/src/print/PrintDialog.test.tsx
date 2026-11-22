@@ -106,6 +106,38 @@ describe('PrintDialog', () => {
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(t('print.range.invalid'));
   });
 
+  // The shared page-range rule's vectors (web/test/vectors/page-ranges.json), on six pages: a
+  // reversed span and a page past the end are refused, as the desktop refuses them.
+  it.each(['3-2', '9'])('refuses %j, which the shared rule refuses', (range) => {
+    const { call, rpc } = rpcStub();
+    const { onClose } = render(6, rpc);
+    act(() => {
+      radio('range').click();
+    });
+    typeText(document.querySelector<HTMLInputElement>('.print-range')!, range);
+    act(() => {
+      printButton().click();
+    });
+    expect(call).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(t('print.range.invalid'));
+  });
+
+  it('accepts a spaced range the shared rule accepts, and prints those pages', async () => {
+    const { call, rpc } = rpcStub();
+    const { onClose } = render(6, rpc);
+    act(() => {
+      radio('range').click();
+    });
+    typeText(document.querySelector<HTMLInputElement>('.print-range')!, '1 - 3');
+    act(() => {
+      printButton().click();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(call).toHaveBeenCalled());
+    expect(call.mock.calls[0]?.[1]).toMatchObject({ args: { pages: [0, 1, 2] } });
+  });
+
   it('starts print_pages for the typed range at the chosen dpi and closes the dialog', async () => {
     const { call, rpc } = rpcStub();
     const { onClose } = render(6, rpc);

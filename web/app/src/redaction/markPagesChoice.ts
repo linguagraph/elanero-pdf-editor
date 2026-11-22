@@ -2,6 +2,7 @@
 // is the page's visible space (points, origin top-left, /Rotate and CropBox applied, from
 // session.pages), so a rotated page is covered as the user sees it. Nothing is applied here.
 import { t } from '../i18n/t';
+import type { PageRangeFailure } from '../pages/pageRanges';
 import { parsePageRange } from '../print/printRange';
 import type { PageSize } from '../rpc/generated';
 import type { PageArea } from '../text/textLayer';
@@ -16,7 +17,8 @@ export interface MarkPagesValues {
 
 export type MarkPagesCheck =
   | { readonly ok: true; readonly pages: readonly number[] } // 0-based, sorted
-  | { readonly ok: false; readonly message: string };
+  // range: the shared page-range rule's reason, set only when the typed range is what failed.
+  | { readonly ok: false; readonly message: string; readonly range?: PageRangeFailure };
 
 // The pages the scope names. A current page outside the document, an empty document, and a range
 // that does not parse are all refused before anything is marked.
@@ -35,9 +37,9 @@ export function choosePages(
       return refused;
     return { ok: true, pages: [currentPage - 1] };
   }
-  const pages = parsePageRange(values.range, pageCount);
-  if (pages === undefined || pages.length === 0) return refused;
-  return { ok: true, pages };
+  const checked = parsePageRange(values.range, pageCount);
+  if (!checked.ok) return { ok: false, message: refused.message, range: checked.error };
+  return { ok: true, pages: checked.pages };
 }
 
 // One area per chosen page, covering its whole visible box. A page with no size in the list is
