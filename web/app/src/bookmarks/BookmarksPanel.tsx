@@ -452,6 +452,14 @@ function BookmarkTree({
     void runEdit(planAdd(entries, expanded, after, asChild, place, title));
   };
 
+  const toggle = (index: number) => {
+    if (entries === null) return;
+    const next = new Set(expanded);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    setExpanded(next);
+    setExpandedOf(tabId, fingerprintOf(entries), next);
+  };
   // The visible rows, and the drag (hooks run before the early returns below, so they run every render).
   const rows = entries === null ? [] : visibleRows(entries, expanded);
   const outlineDrag = useOutlineDrag({
@@ -470,6 +478,10 @@ function BookmarkTree({
         void runEdit(planEdit(entries, expanded, index, { kind: 'moveTo', target }));
     },
     onCancel: () => setCancelNote(true),
+    // Only a closed entry is opened, so this never collapses one.
+    onSpringLoad: (index) => {
+      if (!expanded.has(index)) toggle(index);
+    },
   });
 
   if (loadFailed) {
@@ -512,13 +524,6 @@ function BookmarkTree({
   const activeIndex = rows.some((row) => row.index === focusIndex) ? focusIndex : rows[0]?.index;
   const locked = busy || editing !== null;
 
-  const toggle = (index: number) => {
-    const next = new Set(expanded);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
-    setExpanded(next);
-    setExpandedOf(tabId, fingerprintOf(entries), next);
-  };
   const focusRow = (index: number) => {
     setFocusIndex(index);
     listRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)?.focus();

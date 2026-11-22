@@ -7,7 +7,10 @@
   outline-offset: 2px;
 }
 
+/* The indent per level. The row indents and the drop line both use it, and the drag reads it back
+   (useOutlineDrag), so the level the pointer picks is the level the row is drawn at. */
 .bookmarks-list {
+  --bookmarks-indent: 1.25rem;
   overflow-y: auto;
   padding: var(--space-1) 0;
   background: var(--color-surface);
@@ -28,25 +31,25 @@
   padding-inline-start: var(--space-2);
 }
 .bookmarks-row[data-depth='2'] {
-  padding-inline-start: calc(var(--space-2) + 1.25rem);
+  padding-inline-start: calc(var(--space-2) + 1 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-depth='3'] {
-  padding-inline-start: calc(var(--space-2) + 2.5rem);
+  padding-inline-start: calc(var(--space-2) + 2 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-depth='4'] {
-  padding-inline-start: calc(var(--space-2) + 3.75rem);
+  padding-inline-start: calc(var(--space-2) + 3 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-depth='5'] {
-  padding-inline-start: calc(var(--space-2) + 5rem);
+  padding-inline-start: calc(var(--space-2) + 4 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-depth='6'] {
-  padding-inline-start: calc(var(--space-2) + 6.25rem);
+  padding-inline-start: calc(var(--space-2) + 5 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-depth='7'] {
-  padding-inline-start: calc(var(--space-2) + 7.5rem);
+  padding-inline-start: calc(var(--space-2) + 6 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-depth='8'] {
-  padding-inline-start: calc(var(--space-2) + 8.75rem);
+  padding-inline-start: calc(var(--space-2) + 7 * var(--bookmarks-indent));
 }
 
 .bookmarks-toggle {
@@ -180,25 +183,25 @@
   outline-offset: -2px;
 }
 .bookmarks-row[data-drop-depth='2'] {
-  --drop-indent: 1.25rem;
+  --drop-indent: calc(1 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-drop-depth='3'] {
-  --drop-indent: 2.5rem;
+  --drop-indent: calc(2 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-drop-depth='4'] {
-  --drop-indent: 3.75rem;
+  --drop-indent: calc(3 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-drop-depth='5'] {
-  --drop-indent: 5rem;
+  --drop-indent: calc(4 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-drop-depth='6'] {
-  --drop-indent: 6.25rem;
+  --drop-indent: calc(5 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-drop-depth='7'] {
-  --drop-indent: 7.5rem;
+  --drop-indent: calc(6 * var(--bookmarks-indent));
 }
 .bookmarks-row[data-drop-depth='8'] {
-  --drop-indent: 8.75rem;
+  --drop-indent: calc(7 * var(--bookmarks-indent));
 }
 
 @media (forced-colors: active) {

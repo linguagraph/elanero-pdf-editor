@@ -31,6 +31,26 @@ export function hitAt(boxes: readonly RowBox[], y: number): Hit {
   return { kind: 'gap', slot: boxes.length };
 }
 
+// The indent per level when --bookmarks-indent cannot be read (1.25rem at a 16 px root).
+export const DEFAULT_INDENT_PX = 20;
+const DEFAULT_ROOT_PX = 16;
+
+// The px value of a --bookmarks-indent computed value ("1.25rem", "20px"). A rem is scaled by the
+// root font size. Anything else (an empty value in a test or an old browser) gives the 20 px fallback.
+export function indentPx(value: string, rootPx: number): number {
+  const match = /^(\d*\.?\d+)(px|rem)$/.exec(value.trim());
+  if (match === null) return DEFAULT_INDENT_PX;
+  const amount = Number(match[1]);
+  const px = match[2] === 'rem' ? amount * rootPx : amount;
+  return px > 0 ? px : DEFAULT_INDENT_PX;
+}
+
+// The root font size in px, which the rem indents scale with.
+export function rootFontPx(): number {
+  const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
+}
+
 // The level a horizontal position picks: `origin` is the depth-1 padding, `step` the indent per level.
 export function levelAt(x: number, origin: number, step: number, min: number, max: number): number {
   const level = Math.floor((x - origin) / step) + 1;

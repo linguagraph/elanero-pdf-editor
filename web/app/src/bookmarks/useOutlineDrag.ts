@@ -14,12 +14,21 @@ import {
 } from 'react';
 import { autoScrollStep, passedThreshold } from '../organizer/reorder';
 import type { OutlineEntry } from '../rpc/generated';
-import { hitAt, resolveDrop, type Resolved, type RowBox } from './drop';
+import {
+  DEFAULT_INDENT_PX,
+  hitAt,
+  indentPx,
+  resolveDrop,
+  rootFontPx,
+  type Hit,
+  type Resolved,
+  type RowBox,
+} from './drop';
 import type { MoveTarget } from './outlineEdit';
 import type { BookmarkRow } from './tree';
 
-// The indent per level the stylesheet uses (1.25rem at the default root size).
-const INDENT_PX = 20;
+// How long the pointer must rest on a closed entry before the drag opens it (W5.2 spring-loading).
+export const SPRING_LOAD_MS = 800;
 // The depth-1 padding (--space-2) when the row cannot be measured.
 const FALLBACK_ORIGIN_PX = 8;
 
@@ -36,6 +45,8 @@ export interface OutlineDragOptions {
   readonly onStart: (index: number) => void;
   readonly onDrop: (index: number, target: MoveTarget) => void;
   readonly onCancel: () => void;
+  // A closed entry the pointer rested on for SPRING_LOAD_MS: the panel expands it (view state).
+  readonly onSpringLoad: (index: number) => void;
 }
 
 export interface OutlineDrag {
@@ -70,13 +81,23 @@ interface Live {
   resolved: Resolved | null;
   key: string;
   frame: number | null;
+  // The indent per level, read from --bookmarks-indent once per drag.
+  step: number;
+  // The closed entry under the pointer and the timer that opens it.
+  spring: { readonly row: number; readonly timer: ReturnType<typeof setTimeout> } | null;
 }
 
-// Cancels a live drag's frame. Safe on a null or an idle drag.
-function stopFrame(live: Live | null): void {
+function clearSpring(live: Live): void {
+  if (live.spring !== null) clearTimeout(live.spring.timer);
+  live.spring = null;
+}
+
+// Cancels a live drag's frame and spring-load timer. Safe on a null or an idle drag.
+function stopTimers(live: Live | null): void {
   if (live === null) return;
   if (live.frame !== null) cancelAnimationFrame(live.frame);
   live.frame = null;
+  clearSpring(live);
 }
 
 // A string that changes whenever the drop would change what is shown or sent.
@@ -115,6 +136,10 @@ export function useOutlineDrag(options: OutlineDragOptions): OutlineDrag {
     const list = latest.current.listRef.current;
     if (live === null || list === null) return;
     const origin = list.getBoundingClientRect();
+    live.step = indentPx(
+      getComputedStyle(list).getPropertyValue('--bookmarks-indent'),
+      rootFontPx(),
+    );
     live.boxes = [];
     list.querySelectorAll<HTMLElement>('[data-index]').forEach((el) => {
       const rect = el.getBoundingClientRect();
@@ -126,43 +151,63 @@ export function useOutlineDrag(options: OutlineDragOptions): OutlineDrag {
     live.origin = Number.parseFloat(padding) || FALLBACK_ORIGIN_PX;
   }, []);
 
-  // Shows the drop for the live pointer; schedules auto-scroll near the list's edges.
-  const update = useCallback((press: Press): void => {
-    const live = press.live;
-    const { listRef, entries, rows } = latest.current;
-    const list = listRef.current;
-    if (live === null || list === null || entries === null) return;
-    const rect = list.getBoundingClientRect();
-    const rtl = getComputedStyle(list).direction === 'rtl';
-    const x = rtl ? rect.right - live.clientX : live.clientX - rect.left;
-    const y = live.clientY - rect.top + list.scrollTop;
-    const hit = hitAt(live.boxes, y);
-    const resolved = resolveDrop(entries, rows, press.index, hit, x, {
-      origin: live.origin,
-      step: INDENT_PX,
-    });
-    live.resolved = resolved;
-    const key = keyOf(resolved);
-    if (key !== live.key) {
-      live.key = key;
-      setDrag({ index: press.index, resolved });
-    }
-
-    const step = autoScrollStep(live.clientY, rect.top, rect.bottom);
-    if (step !== 0 && live.frame === null) {
-      live.frame = requestAnimationFrame(() => {
-        live.frame = null;
-        const frameList = latest.current.listRef.current;
-        if (frameList === null || pressRef.current !== press || press.live !== live) return;
-        const box = frameList.getBoundingClientRect();
-        const next = autoScrollStep(live.clientY, box.top, box.bottom);
-        if (next === 0) return;
-        frameList.scrollTop += next;
-        // The pointer did not move, but the rows under it did: recompute.
-        updateRef.current(press);
-      });
-    }
+  // Opens the closed entry under the pointer after SPRING_LOAD_MS; any other anchor cancels it.
+  const armSpring = useCallback((press: Press, live: Live, hit: Hit): void => {
+    const row = hit.kind === 'inside' ? latest.current.rows[hit.row] : undefined;
+    const wanted = row !== undefined && row.hasChildren && !row.expanded ? row.index : null;
+    if ((live.spring?.row ?? null) === wanted) return;
+    clearSpring(live);
+    if (wanted === null) return;
+    const timer = setTimeout(() => {
+      if (pressRef.current !== press || press.live !== live) return;
+      if (live.spring?.row !== wanted) return;
+      live.spring = null;
+      latest.current.onSpringLoad(wanted);
+    }, SPRING_LOAD_MS);
+    live.spring = { row: wanted, timer };
   }, []);
+
+  // Shows the drop for the live pointer; schedules auto-scroll near the list's edges.
+  const update = useCallback(
+    (press: Press): void => {
+      const live = press.live;
+      const { listRef, entries, rows } = latest.current;
+      const list = listRef.current;
+      if (live === null || list === null || entries === null) return;
+      const rect = list.getBoundingClientRect();
+      const rtl = getComputedStyle(list).direction === 'rtl';
+      const x = rtl ? rect.right - live.clientX : live.clientX - rect.left;
+      const y = live.clientY - rect.top + list.scrollTop;
+      const hit = hitAt(live.boxes, y);
+      armSpring(press, live, hit);
+      const resolved = resolveDrop(entries, rows, press.index, hit, x, {
+        origin: live.origin,
+        step: live.step,
+      });
+      live.resolved = resolved;
+      const key = keyOf(resolved);
+      if (key !== live.key) {
+        live.key = key;
+        setDrag({ index: press.index, resolved });
+      }
+
+      const step = autoScrollStep(live.clientY, rect.top, rect.bottom);
+      if (step !== 0 && live.frame === null) {
+        live.frame = requestAnimationFrame(() => {
+          live.frame = null;
+          const frameList = latest.current.listRef.current;
+          if (frameList === null || pressRef.current !== press || press.live !== live) return;
+          const box = frameList.getBoundingClientRect();
+          const next = autoScrollStep(live.clientY, box.top, box.bottom);
+          if (next === 0) return;
+          frameList.scrollTop += next;
+          // The pointer did not move, but the rows under it did: recompute.
+          updateRef.current(press);
+        });
+      }
+    },
+    [armSpring],
+  );
   // The frame above reaches the current update through this ref (update cannot name itself).
   useLayoutEffect(() => {
     updateRef.current = update;
@@ -180,7 +225,7 @@ export function useOutlineDrag(options: OutlineDragOptions): OutlineDrag {
         // The capture was never taken, or is already gone.
       }
     }
-    stopFrame(live);
+    stopTimers(live);
     if (live === null) return false;
     setDrag(null);
     return true;
@@ -203,7 +248,7 @@ export function useOutlineDrag(options: OutlineDragOptions): OutlineDrag {
   }, [rowsKey, measure, update]);
 
   // Timers and frames must not outlive the panel.
-  useEffect(() => () => stopFrame(pressRef.current?.live ?? null), []);
+  useEffect(() => () => stopTimers(pressRef.current?.live ?? null), []);
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
     const { enabled, listRef } = latest.current;
@@ -249,6 +294,8 @@ export function useOutlineDrag(options: OutlineDragOptions): OutlineDrag {
         resolved: null,
         key: '',
         frame: null,
+        step: DEFAULT_INDENT_PX,
+        spring: null,
       };
       measure(press);
       latest.current.onStart(press.index);
