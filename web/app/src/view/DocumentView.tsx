@@ -88,10 +88,18 @@ import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
 import { MAX_TEXT_LAYERS, TextLayerCache } from '../text/textLayerCache';
-import { commitEdit, commitText, type EditChange, offerDroppedText } from '../edit/commit';
+import {
+  commitAdd,
+  commitEdit,
+  commitText,
+  type EditChange,
+  newTextBlock,
+  offerDroppedText,
+} from '../edit/commit';
 import { EditLayer, type EditSelection, type TextEdit } from '../edit/EditLayer';
 import { ObjectCache } from '../edit/objectCache';
 import { ShapeLayer } from '../edit/ShapeLayer';
+import { TextBoxLayer } from '../edit/TextBoxLayer';
 import { addImage, dropPendingImage, exportImage, pendingImageOf } from '../edit/images';
 import {
   addShape,
@@ -533,10 +541,11 @@ export function DocumentView({
   if (seenTool !== tool) {
     setSeenTool(tool);
     if (tool !== 'select') setCommentTool(null);
-    if (tool !== 'edit') {
-      setEditSelection(null);
-      setTextEdit(null);
-    }
+    if (tool !== 'edit') setEditSelection(null);
+    // An existing block is typed in under the Edit tool, a new block under Add Text (W6.8a 8a-2);
+    // leaving the tool that owns the open editor ends it, and the editor commits what was typed.
+    const owned = textEdit?.newRect !== undefined ? 'add-text' : 'edit';
+    if (textEdit !== null && tool !== owned) setTextEdit(null);
   }
   // A gesture the layer ended with a drag is committed here; the engine makes the change and the
   // selection it leaves is set by commitEdit (W6.7a S5).
@@ -547,10 +556,21 @@ export function DocumentView({
   );
   // The typed paragraph is committed as one step (W6.8a 8a-1). The editor stays open while the
   // engine is busy, and closes on any other outcome, so the caller learns whether to close.
+  // A new block (Add Text) is added in its box, and a successful add returns the tool to Select, as a
+  // shape does. A blank text adds nothing and closes the editor, with the tool left on.
   const applyTextEdit = useCallback(
     async (text: string): Promise<boolean> => {
       const edit = textEdit;
       if (edit === null) return true;
+      if (edit.newRect !== undefined) {
+        const drawnOn = tabId;
+        const outcome = await commitAdd(
+          { rpc, handle, cache: editObjects, scheduler },
+          { page: edit.page, rect: edit.newRect, text },
+        );
+        if (outcome === 'done' && text.trim() !== '') onToolChange?.('select', drawnOn);
+        return outcome !== 'busy';
+      }
       const outcome = await commitText(
         { rpc, handle, cache: editObjects, scheduler },
         { page: edit.page, revision: edit.revision, object: edit.object, text },
@@ -558,7 +578,7 @@ export function DocumentView({
       );
       return outcome !== 'busy';
     },
-    [textEdit, rpc, handle, editObjects, scheduler],
+    [textEdit, rpc, handle, editObjects, scheduler, tabId, onToolChange],
   );
   // Enter on a single selected editable paragraph opens it (W6.8a 8a-1, the keyboard path). Keys
   // from a field, a button or a dialog keep their own meaning.
@@ -1636,7 +1656,13 @@ export function DocumentView({
                         onCommit={commitChange}
                         rpc={rpc}
                         handle={handle}
-                        editing={textEdit !== null && textEdit.page === box.index ? textEdit : null}
+                        editing={
+                          textEdit !== null &&
+                          textEdit.page === box.index &&
+                          textEdit.newRect === undefined
+                            ? textEdit
+                            : null
+                        }
                         onOpenText={(object) =>
                           setTextEdit({
                             page: box.index,
@@ -1655,6 +1681,54 @@ export function DocumentView({
                           // replaced by another must not clear the new one.
                           setTextEdit((current) => (current === textEdit ? null : current))
                         }
+                      />
+                    ) : null}
+                    {tool === 'add-text' && sizes !== null ? (
+                      <TextBoxLayer
+                        cache={editObjects}
+                        page={box.index}
+                        revision={scheduler.revisionOf(box.index)}
+                        zoom={zoom}
+                        widthPt={sizes[box.index]?.width ?? 0}
+                        heightPt={sizes[box.index]?.height ?? 0}
+                        focusable={box.index === currentPage}
+                        rpc={rpc}
+                        handle={handle}
+                        editing={
+                          textEdit !== null &&
+                          textEdit.page === box.index &&
+                          textEdit.newRect !== undefined
+                            ? textEdit
+                            : null
+                        }
+                        onDraw={(rect) => {
+                          // One new block at a time: a box placed while one is open is not taken.
+                          if (textEdit !== null) return;
+                          setTextEdit({
+                            page: box.index,
+                            revision: scheduler.revisionOf(box.index),
+                            object: newTextBlock(rect),
+                            newRect: rect,
+                          });
+                        }}
+                        onOpenText={(object) => {
+                          // A click on an existing block edits it, under the Edit tool.
+                          onToolChange?.('edit', tabId);
+                          setTextEdit({
+                            page: box.index,
+                            revision: scheduler.revisionOf(box.index),
+                            object,
+                          });
+                        }}
+                        onApply={applyTextEdit}
+                        onClose={() =>
+                          setTextEdit((current) => (current === textEdit ? null : current))
+                        }
+                        commitOnLeave={() =>
+                          !textDropRef.current && mountedPagesRef.current.has(box.index)
+                        }
+                        onDrop={(text) => offerDroppedText(text)}
+                        onStop={() => onToolChange?.('select')}
                       />
                     ) : null}
                     {placeKind !== null && sizes !== null ? (

@@ -14,7 +14,7 @@ import {
 } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
-import type { PageObjectDto, RectDto, RunResult } from '../rpc/generated';
+import type { PageObjectDto, RectDto, RunResult, TextStyleDto } from '../rpc/generated';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { Affine } from './hitTest';
 import { reselect } from './hitTest';
@@ -284,6 +284,76 @@ export async function commitText(
   settle(
     next === undefined ? null : await reselected(deps, change.page, [change.object.bbox], next),
   );
+  return 'done';
+}
+
+// One typed new block (W6.8a 8a-2): `rect` is the box the gesture gave, in visible page points.
+export interface AddChange {
+  readonly page: number;
+  readonly rect: RectDto;
+  readonly text: string;
+}
+
+// The style a new block is set in: the desktop's DEFAULT_TEXT_STYLE (Helvetica 12, black, left,
+// line height 1.2). The engine's AddText takes a style, not null, so the default is sent in full.
+export const DEFAULT_TEXT_STYLE: TextStyleDto = {
+  font: 'Helvetica',
+  size: 12,
+  color: { r: 0, g: 0, b: 0, a: 1 },
+  bold: false,
+  italic: false,
+  align: 'left',
+  line_height: 1.2,
+  char_spacing: 0,
+  word_spacing: 0,
+};
+
+// The editor's stand-in for a block that does not exist yet: a text block at `rect`, with no key.
+export function newTextBlock(rect: RectDto): PageObjectDto {
+  return {
+    type: 'text',
+    key: '',
+    bbox: rect,
+    text: '',
+    style: DEFAULT_TEXT_STYLE,
+    editable: true,
+    reason: '',
+    image_size: [0, 0],
+    stroke: false,
+    fill: false,
+  };
+}
+
+// Adds a typed block (W6.8a 8a-2): one content.add_text, so one engine Command and one undo step.
+// A blank text is not sent (the editor closes, as the desktop's does). The errors are shown as for
+// commitText, and the reply says whether the editor closes (`busy` keeps it open with its text).
+export async function commitAdd(deps: CommitDeps, change: AddChange): Promise<TextOutcome> {
+  if (change.text.trim() === '') return 'done';
+  const store = deps.store ?? toasts;
+  const copy = copyAction(store, change.text);
+  let reply: RunResult;
+  try {
+    reply = await deps.rpc.call('actions.run', {
+      handle: deps.handle,
+      name: 'content.add_text',
+      args: { page: change.page, rect: change.rect, text: change.text, style: DEFAULT_TEXT_STYLE },
+    });
+  } catch (error) {
+    if (error instanceof RpcError && error.code === 'BUSY') {
+      reportRpcError(store, error);
+      return 'busy';
+    }
+    if (error instanceof RpcError) {
+      reportRpcError(store, error, undefined, copy);
+    } else {
+      store.push('error', t('edit.text.failed'), copy);
+    }
+    return 'failed';
+  }
+  if (!reply.executed) return 'done';
+  deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
+  // The new block has no selection to keep: the tool returns to Select, so the step is only offered.
+  offerEditUndo(deps, 'info', t('edit.textAdded'), reply, () => undefined);
   return 'done';
 }
 

@@ -595,9 +595,9 @@ export function App({
       });
     }
   };
-  // A shape tool toggles like the Edit tool: a second press returns to Select. A signed document
-  // asks once per tab first, as the Edit tool does (W6.7b).
-  const toggleShapeTool = (tool: ShapeTool) => {
+  // A shape tool or Add Text toggles like the Edit tool: a second press returns to Select. A signed
+  // document asks once per tab first, as the Edit tool does (W6.7b, W6.8a 8a-2).
+  const toggleEditTool = (tool: ShapeTool | 'add-text') => {
     if (activeId === null) return;
     if (viewTool === tool) {
       setViewTool(activeId, 'select');
@@ -716,9 +716,11 @@ export function App({
               setSignedEditAsk({ tabId: activeId, tool: 'edit' });
           },
           // The shape tools (W6.7b) draw one shape each, then return to Select.
-          'add-rectangle': () => toggleShapeTool('shape-rectangle'),
-          'add-ellipse': () => toggleShapeTool('shape-ellipse'),
-          'add-line': () => toggleShapeTool('shape-line'),
+          'add-rectangle': () => toggleEditTool('shape-rectangle'),
+          'add-ellipse': () => toggleEditTool('shape-ellipse'),
+          'add-line': () => toggleEditTool('shape-line'),
+          // Add Text (W6.8a 8a-2): a click or drag places one text block, then the tool returns to Select.
+          'add-text': () => toggleEditTool('add-text'),
           'add-image': () => void addImageFromPicker(),
           // Replace and Export (W6.7b slice 2b) act on the Edit tool's one selected picture. Export
           // names its file after the document.

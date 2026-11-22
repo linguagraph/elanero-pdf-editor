@@ -120,3 +120,16 @@
   stroke: var(--color-accent);
   stroke-width: 1.5px;
 }
+
+/* The Add Text layer (W6.8a 8a-2): it covers the page like the edit layer and takes the pointer
+   while the tool is on. The paragraph editor is placed inside it. */
+.text-box-layer {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: text;
+}
+
+.text-box-layer:focus {
+  outline: none;
+}
