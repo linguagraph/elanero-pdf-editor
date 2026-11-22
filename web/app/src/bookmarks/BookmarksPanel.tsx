@@ -39,7 +39,8 @@ export interface BookmarksPanelProps {
   readonly tabId: number;
   // The page shown in the view (zero-based): the place a bookmark goes to when the view has none.
   readonly currentPage: number;
-  // Changes when the structure or the outline changed (App's structureRevision): the outline reloads.
+  // Changes when the structure or the outline changed (App's structure and outline revisions): the
+  // outline reloads.
   readonly revision: number;
   // Reports the step an Undo toast undid or redid, so the app can refresh what it shows.
   readonly onHistoryStep: (reply: HistoryResult) => void;
