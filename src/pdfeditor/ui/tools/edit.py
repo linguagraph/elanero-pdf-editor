@@ -268,9 +268,9 @@ class EditObjectsTool(Tool):
 
 
 class _RectTool(Tool):
-    """Drag out a rectangle on one page (click for a default size)."""
+    """Drag out a rectangle on one page (click for a default size, or nothing when None)."""
 
-    default_size = (200.0, 40.0)
+    default_size: tuple[float, float] | None = (200.0, 40.0)
 
     def __init__(self) -> None:
         self._start: tuple[int, Point] | None = None
@@ -303,6 +303,8 @@ class _RectTool(Tool):
         view.set_annotation_preview({})
         b = view.scene_to_page(page, view.mapToScene(event.position().toPoint()))
         if abs(b.x - a.x) < MIN_DRAG and abs(b.y - a.y) < MIN_DRAG:
+            if self.default_size is None:
+                return True  # nothing to add; the tool stays active for the real drag
             w, h = self.default_size
             b = Point(a.x + w, a.y + h)
         bounds = view.page_rect(page)
@@ -383,7 +385,9 @@ class AddImageTool(_RectTool):
 
 
 class AddShapeTool(_RectTool):
-    default_size = (120.0, 80.0)
+    # A click adds nothing: a default-size shape would be committed under the pointer and the
+    # tool would drop back to Select, so the next drag moved that shape instead of drawing one.
+    default_size = None
 
     def __init__(self, kind: ShapeKind) -> None:
         super().__init__()
