@@ -1,9 +1,11 @@
-// W8.1 S6: links (W5.3). A goto link on a rotated page moves the view and Back returns; a web link
-// asks first in the confirm dialog, and Cancel or Open decide what happens; the refused links show
-// their notice and open nothing. The flows only read the document, so nothing is saved and no host
+// W8.1 S6: links (W5.3). A goto link on a rotated page sits on its text and moves the view; a longer
+// jump is recorded and Back returns; a web link asks first in the confirm dialog, and Cancel or Open
+// decide what happens; the refused links show their notice and open nothing; axe checks the link
+// layer and the dialog. The flows only read the document, so nothing is saved and no host
 // check is recorded (as text.spec.ts). window.open is stubbed to log its arguments and open nothing,
 // so the run makes no third-party request.
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { checkAxe, KNOWN_TAB_ISSUES } from './axe';
 import { STAGED, fixture, openApp, openPdf, watchPage } from './support';
 
 // The window.open calls the stub logged, one entry per call: its arguments.
@@ -43,7 +45,7 @@ async function overlaps(a: Locator, b: Locator): Promise<boolean> {
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
-  test('a goto link on a rotated page moves the view, and Back returns to page 1', async ({
+  test('a goto link on a rotated page sits on its text and moves the view to page 2', async ({
     page,
   }) => {
     const problems = watchPage(page);
@@ -65,9 +67,34 @@ test.describe('engine staged', () => {
     await link.click();
     await expect(jump).toHaveValue('2');
 
+    // A move of one page is not recorded in the history (navigation.ts recordJump, W5.3 design
+    // question 3), so a link to the next page leaves Back off. The next test covers Back.
     const back = page.locator('.doc-status').getByRole('button', { name: 'Back', exact: true });
+    await expect(back).toBeDisabled();
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
+
+  test('a goto link jumps to page iv, and Back returns to page i', async ({ page }) => {
+    const problems = watchPage(page);
+    await openApp(page);
+    await openPdf(page, 'outline.pdf', fixture('outline.pdf'));
+
+    // outline.pdf numbers its pages in roman, so the field and the link name show the labels.
+    const jump = page.getByRole('textbox', { name: 'Go to page' });
+    await expect(jump).toHaveValue('i');
+    const back = page.locator('.doc-status').getByRole('button', { name: 'Back', exact: true });
+    await expect(back).toBeDisabled();
+
+    await page
+      .locator('[data-page="0"] .page-link-layer')
+      .getByRole('link', { name: 'Go to page iv', exact: true })
+      .click();
+    await expect(jump).toHaveValue('iv');
+
     await back.click();
-    await expect(jump).toHaveValue('1');
+    await expect(jump).toHaveValue('i');
+    await expect(back).toBeDisabled();
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
@@ -102,6 +129,25 @@ test.describe('engine staged', () => {
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
+  // The accessibility line (#554): axe on the document with its link layer, then with the confirm
+  // dialog open. Only the tab strip's known issues (axe.ts) are excused.
+  test('axe: the link layer and the confirm dialog', async ({ page }, testInfo) => {
+    const problems = watchPage(page);
+    await stubWindowOpen(page);
+    await openApp(page);
+    await openPdf(page, 'outline.pdf', fixture('outline.pdf'));
+
+    const link = page.getByRole('link', { name: 'Link to example.org', exact: true });
+    await expect(link).toBeVisible();
+    await checkAxe(page, testInfo, KNOWN_TAB_ISSUES);
+
+    await link.click();
+    await expect(page.getByRole('dialog', { name: 'Open link?' })).toBeVisible();
+    await checkAxe(page, testInfo, KNOWN_TAB_ISSUES);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
+
   test('refused links show their notice and open nothing', async ({ page }) => {
     const problems = watchPage(page);
     await stubWindowOpen(page);
@@ -111,6 +157,17 @@ test.describe('engine staged', () => {
     const notice = page.locator('.doc-link-notice');
     const dialog = page.getByRole('dialog');
     const jump = page.getByRole('textbox', { name: 'Go to page' });
+
+    // Page 1's link with an empty destination: MuPDF reports it as a named action, so the engine
+    // lists it as unsupported (tests/unit/test_webapi_links.py), not as a link with no page. It
+    // comes first, so its notice is the first one shown. The no-destination notice has no fixture
+    // link; PageLinkLayer.test.tsx and linkTarget.test.ts cover it.
+    await expect(jump).toHaveValue('1');
+    await page
+      .locator('[data-page="0"] .page-link-layer')
+      .getByRole('link', { name: 'Unsupported link', exact: true })
+      .click();
+    await expect(notice).toHaveText('This kind of link does not work in the web version.');
 
     // Page 2, top to bottom: the javascript: link, the malformed link, then the Launch link. The
     // first and last share the name "Unsupported link", so they are picked by position; the notice
@@ -128,16 +185,6 @@ test.describe('engine staged', () => {
 
     await page2.locator('.page-link').nth(2).click();
     await expect(notice).toHaveText('This kind of link does not work in the web version.');
-
-    // Page 1's link with no destination.
-    await jump.fill('1');
-    await jump.press('Enter');
-    await expect(jump).toHaveValue('1');
-    await page
-      .locator('.page-link-layer')
-      .getByRole('link', { name: 'Link with no destination', exact: true })
-      .click();
-    await expect(notice).toHaveText('This link does not lead to a page in this document.');
 
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => openLog(page)).toEqual([]);

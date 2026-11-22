@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REGISTRY } from '../commands/catalog';
 import { type CommandState } from '../commands/registry';
 import { createJobProgressStore } from '../feedback/jobRun';
@@ -19,6 +19,9 @@ import { SpaceAuditTable } from '../compress/SpaceAuditTable';
 import { CommentsExportDialog } from '../commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from '../commentsImport/CommentsImportDialog';
 import { LinkConfirmDialog } from '../links/LinkConfirmDialog';
+import { LinkCache, type LinksRpc } from '../links/linkCache';
+import { PageLinkLayer } from '../links/PageLinkLayer';
+import type { LinksResult } from '../rpc/generated';
 import { ExportDialog } from '../export/ExportDialog';
 import { FlattenDialog } from '../flatten/FlattenDialog';
 import { runAxe } from '../test/axe';
@@ -254,6 +257,43 @@ describe('dialogs that open on an engine session (W8.5 S1)', () => {
   it('comments import dialog', async () => {
     render(<CommentsImportDialog isOpen onClose={() => undefined} engine={engine} handle="h1" />);
     await expectAccessible();
+  });
+
+  it('page link layer (W5.3)', async () => {
+    // One link of each kind the layer names: a page, a web link, a mail link, a malformed address,
+    // a link with no destination and a refused one.
+    const rect = (y: number) => ({ x0: 72, y0: y, x1: 150, y1: y + 14 });
+    const result: LinksResult = {
+      revision: 1,
+      truncated: false,
+      links: [
+        { rect: rect(100), kind: 'goto', page: 1, top: null, uri: '' },
+        { rect: rect(120), kind: 'uri', page: null, top: null, uri: 'https://example.org/' },
+        { rect: rect(140), kind: 'uri', page: null, top: null, uri: 'mailto:a@example.org' },
+        { rect: rect(160), kind: 'uri', page: null, top: null, uri: 'https://' },
+        { rect: rect(180), kind: 'goto', page: null, top: null, uri: '' },
+        { rect: rect(200), kind: 'uri', page: null, top: null, uri: 'javascript:alert(1)' },
+      ],
+    };
+    const rpc: LinksRpc = {
+      call: vi.fn(() => Promise.resolve(result)) as unknown as LinksRpc['call'],
+    };
+    render(
+      <PageLinkLayer
+        cache={new LinkCache(rpc, 'h')}
+        page={0}
+        revision={1}
+        zoom={1}
+        labels={[]}
+        onFollow={() => undefined}
+      />,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // The layer must have placed the links, or an empty layer would pass for free.
+    expect(host.querySelectorAll('[role="link"]')).toHaveLength(6);
+    await expectAccessible(host);
   });
 
   it('link confirm dialog (W5.3)', async () => {

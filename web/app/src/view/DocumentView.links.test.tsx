@@ -185,6 +185,40 @@ describe('DocumentView links (W5.3)', () => {
     open.mockRestore();
   });
 
+  it('a tap on a web link focuses it, so Cancel returns the focus to the link', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    await mount('select');
+    scroller().focus();
+    tap(link(1));
+    const cancel = [...document.querySelectorAll<HTMLElement>('.overlay-dialog button')].find(
+      (button) => button.textContent === t('links.confirm.cancel'),
+    );
+    if (cancel === undefined) throw new Error('no Cancel button');
+    expect(document.activeElement).toBe(cancel);
+    // A mouse press on Cancel as the browser sends it: react-aria presses on the pointer events.
+    pointer(cancel, 'pointerdown', 1, 1);
+    pointer(cancel, 'mousedown', 1, 1);
+    pointer(cancel, 'pointerup', 1, 1);
+    pointer(cancel, 'mouseup', 1, 1);
+    pointer(cancel, 'click', 1, 1);
+    // react-aria restores the focus in an animation frame after the dialog unmounts.
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    });
+    expect(document.querySelector('.overlay-dialog')).toBeNull();
+    expect(document.activeElement).toBe(link(1));
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it('a tap on a goto link leaves the focus where it was', async () => {
+    await mount('select', { onLinkGoTo: vi.fn() });
+    const element = scroller();
+    element.focus();
+    tap(link(0));
+    expect(document.activeElement).toBe(element);
+  });
+
   it('a blocked link shows its notice with the scheme and opens nothing', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     act(() => {
