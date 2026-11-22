@@ -80,9 +80,11 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const lines = pageLines(page, 0);
+    // allTextContents does not wait, so the lines must be drawn before they are read.
+    await expect(lines.nth(2)).toBeVisible();
     const all = await lines.allTextContents();
-    expect(all[1]?.trim(), 'second line has text').not.toBe('');
-    expect(all[2]?.trim(), 'third line has text').not.toBe('');
+    expect(all[1]?.trim() ?? '', 'second line has text').not.toBe('');
+    expect(all[2]?.trim() ?? '', 'third line has text').not.toBe('');
     const first = await lines.nth(1).boundingBox();
     const last = await lines.nth(2).boundingBox();
     if (first === null || last === null) throw new Error('page 1 has no text lines to select');
@@ -146,8 +148,9 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const lines = pageLines(page, 0);
+    await expect(lines.nth(3)).toBeVisible();
     const all = await lines.allTextContents();
-    expect(all[3]?.trim(), 'fourth line has text').not.toBe('');
+    expect(all[3]?.trim() ?? '', 'fourth line has text').not.toBe('');
     const first = await lines.nth(1).boundingBox();
     const last = await lines.nth(2).boundingBox();
     const target = await lines.nth(3).boundingBox();
@@ -172,12 +175,19 @@ test.describe('engine staged', () => {
       expect(box?.height, `handle ${index} height`).toBeGreaterThanOrEqual(44);
     }
 
-    // Drag the end handle down to the fourth line's end: the selection now covers three lines.
+    // Drag the end handle down to the fourth line's end: the selection now covers three lines. The
+    // handle hangs below its line and keeps the press's offset from the line's middle (section 3), so
+    // the finger moves down by the distance between the lines, not onto the fourth line itself.
     const endHandle = await page.locator('.selection-handle--end').boundingBox();
     if (endHandle === null) throw new Error('the end handle is not drawn');
     const grip = centre(endHandle);
     await touchEvent(cdp, 'touchStart', grip);
-    await dragFinger(cdp, grip, { x: target.x + target.width + 4, y: centre(target).y }, 12);
+    await dragFinger(
+      cdp,
+      grip,
+      { x: target.x + target.width + 4, y: grip.y + centre(target).y - centre(last).y },
+      12,
+    );
     await touchEvent(cdp, 'touchEnd');
 
     await page.keyboard.press('Control+C');
