@@ -31,7 +31,11 @@ test.describe('engine staged', () => {
     await expect(dialog).toBeVisible();
 
     // Smallest, then Compress: one job, and the result has the sizes and the space table.
-    await dialog.getByRole('radio', { name: 'Smallest (screen)', exact: true }).check();
+    // The radio input is visually hidden inside its label, which takes the click: click the label.
+    await dialog.getByText('Smallest (screen)', { exact: true }).click();
+    await expect(
+      dialog.getByRole('radio', { name: 'Smallest (screen)', exact: true }),
+    ).toBeChecked();
     await dialog.getByRole('button', { name: 'Compress', exact: true }).click();
     const table = dialog.getByRole('table');
     await expect(table).toBeVisible({ timeout: 120_000 });
@@ -59,7 +63,8 @@ test.describe('engine staged', () => {
     await openPdf(page, 'reduced.pdf', reduced);
     await openReduceFileSize(page);
     const again = page.getByRole('dialog', { name: 'Reduce file size' });
-    await again.getByRole('radio', { name: 'Lossless', exact: true }).check();
+    await again.getByText('Lossless', { exact: true }).click();
+    await expect(again.getByRole('radio', { name: 'Lossless', exact: true })).toBeChecked();
     await again.getByRole('button', { name: 'Compress', exact: true }).click();
     await expect(again.getByRole('status')).toContainText('do not make the file smaller', {
       timeout: 120_000,

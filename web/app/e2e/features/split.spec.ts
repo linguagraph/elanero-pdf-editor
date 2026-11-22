@@ -12,9 +12,10 @@ interface Saved {
 
 // Opens the Split command from the command palette and returns the dialog.
 async function openSplit(page: Page): Promise<Locator> {
-  await page.getByRole('searchbox', { name: 'Search tools' }).click();
-  await page.keyboard.type('Split');
-  await page.getByRole('option', { name: 'Split', exact: true }).click();
+  // One fill, not typed keys, as compress.spec.ts does. The option's accessible name also holds
+  // its tab and shortcut, so it is matched by its start.
+  await page.getByRole('searchbox', { name: 'Search tools' }).fill('Split');
+  await page.getByRole('option', { name: /^Split/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Split document' });
   await expect(dialog).toBeVisible();
   return dialog;
