@@ -92,8 +92,10 @@ version, it stays in `%LOCALAPPDATA%\pdfeditor` until you delete that folder.
 
 ## When Elanero uses the internet
 
-Elanero works offline. It connects to the internet only when you ask it to, with one exception: the
-Microsoft Store version checks for updates by itself (see below).
+Elanero works offline, except when you ask for a translation. Then, and only then, the text you
+selected is sent to the translation service you chose (see below). Otherwise it connects to the
+internet only when you ask it to, with one exception: the Microsoft Store version checks for
+updates by itself (see below).
 
 - **Checking for updates in the Microsoft Store (Store version only).** Once a day, and when you
   choose Help > Check for Updates, Elanero asks the Microsoft Store (Microsoft) whether a newer
@@ -104,16 +106,19 @@ Microsoft Store version checks for updates by itself (see below).
 - **Downloading an OCR language.** Elanero downloads the language file from GitHub
   (`github.com/tesseract-ocr/tessdata_fast`). GitHub sees your IP address, as with any
   download; see [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
-- **Translating selected text.** Translation is off until you agree to it once. After that,
-  when you select text and choose Translate, Elanero sends only that selected text to the
-  service you picked: MyMemory (Translated.net), DeepL, Microsoft Azure AI Translator, or a
-  LibreTranslate server you enter.
-  The service sees the text and your IP address. With MyMemory you can add an email address,
+- **Translating selected text.** Translation is off until you agree to it for the service you
+  pick. When you select text and choose Translate, Elanero sends only that selected text to that
+  service. Nothing is sent in the background. The services are:
+  - **MyMemory (Translated.net)**, the default. It is free and needs no key.
+  - **DeepL**, **Microsoft Azure AI Translator**, and **a LibreTranslate server you enter**. Each
+    needs your own key or server address.
+
+  The service sees the text and your IP address. With MyMemory you can enter an email address,
   which is sent with each request for a higher daily limit. Each service's privacy policy is
-  linked from the notice and from Preferences ▸ Translation. Your DeepL, Azure or LibreTranslate key
-  is stored encrypted for your Windows account, and is sent only to that service. The Azure
-  region, if you enter one, is stored as plain text. Nothing is
-  sent in the background, and you can turn translation off in Preferences.
+  linked from the notice and from Preferences ▸ Translation. Your DeepL, Azure or LibreTranslate
+  key is stored encrypted for your Windows account, and is sent only to that service. The Azure
+  region and the MyMemory email, if you enter them, are stored as plain text. You can turn
+  translation off in Preferences.
 - **Opening a link.** When you click a web link in a document or in Elanero, it opens in your
   web browser.
 - **Adding a timestamp to a signature.** If you turn on "Add a trusted timestamp" when signing
