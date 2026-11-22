@@ -3,8 +3,9 @@
 // engine check stays authoritative (pages of one document can differ in size); this one only saves
 // a round trip and names the page that would be too small.
 import type { PageRect } from '../comments/coordinates';
-import { parsePageRange } from '../print/printRange';
 import { t } from '../i18n/t';
+import { parsePageRange } from '../print/printRange';
+import type { PageRangeFailure } from '../pages/pageRanges';
 import type { PageSize } from '../rpc/generated';
 
 export type CropUnit = 'pt' | 'mm' | 'in';
@@ -78,7 +79,9 @@ export interface CropArgs {
 }
 
 export type CropCheck =
-  { readonly ok: true; readonly args: CropArgs } | { readonly ok: false; readonly message: string };
+  | { readonly ok: true; readonly args: CropArgs }
+  // range: the shared page-range rule's reason, set only when the typed range is what failed.
+  | { readonly ok: false; readonly message: string; readonly range?: PageRangeFailure };
 
 // The engine refuses a page left narrower or shorter than this (actions/pages.py).
 const MIN_SIDE_PT = 1;
@@ -99,22 +102,28 @@ function readMargin(text: string, unit: CropUnit): Margin {
   return { ok: true, points };
 }
 
-// The pages the scope names, 0-based, or null when the scope names none (a bad range, or a current
-// page outside the document).
+type ChosenPages =
+  | { readonly ok: true; readonly pages: number[] }
+  | { readonly ok: false; readonly range?: PageRangeFailure };
+
+// The pages the scope names, 0-based, or a refusal (a bad range, or a current page outside the
+// document). A refusal carries the range rule's reason only for a typed range.
 function choosePages(
   values: CropValues,
   sizes: readonly PageSize[],
   currentPage: number,
-): number[] | null {
+): ChosenPages {
   const count = sizes.length;
-  if (values.scope === 'all') return count > 0 ? sizes.map((_, index) => index) : null;
+  if (values.scope === 'all') {
+    return count > 0 ? { ok: true, pages: sizes.map((_, index) => index) } : { ok: false };
+  }
   if (values.scope === 'current') {
     return Number.isInteger(currentPage) && currentPage >= 1 && currentPage <= count
-      ? [currentPage - 1]
-      : null;
+      ? { ok: true, pages: [currentPage - 1] }
+      : { ok: false };
   }
-  const pages = parsePageRange(values.range, count);
-  return pages === undefined || pages.length === 0 ? null : [...pages];
+  const checked = parsePageRange(values.range, count);
+  return checked.ok ? { ok: true, pages: [...checked.pages] } : { ok: false, range: checked.error };
 }
 
 // Checks the form and builds the crop's arguments. Nothing is sent unless this returns ok.
@@ -130,8 +139,9 @@ export function checkCrop(
   for (const margin of [left, top, right, bottom]) {
     if (!margin.ok) return { ok: false, message: margin.message };
   }
-  const pages = choosePages(values, sizes, currentPage);
-  if (pages === null) return { ok: false, message: t('crop.error.range') };
+  const chosen = choosePages(values, sizes, currentPage);
+  if (!chosen.ok) return { ok: false, message: t('crop.error.range'), range: chosen.range };
+  const pages = chosen.pages;
   const margins = {
     left: left.ok ? left.points : 0,
     top: top.ok ? top.points : 0,

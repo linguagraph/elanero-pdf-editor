@@ -91,10 +91,35 @@ describe('pages', () => {
     expect(checkCrop(values({ scope: 'range', range: '' }), [LETTER], 1)).toEqual({
       ok: false,
       message: t('crop.error.range'),
+      range: { kind: 'empty', item: '' },
     });
     expect(checkCrop(values({ scope: 'range', range: '5' }), [LETTER], 1)).toEqual({
       ok: false,
       message: t('crop.error.range'),
+      range: { kind: 'out_of_range', item: '5' },
     });
+  });
+
+  // The shared page-range rule's vectors (web/test/vectors/page-ranges.json), on five pages.
+  it('refuses a range the shared rule refuses, and says why', () => {
+    const five = [LETTER, LETTER, LETTER, LETTER, LETTER];
+    expect(checkCrop(values({ scope: 'range', range: '3-2', left: '1' }), five, 1)).toEqual({
+      ok: false,
+      message: t('crop.error.range'),
+      range: { kind: 'invalid', item: '3-2' },
+    });
+    expect(checkCrop(values({ scope: 'range', range: '9', left: '1' }), five, 1)).toEqual({
+      ok: false,
+      message: t('crop.error.range'),
+      range: { kind: 'out_of_range', item: '9' },
+    });
+  });
+
+  it('accepts a range the shared rule accepts', () => {
+    const five = [LETTER, LETTER, LETTER, LETTER, LETTER];
+    const spaced = checkCrop(values({ scope: 'range', range: '1 - 3', left: '1' }), five, 1);
+    expect(spaced.ok && spaced.args.pages).toEqual([0, 1, 2]);
+    const repeated = checkCrop(values({ scope: 'range', range: '2;2,2', left: '1' }), five, 1);
+    expect(repeated.ok && repeated.args.pages).toEqual([1]);
   });
 });

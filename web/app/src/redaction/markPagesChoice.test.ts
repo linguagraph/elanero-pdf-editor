@@ -37,9 +37,38 @@ describe('choosePages', () => {
   });
 
   it('refuses a range that does not parse or names a page past the end', () => {
-    for (const range of ['', 'two', '2-', '3-1', '1-4', '1,,2', '0']) {
+    for (const range of ['', 'two', '3-1', '1-4', '0']) {
       expect(choosePages({ scope: 'range', range }, 3, 1).ok, range).toBe(false);
     }
+  });
+
+  // The shared page-range rule's vectors (web/test/vectors/page-ranges.json), on three pages.
+  it('refuses a range the shared rule refuses, and says why', () => {
+    expect(choosePages({ scope: 'range', range: '3-2' }, 3, 1)).toEqual({
+      ok: false,
+      message: t('markPages.error.range'),
+      range: { kind: 'invalid', item: '3-2' },
+    });
+    expect(choosePages({ scope: 'range', range: '9' }, 3, 1)).toEqual({
+      ok: false,
+      message: t('markPages.error.range'),
+      range: { kind: 'out_of_range', item: '9' },
+    });
+  });
+
+  it('accepts a range the shared rule accepts', () => {
+    expect(choosePages({ scope: 'range', range: '1 - 2' }, 3, 1)).toEqual({
+      ok: true,
+      pages: [0, 1],
+    });
+    expect(choosePages({ scope: 'range', range: '1,,2' }, 3, 1)).toEqual({
+      ok: true,
+      pages: [0, 1],
+    });
+    expect(choosePages({ scope: 'range', range: '2-' }, 3, 1)).toEqual({
+      ok: true,
+      pages: [1, 2],
+    });
   });
 
   it('refuses every scope on an empty document', () => {
