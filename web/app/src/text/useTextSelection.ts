@@ -18,6 +18,7 @@ import {
 import { CSS_PX_PER_POINT } from '../view/zoom';
 import { HIT_TOLERANCE, type PageTextIndex } from './pageTextIndex';
 import type { AreaPoint } from './textLayer';
+import { autoScrollDelta, type HandleEnd } from './SelectionHandles';
 import { extendFromWord, type TextPos, TextSelection } from './textSelection';
 import {
   IDLE,
@@ -60,10 +61,19 @@ export interface TextSelectionPointer {
   contextMenu(event: ReactMouseEvent<HTMLElement>): void;
   // Sets the model's selection, or clears it with null (Select All selects a page's whole text).
   select(selection: TextSelection | null): void;
+  // True when the last pointer that pressed was a touch or a pen: the selection handles show then
+  // (W5.4 S2, section 3). A mouse press hides them.
+  readonly handles: boolean;
+  // Called from a selection handle's pointer-down: `end` is the handle, `grab` the press's offset
+  // in CSS px from the line's middle. The handle's end is kept as the anchor and the pointer moves
+  // the other end.
+  startHandle(event: ReactPointerEvent<HTMLElement>, end: HandleEnd, grab: number): void;
 }
 
 export function useTextSelection(options: TextSelectionOptions): TextSelectionPointer {
   const [selection, setSelection] = useState<TextSelection | null>(null);
+  // The type of the last pointer that pressed the pages, for the selection handles (section 3).
+  const [lastPointer, setLastPointer] = useState<string | null>(null);
   // The drag's listeners read the latest options, not the ones of the press that started them.
   const latest = useRef(options);
   const stopDrag = useRef<(() => void) | null>(null);
@@ -99,6 +109,70 @@ export function useTextSelection(options: TextSelectionOptions): TextSelectionPo
     element.addEventListener('touchmove', guard, { passive: false });
     return () => element.removeEventListener('touchmove', guard);
   });
+
+  // A handle drag (W5.4 S2, section 3). The end the handle marks keeps its place as the anchor, and
+  // the pointer's caret, offset by `grab` so the line stays under the finger, is the focus. A caret
+  // equal to the anchor is refused, so a drag never empties the selection. The listeners sit on the
+  // window: the handles remount when they swap roles, and the drag goes on. Near the scroller's top
+  // or bottom edge the view scrolls a frame at a time, and the caret is read again after each step.
+  function startHandle(event: ReactPointerEvent<HTMLElement>, end: HandleEnd, grab: number): void {
+    const current = selected.current;
+    if (current === null || current.isEmpty) return;
+    setLastPointer(event.pointerType);
+    longPressed.current = false;
+    stopDrag.current?.();
+    const fixed = end === 'start' ? current.end : current.start;
+    const pointerId = event.pointerId;
+    let at = { x: event.clientX, y: event.clientY };
+    let frame: number | null = null;
+    const follow = () => {
+      const focus = caretAtPointer(latest.current, at.x, at.y - grab);
+      if (focus === null) return;
+      const next = new TextSelection(fixed, focus);
+      if (!next.isEmpty) commit(next);
+    };
+    const scrollStep = () => {
+      frame = null;
+      const scroller = latest.current.scroll.current;
+      if (scroller !== null) {
+        const delta = autoScrollDelta(scroller.getBoundingClientRect(), at.y);
+        if (delta !== 0) {
+          scroller.scrollTop += delta;
+          follow();
+        }
+      }
+      frame = requestAnimationFrame(scrollStep);
+    };
+    const onMove = (moved: PointerEvent) => {
+      if (moved.pointerId !== pointerId) return;
+      at = { x: moved.clientX, y: moved.clientY };
+      follow();
+    };
+    const finish = () => {
+      stopDrag.current?.();
+      latest.current.onGestureEnd?.(selected.current);
+    };
+    const onUp = (up: PointerEvent) => {
+      if (up.pointerId === pointerId) finish();
+    };
+    // A second pointer (a pinch) ends the drag and keeps the selection, as a touch selection does.
+    const onOther = (down: PointerEvent) => {
+      if (down.pointerId !== pointerId) finish();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('pointerdown', onOther);
+    frame = requestAnimationFrame(scrollStep);
+    stopDrag.current = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('pointerdown', onOther);
+      stopDrag.current = null;
+    };
+  }
 
   function clearTimer(): void {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -204,6 +278,8 @@ export function useTextSelection(options: TextSelectionOptions): TextSelectionPo
   return {
     selection,
     select: commit,
+    handles: lastPointer === 'touch' || lastPointer === 'pen',
+    startHandle,
     contextMenu(event) {
       if (gesture.current.phase === 'pending') feed({ type: 'contextmenu' });
       if (longPressed.current) event.preventDefault();
@@ -211,6 +287,7 @@ export function useTextSelection(options: TextSelectionOptions): TextSelectionPo
     startPress(event) {
       const current = latest.current;
       longPressed.current = false;
+      setLastPointer(event.pointerType);
       if (!current.enabled || event.button !== 0) return false;
       if (event.pointerType === 'touch' || event.pointerType === 'pen') {
         return startTouch(event, current);

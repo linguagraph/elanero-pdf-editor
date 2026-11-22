@@ -44,3 +44,50 @@
   background: rgb(0 96 192 / 35%);
   pointer-events: none;
 }
+
+.page-text-layer--handles {
+  overflow: visible;
+}
+
+/* The selection handles (W5.4 S2): a 44 x 44 CSS px hit box under the selection's end line, always,
+   not only under pointer: coarse (the W8.5 rule). touch-action none keeps a drag on a handle from
+   scrolling. The knob sits at the top of the box; the stem reaches up to the line. */
+.selection-handle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.selection-handle__knob {
+  position: absolute;
+  top: 0;
+  left: 15px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.selection-handle__stem {
+  position: absolute;
+  left: 21px;
+  width: 2px;
+  background: var(--color-accent);
+  pointer-events: none;
+}
+
+/* In forced colours the knob and stem take the highlight colour, with a text-colour outline. */
+@media (forced-colors: active) {
+  .selection-handle__knob,
+  .selection-handle__stem {
+    background: Highlight;
+  }
+
+  .selection-handle__knob {
+    outline: 1px solid CanvasText;
+  }
+}

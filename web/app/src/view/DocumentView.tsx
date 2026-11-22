@@ -1495,6 +1495,12 @@ export function DocumentView({
                         markToolOn: redactionTools.state.active,
                       })}
                       selection={selecting ? textSelection.selection : undefined}
+                      handles={textSelection.handles}
+                      onHandlePress={(event, end, grab) => {
+                        // A handle press is not a link tap: lifting the finger must not follow one.
+                        linkPress.current = null;
+                        textSelection.startHandle(event, end, grab);
+                      }}
                     />
                     {linkLayerOn && sizes !== null ? (
                       <PageLinkLayer
