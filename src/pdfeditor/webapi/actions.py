@@ -36,6 +36,7 @@ from pdfeditor.webapi.errors import (
     RpcFailure,
 )
 from pdfeditor.webapi.events import changed_of, state_of
+from pdfeditor.webapi.fontrefs import check_font_refs
 from pdfeditor.webapi.registry import REGISTRY
 
 
@@ -59,6 +60,8 @@ def run_action(params: dto.RunParams, buffers: BufferTable) -> dto.RunResult:
         raise RpcFailure(INVALID_ARGS, "params.name: no such action", {"path": "params.name"})
     # The arguments name binary values by buffer, so they are converted with the call's table.
     args = from_json(layer.REGISTRY[params.name].args, params.args, buffers, "args")
+    # A FILE font ref may name only an uploaded face (W6.9 slice 2): the engine reads its path.
+    check_font_refs(args, "args")
     events = _Events()
     unsubscribe = session.subscribe(events)
     try:
