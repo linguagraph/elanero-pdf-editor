@@ -14,13 +14,26 @@ from enum import StrEnum
 from pdfeditor.actions import action
 from pdfeditor.actions.base import ActionResult, Refused, ensure_idle, execute_all
 from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
+from pdfeditor.actions.edit_geometry import is_click
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
-from pdfeditor.model.geometry import PageRects, Point, Quad, Rect
+from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef, callout_line
+from pdfeditor.model.color import Color
+from pdfeditor.model.geometry import PageRects, Point, Quad, Rect, simplify
 
 # The size of a sticky note's icon, in points (the desktop's NoteTool uses the same).
 NOTE_SIZE = 20.0
+# A text box or callout drawn as a click gets a box this size (the desktop's default).
+DEFAULT_BOX_SIZE = (180.0, 40.0)
+# The most points one comment takes (a pen stroke at 60 Hz is about 1 000 points).
+MAX_POINTS = 10_000
+# The most UTF-8 bytes of text one comment takes.
+MAX_TEXT_BYTES = 64 * 1024
+# Stroke simplification tolerance for a pen stroke, in points (the desktop's InkTool).
+INK_TOLERANCE = 0.6
+# Polygon or polyline vertices closer than this (Manhattan, points) are one: a double-click
+# leaves a duplicate behind (the desktop's PolyTool.finish drops it).
+REPEAT_TOLERANCE = 1.0
 
 
 def build_note(page: int, point: Point, text: str, author: str = "") -> AnnotationModel:
@@ -42,7 +55,7 @@ def build_note(page: int, point: Point, text: str, author: str = "") -> Annotati
 
 
 def build_shape(kind: AnnotationType, page: int, rect: Rect, author: str = "") -> AnnotationModel:
-    """A square (rectangle tool) drawn in the desktop's default style for ``kind``."""
+    """A square (rectangle tool) or circle (oval tool) drawn in the desktop's default style."""
     style = DEFAULT_STYLES[kind]
     return AnnotationModel(
         kind,
@@ -80,31 +93,152 @@ def build_markup(
     )
 
 
+def build_text_box(page: int, box: Rect, text: str, author: str = "") -> AnnotationModel:
+    """A text box: black 12 pt text and no border colour, as the desktop's Text Box tool."""
+    style = DEFAULT_STYLES[AnnotationType.FREE_TEXT]
+    return AnnotationModel(
+        AnnotationType.FREE_TEXT,
+        page,
+        box,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        contents=text,
+        text_color=Color(0, 0, 0),
+        font_size=12.0,
+    )
+
+
+def build_callout(page: int, tip: Point, box: Rect, text: str, author: str = "") -> AnnotationModel:
+    """A text box with a leader line from ``tip`` to ``box``, with an open arrow at the tip."""
+    style = DEFAULT_STYLES[AnnotationType.FREE_TEXT]
+    return AnnotationModel(
+        AnnotationType.FREE_TEXT,
+        page,
+        box,
+        color=Color(0, 0, 0),  # the box's border and the leader line
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        contents=text,
+        text_color=Color(0, 0, 0),
+        font_size=12.0,
+        vertices=callout_line(tip, box),
+        line_endings=("OpenArrow", "None"),
+    )
+
+
+def build_ink(page: int, stroke: list[Point], author: str = "") -> AnnotationModel:
+    """A freehand stroke, already simplified: one stroke per comment."""
+    style = DEFAULT_STYLES[AnnotationType.INK]
+    return AnnotationModel(
+        AnnotationType.INK,
+        page,
+        Rect.from_points(stroke),
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        ink=(tuple(stroke),),
+    )
+
+
+def build_line(page: int, a: Point, b: Point, arrow: bool, author: str = "") -> AnnotationModel:
+    """A line from ``a`` to ``b``; ``arrow`` puts an open arrow at ``b``."""
+    style = DEFAULT_STYLES[AnnotationType.LINE]
+    return AnnotationModel(
+        AnnotationType.LINE,
+        page,
+        Rect.from_points([a, b]),
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        vertices=(a, b),
+        line_endings=("None", "OpenArrow" if arrow else "None"),
+    )
+
+
+def build_poly(
+    kind: AnnotationType, page: int, vertices: list[Point], author: str = ""
+) -> AnnotationModel:
+    """A polygon or polyline through ``vertices``."""
+    style = DEFAULT_STYLES[kind]
+    return AnnotationModel(
+        kind,
+        page,
+        Rect.from_points(vertices),
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        vertices=tuple(vertices),
+    )
+
+
+def default_box(tip: Point, at: Point) -> Rect:
+    """A default-size text box placed at ``at``, on the side of ``at`` away from the ``tip``."""
+    w, h = DEFAULT_BOX_SIZE
+    x0 = at.x if at.x >= tip.x else at.x - w
+    return Rect(x0, at.y - h / 2, x0 + w, at.y + h / 2)
+
+
 class CommentTool(StrEnum):
-    """The comment tools the web offers. The value is the name the web sends."""
+    """The comment tools the web offers. The value is the name the web sends, and the desktop's
+    tool name (``ui/tools/annotate.py``, ``tool_for``)."""
 
     NOTE = "note"
     RECTANGLE = "rectangle"
     HIGHLIGHT = "highlight"
+    TEXTBOX = "textbox"
+    CALLOUT = "callout"
+    PEN = "pen"
+    LINE = "line"
+    ARROW = "arrow"
+    OVAL = "oval"
+    POLYGON = "polygon"
+    POLYLINE = "polyline"
 
 
 @dataclass(frozen=True, slots=True)
 class CreateAnnotation:
-    """One comment from one gesture. ``rect`` is in page points, visible space, origin top-left.
-    A note uses only the top-left corner of ``rect``."""
+    """One comment from one gesture. Coordinates are in page points, visible space, origin
+    top-left.
+
+    A note uses the top-left corner of ``rect``. Box tools use ``rect``; a box too small to be a
+    drag gets the tool's default size where the tool has one (text box, callout). A callout's
+    ``rect`` is its box and its single tip is ``points[0]``. Pen, line, arrow, polygon and
+    polyline use ``points`` and ignore ``rect``."""
 
     tool: CommentTool
     page: int
     rect: Rect
     text: str = ""
     author: str = ""
+    points: tuple[Point, ...] = ()
 
 
 _UNDO_LABELS = {
     CommentTool.NOTE: "Add Sticky Note",
     CommentTool.RECTANGLE: "Add Rectangle",
     CommentTool.HIGHLIGHT: "Add Highlight",
+    CommentTool.TEXTBOX: "Add Text Box",
+    CommentTool.CALLOUT: "Add Callout",
+    CommentTool.PEN: "Add Drawing",
+    CommentTool.LINE: "Add Line",
+    CommentTool.ARROW: "Add Arrow",
+    CommentTool.OVAL: "Add Oval",
+    CommentTool.POLYGON: "Add Polygon",
+    CommentTool.POLYLINE: "Add Polyline",
 }
+
+# Tools whose comment is text: a blank text adds nothing.
+_TEXT_TOOLS = {CommentTool.NOTE, CommentTool.TEXTBOX, CommentTool.CALLOUT}
 
 
 def _clipped(rect: Rect, page: Rect) -> Rect | None:
@@ -116,6 +250,99 @@ def _clipped(rect: Rect, page: Rect) -> Rect | None:
     return Rect(x0, y0, x1, y1)
 
 
+def _is_drag(rect: Rect) -> bool:
+    """Whether ``rect`` was drawn as a drag rather than a click."""
+    return not is_click(Point(rect.x0, rect.y0), Point(rect.x1, rect.y1))
+
+
+def _clamped(points: tuple[Point, ...], page: Rect) -> list[Point]:
+    """``points`` moved onto the page (a drag may leave it). Refuses too many."""
+    if len(points) > MAX_POINTS:
+        raise Refused(f"a comment takes at most {MAX_POINTS:,} points")
+    return [Point(min(max(p.x, page.x0), page.x1), min(max(p.y, page.y0), page.y1)) for p in points]
+
+
+def _without_repeats(points: list[Point]) -> list[Point]:
+    out: list[Point] = []
+    for p in points:
+        if not out or abs(p.x - out[-1].x) + abs(p.y - out[-1].y) > REPEAT_TOLERANCE:
+            out.append(p)
+    return out
+
+
+def _build_point_tool(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
+    """The comment for a pen, line, arrow, polygon or polyline; None when it adds nothing."""
+    pts = _clamped(args.points, page)
+    if args.tool is CommentTool.PEN:
+        stroke = simplify(pts, INK_TOLERANCE)
+        return build_ink(args.page, stroke, args.author) if len(stroke) >= 2 else None
+    if args.tool in (CommentTool.LINE, CommentTool.ARROW):
+        if len(pts) != 2:
+            raise Refused("a line takes exactly 2 points")
+        a, b = pts
+        if is_click(a, b):
+            return None
+        return build_line(args.page, a, b, args.tool is CommentTool.ARROW, args.author)
+    kind = AnnotationType.POLYGON if args.tool is CommentTool.POLYGON else AnnotationType.POLYLINE
+    vertices = _without_repeats(pts)
+    minimum = 3 if kind is AnnotationType.POLYGON else 2
+    if len(vertices) < minimum:
+        raise Refused(f"a {args.tool.value} takes at least {minimum} distinct points")
+    return build_poly(kind, args.page, vertices, args.author)
+
+
+def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
+    """The comment ``args`` describes, or None when the gesture adds nothing (off the page, too
+    small, or a text tool with no text). Raises Refused for input the web can't legitimately send.
+    """
+    tool = args.tool
+    if len(args.text.encode("utf-8")) > MAX_TEXT_BYTES:
+        raise Refused(f"a comment's text takes at most {MAX_TEXT_BYTES // 1024} KiB")
+    if tool in _TEXT_TOOLS and not args.text.strip():
+        return None
+    if tool is CommentTool.NOTE:
+        point = Point(args.rect.x0, args.rect.y0)
+        icon = Rect(point.x, point.y, point.x + NOTE_SIZE, point.y + NOTE_SIZE)
+        if _clipped(icon, page) is None:  # the click is off the page
+            return None
+        return build_note(args.page, point, args.text, args.author)
+    if tool in (
+        CommentTool.PEN,
+        CommentTool.LINE,
+        CommentTool.ARROW,
+        CommentTool.POLYGON,
+        CommentTool.POLYLINE,
+    ):
+        return _build_point_tool(args, page)
+    if tool is CommentTool.CALLOUT:
+        pts = _clamped(args.points, page)
+        if len(pts) != 1:
+            raise Refused("a callout takes exactly 1 point, its tip")
+        tip = pts[0]
+        drawn = args.rect.normalized()
+        box = drawn if _is_drag(drawn) else default_box(tip, Point(drawn.x0, drawn.y0))
+        clipped = _clipped(box, page)
+        if clipped is None:
+            return None
+        return build_callout(args.page, tip, clipped, args.text, args.author)
+    if tool is CommentTool.TEXTBOX:
+        drawn = args.rect.normalized()
+        w, h = DEFAULT_BOX_SIZE
+        box = drawn if _is_drag(drawn) else Rect(drawn.x0, drawn.y0, drawn.x0 + w, drawn.y0 + h)
+        clipped = _clipped(box, page)
+        if clipped is None:
+            return None
+        return build_text_box(args.page, clipped, args.text, args.author)
+    area = _clipped(args.rect, page)
+    if area is None:  # off the page, or a click without a drag
+        return None
+    if tool is CommentTool.RECTANGLE:
+        return build_shape(AnnotationType.SQUARE, args.page, area, args.author)
+    if tool is CommentTool.OVAL:
+        return build_shape(AnnotationType.CIRCLE, args.page, area, args.author)
+    return build_markup(AnnotationType.HIGHLIGHT, args.page, area, args.text, args.author)
+
+
 @action("annotations.create", CreateAnnotation, requires=WRITE)
 def create(session: DocumentSession, args: CreateAnnotation) -> ActionResult[tuple[AnnotRef, ...]]:
     ensure_idle(session)
@@ -124,20 +351,9 @@ def create(session: DocumentSession, args: CreateAnnotation) -> ActionResult[tup
         if not 0 <= args.page < session.document.page_count:
             raise Refused(f"page {args.page + 1} does not exist")
         page_rect = session.document.page(args.page).rect
-    if args.tool is CommentTool.NOTE:
-        point = Point(args.rect.x0, args.rect.y0)
-        icon = Rect(point.x, point.y, point.x + NOTE_SIZE, point.y + NOTE_SIZE)
-        if _clipped(icon, page_rect) is None:  # the click is off the page
-            return ActionResult(label, (), False)
-        model = build_note(args.page, point, args.text, args.author)
-    else:
-        box = _clipped(args.rect, page_rect)
-        if box is None:  # off the page, or a click without a drag
-            return ActionResult(label, (), False)
-        if args.tool is CommentTool.RECTANGLE:
-            model = build_shape(AnnotationType.SQUARE, args.page, box, args.author)
-        else:
-            model = build_markup(AnnotationType.HIGHLIGHT, args.page, box, args.text, args.author)
+    model = _build(args, page_rect)
+    if model is None:
+        return ActionResult(label, (), False)
     command = AddAnnotationCommand(model, label)
     if not execute_all(session, [command], label):
         return ActionResult(label, (), False)
