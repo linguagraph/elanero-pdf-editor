@@ -286,7 +286,7 @@ describe('serveEngine translation gate (W6.6)', () => {
     send({ kind: 'init', baseUrl: 'http://localhost/engine/' });
     send({ id: 1, method: 'dispatch', request: '{"method":"translation.translate"}' });
     send({ id: 2, method: 'dispatch', request: '{"method":"session.info"}' });
-    send({ id: 3, method: 'dispatch', request: '{"method":"translation.test","boom":1}' });
+    send({ id: 3, method: 'dispatch', request: '{"method":"translation.translate","boom":1}' });
     await flush();
     expect(seen).toEqual([true, false, true]);
     expect(armed.value).toBe(false);

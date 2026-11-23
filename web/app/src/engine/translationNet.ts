@@ -3,17 +3,12 @@
 // while armed. Python gets plain request objects, never a constructor that leads to the native class.
 
 // The origins translation may call: the CSP's connect-src minus 'self' (a Vitest test checks it).
-export const TRANSLATION_ORIGINS: readonly string[] = [
-  'https://api.mymemory.translated.net',
-  'https://api.cognitive.microsofttranslator.com',
-  'https://libretranslate.com',
-];
+// The web offers MyMemory only (W6.6 owner decision).
+export const TRANSLATION_ORIGINS: readonly string[] = ['https://api.mymemory.translated.net'];
 
-// The engine calls that may reach the network. The worker arms the gate for each of them.
-export const TRANSLATION_METHODS: ReadonlySet<string> = new Set([
-  'translation.translate',
-  'translation.test',
-]);
+// The engine calls that may reach the network. The worker arms the gate for each of them. S2 adds
+// nothing here: translation.translate joins the method table with the bubble (S3).
+export const TRANSLATION_METHODS: ReadonlySet<string> = new Set(['translation.translate']);
 
 // The part of XMLHttpRequest that the translation transport uses.
 export interface XhrLike {
@@ -38,7 +33,7 @@ export interface TranslationNet {
 const ALLOWED_METHODS: ReadonlySet<string> = new Set(['GET', 'POST']);
 
 // True only for an https address with no user name or password, on one of TRANSLATION_ORIGINS.
-// The origin is compared as a whole, so a look-alike host (libretranslate.com.example.test) fails.
+// The origin is compared as a whole, so a look-alike host (api.mymemory.translated.net.example.test) fails.
 export function isTranslationUrl(url: string): boolean {
   let parsed: URL;
   try {

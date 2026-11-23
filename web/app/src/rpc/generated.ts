@@ -1014,16 +1014,14 @@ export interface TranslationInfoResult {
   languages: Record<string, LanguageDto[]>;
 }
 
-/** One translation service the web offers (W6.6). The three are fixed by the CSP. */
+/** The translation service the web offers (W6.6): MyMemory, the only one, with no settings. */
 export interface TranslationServiceDto {
-  /** "mymemory", "azure" or "libretranslate" */
+  /** "mymemory" */
   id: string;
   /** the service's name for the pickers and the notice */
   name: string;
   /** its privacy policy, linked from the consent notice */
   privacy_url: string;
-  /** a key is needed before any request can be sent */
-  needs_key: boolean;
   /** False: the source language must be named (MyMemory) */
   detects_source: boolean;
   /** the longest selection the service takes at once */
@@ -2776,12 +2774,11 @@ export function decodeTranslationServiceDto(
   path: string,
 ): TranslationServiceDto {
   const o = expectObject(value, path);
-  checkKeys(o, ['id', 'name', 'privacy_url', 'needs_key', 'detects_source', 'max_chars'], path);
+  checkKeys(o, ['id', 'name', 'privacy_url', 'detects_source', 'max_chars'], path);
   return {
     id: expectString(field(o, 'id', path), `${path}.id`),
     name: expectString(field(o, 'name', path), `${path}.name`),
     privacy_url: expectString(field(o, 'privacy_url', path), `${path}.privacy_url`),
-    needs_key: expectBoolean(field(o, 'needs_key', path), `${path}.needs_key`),
     detects_source: expectBoolean(field(o, 'detects_source', path), `${path}.detects_source`),
     max_chars: expectInteger(field(o, 'max_chars', path), `${path}.max_chars`),
   };

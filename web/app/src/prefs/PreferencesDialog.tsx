@@ -13,6 +13,14 @@ import type { MessageId } from '../i18n/en';
 import type { FontLibrary } from '../fonts/fontLibrary';
 import { Overlay } from '../layout/Overlay';
 import { clearLocalData, type ClearAction } from '../storage/clearLocalData';
+import type { TranslationInfoResult } from '../rpc/generated';
+import { ConsentNotice } from '../translate/ConsentNotice';
+import {
+  agreedPatch,
+  hasCurrentConsent,
+  withdrawnPatch,
+  type TranslationInfoLoader,
+} from '../translate/consent';
 import { ACCENT_CHOICES, applyAccent, isAccentChoice } from '../theme/accent';
 import type { AccentId } from '../theme/tokens';
 import {
@@ -25,6 +33,7 @@ import {
 import {
   AUTHOR_NAME_MAX_LENGTH,
   cleanHexColour,
+  cleanLanguageCode,
   DEFAULT_PREFERENCES,
   OVERLAY_TEXT_MAX_LENGTH,
   PAGE_LAYOUT_CHOICES,
@@ -50,9 +59,16 @@ export interface PreferencesDialogProps {
   reloadPage?: () => void;
   // Opens the Keyboard Shortcuts dialog above this one; the draft here is kept (W4.5 D3).
   onShowShortcuts?: () => void;
+  // The translation service's languages and privacy link (translation.info). Left out in tests and
+  // when the engine is not ready: the page then offers only the app's language.
+  loadTranslationInfo?: TranslationInfoLoader;
   // The tab's uploaded fonts (W6.9 slice 4): the Fonts section. Tests leave it out.
   fonts?: FontLibrary;
 }
+
+// Elanero's own privacy policy, linked from the translation page and its notice (W6.6 section 13).
+const ELANERO_PRIVACY_URL =
+  'https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md';
 
 const THEME_LABELS: Readonly<Record<ThemeChoice, MessageId>> = {
   system: 'prefs.theme.system',
@@ -98,6 +114,7 @@ export function PreferencesDialog({
   clearData = () => clearLocalData(),
   reloadPage = () => window.location.reload(),
   onShowShortcuts = () => undefined,
+  loadTranslationInfo,
   fonts,
 }: PreferencesDialogProps) {
   const cancel = () => {
@@ -114,6 +131,7 @@ export function PreferencesDialog({
         clearData={clearData}
         reloadPage={reloadPage}
         onShowShortcuts={onShowShortcuts}
+        loadTranslationInfo={loadTranslationInfo}
         fonts={fonts}
       />
     </Overlay>
@@ -127,7 +145,22 @@ interface PreferencesFormProps {
   clearData: ClearAction;
   reloadPage: () => void;
   onShowShortcuts: () => void;
+  loadTranslationInfo?: TranslationInfoLoader;
   fonts: FontLibrary | undefined;
+}
+
+// The language name in the browser's own words; the English name from the service when the browser
+// does not know the code.
+function languageName(code: string, fallback: string): string {
+  try {
+    return (
+      new Intl.DisplayNames([document.documentElement.lang || 'en'], { type: 'language' }).of(
+        code,
+      ) ?? fallback
+    );
+  } catch {
+    return fallback;
+  }
 }
 
 // Mounted only while the dialog is open (the overlay renders nothing when closed), so every open
@@ -139,10 +172,13 @@ function PreferencesForm({
   clearData,
   reloadPage,
   onShowShortcuts,
+  loadTranslationInfo,
   fonts,
 }: PreferencesFormProps) {
   const [draft, setDraft] = useState<Preferences>(readPreferences);
   const [confirming, setConfirming] = useState(false);
+  const [translationInfo, setTranslationInfo] = useState<TranslationInfoResult | null>(null);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearFailed, setClearFailed] = useState(false);
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -158,6 +194,18 @@ function PreferencesForm({
   useEffect(() => {
     if (confirming) keepRef.current?.focus();
   }, [confirming]);
+
+  // The languages come from the engine once, when the dialog opens; a failure leaves the page usable.
+  useEffect(() => {
+    let live = true;
+    loadTranslationInfo?.().then(
+      (info) => live && setTranslationInfo(info),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [loadTranslationInfo]);
 
   const update = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     setDraft((previous) => ({ ...previous, [key]: value }));
@@ -196,6 +244,25 @@ function PreferencesForm({
     setClearing(false);
     setConfirming(false);
     setClearFailed(true);
+  };
+
+  // The switch: on asks for the notice (unless the current one was agreed to); off clears the
+  // record, so the notice asks again. Agreeing saves at once, as the bubble will (W6.6 section 7).
+  const chooseTranslation = (selected: boolean) => {
+    if (!selected) {
+      setDraft((previous) => ({ ...previous, ...withdrawnPatch() }));
+    } else if (hasCurrentConsent(draft)) {
+      update('translationEnabled', true);
+    } else {
+      setNoticeOpen(true);
+    }
+  };
+
+  const agreeToTranslation = () => {
+    const patch = agreedPatch();
+    writePreferences({ ...readPreferences(), ...patch });
+    setDraft((previous) => ({ ...previous, ...patch }));
+    setNoticeOpen(false);
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -323,6 +390,60 @@ function PreferencesForm({
           </select>
           <span className="prefs-hint">{t('prefs.layout.hint')}</span>
         </label>
+      </section>
+
+      <section className="prefs-section" aria-labelledby={`${ids}-translation`}>
+        <h3 id={`${ids}-translation`} className="prefs-heading">
+          {t('prefs.section.translation')}
+        </h3>
+        <Checkbox
+          className="prefs-option"
+          isSelected={draft.translationEnabled}
+          onChange={chooseTranslation}
+        >
+          {t('prefs.translation.enable')}
+        </Checkbox>
+        <label className="prefs-field" htmlFor={`${ids}-translation-language`}>
+          <span className="prefs-label">{t('prefs.translation.language')}</span>
+          <select
+            id={`${ids}-translation-language`}
+            className="prefs-select"
+            value={draft.translationTarget}
+            disabled={!draft.translationEnabled}
+            onChange={(event) => update('translationTarget', cleanLanguageCode(event.target.value))}
+          >
+            <option value="">{t('prefs.translation.sameAsApp')}</option>
+            {(translationInfo?.languages.mymemory ?? []).map((language) => (
+              <option key={language.code} value={language.code}>
+                {languageName(language.code, language.name)}
+              </option>
+            ))}
+          </select>
+          <span className="prefs-hint">{t('prefs.translation.languageHint')}</span>
+        </label>
+        <span className="prefs-hint">{t('prefs.translation.note')}</span>
+        <p className="prefs-hint">
+          {translationInfo === null ? null : (
+            <a
+              href={translationInfo.services[0]?.privacy_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('prefs.translation.mymemoryPrivacy')}
+            </a>
+          )}
+        </p>
+        <p className="prefs-hint">
+          <a href={ELANERO_PRIVACY_URL} target="_blank" rel="noopener noreferrer">
+            {t('prefs.translation.elaneroPrivacy')}
+          </a>
+        </p>
+        <ConsentNotice
+          isOpen={noticeOpen}
+          privacyUrl={translationInfo?.services[0]?.privacy_url}
+          onAgree={agreeToTranslation}
+          onCancel={() => setNoticeOpen(false)}
+        />
       </section>
 
       <section className="prefs-section" aria-labelledby={`${ids}-redaction`}>

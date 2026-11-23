@@ -27,6 +27,10 @@ const SAVED: Preferences = {
   redactionOverlayText: 'REDACTED',
   redactionTextColor: '#102030',
   accent: 'teal',
+  translationEnabled: true,
+  translationTarget: 'fr',
+  translationLastSource: 'de',
+  translationConsent: { service: 'mymemory', version: 1, at: '2026-11-23T10:00:00.000Z' },
 };
 
 afterEach(() => {
@@ -72,6 +76,10 @@ describe('preferences round trip', () => {
       redactionOverlayText: 'REDACTED',
       redactionTextColor: '#102030',
       accent: 'teal',
+      translationEnabled: true,
+      translationTarget: 'fr',
+      translationLastSource: 'de',
+      translationConsent: { service: 'mymemory', version: 1, at: '2026-11-23T10:00:00.000Z' },
     });
   });
 

@@ -20,6 +20,19 @@ export type PageLayoutChoice = (typeof PAGE_LAYOUT_CHOICES)[number];
 
 export const AUTHOR_NAME_MAX_LENGTH = 64;
 
+// Translation (W6.6): the web offers one service, MyMemory, with no settings. The consent record
+// sits with the other preferences; nothing about translation is secret.
+export const TRANSLATION_SERVICE = 'mymemory';
+const LANGUAGE_CODE_MAX_LENGTH = 16;
+const LANGUAGE_CODE_PATTERN = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/;
+
+// What the user agreed to: the service, the notice's version and the date (W6.6 section 7).
+export interface TranslationConsent {
+  readonly service: string;
+  readonly version: number;
+  readonly at: string;
+}
+
 // The redaction mark style (W4.5 S3): the desktop's MarkStyle defaults (black box, white text, no
 // overlay text). Each new mark takes the style at the time it is made; marks already made keep it.
 export const OVERLAY_TEXT_MAX_LENGTH = 64;
@@ -45,6 +58,12 @@ export interface Preferences {
   readonly redactionTextColor: string;
   // The accent colour preset (W4.5 S4); Blue is the default and the web's own dark blue.
   readonly accent: AccentId;
+  // Translation (W6.6 section 5): on only after the consent notice, the default target language
+  // ('' is the app's language), the last From language ('' before any choice) and the record.
+  readonly translationEnabled: boolean;
+  readonly translationTarget: string;
+  readonly translationLastSource: string;
+  readonly translationConsent: TranslationConsent | null;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -61,6 +80,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   redactionOverlayText: '',
   redactionTextColor: REDACTION_TEXT_COLOR_DEFAULT,
   accent: DEFAULT_ACCENT_ID,
+  translationEnabled: false,
+  translationTarget: '',
+  translationLastSource: '',
+  translationConsent: null,
 };
 
 // The non-theme preferences are one JSON object. The theme keeps its own key (theme.ts), because
@@ -159,6 +182,25 @@ export function cleanOverlayText(value: unknown): string {
   return printable.trim().slice(0, OVERLAY_TEXT_MAX_LENGTH);
 }
 
+// A language code as MyMemory and the app write it ("en", "pt-BR"); anything else is the empty code.
+export function cleanLanguageCode(value: unknown): string {
+  return typeof value === 'string' &&
+    value.length <= LANGUAGE_CODE_MAX_LENGTH &&
+    LANGUAGE_CODE_PATTERN.test(value)
+    ? value
+    : '';
+}
+
+// The stored record, or null when it is missing or not one this build wrote.
+export function cleanConsent(value: unknown): TranslationConsent | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  if (record.service !== TRANSLATION_SERVICE) return null;
+  if (typeof record.version !== 'number' || !Number.isInteger(record.version)) return null;
+  if (typeof record.at !== 'string' || Number.isNaN(Date.parse(record.at))) return null;
+  return { service: TRANSLATION_SERVICE, version: record.version, at: record.at.slice(0, 40) };
+}
+
 export function readPreferences(): Preferences {
   const record = readRecord();
   return {
@@ -190,6 +232,13 @@ export function readPreferences(): Preferences {
       DEFAULT_PREFERENCES.redactionTextColor,
     ),
     accent: pickChoice(record.accent, ACCENT_PRESETS, DEFAULT_PREFERENCES.accent),
+    translationEnabled:
+      typeof record.translationEnabled === 'boolean'
+        ? record.translationEnabled
+        : DEFAULT_PREFERENCES.translationEnabled,
+    translationTarget: cleanLanguageCode(record.translationTarget),
+    translationLastSource: cleanLanguageCode(record.translationLastSource),
+    translationConsent: cleanConsent(record.translationConsent),
   };
 }
 
@@ -221,6 +270,10 @@ export function writePreferences(prefs: Preferences): boolean {
       DEFAULT_PREFERENCES.redactionTextColor,
     ),
     accent: pickChoice(prefs.accent, ACCENT_PRESETS, DEFAULT_PREFERENCES.accent),
+    translationEnabled: prefs.translationEnabled,
+    translationTarget: cleanLanguageCode(prefs.translationTarget),
+    translationLastSource: cleanLanguageCode(prefs.translationLastSource),
+    translationConsent: cleanConsent(prefs.translationConsent),
   };
   setTheme(prefs.theme);
   const saved = writeStoredValue(PREFS_STORAGE_KEY, JSON.stringify(record));

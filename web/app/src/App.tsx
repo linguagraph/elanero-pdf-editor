@@ -171,6 +171,11 @@ export function App({
   const [findRequest, setFindRequest] = useState<FindRequest | undefined>(undefined);
   const findCount = useRef(0);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  // The translation languages and privacy link, read from the engine when the page opens (W6.6).
+  const loadTranslationInfo = useCallback(
+    async () => (await engine.whenReady()).call('translation.info', {}),
+    [engine],
+  );
   // About Elanero (W4.3a S4), from the app menu.
   const [aboutOpen, setAboutOpen] = useState(false);
   // Keyboard Shortcuts (W4.5 S2): opened from Preferences only. It opens above Preferences, which
@@ -997,6 +1002,7 @@ export function App({
         hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
         onShowShortcuts={() => setShortcutsOpen(true)}
         clearData={clearData}
+        loadTranslationInfo={loadTranslationInfo}
         fonts={fonts}
       />
       <SaveAsDialog

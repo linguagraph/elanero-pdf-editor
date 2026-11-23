@@ -11,7 +11,6 @@ from typing import Any
 
 import pytest
 
-from pdfeditor.services.translation.azure import ENDPOINT as AZURE_ENDPOINT
 from pdfeditor.services.translation.http import Reply, Request
 from pdfeditor.services.translation.mymemory import ENDPOINT as MYMEMORY_ENDPOINT
 from pdfeditor.services.translation.web_http import WEB_ENDPOINT_ORIGINS, make_xhr_opener
@@ -137,14 +136,10 @@ def test_a_send_exception_is_a_network_failure(monkeypatch: pytest.MonkeyPatch) 
         make_xhr_opener()(Request("https://libretranslate.com/translate", "GET", {}, None), 5.0)
 
 
-def test_web_origins_are_the_three_from_w03() -> None:
-    """Hard-coded on purpose: the set must match docs/web/spikes/W0.3-results.md (its CSP
-    connect-src line lists the same three). Changing one means changing the spike too."""
-    assert {
-        "https://api.mymemory.translated.net",
-        "https://api.cognitive.microsofttranslator.com",
-        "https://libretranslate.com",
-    } == WEB_ENDPOINT_ORIGINS
+def test_web_origins_are_mymemory_only() -> None:
+    """Hard-coded on purpose: the web offers MyMemory alone (W6.6 owner decision), and the CSP's
+    connect-src and the engine gate list the same host. Changing one means changing all three."""
+    assert {"https://api.mymemory.translated.net"} == WEB_ENDPOINT_ORIGINS
 
 
 def test_web_origins_cover_each_default_endpoint() -> None:
@@ -152,16 +147,7 @@ def test_web_origins_cover_each_default_endpoint() -> None:
         parts = urllib.parse.urlsplit(url)
         return f"{parts.scheme}://{parts.netloc}"
 
-    assert {
-        "https://api.mymemory.translated.net",
-        "https://api.cognitive.microsofttranslator.com",
-        "https://libretranslate.com",
-    } == WEB_ENDPOINT_ORIGINS
-    assert origin(MYMEMORY_ENDPOINT) in WEB_ENDPOINT_ORIGINS
-    assert origin(AZURE_ENDPOINT) in WEB_ENDPOINT_ORIGINS
-    # LibreTranslate has no default host in code (the user names the server), so the list is
-    # the source of truth for its public instance.
-    assert "https://libretranslate.com" in WEB_ENDPOINT_ORIGINS
+    assert {origin(MYMEMORY_ENDPOINT)} == WEB_ENDPOINT_ORIGINS
 
 
 @pytest.mark.skipif(sys.platform == "emscripten", reason="no subprocesses in Pyodide")

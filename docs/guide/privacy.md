@@ -33,7 +33,8 @@ Microsoft Store version checks for updates by itself (see below).
 - **Downloading an OCR language**, from GitHub. GitHub sees your IP address, as it does for any
   download.
 - **Translating selected text**, once you have turned translation on. Only the text you selected is
-  sent, to the service you chose. See [Translation](translation.md).
+  sent, to the service you chose. In the web version that is MyMemory alone, sent from your browser
+  to MyMemory with no other details. See [Translation](translation.md).
 - **Opening a link**. Links to web pages open in your browser.
 - **Adding a timestamp to a signature**, if you turn it on and enter a timestamp server. Elanero sends
   that server a hash of the signature, not the document or your certificate. See

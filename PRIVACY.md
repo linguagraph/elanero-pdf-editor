@@ -29,7 +29,9 @@ site, and your documents are not uploaded to any server.
 - **Preferences and recent items** are stored in the browser's `localStorage`, under keys that start
   with `elanero.`:
   - `elanero.theme`: your colour theme (system, light or dark), one word.
-  - `elanero.prefs`: your other preferences, such as zoom, accent colour and language. It never holds
+  - `elanero.prefs`: your other preferences, such as zoom, accent colour and language.
+    It also records whether translation is on, your default translation language, the last
+    source language you chose, and the date you agreed to the translation notice. It never holds
     a password, token or key.
   - `elanero.recentFiles`: the names and opening times of up to ten recent files. No file bytes and
     no file paths.
@@ -50,17 +52,17 @@ site, and your documents are not uploaded to any server.
 **What leaves your device**
 
 - **Nothing from your documents.** The app loads only its own files from the site where it is
-  hosted. Its security policy allows the page to connect only to that site and to the three
-  translation services listed below.
-- **Translation (planned, not in this build).** When translation is built and you turn it on, the
-  text you select is sent to one of these services, and only these:
-  - MyMemory (Translated.net): `https://api.mymemory.translated.net`. If you enter an email address,
-    it is sent with each request to raise the daily limit.
-  - Microsoft Azure AI Translator: `https://api.cognitive.microsofttranslator.com`.
-  - LibreTranslate: `https://libretranslate.com`.
-
-  DeepL and other LibreTranslate servers are not available in the web version. Until translation is
-  built, this build sends no translation requests.
+  hosted. Its security policy allows the page to connect only to that site and to the MyMemory
+  translation service below.
+- **Translation.** Translation is off until you turn it on and agree to a notice, and the notice
+  asks again if it changes. When you select text and choose Translate, only that selected text is
+  sent, from your browser straight to MyMemory (Translated.net) at
+  `https://api.mymemory.translated.net`. There is no relay server, so MyMemory sees the text and
+  your IP address; its own privacy policy, linked from the notice, applies. Nothing is sent in the
+  background. The web version uses no translation keys or accounts and sends no email address or
+  other details with the text. If you want another translation service, such as DeepL, Microsoft
+  Azure or your own LibreTranslate server, use the Windows version of Elanero.
+  Until the Translate command ships, this build sends no translation requests.
 - **The hosting site.** GitHub Pages serves the app's files, and, as with any website, it sees the
   IP address of the request.
 
@@ -174,12 +176,14 @@ How the web version section was checked (repository paths):
 - Network allow-list: web/app/src/csp.ts `connect-src`; web/app/index.html carries the same
   policy (web/app/src/csp.test.ts checks they match). The app's own file load is same-origin:
   web/app/src/engine/loader.ts (defaultFetch).
-- Translation origins: web/app/src/csp.ts; src/pdfeditor/services/translation/web_http.py
-  (WEB_ENDPOINT_ORIGINS); MyMemory endpoint and optional `de` email field in
-  src/pdfeditor/services/translation/mymemory.py; Azure in azure.py; LibreTranslate in
-  libretranslate.py. DeepL is absent from the web set (web_http.py, csp.ts; docs/web/plan.md R4).
-- Translation is not in this build: no translation UI in web/app/src (only error strings in
-  web/app/src/i18n/en.ts); W6.6 is unticked in PLAN.md.
+- Translation origins, all MyMemory only: web/app/src/csp.ts (connect-src);
+  web/app/src/engine/translationNet.ts (TRANSLATION_ORIGINS); src/pdfeditor/services/translation/
+  web_http.py (WEB_ENDPOINT_ORIGINS). The single service is in src/pdfeditor/webapi/translate.py
+  (WEB_SERVICES). The web passes no email, so the `de` parameter is never sent
+  (src/pdfeditor/services/translation/mymemory.py). Consent: web/app/src/translate/consent.ts.
+- Translation sends no request in this build: the translate call is not in the engine's method
+  table until the bubble (W6.6 slice S3); web/app/src/translate/ holds only the consent notice.
+  W6.6 is unticked in PLAN.md.
 - Job workers lose fetch, XMLHttpRequest and WebSocket: web/app/src/engine/jobworker.ts
   (FORBIDDEN_GLOBALS).
 - GitHub Pages hosting: docs/web/plan.md (intro) and docs/web/design/W1.1.md section 9.
