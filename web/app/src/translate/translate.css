@@ -1,0 +1,85 @@
+/* The selection toolbar and the translation bubble (W6.6 section 8). Fixed to the window; the narrow
+   layout turns the bubble into a bottom sheet. */
+.selection-toolbar,
+.translate-bubble {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  gap: var(--space-1);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  padding: var(--space-1);
+}
+
+.selection-toolbar[data-above='true'],
+.translate-bubble[data-above='true'] {
+  transform: translateY(-100%);
+}
+
+.translate-bubble {
+  flex-direction: column;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.translate-bubble__langs,
+.translate-bubble__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.translate-bubble__langs label {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 110px;
+  min-width: 0;
+}
+
+.translate-bubble__result {
+  min-height: 3em;
+  max-height: 12em;
+  overflow: auto;
+  user-select: text;
+}
+
+.translate-bubble__text,
+.translate-bubble__result p {
+  margin: 0;
+}
+
+.translate-bubble__error {
+  color: var(--color-text);
+  font-style: italic;
+}
+
+.translate-bubble__credit {
+  margin: 0;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+.selection-toolbar button:focus-visible,
+.translate-bubble button:focus-visible,
+.translate-bubble select:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .translate-bubble {
+    top: auto !important;
+    left: 0 !important;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    transform: none !important;
+    border-radius: var(--radius-small) var(--radius-small) 0 0;
+  }
+}

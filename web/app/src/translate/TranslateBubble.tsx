@@ -125,13 +125,20 @@ export function TranslateBubble({
     const outside = (event: Event) => {
       if (!boxRef.current?.contains(event.target as Node)) onClose();
     };
+    // Escape closes from anywhere in the document: the bubble takes no focus (a focus move can
+    // clear the DOM selection and close it through selectionchange), so the key is read here.
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
     document.addEventListener('selectionchange', onSelection);
     document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', onEscape);
     window.addEventListener('scroll', outside, true);
     window.addEventListener('resize', onClose);
     return () => {
       document.removeEventListener('selectionchange', onSelection);
       document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', onEscape);
       window.removeEventListener('scroll', outside, true);
       window.removeEventListener('resize', onClose);
     };
@@ -164,9 +171,6 @@ export function TranslateBubble({
       className="translate-bubble"
       data-above={spot?.above ? 'true' : undefined}
       style={spot === null ? undefined : { top: spot.top, left: spot.left }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose();
-      }}
     >
       <div className="translate-bubble__langs">
         <label>

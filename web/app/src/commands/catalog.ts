@@ -36,6 +36,7 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   // The Comments panel's exports are not in the shared table yet; W7.1b adds the panel entry points.
   'export-comments',
   'import-comments',
+  'translate-selection',
 ]);
 
 // Desktop commands the web does not offer (W4.3b): New Window and Exit have no meaning in a browser
@@ -118,6 +119,7 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'save-as': 'save',
   'extract-image': 'image-down',
   'mark-text': 'text-search',
+  'translate-selection': 'languages',
   'whats-different': 'info',
   'install-app': 'upload',
   'open-recent': 'folder-open',
@@ -246,6 +248,7 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     'command.redact.keywords',
   ),
   cmd('mark-text', 'command.mark-text.label', 'protect.redact'),
+  cmd('translate-selection', 'command.translate-selection.label', 'home.tools', NEEDS_DOCUMENT),
   cmd('mark-whole-pages', 'command.mark-whole-pages.label', 'protect.redact'),
   cmd('redaction-properties', 'command.redaction-properties.label', 'protect.redact', ALWAYS),
   cmd('apply-redactions', 'command.apply-redactions.label', 'protect.redact', CAN_APPLY_REDACTIONS),

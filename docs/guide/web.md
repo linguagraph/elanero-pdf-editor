@@ -330,7 +330,6 @@ built in the web version yet:
 - editing the words of a paragraph, adding text, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
 - comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and watermarks;
 - the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
-- translation (which will be turned on only when you ask for it);
 - the **Install App** command.
 
 ## Browser support
@@ -407,7 +406,7 @@ pages: all pages, the current page, or a range such as `1-3, 5`. Then choose the
 - **The app's files** are kept by the browser so the editor works offline.
 
 The web version sends nothing to any server while you edit, and has no accounts, analytics or
-advertising. Translation, once it is available, is the only outside request, and it is opt-in. The
+advertising. Translation is the only outside request, and it is opt-in. The
 full policy, with what the desktop app stores, is in the
 [privacy policy](https://github.com/linguagraph/elanero-pdf-editor/blob/main/PRIVACY.md), and
 [Privacy](privacy.md) summarizes it.
@@ -449,7 +448,7 @@ full policy, with what the desktop app stores, is in the
 | Extract images | Yes | Yes (Tools tab, Export group, Extract Images; choose the pages to look at; several images come back as one ZIP) |
 | Extract fonts | Yes | Yes (Tools tab, Export group, Extract Fonts; a font whose licence forbids saving is not saved, and the dialog names it) |
 | Print | Yes | Yes (Home tab, File group, Print, or Ctrl+P; choose the page range and resolution, and whether comments are printed) |
-| Translation (opt-in) | Yes | Coming soon |
+| Translation (opt-in) | Yes | Yes (MyMemory only; select text, then Translate in the mini toolbar or the command palette; see [Translation](translation.md#in-the-web-version)) |
 | OCR and batch OCR | Yes | Desktop only (for now) |
 | Digital signatures | Yes | Desktop only (for now) |
 | PDF/A and accessibility checks | Yes | Desktop only (for now) |

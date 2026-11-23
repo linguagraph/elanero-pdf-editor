@@ -62,7 +62,6 @@ site, and your documents are not uploaded to any server.
   background. The web version uses no translation keys or accounts and sends no email address or
   other details with the text. If you want another translation service, such as DeepL, Microsoft
   Azure or your own LibreTranslate server, use the Windows version of Elanero.
-  Until the Translate command ships, this build sends no translation requests.
 - **The hosting site.** GitHub Pages serves the app's files, and, as with any website, it sees the
   IP address of the request.
 
@@ -181,9 +180,9 @@ How the web version section was checked (repository paths):
   web_http.py (WEB_ENDPOINT_ORIGINS). The single service is in src/pdfeditor/webapi/translate.py
   (WEB_SERVICES). The web passes no email, so the `de` parameter is never sent
   (src/pdfeditor/services/translation/mymemory.py). Consent: web/app/src/translate/consent.ts.
-- Translation sends no request in this build: the translate call is not in the engine's method
-  table until the bubble (W6.6 slice S3); web/app/src/translate/ holds only the consent notice.
-  W6.6 is unticked in PLAN.md.
+- Translation requests: the only call is translation.translate (src/pdfeditor/webapi/__init__.py),
+  sent from the engine worker's gate (web/app/src/engine/translationNet.ts) only after consent, by
+  the bubble in web/app/src/translate/TranslateFlow.tsx and TranslateBubble.tsx.
 - Job workers lose fetch, XMLHttpRequest and WebSocket: web/app/src/engine/jobworker.ts
   (FORBIDDEN_GLOBALS).
 - GitHub Pages hosting: docs/web/plan.md (intro) and docs/web/design/W1.1.md section 9.
