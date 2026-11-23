@@ -32,7 +32,9 @@ export function matchesChord(event: KeyEventLike, chord: Chord, isMac: boolean):
   // Control key on macOS (where Control+H is not Cmd+H and must not run the Hand tool).
   if (isMac ? event.ctrlKey : event.metaKey) return false;
   if (event.shiftKey !== chord.shift || event.altKey !== chord.alt) return false;
-  if (event.key.toLowerCase() === chord.key) return true;
+  // The table spells Space as its name, while KeyboardEvent.key gives a plain space character.
+  const pressed = event.key === ' ' ? 'space' : event.key.toLowerCase();
+  if (pressed === chord.key) return true;
   // With Alt (or Shift) on some platforms the key value changes, so a letter or digit is also
   // matched by its physical key code.
   if (/^[a-z0-9]$/.test(chord.key)) {

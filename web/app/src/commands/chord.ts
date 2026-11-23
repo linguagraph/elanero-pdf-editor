@@ -49,3 +49,71 @@ export function canonicalChord(text: string): string {
     chord.key,
   ].join('');
 }
+
+// The part of a keydown the key recorder reads. A type of its own keeps the function testable
+// without a browser.
+export interface RecordedKeyEvent {
+  readonly key: string;
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+// The outcome of one recorded keydown: a chord in the portable form, or the platform's other
+// modifier (Meta on Windows and Linux, Control on macOS), which the recorder does not accept in v1.
+export type RecordedChord =
+  { readonly kind: 'chord'; readonly text: string } | { readonly kind: 'os' };
+
+// Keys that only modify or lock other keys. Pressed alone they are ignored, so the recorder keeps
+// waiting. The lock keys and the Super, Hyper and Fn family are included, so they are not refused.
+const MODIFIER_KEYS: ReadonlySet<string> = new Set([
+  'Control',
+  'Shift',
+  'Alt',
+  'Meta',
+  'AltGraph',
+  'OS',
+  'CapsLock',
+  'NumLock',
+  'ScrollLock',
+  'Fn',
+  'FnLock',
+  'Super',
+  'Hyper',
+  'Symbol',
+  'SymbolLock',
+]);
+
+// KeyboardEvent.key names that the table spells another way (the inverse of KEY_NAMES above).
+const RECORDED_NAMES: Readonly<Record<string, string>> = {
+  ' ': 'Space',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  PageUp: 'PgUp',
+  PageDown: 'PgDn',
+  Escape: 'Esc',
+};
+
+// The key string a keydown stands for, or undefined for a modifier key pressed alone (the recorder
+// keeps waiting). Letters and digits come from the physical key, so Alt on macOS, which changes
+// event.key, still records "A" and "1". Ctrl means Cmd on macOS, as in the table.
+export function chordFromKeyEvent(
+  event: RecordedKeyEvent,
+  isMac: boolean,
+): RecordedChord | undefined {
+  if (MODIFIER_KEYS.has(event.key)) return undefined;
+  if (isMac ? event.ctrlKey : event.metaKey) return { kind: 'os' };
+  const letter = /^Key([A-Z])$/.exec(event.code);
+  const digit = /^Digit([0-9])$/.exec(event.code);
+  const name = letter?.[1] ?? digit?.[1] ?? RECORDED_NAMES[event.key] ?? event.key;
+  const parts: string[] = [];
+  if (isMac ? event.metaKey : event.ctrlKey) parts.push('Ctrl');
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+  parts.push(name);
+  return { kind: 'chord', text: parts.join('+') };
+}
