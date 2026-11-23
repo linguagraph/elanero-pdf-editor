@@ -1,5 +1,7 @@
 import { Button } from 'react-aria-components';
-import { displayKeys, effectiveKeys, isMacPlatform } from '../commands/shortcuts';
+import { effectiveKeys } from '../commands/bindings';
+import { displayKeys, isMacPlatform } from '../commands/shortcuts';
+import { useShortcutBindings } from '../commands/useShortcutBindings';
 import { type CommandState, type Registry } from '../commands/registry';
 import { isVisible } from '../commands/run';
 import { t } from '../i18n/t';
@@ -18,6 +20,7 @@ export interface ShortcutListProps {
 // The keyboard shortcuts help: every visible command with a binding, from the effective keys (the
 // web override where there is one). Shared by the command palette and the Keyboard Shortcuts dialog.
 export function ShortcutList({ registry, state, onBack }: ShortcutListProps) {
+  useShortcutBindings();
   const bound = registry.commands
     .filter((def) => isVisible(def, state))
     .map((def) => ({ def, keys: effectiveKeys(def.id) }))

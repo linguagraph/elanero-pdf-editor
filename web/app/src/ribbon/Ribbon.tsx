@@ -28,7 +28,9 @@ import {
   TAB_LABELS,
   type TabId,
 } from '../commands/registry';
-import { displayKeys, effectiveKeys, isMacPlatform, shortcutLabel } from '../commands/shortcuts';
+import { effectiveKeys } from '../commands/bindings';
+import { displayKeys, isMacPlatform, shortcutLabel } from '../commands/shortcuts';
+import { useShortcutBindings } from '../commands/useShortcutBindings';
 import { t } from '../i18n/t';
 import { layoutTierForWidth } from '../layout/breakpoints';
 import { useViewportWidth } from '../layout/useViewportWidth';
@@ -204,6 +206,7 @@ interface CollapseChevronProps {
 // The chevron at the tab row's end: it collapses or shows the ribbon. Its tooltip names the keys
 // the web binds (effectiveKeys), so a change to them shows up.
 function CollapseChevron({ expanded, onPress }: CollapseChevronProps) {
+  useShortcutBindings();
   const keys = effectiveKeys('collapse-ribbon');
   const label = expanded ? t('ribbon.collapse') : t('ribbon.expand');
   const tip =
@@ -394,6 +397,7 @@ export function CommandButton({
   onBlocked,
   compact,
 }: CommandButtonProps) {
+  useShortcutBindings();
   const reason = commandDisabledReason(def, state, handlers);
   const reasonId = useId();
   const shortcutId = useId();

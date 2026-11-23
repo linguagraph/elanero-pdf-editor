@@ -2,58 +2,16 @@
 // (web/src/shortcuts.web.ts) when it has one, and the shared table's keys otherwise. This module
 // parses the key strings, matches keyboard events against them and formats them for display. It
 // does no PDF work and calls no engine.
-import { WEB_SHORTCUT_OVERRIDES } from '../../../src/shortcuts.web';
+import { effectiveKeys, userKeys } from './bindings';
+import { type Chord, parseChord } from './chord';
 import { isVisible } from './run';
-import { sharedKeys, type CommandDef, type CommandState, type Registry } from './registry';
+import { type CommandDef, type CommandState, type Registry } from './registry';
+
+export { type Chord, parseChord } from './chord';
 
 // The palette's own shortcut. It is in the shared table but is not a registry command: it opens the
 // palette rather than running a command.
 export const PALETTE_SHORTCUT_ID = 'command-palette';
-
-const OVERRIDES: ReadonlyMap<string, readonly string[]> = new Map(
-  Object.entries(WEB_SHORTCUT_OVERRIDES),
-);
-
-// The keys a command is bound to on the web: the override when it has one (an empty override
-// means no shortcut), the shared table's keys otherwise.
-export function effectiveKeys(id: string): readonly string[] {
-  return OVERRIDES.get(id) ?? sharedKeys(id);
-}
-
-// One parsed key string, such as "Ctrl+Shift+P". `key` is lower case and names a key the way
-// KeyboardEvent.key does (letters, digits, "arrowleft", "pagedown", "tab", "f4", "=", "-").
-export interface Chord {
-  readonly ctrl: boolean;
-  readonly shift: boolean;
-  readonly alt: boolean;
-  readonly key: string;
-}
-
-// The table's names for keys that KeyboardEvent.key spells differently.
-const KEY_NAMES: Readonly<Record<string, string>> = {
-  left: 'arrowleft',
-  right: 'arrowright',
-  up: 'arrowup',
-  down: 'arrowdown',
-  pgup: 'pageup',
-  pgdn: 'pagedown',
-  esc: 'escape',
-};
-
-export function parseChord(text: string): Chord {
-  // "Ctrl++" is Ctrl with the plus key, so the key is "+" and the modifiers are the text before it.
-  const isPlusKey = text.endsWith('++');
-  const parts = (isPlusKey ? text.slice(0, -2) : text).split('+');
-  const name = isPlusKey ? '+' : (parts.pop() ?? '');
-  const modifiers = new Set(parts.map((part) => part.toLowerCase()));
-  const key = KEY_NAMES[name.toLowerCase()] ?? name.toLowerCase();
-  return {
-    ctrl: modifiers.has('ctrl'),
-    shift: modifiers.has('shift'),
-    alt: modifiers.has('alt'),
-    key,
-  };
-}
 
 // The part of the event a chord is matched against. A type of its own keeps the matcher testable
 // without a browser.
@@ -92,13 +50,17 @@ export function commandForEvent(
   state: CommandState,
   isMac: boolean,
 ): string | undefined {
-  const matches = (id: string): boolean =>
-    effectiveKeys(id).some((text) => matchesChord(event, parseChord(text), isMac));
-  if (matches(PALETTE_SHORTCUT_ID)) return PALETTE_SHORTCUT_ID;
-  const def = registry.commands.find(
-    (command: CommandDef) => isVisible(command, state) && matches(command.id),
+  const matches = (keys: readonly string[]): boolean =>
+    keys.some((text) => matchesChord(event, parseChord(text), isMac));
+  if (matches(effectiveKeys(PALETTE_SHORTCUT_ID))) return PALETTE_SHORTCUT_ID;
+  const visible = registry.commands.filter((command: CommandDef) => isVisible(command, state));
+  // A user binding wins over another command's default (design section 5): the user-bound commands
+  // are tried first, then the rest. Among equal sources registry order decides.
+  const userBound = visible.find(
+    (command) => userKeys(command.id) !== undefined && matches(effectiveKeys(command.id)),
   );
-  return def?.id;
+  if (userBound) return userBound.id;
+  return visible.find((command) => matches(effectiveKeys(command.id)))?.id;
 }
 
 // True on macOS, from the platform string (navigator.platform).

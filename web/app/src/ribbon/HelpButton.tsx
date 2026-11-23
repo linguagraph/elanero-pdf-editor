@@ -1,6 +1,8 @@
 import { Button, Tooltip, TooltipTrigger } from 'react-aria-components';
 import { type TabId } from '../commands/registry';
-import { displayKeys, effectiveKeys, isMacPlatform } from '../commands/shortcuts';
+import { effectiveKeys } from '../commands/bindings';
+import { displayKeys, isMacPlatform } from '../commands/shortcuts';
+import { useShortcutBindings } from '../commands/useShortcutBindings';
 import { openGuide, TAB_GUIDE_PAGE } from '../help/guide';
 import { t } from '../i18n/t';
 import { Icon } from '../theme/Icon';
@@ -17,6 +19,7 @@ export interface HelpButtonProps {
 // The "?" button at the tab row's end (W1.6 section 2). Its tooltip names the Help keys, so an
 // override from the shortcut settings shows up.
 export function HelpButton({ tab }: HelpButtonProps) {
+  useShortcutBindings();
   const keys = effectiveKeys('help');
   const tip =
     keys.length > 0 ? t('ribbon.helpTip', { keys: displayKeys(keys, IS_MAC) }) : t('ribbon.help');

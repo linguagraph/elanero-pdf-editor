@@ -6,13 +6,14 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
+import { effectiveKeys, isAlwaysPrevented } from '../commands/bindings';
 import {
   commandForEvent,
   displayKeys,
-  effectiveKeys,
   isMacPlatform,
   PALETTE_SHORTCUT_ID,
 } from '../commands/shortcuts';
+import { useShortcutBindings } from '../commands/useShortcutBindings';
 import {
   type CommandDef,
   type CommandState,
@@ -105,6 +106,8 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.defaultPrevented) return;
+      // Ctrl+O, Ctrl+S and Ctrl+P never reach the browser's own dialogs, bound or not (W4.x).
+      if (isAlwaysPrevented(event, IS_MAC)) event.preventDefault();
       const id = commandForEvent(event, registry, state, IS_MAC);
       if (id === undefined) return;
       if (id === PALETTE_SHORTCUT_ID) {
@@ -176,6 +179,8 @@ function locationLabel(registry: Registry, def: CommandDef): string {
 // aria-activedescendant (the combobox pattern), so the arrow keys move the highlight, not the focus.
 // The list is read once per opening (the Overlay unmounts it when closed), so a run shows next time.
 function CommandList({ registry, state, handlers, initialQuery, onRun }: CommandListProps) {
+  // Re-renders the rows when a shortcut changes, so each row shows the key the web now binds.
+  useShortcutBindings();
   const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
   const [recent] = useState(() => readRecentCommands());

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { WEB_SHORTCUT_OVERRIDES } from '../../../src/shortcuts.web';
 import shortcutTable from '../../../src/generated/shortcuts.json';
+import { effectiveKeys } from './bindings';
 import { DROPPED_IDS, MENU, REGISTRY } from './catalog';
 import { isSharedId, sharedKeys, type CommandState } from './registry';
 import {
   commandForEvent,
   displayKeys,
-  effectiveKeys,
   type KeyEventLike,
   isMacPlatform,
   matchesChord,
