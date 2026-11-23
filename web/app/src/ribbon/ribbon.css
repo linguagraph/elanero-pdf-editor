@@ -121,6 +121,18 @@
   border-color: var(--color-border);
 }
 
+/* A checked toggle (Select, Hand) stays marked while it is checked: the tint and the accent border
+   are the cue, and they win over hover so the pressed command does not look unpressed on hover. */
+.ribbon-command[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-accent);
+}
+
+.ribbon-command[aria-pressed='true']:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-accent);
+}
+
 .ribbon-command[data-focus-visible] {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 1px;
@@ -373,6 +385,18 @@
 .ribbon[data-form='compact'] .ribbon-command {
   min-width: 32px;
   padding: var(--space-1);
+}
+
+.ribbon[data-form='compact'] .ribbon-command[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-accent);
+}
+
+/* Forced colours drop the tint, so the pressed command keeps a solid border as its cue. */
+@media (forced-colors: active) {
+  .ribbon-command[aria-pressed='true'] {
+    border-color: CanvasText;
+  }
 }
 
 /* Touch targets are at least 44 px (W1.6, touch). */
