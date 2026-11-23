@@ -63,10 +63,10 @@ test.describe('engine staged', () => {
   test('not-smaller case: a reduced copy run with Lossless shows the table with no download', async ({
     page,
   }) => {
-    // Issue #610: the web reduce job compares with the wrong baseline (a re-save, not the opened
-    // file), so the not-smaller result below is not reached yet. See
-    // docs/web/design/W6.4-compress-spec-decision.md section 4. Remove this fixme with that fix.
-    test.fixme(true, 'issue #610: the web reduce job compares with the wrong baseline');
+    // Issue #610 is fixed (PR #644): the web reduce job compares with the file the user holds while
+    // the document is unchanged, so a reduced copy is not offered as smaller. See
+    // docs/web/design/W6.4-compress-spec-decision.md section 4. This runs in the Web
+    // end-to-end workflow.
     const problems = watchPage(page);
     const original = fixture('heavy.pdf');
     await openApp(page);
