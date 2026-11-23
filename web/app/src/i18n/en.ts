@@ -363,7 +363,7 @@ export const EN = {
   'command.extract-fonts.label': 'Extract Fonts',
   'command.create-pdf-from-office-file.label': 'Create from Office',
   'command.reduce-file-size.label': 'Reduce File Size',
-  'command.space-usage.label': 'Space Audit',
+  'command.space-usage.label': 'Space Usage…',
   'command.compare-files.label': 'Compare Files',
   'command.pdf-a-preflight.label': 'Preflight',
   'command.save-as-pdf-a.label': 'Save as PDF/A',
