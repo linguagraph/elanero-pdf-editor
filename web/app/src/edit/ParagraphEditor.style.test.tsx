@@ -4,6 +4,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
+import { FontLibraryContext } from '../fonts/fontLibraryContext';
+import {
+  fakeFontLibrary,
+  type FakeFontLibrary,
+  fontDto,
+  libraryFont,
+} from '../fonts/testFontLibrary';
 import { t } from '../i18n/t';
 import type { PageObjectDto } from '../rpc/generated';
 import { ParagraphEditor } from './ParagraphEditor';
@@ -41,7 +48,11 @@ const paragraph: PageObjectDto = {
   fill: false,
 };
 
-function mount(edited: PageObjectDto = paragraph, pageObjects: readonly PageObjectDto[] = []) {
+function mount(
+  edited: PageObjectDto = paragraph,
+  pageObjects: readonly PageObjectDto[] = [],
+  library?: FakeFontLibrary,
+) {
   const onApply = vi.fn(async () => true);
   const onClose = vi.fn();
   const call = vi.fn<(method: string, params: unknown) => Promise<unknown>>(async () => ({
@@ -52,16 +63,18 @@ function mount(edited: PageObjectDto = paragraph, pageObjects: readonly PageObje
   const rpc = { call } as unknown as PageRpc;
   act(() =>
     root.render(
-      <ParagraphEditor
-        object={edited}
-        page={0}
-        zoom={1}
-        rpc={rpc}
-        handle="h1"
-        onApply={onApply}
-        onClose={onClose}
-        pageObjects={pageObjects}
-      />,
+      <FontLibraryContext.Provider value={library}>
+        <ParagraphEditor
+          object={edited}
+          page={0}
+          zoom={1}
+          rpc={rpc}
+          handle="h1"
+          onApply={onApply}
+          onClose={onClose}
+          pageObjects={pageObjects}
+        />
+      </FontLibraryContext.Provider>,
     ),
   );
   const area = host.querySelector('textarea') as HTMLTextAreaElement;
@@ -250,6 +263,77 @@ describe('the style bar in the editor', () => {
     // The live region stays the same node; only its child is replaced, so the repeated press is announced.
     expect(region()).toBe(firstRegion);
     expect(region()?.firstElementChild).not.toBe(first);
+  });
+
+  describe('with an uploaded family', () => {
+    const FAMILY_ID = 'f'.repeat(64);
+    const FAMILY_PATH = `/fonts/${FAMILY_ID}.ttf`;
+    const face = (weight: number, index: number) => ({
+      index,
+      family: 'Test Sans',
+      style: weight >= 600 ? 'Bold' : 'Regular',
+      weight,
+      italic: false,
+      scripts: ['latin'],
+      variable: false,
+    });
+    const libraryWith = (faces: ReturnType<typeof face>[]) =>
+      fakeFontLibrary({
+        fonts: [
+          libraryFont({
+            id: FAMILY_ID,
+            name: 'Test.ttf',
+            dto: fontDto({ id: FAMILY_ID, path: FAMILY_PATH, faces }),
+          }),
+        ],
+      });
+    // The editor opens with no font ref (the block's font is found by name), so the family's FILE
+    // ref comes from a pick: the regular face, which Bold then switches.
+    it('Ctrl+B switches to the bold face of the family, and the commit sends it', async () => {
+      const library = libraryWith([face(400, 0), face(700, 1)]);
+      const { area, onApply } = mount(paragraph, [paragraph], library);
+      pickFont('Test Sans');
+      await flush();
+      keyDown(area, { key: 'b', ctrlKey: true });
+      const bold = host.querySelector(`button[aria-label="${t('edit.style.bold')}"]`);
+      expect(bold?.getAttribute('aria-pressed')).toBe('true');
+      keyDown(area, { key: 'Enter', ctrlKey: true });
+      await flush();
+      expect(onApply).toHaveBeenCalledWith(
+        'Old words',
+        expect.objectContaining({
+          bold: true,
+          font_ref: { kind: 'file', name: 'Test Sans', path: FAMILY_PATH, index: 1 },
+        }),
+      );
+    });
+
+    it('Ctrl+B on a family with no bold face changes nothing and says why', async () => {
+      const library = libraryWith([face(400, 0)]);
+      const { area } = mount(paragraph, [paragraph], library);
+      pickFont('Test Sans');
+      await flush();
+      keyDown(area, { key: 'b', ctrlKey: true });
+      const bold = host.querySelector(`button[aria-label="${t('edit.style.bold')}"]`);
+      expect(bold?.getAttribute('aria-pressed')).toBe('false');
+      expect(host.querySelector('[role="status"]')?.textContent).toBe(t('edit.style.noBold'));
+    });
+
+    it('picking the family sends its FILE font ref with the commit, end to end', async () => {
+      const library = libraryWith([face(400, 0), face(700, 1)]);
+      const { area, onApply } = mount(paragraph, [paragraph], library);
+      pickFont('Test Sans');
+      await flush();
+      keyDown(area, { key: 'Enter', ctrlKey: true });
+      await flush();
+      expect(onApply).toHaveBeenCalledWith(
+        'Old words',
+        expect.objectContaining({
+          font: 'Test Sans',
+          font_ref: { kind: 'file', name: 'Test Sans', path: FAMILY_PATH, index: 0 },
+        }),
+      );
+    });
   });
 
   it('an arrow key clears the face note', () => {

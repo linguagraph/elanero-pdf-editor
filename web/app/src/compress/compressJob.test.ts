@@ -37,7 +37,7 @@ function reduceReply(value: unknown): CallResult {
   return { reply: JSON.stringify(reply), buffer: BYTES };
 }
 
-function engineAndWorker(reply: CallResult) {
+function engineAndWorker(reply: CallResult, baseline: number | null = null) {
   const call = vi.fn(async (method: string) => {
     if (method === 'jobs.prepare') {
       return {
@@ -46,6 +46,7 @@ function engineAndWorker(reply: CallResult) {
         mutating: false,
         document: BYTES.slice(0),
         state: null,
+        baseline,
       };
     }
     return { applied: false, changed: null, state: null };
@@ -107,6 +108,23 @@ describe('runCompress', () => {
       categories: [{ key: 'images', size: 700 }],
     });
     expect(result.auditAfter?.total).toBe(1000);
+  });
+
+  it('sends the file the user holds as the baseline, so a copy is judged against it (#610)', async () => {
+    // The engine's baseline is the opened file's size while the document is unchanged: a
+    // lossless run of a compact copy must not be judged against a larger re-save.
+    const { worker, deps } = engineAndWorker(
+      reduceReply({ before: 2000, after: 2100, notes: [] }),
+      2000,
+    );
+
+    const result = await runCompress(deps, 'doc-9', presetSettings('lossless'), { audit: false });
+
+    const run = JSON.parse(String(vi.mocked(worker.call).mock.calls[0]?.[0])) as {
+      params: { args: unknown };
+    };
+    expect(run.params.args).toEqual({ preset: 'lossless', audit: false, before: 2000 });
+    expect(isSmaller(result.before, result.after)).toBe(false);
   });
 
   it('rejects a reply whose value has no sizes', async () => {

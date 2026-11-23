@@ -5,6 +5,7 @@ import { createEngineConnection } from './engine/engineConnection';
 import { engineBootOptions, jobWorkerBootOptions } from './engine/bootOptions';
 import { createJobWorkerPool } from './engine/jobPool';
 import { createFontLibrary } from './fonts/fontLibrary';
+import { FontLibraryContext } from './fonts/fontLibraryContext';
 import { createFontStore } from './storage/fontStore';
 import { startJobWorker } from './engine/start';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
@@ -33,13 +34,15 @@ function mount(root: HTMLElement): void {
   });
   createRoot(root).render(
     <StrictMode>
-      <App
-        engine={engine}
-        fonts={fonts}
-        jobs={jobs}
-        startPrintWorker={jobs.acquire}
-        launches={launches}
-      />
+      <FontLibraryContext.Provider value={fonts}>
+        <App
+          engine={engine}
+          fonts={fonts}
+          jobs={jobs}
+          startPrintWorker={jobs.acquire}
+          launches={launches}
+        />
+      </FontLibraryContext.Provider>
     </StrictMode>,
   );
   // Production only: the dev server's modules must not sit behind a service worker cache.

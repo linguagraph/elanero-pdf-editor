@@ -5,7 +5,7 @@
 // content.preview_font call per font).
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { t } from '../i18n/t';
-import type { FontOption, FontSection } from './fontList';
+import { UPLOAD_KEY, type FontOption, type FontSection } from './fontList';
 
 // The roving-focus props of one bar control (the bar's tab stop; see StyleBar).
 export interface StopProps {
@@ -19,9 +19,11 @@ export interface FontPickerProps {
   readonly selected: FontOption;
   readonly stop: StopProps;
   readonly onPick: (option: FontOption) => void;
+  // Opens the file dialog for the Uploaded section's "Upload font…" row.
+  readonly onUpload?: () => void;
 }
 
-export function FontPicker({ sections, selected, stop, onPick }: FontPickerProps) {
+export function FontPicker({ sections, selected, stop, onPick, onUpload }: FontPickerProps) {
   const id = useId();
   const listId = `${id}-list`;
   const [open, setOpen] = useState(false);
@@ -38,7 +40,10 @@ export function FontPicker({ sections, selected, stop, onPick }: FontPickerProps
     }))
     .filter((s) => s.options.length > 0);
   const flat = shown.flatMap((s) => s.options);
-  const activeKey = flat.some((o) => o.key === active) ? active : (flat[0]?.key ?? null);
+  // The upload row is never the default: a filter can leave it first, and Enter must not open the
+  // file dialog. The arrow keys still reach it, and an explicit move keeps it active.
+  const defaultKey = flat.find((o) => o.key !== UPLOAD_KEY)?.key ?? null;
+  const activeKey = flat.some((o) => o.key === active) ? active : defaultKey;
   const optionId = (key: string) => `${id}-o${flat.findIndex((o) => o.key === key)}`;
 
   // Keeps the highlighted font in view when the list scrolls.
@@ -56,8 +61,9 @@ export function FontPicker({ sections, selected, stop, onPick }: FontPickerProps
   };
 
   const pick = (option: FontOption) => {
-    onPick(option);
     close();
+    if (option.key === UPLOAD_KEY) onUpload?.();
+    else onPick(option);
   };
 
   const move = (step: 1 | -1) => {

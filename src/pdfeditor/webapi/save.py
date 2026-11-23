@@ -78,6 +78,8 @@ def save_bytes(params: dto.SaveParams) -> dto.SaveResult:
             {"max_bytes": limits.MAX_SAVE_BYTES, "size": size},
         )
     REGISTRY.note_saved(params.handle, written)
+    # Held only once the browser has written these bytes (mark_saved promotes it).
+    REGISTRY.set_pending_size(params.handle, size)
     return dto.SaveResult(
         data=saved.data,
         size=size,
@@ -108,4 +110,5 @@ def mark_saved(params: dto.HandleParams) -> dto.MarkSavedResult:
                 {"reason": "document changed"},
             )
         session.undo_stack.set_clean()
+        REGISTRY.promote_pending_size(params.handle)
         return dto.MarkSavedResult(saved=True, state=state_of(session))

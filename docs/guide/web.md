@@ -316,6 +316,10 @@ lists the missing characters in a notice. **Undo** in that notice puts the parag
 Bold and Italic are off when the font on the page has no bold or italic face of its own; choose a
 standard font to use them.
 
+The picker's **Uploaded** section lists the fonts you upload (see [Fonts](#fonts) above); its
+**Upload font…** row adds one. Bold and Italic then use the bold or italic face of the uploaded
+family when it has one.
+
 ## What is not available yet
 
 These features are on the desktop today and are planned for the web version. Most of them are not
