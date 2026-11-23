@@ -39,6 +39,14 @@
   font: inherit;
 }
 
+.combine-password {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .combine-pages-image {
   color: var(--color-text-muted);
 }

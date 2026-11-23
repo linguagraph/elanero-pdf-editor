@@ -4,24 +4,48 @@
 // a row that failed says so, and the job checks the file again when Combine runs.
 import type { EngineClient, EngineConnection } from '../engine/engineConnection';
 import { RpcError } from '../rpc/client';
+import { PASSWORD_ATTEMPTS } from '../organizer/insertFile';
 import { isImageSourceName, type SourceItem } from './sources';
 
 // The most bytes one probe sends. This is limits.MAX_PROBE_BYTES (64 MiB) in webapi/limits.py: a
 // larger file is marked unchecked without a call, and a FILE_TOO_LARGE reply gives the same state.
 export const PROBE_MAX_BYTES = 64 * 1024 * 1024;
 
+// What the last Unlock told the user about a locked row: nothing, a wrong password, or a check that
+// could not run (the row stays locked and no attempt is counted).
+export type LockNotice = 'none' | 'wrong' | 'notChecked';
+
 export type ProbeState =
   | { readonly kind: 'pending' } // queued or in flight
-  | { readonly kind: 'counted'; readonly pages: number; readonly encrypted: boolean }
-  | { readonly kind: 'locked' } // password protected: the count needs a password, not yet offered
+  // unlocked: the row holds an unprotected copy from combine.unlock, which the job uses instead.
+  | {
+      readonly kind: 'counted';
+      readonly pages: number;
+      readonly encrypted: boolean;
+      readonly unlocked?: boolean;
+    }
   | { readonly kind: 'unreadable' } // the engine could not open it (OPEN_FAILED)
-  | { readonly kind: 'unchecked'; readonly reason: 'large' | 'engine' }; // not counted; the job will
+  | { readonly kind: 'unchecked'; readonly reason: 'large' | 'engine' } // not counted; the job will
+  | LockedState;
+
+// Password protected. large: above the probe limit, so it cannot be unlocked in the browser.
+export interface LockedState {
+  readonly kind: 'locked';
+  readonly attempts: number; // wrong passwords so far
+  readonly notice: LockNotice;
+  readonly gaveUp: boolean; // PASSWORD_ATTEMPTS wrong passwords: no more tries
+  readonly large: boolean;
+}
+
+export function lockedState(attempts = 0, notice: LockNotice = 'none', large = false): LockedState {
+  return { kind: 'locked', attempts, notice, gaveUp: attempts >= PASSWORD_ATTEMPTS, large };
+}
 
 // The state a failed probe leaves its row in. Only the codes the probe can give for a file with no
 // password sent are named; anything else is an engine failure, which Combine does not block on.
 export function stateOfError(error: unknown): ProbeState {
   if (error instanceof RpcError) {
-    if (error.code === 'PASSWORD_REQUIRED') return { kind: 'locked' };
+    if (error.code === 'PASSWORD_REQUIRED') return lockedState();
     if (error.code === 'OPEN_FAILED') return { kind: 'unreadable' };
     if (error.code === 'FILE_TOO_LARGE') return { kind: 'unchecked', reason: 'large' };
   }
@@ -97,5 +121,29 @@ export class ProbeQueue {
     } catch (error) {
       return stateOfError(error);
     }
+  }
+}
+
+export type UnlockOutcome =
+  | { readonly status: 'unlocked'; readonly pages: number; readonly data: ArrayBuffer }
+  | { readonly status: 'wrong' }
+  | { readonly status: 'failed' }; // any other error: not counted as an attempt
+
+// One combine.unlock call for one row: one open with the password, no retry. The password is used
+// for this call only; the reply's copy is the only thing kept, and it is the caller's to store.
+export async function unlockOne(
+  engine: Pick<EngineConnection, 'whenReady'>,
+  item: SourceItem,
+  password: string,
+): Promise<UnlockOutcome> {
+  try {
+    const client: EngineClient = await engine.whenReady();
+    // A fresh copy of the bytes, transferred to the engine, as for a probe.
+    const data = await item.file.arrayBuffer();
+    const result = await client.call('combine.unlock', { name: item.name, data, password });
+    return { status: 'unlocked', pages: result.page_count, data: result.data };
+  } catch (error) {
+    if (error instanceof RpcError && error.code === 'WRONG_PASSWORD') return { status: 'wrong' };
+    return { status: 'failed' };
   }
 }

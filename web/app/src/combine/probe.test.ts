@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EngineClient, EngineConnection } from '../engine/engineConnection';
 import { RpcError } from '../rpc/client';
-import { PROBE_MAX_BYTES, ProbeQueue, type ProbeState, stateOfError } from './probe';
+import {
+  lockedState,
+  PROBE_MAX_BYTES,
+  ProbeQueue,
+  type ProbeState,
+  stateOfError,
+  unlockOne,
+} from './probe';
 import type { SourceItem } from './sources';
 
 function pdf(id: number, name: string, size = 3): SourceItem {
@@ -39,7 +46,7 @@ const counted = (pages: number): unknown => ({
 
 describe('stateOfError', () => {
   it.each([
-    ['PASSWORD_REQUIRED', { kind: 'locked' }],
+    ['PASSWORD_REQUIRED', lockedState()],
     ['OPEN_FAILED', { kind: 'unreadable' }],
     ['FILE_TOO_LARGE', { kind: 'unchecked', reason: 'large' }],
     ['INTERNAL', { kind: 'unchecked', reason: 'engine' }],
@@ -200,5 +207,48 @@ describe('ProbeQueue', () => {
 describe('the probe size limit', () => {
   it('is the same 64 MiB the engine checks (webapi/limits.py MAX_PROBE_BYTES)', () => {
     expect(PROBE_MAX_BYTES).toBe(64 * 1024 * 1024);
+  });
+});
+
+describe('unlockOne', () => {
+  // An engine whose combine.unlock gives the reply or the error the test names.
+  function unlockEngine(reply: unknown) {
+    // Every call must be combine.unlock and carry the password, which is what the test checks.
+    const call = vi.fn((method: string, params: Record<string, unknown>) => {
+      expect(method).toBe('combine.unlock');
+      expect(params).toHaveProperty('password');
+      return reply instanceof RpcError ? Promise.reject(reply) : Promise.resolve(reply);
+    });
+    const client = { call } as unknown as EngineClient;
+    return { engine: { whenReady: () => Promise.resolve(client) }, call };
+  }
+
+  it('makes exactly one combine.unlock call, and returns the copy', async () => {
+    const copy = new Uint8Array([1, 2]).buffer;
+    const { engine, call } = unlockEngine({ page_count: 4, data: copy });
+
+    const outcome = await unlockOne(engine, pdf(1, 'a.pdf'), 'secret');
+
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call.mock.calls[0]?.[0]).toBe('combine.unlock');
+    expect(outcome).toEqual({ status: 'unlocked', pages: 4, data: copy });
+  });
+
+  it('a WRONG_PASSWORD is a wrong outcome, and nothing is retried', async () => {
+    const { engine, call } = unlockEngine(new RpcError('WRONG_PASSWORD', 'no'));
+
+    const outcome = await unlockOne(engine, pdf(1, 'a.pdf'), 'nope');
+
+    expect(outcome).toEqual({ status: 'wrong' });
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('any other error is a failed check, not an attempt, and is not retried', async () => {
+    const { engine, call } = unlockEngine(new RpcError('INTERNAL', 'x'));
+
+    const outcome = await unlockOne(engine, pdf(1, 'a.pdf'), 'nope');
+
+    expect(outcome).toEqual({ status: 'failed' });
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });
