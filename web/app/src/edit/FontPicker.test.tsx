@@ -2,10 +2,11 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fontDto, libraryFont } from '../fonts/testFontLibrary';
 import { t } from '../i18n/t';
 import type { PageObjectDto } from '../rpc/generated';
 import { FontPicker, type StopProps } from './FontPicker';
-import { fontSections, selectedOption } from './fontList';
+import { fontSections, pickedStyle, selectedOption } from './fontList';
 import { DEFAULT_TEXT_ARG } from './textStyle';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -149,9 +150,126 @@ describe('the font picker', () => {
     document.body.removeEventListener('keydown', above);
   });
 
-  it('has no Uploaded section before the uploads of 8b-3', () => {
+  it('has no Uploaded section without a font library', () => {
     const { input } = mount();
     keyDown(input, 'ArrowDown');
-    expect(host.textContent).not.toContain('Uploaded');
+    expect(host.textContent).not.toContain(t('fonts.picker.uploaded'));
+  });
+});
+
+// Two uploaded families: Alpha has a regular and a bold face, Zeta a regular face only.
+const ALPHA_ID = 'a'.repeat(64);
+const ZETA_ID = 'b'.repeat(64);
+const pathOf = (id: string) => `/fonts/${id}.ttf`;
+const faceOf = (family: string, weight: number, index: number) => ({
+  index,
+  family,
+  style: weight >= 600 ? 'Bold' : 'Regular',
+  weight,
+  italic: false,
+  scripts: ['latin'],
+  variable: false,
+});
+const LIBRARY = [
+  libraryFont({
+    id: ALPHA_ID,
+    name: 'Alpha.ttf',
+    dto: fontDto({
+      id: ALPHA_ID,
+      path: pathOf(ALPHA_ID),
+      faces: [faceOf('Alpha', 400, 0), faceOf('Alpha', 700, 1)],
+    }),
+  }),
+  libraryFont({
+    id: ZETA_ID,
+    name: 'Zeta.ttf',
+    dto: fontDto({ id: ZETA_ID, path: pathOf(ZETA_ID), faces: [faceOf('Zeta', 400, 0)] }),
+  }),
+];
+
+function mountWithUploads(onPick = vi.fn(), onUpload = vi.fn()) {
+  const sections = fontSections([page('ABCDEF+Arial')], 'ABCDEF+Arial', LIBRARY);
+  const selected = selectedOption(sections, { ...DEFAULT_TEXT_ARG, font: 'ABCDEF+Arial' });
+  act(() =>
+    root.render(
+      <FontPicker
+        sections={sections}
+        selected={selected}
+        stop={stop}
+        onPick={onPick}
+        onUpload={onUpload}
+      />,
+    ),
+  );
+  const input = host.querySelector<HTMLInputElement>('[role="combobox"]') as HTMLInputElement;
+  return { input, onPick, onUpload };
+}
+
+const uploadedGroup = () =>
+  Array.from(host.querySelectorAll<HTMLElement>('[role="group"]')).find(
+    (g) => g.querySelector('.edit-font-heading')?.textContent === t('fonts.picker.uploaded'),
+  );
+
+describe('the Uploaded section of the picker', () => {
+  it('is a group named by its heading, with one row per family and the upload row last', () => {
+    const { input } = mountWithUploads();
+    keyDown(input, 'ArrowDown');
+    const group = uploadedGroup();
+    expect(group).toBeDefined();
+    const heading = group?.querySelector<HTMLElement>('.edit-font-heading');
+    expect(group?.getAttribute('aria-labelledby')).toBe(heading?.id);
+    const rows = Array.from(group?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    expect(rows.map((o) => o.textContent)).toEqual(['Alpha', 'Zeta', t('fonts.upload.button')]);
+  });
+
+  it('picking a family reports the family option, and its face follows bold', () => {
+    const { input, onPick, onUpload } = mountWithUploads();
+    keyDown(input, 'ArrowDown');
+    const alpha = Array.from(
+      uploadedGroup()?.querySelectorAll<HTMLElement>('[role="option"]') ?? [],
+    ).find((o) => o.textContent === 'Alpha');
+    act(() => alpha?.click());
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(onPick).toHaveBeenCalledTimes(1);
+    const option = onPick.mock.calls[0]?.[0];
+    expect(option).toEqual(expect.objectContaining({ name: 'Alpha' }));
+    expect(pickedStyle(option, { bold: true, italic: false })).toEqual({
+      font: 'Alpha',
+      font_ref: { kind: 'file', name: 'Alpha', path: pathOf(ALPHA_ID), index: 1 },
+    });
+    expect(pickedStyle(option, { bold: false, italic: false }).font_ref).toEqual({
+      kind: 'file',
+      name: 'Alpha',
+      path: pathOf(ALPHA_ID),
+      index: 0,
+    });
+  });
+
+  it('picking the upload row calls onUpload and not onPick', () => {
+    const { input, onPick, onUpload } = mountWithUploads();
+    keyDown(input, 'ArrowDown');
+    const upload = Array.from(
+      uploadedGroup()?.querySelectorAll<HTMLElement>('[role="option"]') ?? [],
+    ).at(-1);
+    act(() => upload?.click());
+    expect(onUpload).toHaveBeenCalledTimes(1);
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it('Enter on a filter that leaves only the upload row does not open the file dialog', () => {
+    const { input, onPick, onUpload } = mountWithUploads();
+    type(input, 'font');
+    expect(options().map((o) => o.textContent)).toEqual([t('fonts.upload.button')]);
+    keyDown(input, 'Enter');
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it('Enter on a filter that matches a family picks the family', () => {
+    const { input, onPick, onUpload } = mountWithUploads();
+    type(input, 'alpha');
+    keyDown(input, 'Enter');
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alpha' }));
   });
 });

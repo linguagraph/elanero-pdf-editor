@@ -3,20 +3,35 @@
 // document font only on its own page, so a font from another page would silently fall back. The
 // standard section is the three base-14 families the desktop lists. Pure functions only; the
 // picker and the style bar render and act on them.
+import type { LibraryFont } from '../fonts/fontLibrary';
 import { t } from '../i18n/t';
 import type { PageObjectDto } from '../rpc/generated';
 import { type FontRefArg, standardRef, type StyleInput } from './textStyle';
 
-export type FontSectionId = 'document' | 'standard';
+export type FontSectionId = 'document' | 'standard' | 'uploaded';
+
+// One face of an uploaded family (design section 4.3): what Bold and Italic choose between, and the
+// FILE ref the engine reads it by.
+export interface UploadedFace {
+  readonly family: string;
+  readonly weight: number;
+  readonly italic: boolean;
+  readonly ref: FontRefArg;
+}
+
+// The key of the Uploaded section's "Upload font…" row: picking it opens the file dialog.
+export const UPLOAD_KEY = 'upload';
 
 // One font the picker can choose. `name` is what the style sends as `font`; `ref` is what it sends
-// as `font_ref` (null for a document font, which the engine finds on the page by name).
+// as `font_ref` (null for a document font, which the engine finds on the page by name). An uploaded
+// family carries its `faces`: a pick takes the one matching the current bold and italic.
 export interface FontOption {
   readonly key: string;
   readonly name: string;
   readonly label: string;
   readonly title: string;
   readonly ref: FontRefArg | null;
+  readonly faces?: readonly UploadedFace[];
 }
 
 export interface FontSection {
@@ -96,9 +111,21 @@ export function faceToggle(
   style: StyleInput,
   which: 'bold' | 'italic',
   pageFonts: readonly string[],
-): Pick<StyleInput, 'font' | 'bold' | 'italic'> | null {
+  uploaded: readonly UploadedFace[] = [],
+): Pick<StyleInput, 'font' | 'bold' | 'italic' | 'font_ref'> | null {
   const bold = which === 'bold' ? !style.bold : style.bold;
   const italic = which === 'italic' ? !style.italic : style.italic;
+  if (style.font_ref?.kind === 'file') {
+    // An uploaded family: Bold is offered when some face is bold (weight 600 or more), Italic when
+    // some face is italic; the press takes the face of the family that matches.
+    const faces = uploaded.filter((face) => face.family === style.font);
+    const offered =
+      which === 'bold'
+        ? faces.some((face) => face.weight >= 600)
+        : faces.some((face) => face.italic);
+    const face = offered ? findFace(faces, bold, italic) : null;
+    return face === null ? null : { font: style.font, bold, italic, font_ref: face.ref };
+  }
   // A standard font, by ref or by its name (the default of new text), has all four faces.
   if (style.font_ref?.kind === 'standard' || (!style.font_ref && isStandardName(style.font))) {
     return { font: style.font, bold, italic };
@@ -175,10 +202,88 @@ export function standardSection(): FontSection {
   };
 }
 
-// The picker's sections for a page: the document section (when the page has text) then standard.
-export function fontSections(objects: readonly PageObjectDto[], blockFont: string): FontSection[] {
+// The Uploaded section (design section 4.3): one row per catalogue family, sorted by name, then the
+// "Upload font…" row. A font counts once the engine holds it (loaded), since only then is its FILE
+// ref one the engine can read. Refused faces are not in the font's dto.
+export function uploadedSection(fonts: readonly LibraryFont[]): FontSection {
+  const families = new Map<string, UploadedFace[]>();
+  for (const font of fonts) {
+    if (!font.loaded || font.dto === undefined) continue;
+    for (const face of font.dto.faces) {
+      const faces = families.get(face.family) ?? [];
+      const ref: FontRefArg = {
+        kind: 'file',
+        name: face.family,
+        path: font.dto.path,
+        index: face.index,
+      };
+      faces.push({ family: face.family, weight: face.weight, italic: face.italic, ref });
+      families.set(face.family, faces);
+    }
+  }
+  const options: FontOption[] = [...families]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([family, faces]) => ({
+      key: `up:${family}`,
+      name: family,
+      label: family,
+      title: family,
+      ref: null,
+      faces,
+    }));
+  const upload = t('fonts.upload.button');
+  options.push({ key: UPLOAD_KEY, name: '', label: upload, title: upload, ref: null });
+  return { id: 'uploaded', heading: t('fonts.picker.uploaded'), options };
+}
+
+// The picker's sections for a page: the document section (when the page has text), the standard
+// one, then the Uploaded section when the caller has the library (`uploaded` given, even empty).
+export function fontSections(
+  objects: readonly PageObjectDto[],
+  blockFont: string,
+  uploaded?: readonly LibraryFont[],
+): FontSection[] {
   const document = documentSection(objects, blockFont);
-  return document === null ? [standardSection()] : [document, standardSection()];
+  const sections: FontSection[] = document === null ? [] : [document];
+  sections.push(standardSection());
+  if (uploaded !== undefined) sections.push(uploadedSection(uploaded));
+  return sections;
+}
+
+// Every uploaded face the sections offer, for Bold and Italic.
+export function uploadedFaces(sections: readonly FontSection[]): readonly UploadedFace[] {
+  return sections.flatMap((s) => s.options.flatMap((o) => o.faces ?? []));
+}
+
+// The face of a family that best matches bold and italic, scored as the desktop's catalogue does:
+// the weight class first, then the slant, then the weight nearest 400 (or 700 for bold). Null when
+// the family has no face.
+export function findFace(
+  faces: readonly UploadedFace[],
+  bold: boolean,
+  italic: boolean,
+): UploadedFace | null {
+  const target = bold ? 700 : 400;
+  const cost = (face: UploadedFace) =>
+    Number(face.weight >= 600 !== bold) * 1_000_000 +
+    Number(face.italic !== italic) * 10_000 +
+    Math.abs(face.weight - target);
+  let best: UploadedFace | null = null;
+  for (const face of faces) {
+    if (best === null || cost(face) < cost(best)) best = face;
+  }
+  return best;
+}
+
+// What a pick sets: an uploaded family takes the face of the current bold and italic; any other
+// option sets its own name and ref.
+export function pickedStyle(
+  option: FontOption,
+  style: Pick<StyleInput, 'bold' | 'italic'>,
+): Pick<StyleInput, 'font' | 'font_ref'> {
+  if (option.faces === undefined) return { font: option.name, font_ref: option.ref };
+  const face = findFace(option.faces, style.bold, style.italic);
+  return { font: option.name, font_ref: face?.ref ?? null };
 }
 
 // The option the style shows. A standard font is found by its ref; a document font by its name,
@@ -189,6 +294,10 @@ export function selectedOption(sections: readonly FontSection[], style: StyleInp
   if (style.font_ref?.kind === 'standard') {
     const byRef = all.find((o) => o.key === `std:${style.font_ref?.name ?? ''}`);
     if (byRef !== undefined) return byRef;
+  }
+  if (style.font_ref?.kind === 'file') {
+    const byFamily = all.find((o) => o.key === `up:${style.font}`);
+    if (byFamily !== undefined) return byFamily;
   }
   const standard = all.find((o) => o.ref !== null && o.name === style.font);
   if (!style.font_ref && standard !== undefined) return standard;

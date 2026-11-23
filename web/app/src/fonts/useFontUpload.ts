@@ -19,12 +19,13 @@ export interface FontUpload {
 }
 
 export function useFontUpload(
-  library: FontLibrary,
+  library: FontLibrary | undefined,
   report: UploadReport,
   inputRef: RefObject<HTMLInputElement | null>,
 ): FontUpload {
   const upload = useCallback(
     async (files: readonly File[]) => {
+      if (library === undefined) return;
       for (const file of files) {
         let outcome: AddOutcome;
         try {
