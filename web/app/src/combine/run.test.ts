@@ -282,3 +282,42 @@ describe('runCombine page ranges', () => {
     expect(toasts.getState().visible[0]?.kind).toBe('error');
   });
 });
+
+describe('runCombine unlocked rows', () => {
+  it('sends the unlocked copy in place of the file, and no password', async () => {
+    const { worker, deps } = setup();
+    const send = vi.spyOn(worker, 'call');
+    const copy = new Uint8Array([7, 7, 7]).buffer;
+    const unlocked = new Map([[1, copy]]);
+
+    const running = runCombine([item(1, 'a.pdf', 'locked-bytes'), item(2, 'b.pdf')], {
+      ...deps,
+      unlocked,
+    });
+    await settle();
+    worker.answer(okReply(new Uint8Array([1]).buffer));
+    await running;
+
+    const [request, buffers] = send.mock.calls[0] ?? [];
+    expect(request).not.toContain('password');
+    expect(Array.from(new Uint8Array(buffers?.[0] ?? new ArrayBuffer(0)))).toEqual([7, 7, 7]);
+    expect(unlocked.get(1)).toBe(copy); // the caller's copy is untouched
+  });
+
+  it('a source the job finds encrypted is a locked row, with no toast', async () => {
+    const { toasts, worker, deps } = setup();
+
+    const running = runCombine([item(1, 'a.pdf'), item(2, 'b.pdf')], deps);
+    await settle();
+    worker.fail(
+      new RpcError('REFUSED', 'a source is encrypted', {
+        reason: 'encrypted_source',
+        path: 'args.sources[1]',
+      }),
+    );
+    const outcome = await running;
+
+    expect(outcome).toEqual({ status: 'lockedRow', index: 1 });
+    expect(toasts.getState().visible).toEqual([]);
+  });
+});

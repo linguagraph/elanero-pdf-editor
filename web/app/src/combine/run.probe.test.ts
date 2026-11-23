@@ -6,7 +6,7 @@ import type { WorkerClient } from '../engine/start';
 import { createJobProgressStore } from '../feedback/jobRun';
 import { createToastStore } from '../feedback/toasts';
 import { t, tp } from '../i18n/t';
-import type { ProbeState } from './probe';
+import { lockedState, type ProbeState } from './probe';
 import { runCombine } from './run';
 import type { SourceItem } from './sources';
 
@@ -28,7 +28,7 @@ function unusedWorker() {
 describe('runCombine with the probe', () => {
   it('refuses while a file is password protected, and starts no worker', async () => {
     const { startWorker } = unusedWorker();
-    const probes = new Map<number, ProbeState>([[1, { kind: 'locked' }]]);
+    const probes = new Map<number, ProbeState>([[1, lockedState()]]);
     const outcome = await runCombine([item(1, 'a.pdf'), item(2, 'b.pdf')], {
       store: store(),
       startWorker,

@@ -129,12 +129,13 @@ function render(props: {
   startWorker?: () => WorkerClient;
   download?: (name: string, bytes: ArrayBuffer) => void;
   engine?: Pick<EngineConnection, 'whenReady'>;
+  isOpen?: boolean;
 }) {
   const store = createJobProgressStore({ toasts: createToastStore() });
   act(() => {
     root.render(
       <CombineDialog
-        isOpen
+        isOpen={props.isOpen ?? true}
         onClose={() => undefined}
         store={store}
         startWorker={props.startWorker ?? (() => mergingWorker(new ArrayBuffer(0)))}
@@ -431,7 +432,9 @@ describe('CombineDialog page counts', () => {
     pick('a.pdf', 'b.pdf');
     await settle();
 
-    expect(rowNamed('a.pdf')?.textContent).toContain(t('combine.row.locked'));
+    expect(rowNamed('a.pdf')?.textContent).toContain(
+      t('combine.password.needed', { name: 'a.pdf' }),
+    );
     act(() => {
       buttonNamed(t('combine.button')).click();
     });
@@ -541,3 +544,220 @@ function manualProbeEngine() {
     },
   };
 }
+
+const PASSWORD = 'pw-Zq7!x';
+
+// An engine that refuses the probe of each locked name, and answers combine.unlock with what the
+// test gives: a reply, an RpcError, or a promise of either.
+function lockingEngine(locked: readonly string[], unlock: (password: string) => unknown) {
+  const calls: { method: string; password?: string }[] = [];
+  const client = {
+    call: (method: string, params: Record<string, unknown>): Promise<unknown> => {
+      if (method === 'combine.unlock') {
+        const password = params.password as string;
+        calls.push({ method, password });
+        const reply = unlock(password);
+        return reply instanceof RpcError ? Promise.reject(reply) : Promise.resolve(reply);
+      }
+      calls.push({ method });
+      if (locked.includes(params.name as string)) {
+        return Promise.reject(new RpcError('PASSWORD_REQUIRED', 'protected'));
+      }
+      return Promise.resolve({ page_count: 2, encrypted: false, needed_password: false });
+    },
+  };
+  const engine = { whenReady: () => Promise.resolve(client as unknown as EngineClient) };
+  return { engine, calls };
+}
+
+function unlockedReply(): unknown {
+  return { page_count: 3, data: new Uint8Array([1, 2, 3]).buffer };
+}
+
+function rowButton(name: string, text: string): HTMLButtonElement {
+  const found = [...(rowNamed(name)?.querySelectorAll('button') ?? [])].find(
+    (button) => button.textContent?.trim() === text,
+  );
+  if (found === undefined) throw new Error(`no ${text} on ${name}`);
+  return found;
+}
+
+function passwordFieldOf(name: string): HTMLInputElement {
+  const field = rowNamed(name)?.querySelector<HTMLInputElement>('input[type="password"]');
+  if (field === null || field === undefined) throw new Error(`no password field on ${name}`);
+  return field;
+}
+
+function pressUnlock(name: string): void {
+  act(() => {
+    rowButton(name, t('combine.password.unlock')).click();
+  });
+}
+
+describe('CombineDialog password entry', () => {
+  it('has a password field outside any form, and clears it when Unlock is pressed', async () => {
+    const { engine } = lockingEngine(['a.pdf'], () => unlockedReply());
+    render({ engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+
+    const field = passwordFieldOf('a.pdf');
+    expect(field.getAttribute('autocomplete')).toBe('off');
+    expect(field.closest('form')).toBeNull();
+    typeInto(field, PASSWORD);
+    pressUnlock('a.pdf');
+    expect(field.value).toBe('');
+  });
+
+  it('keeps the password out of the page, storage and the console', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    const consoles = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => undefined),
+    );
+    try {
+      const { engine } = lockingEngine(['a.pdf'], () => unlockedReply());
+      render({ engine });
+      pick('a.pdf', 'b.pdf');
+      await settle();
+      typeInto(passwordFieldOf('a.pdf'), PASSWORD);
+      pressUnlock('a.pdf');
+      await settle();
+
+      expect(document.body.innerHTML).not.toContain(PASSWORD);
+      expect(JSON.stringify(setItem.mock.calls)).not.toContain(PASSWORD);
+      for (const spy of consoles) expect(JSON.stringify(spy.mock.calls)).not.toContain(PASSWORD);
+    } finally {
+      setItem.mockRestore();
+      for (const spy of consoles) spy.mockRestore();
+    }
+  });
+
+  it('counts wrong passwords, and after the fifth the field and Unlock are off', async () => {
+    const { engine, calls } = lockingEngine(['a.pdf'], () => new RpcError('WRONG_PASSWORD', 'no'));
+    render({ engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      typeInto(passwordFieldOf('a.pdf'), `try-${attempt}`);
+      pressUnlock('a.pdf');
+      await settle();
+    }
+    expect(rowNamed('a.pdf')?.textContent).toContain(tp('combine.password.wrong', 1));
+
+    typeInto(passwordFieldOf('a.pdf'), 'try-5');
+    pressUnlock('a.pdf');
+    await settle();
+
+    expect(passwordFieldOf('a.pdf').disabled).toBe(true);
+    expect(rowButton('a.pdf', t('combine.password.unlock')).disabled).toBe(true);
+    expect(rowNamed('a.pdf')?.textContent).toContain(t('combine.password.gaveUp'));
+    expect(calls.filter((call) => call.method === 'combine.unlock')).toHaveLength(5);
+  });
+
+  it('a check that fails is shown, uses no attempt and is not retried', async () => {
+    const { engine, calls } = lockingEngine(['a.pdf'], () => new RpcError('INTERNAL', 'x'));
+    render({ engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+
+    typeInto(passwordFieldOf('a.pdf'), PASSWORD);
+    pressUnlock('a.pdf');
+    await settle();
+
+    expect(rowNamed('a.pdf')?.textContent).toContain(t('combine.password.notChecked'));
+    expect(calls.filter((call) => call.method === 'combine.unlock')).toHaveLength(1);
+  });
+
+  it('combines an unlocked row from its copy, and the job request has no password', async () => {
+    const worker = mergingWorker(new ArrayBuffer(0));
+    const send = vi.spyOn(worker, 'call');
+    const { engine } = lockingEngine(['a.pdf'], () => unlockedReply());
+    render({ engine, startWorker: () => worker });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+    typeInto(passwordFieldOf('a.pdf'), PASSWORD);
+    pressUnlock('a.pdf');
+    await settle();
+    expect(rowNamed('a.pdf')?.textContent).toContain(t('combine.password.unlocked'));
+
+    act(() => {
+      buttonNamed(t('combine.button')).click();
+    });
+    await settle();
+
+    const [request, buffers] = send.mock.calls[0] ?? [];
+    expect(String(request)).not.toContain(PASSWORD);
+    expect(String(request)).not.toContain('password');
+    expect(Array.from(new Uint8Array(buffers?.[0] ?? new ArrayBuffer(0)))).toEqual([1, 2, 3]);
+  });
+
+  it('a removed row whose Unlock is still running gets no copy', async () => {
+    let answer: ((reply: unknown) => void) | undefined;
+    const { engine } = lockingEngine(['a.pdf'], () => new Promise((resolve) => (answer = resolve)));
+    render({ engine });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+    typeInto(passwordFieldOf('a.pdf'), PASSWORD);
+    pressUnlock('a.pdf');
+
+    act(() => {
+      rowButton('a.pdf', t('combine.remove')).click();
+    });
+    answer?.(unlockedReply());
+    await settle();
+
+    expect(rowNamed('a.pdf')).toBeUndefined();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('closing the dialog drops the copies, so the row asks for its password again', async () => {
+    const startWorker = vi.fn(() => mergingWorker(new ArrayBuffer(0)));
+    const { engine } = lockingEngine(['a.pdf'], () => unlockedReply());
+    render({ engine, startWorker });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+    typeInto(passwordFieldOf('a.pdf'), PASSWORD);
+    pressUnlock('a.pdf');
+    await settle();
+
+    render({ engine, startWorker, isOpen: false });
+    await settle();
+    render({ engine, startWorker });
+    await settle();
+    expect(rowNamed('a.pdf')?.textContent).toContain(
+      t('combine.password.needed', { name: 'a.pdf' }),
+    );
+    act(() => {
+      buttonNamed(t('combine.button')).click();
+    });
+    await settle();
+    expect(startWorker).not.toHaveBeenCalled();
+  });
+
+  it('a file the job finds encrypted becomes a locked row with its password box', async () => {
+    const worker: WorkerClient = {
+      call: () =>
+        Promise.reject(
+          new RpcError('REFUSED', 'a source is encrypted', {
+            reason: 'encrypted_source',
+            path: 'args.sources[0]',
+          }),
+        ),
+      onStage: () => () => undefined,
+      terminate: vi.fn(),
+    };
+    render({ engine: probingEngine(() => ({ pages: 2 })), startWorker: () => worker });
+    pick('a.pdf', 'b.pdf');
+    await settle();
+    act(() => {
+      buttonNamed(t('combine.button')).click();
+    });
+    await settle();
+
+    expect(passwordFieldOf('a.pdf')).toBeDefined();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      tp('combine.blocked.locked', 1),
+    );
+  });
+});
