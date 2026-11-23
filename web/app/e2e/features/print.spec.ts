@@ -64,10 +64,9 @@ test.describe('engine staged', () => {
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
-  // Fixme until the spec runs on staged engine assets: the worker defect is fixed in #522, but the
-  // CI-built PyMuPDF wheel (cp314, the precache name) is not available outside the Actions cache, so
-  // the spec could not run here. See #560.
-  test.fixme('print a page range of two pages: the iframe gets both images', async ({
+  // The worker defect is fixed in #522. The spec runs in the Web end-to-end workflow on Chromium
+  // (CI builds the PyMuPDF wheel); WebKit stays skipped below. See #560.
+  test('print a page range of two pages: the iframe gets both images', async ({
     browserName,
     page,
   }) => {
