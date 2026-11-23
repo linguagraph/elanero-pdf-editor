@@ -18,7 +18,15 @@ from pdfeditor.webapi.events import CallRecorder
 
 
 class _Entry:
-    __slots__ = ("password", "recorder", "saved", "session", "unsubscribe")
+    __slots__ = (
+        "held_size",
+        "password",
+        "pending_size",
+        "recorder",
+        "saved",
+        "session",
+        "unsubscribe",
+    )
 
     def __init__(self, session: DocumentSession, password: str | None) -> None:
         self.session = session
@@ -26,6 +34,12 @@ class _Entry:
         # The document state the last save_bytes wrote (see jobs.document_fingerprint); None until
         # the document is saved through the web. save.mark_saved compares against it.
         self.saved: tuple[object, ...] | None = None
+        # The size of the file the user holds: the bytes opened, or the last bytes saved. A reduce
+        # compares with it while the document is clean (jobs.prepare sends it as the baseline).
+        self.held_size: int | None = None
+        # The size of the bytes the last save_bytes returned. It becomes held_size only when the
+        # browser has written them (mark_saved); a failed write leaves the older file held.
+        self.pending_size: int | None = None
         self.recorder = CallRecorder(session)
         self.unsubscribe = session.subscribe(self.recorder)
 
@@ -93,6 +107,27 @@ class DocumentRegistry:
     def saved_fingerprint(self, handle: str) -> tuple[object, ...] | None:
         entry = self._entries.get(handle)
         return None if entry is None else entry.saved
+
+    def set_held_size(self, handle: str, size: int) -> None:
+        entry = self._entries.get(handle)
+        if entry is not None:
+            entry.held_size = size
+
+    def set_pending_size(self, handle: str, size: int) -> None:
+        entry = self._entries.get(handle)
+        if entry is not None:
+            entry.pending_size = size
+
+    def promote_pending_size(self, handle: str) -> None:
+        """The browser wrote the last saved bytes: they are now the file the user holds."""
+        entry = self._entries.get(handle)
+        if entry is not None and entry.pending_size is not None:
+            entry.held_size = entry.pending_size
+            entry.pending_size = None
+
+    def held_size(self, handle: str) -> int | None:
+        entry = self._entries.get(handle)
+        return None if entry is None else entry.held_size
 
     def close(self, handle: str) -> None:
         """Forget the handle and its password first, then close the document. The recorder is

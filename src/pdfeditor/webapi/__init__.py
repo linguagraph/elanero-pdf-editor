@@ -108,9 +108,9 @@ METHODS: dict[str, Method] = {
     "jobs.prepare": Method(dto.JobPrepareParams, jobs.prepare, takes_buffers=True),
     "jobs.apply": Method(dto.JobApplyParams, jobs.apply),
     "jobs.abort": Method(dto.JobAbortParams, jobs.abort),
-    # translation.translate is not in the table until slice S3 (the bubble): the engine worker's
-    # network gate is armed for it, so no request can start before then.
+    # The engine worker arms its network gate (translationNet.ts) for translation.translate only.
     "translation.info": Method(dto.Empty, translate.info),
+    "translation.translate": Method(dto.TranslateParams, translate.translate),
 }
 
 

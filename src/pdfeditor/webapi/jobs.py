@@ -237,6 +237,10 @@ def _convert_reduce(data: object, buffers: BufferTable) -> dto.ReduceSizeArgs:
             "args.options: only a custom preset takes options",
             {"path": "args.options"},
         )
+    if args.before is not None and args.before < 0:
+        raise RpcFailure(
+            INVALID_ARGS, "args.before: a size is not negative", {"path": "args.before"}
+        )
     return args
 
 
@@ -309,7 +313,9 @@ def _run_reduce(
     ctx.token.check()
     if not args.audit:
         with owner.lock:
-            result = reduce_size(owner.document, options, token=ctx.token, progress=ctx.progress)
+            result = reduce_size(
+                owner.document, options, args.before, token=ctx.token, progress=ctx.progress
+            )
         audit_before = audit_after = None
     else:
         # One job, one progress bar: 0 audit before, 1 to 4 the reduce, 4 audit after, 5 done.
@@ -319,7 +325,11 @@ def _run_reduce(
         ctx.token.check()
         with owner.lock:
             result = reduce_size(
-                owner.document, options, token=ctx.token, progress=_shifted(ctx.progress)
+                owner.document,
+                options,
+                args.before,
+                token=ctx.token,
+                progress=_shifted(ctx.progress),
             )
         ctx.progress(4, _AUDITED_STEPS)
         ctx.token.check()
@@ -1084,6 +1094,12 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
                 {"max_bytes": limits.MAX_JOB_BYTES, "size": len(data)},
             )
         fingerprint = document_fingerprint(session)
+        # A reduce compares with the file the user holds while the document is unchanged, as the
+        # desktop does with the file on disk. Without it the job compares with a re-save of the
+        # copy, which can be larger than the file (issue #610).
+        baseline: int | None = None
+        if kind.name == "reduce_size" and not session.is_dirty:
+            baseline = REGISTRY.held_size(params.handle)
         if kind.mutating:
             session.begin_task(label)
             state = state_of(session)  # the busy flag changed: the front end must hear of it
@@ -1098,7 +1114,12 @@ def prepare(params: dto.JobPrepareParams, buffers: BufferTable) -> dto.JobPrepar
         ),
     )
     return dto.JobPrepareResult(
-        token=token, label=label, mutating=kind.mutating, document=data, state=state
+        token=token,
+        label=label,
+        mutating=kind.mutating,
+        document=data,
+        state=state,
+        baseline=baseline,
     )
 
 
