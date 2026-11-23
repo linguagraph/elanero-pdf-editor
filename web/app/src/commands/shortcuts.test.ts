@@ -144,6 +144,14 @@ describe('parsing and matching', () => {
     ).toBe(true);
   });
 
+  it('matches Space, which KeyboardEvent.key reports as a plain space character', () => {
+    const ctrlSpace = parseChord('Ctrl+Space');
+    expect(matchesChord(event({ key: ' ', code: 'Space', ctrlKey: true }), ctrlSpace, false)).toBe(
+      true,
+    );
+    expect(matchesChord(event({ key: ' ', code: 'Space' }), ctrlSpace, false)).toBe(false);
+  });
+
   it('finds the palette before any command, and the command an event asks for', () => {
     expect(
       commandForEvent(event({ key: 'P', ctrlKey: true, shiftKey: true }), REGISTRY, STATE, false),
