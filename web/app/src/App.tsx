@@ -48,7 +48,7 @@ import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
-import type { ChangedDto, HistoryResult } from './rpc/generated';
+import type { ChangedDto, HistoryResult, TranslateParams } from './rpc/generated';
 import { type HistoryDirection, historyRefresh, runHistoryStep } from './history/runHistory';
 import { CommentsExportDialog } from './commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from './commentsImport/CommentsImportDialog';
@@ -63,6 +63,7 @@ import { RedactionController } from './redaction/controller';
 import { MarkPagesDialog } from './redaction/MarkPagesDialog';
 import { markSelectedText } from './redaction/markText';
 import { copySelectedText } from './text/copy';
+import { type TranslateFlowHandle, TranslateFlow } from './translate/TranslateFlow';
 import { copyLarge } from './text/largeCopy';
 import { RedactionsPanel } from './redaction/RedactionsPanel';
 import { RedactionPropertiesDialog } from './redaction/RedactionPropertiesDialog';
@@ -175,6 +176,15 @@ export function App({
     async () => (await engine.whenReady()).call('translation.info', {}),
     [engine],
   );
+  // The bubble's translation call (W6.6): the engine's gated network path, once the user agreed.
+  const translateCall = useCallback(
+    async (params: TranslateParams) =>
+      (await engine.whenReady()).call('translation.translate', params),
+    [engine],
+  );
+  // The translate flow of the open document (the Translate command and the selection toolbar).
+  const translateFlow = useRef<TranslateFlowHandle>(null);
+  const getView = useCallback(() => viewRef.current, []);
   // About Elanero (W4.3a S4), from the app menu.
   const [aboutOpen, setAboutOpen] = useState(false);
   // Keyboard Shortcuts (W4.5 S2): opened from Preferences only. It opens above Preferences, which
@@ -661,6 +671,8 @@ export function App({
             }
             setMarkPagesOpen(true);
           },
+          // Translate selection (W6.6) opens the bubble for the selected text, after the consent notice.
+          'translate-selection': () => translateFlow.current?.translate(),
           // Mark Text (W4.12) marks the text selection on the view's pages (the model's, or the
           // browser's under Hand); nothing is applied.
           'mark-text': () => {
@@ -1252,6 +1264,18 @@ export function App({
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined
             }
+          />
+        ) : null}
+        {documentShown && session !== null && scheduler !== null ? (
+          <TranslateFlow
+            key={activeId ?? undefined}
+            ref={translateFlow}
+            getView={getView}
+            loadInfo={loadTranslationInfo}
+            translate={translateCall}
+            rpc={session.rpc}
+            handle={session.handle}
+            scheduler={scheduler}
           />
         ) : null}
         {documentShown ? null : (
