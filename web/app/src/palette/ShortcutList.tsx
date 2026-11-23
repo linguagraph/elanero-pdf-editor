@@ -15,11 +15,13 @@ export interface ShortcutListProps {
   // The palette shows a Back button that returns to its command list. The Keyboard Shortcuts
   // dialog has no list to return to, so it passes nothing.
   onBack?: () => void;
+  // Opens the editable Keyboard Shortcuts dialog (W4.x, #330). Only the palette passes it.
+  onChange?: () => void;
 }
 
 // The keyboard shortcuts help: every visible command with a binding, from the effective keys (the
-// web override where there is one). Shared by the command palette and the Keyboard Shortcuts dialog.
-export function ShortcutList({ registry, state, onBack }: ShortcutListProps) {
+// web override where there is one). Read-only; the palette's list adds a button to change them.
+export function ShortcutList({ registry, state, onBack, onChange }: ShortcutListProps) {
   useShortcutBindings();
   const bound = registry.commands
     .filter((def) => isVisible(def, state))
@@ -33,6 +35,11 @@ export function ShortcutList({ registry, state, onBack }: ShortcutListProps) {
         </Button>
       )}
       <h2 className="palette-heading">{t('palette.shortcutsList')}</h2>
+      {onChange === undefined ? null : (
+        <Button className="overlay-close" onPress={onChange}>
+          {t('palette.changeShortcuts')}
+        </Button>
+      )}
       {bound.length === 0 ? (
         <p className="palette-empty">{t('palette.noShortcuts')}</p>
       ) : (

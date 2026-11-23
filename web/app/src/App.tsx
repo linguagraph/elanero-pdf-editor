@@ -34,7 +34,6 @@ import { EncryptDialog } from './security/EncryptDialog';
 import { RemoveSecurityDialog } from './security/RemoveSecurityDialog';
 import { PropertiesDialog } from './properties/PropertiesDialog';
 import { CommandPalette } from './palette/CommandPalette';
-import { openCommandPalette } from './palette/openCommandPalette';
 import { ShortcutsDialog } from './palette/ShortcutsDialog';
 import { useDocuments } from './documents/useDocuments';
 import { OpenInput } from './documents/OpenInput';
@@ -286,7 +285,8 @@ export function App({
     'previous-document': () => cycleDocument(-1),
     'collapse-ribbon': () => setRibbonChoice({ ...ribbonPrefs, collapsed: !ribbonPrefs.collapsed }),
     'compact-ribbon': () => setRibbonChoice({ ...ribbonPrefs, compact: !ribbonPrefs.compact }),
-    'keyboard-shortcuts': () => openCommandPalette({ view: 'shortcuts' }),
+    // The editable Keyboard Shortcuts dialog (W4.x), the same one Preferences opens.
+    'keyboard-shortcuts': () => setShortcutsOpen(true),
     // Help opens the guide's start; the "?" button opens the page of the tab shown instead.
     help: () => openGuide(),
     'whats-different': () => openGuide(WEB_VERSION_PAGE),

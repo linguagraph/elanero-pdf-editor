@@ -47,6 +47,17 @@ const PROBES: readonly ProbeKey[] = [
   { group: 'reserved', keys: 'Ctrl+Shift+T', press: 'Control+Shift+T', code: 'KeyT' },
   { group: 'reserved', keys: 'Ctrl+Shift+I', press: 'Control+Shift+I', code: 'KeyI' },
   { group: 'reserved', keys: 'Ctrl+Shift+C', press: 'Control+Shift+C', code: 'KeyC' },
+  // Common browser keys the W1.6 table does not list yet (W4.x section 5, recorded as data).
+  { group: 'reserved', keys: 'Ctrl+T', press: 'Control+T', code: 'KeyT' },
+  { group: 'reserved', keys: 'Ctrl+L', press: 'Control+L', code: 'KeyL' },
+  { group: 'reserved', keys: 'Ctrl+R', press: 'Control+R', code: 'KeyR' },
+  { group: 'reserved', keys: 'F5', press: 'F5', code: 'F5' },
+  { group: 'reserved', keys: 'F11', press: 'F11', code: 'F11' },
+  { group: 'reserved', keys: 'F12', press: 'F12', code: 'F12' },
+  { group: 'reserved', keys: 'Ctrl+Shift+J', press: 'Control+Shift+J', code: 'KeyJ' },
+  { group: 'reserved', keys: 'Alt+F4', press: 'Alt+F4', code: 'F4' },
+  { group: 'reserved', keys: 'Alt+D', press: 'Alt+D', code: 'KeyD' },
+  { group: 'reserved', keys: 'Alt+F', press: 'Alt+F', code: 'KeyF' },
   // Second group (the candidates for the key list the W1.6 table allows).
   { group: 'second-group', keys: 'Ctrl+1', press: 'Control+1', code: 'Digit1' },
   { group: 'second-group', keys: 'Ctrl+2', press: 'Control+2', code: 'Digit2' },

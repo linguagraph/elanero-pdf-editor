@@ -71,8 +71,15 @@ is reloaded until you press it.
   - **Redaction**: the **Box colour**, **Text colour** and **Text on the box** used for new redaction
     marks (black, white and empty by default). Marks you have already drawn keep their style.
   - **Fonts**: the fonts you upload for text (see [Fonts](#fonts) below). Changes apply at once.
-  - **Shortcuts**: **Keyboard Shortcuts…** lists every keyboard shortcut. It opens on top of
-    Preferences, and your unsaved changes there are kept.
+  - **Shortcuts**: **Keyboard Shortcuts…** lists every keyboard shortcut and lets you change them.
+    It opens on top of Preferences, and your unsaved changes there are kept. Choose a command, press
+    **Record new shortcut**, press the new keys, then **Assign**. **Remove** leaves a command with no
+    keys, **Default** puts one command back and **Reset all…** puts every shortcut back after you
+    confirm. Changes apply at once and are kept in this browser. Some keys are refused: a key your
+    browser uses itself (such as Ctrl+W, Ctrl+T or Ctrl+L), a key that moves you around the page or
+    edits text (Tab, the arrow keys, Enter, Delete, F6), and a key that another command already uses,
+    which you must remove there first. Ctrl+O, Ctrl+S and Ctrl+P always stay with Elanero, so the
+    browser's own dialogs do not open over it.
   - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and
     uploaded fonts from this browser, then reloads the page. It is turned off while a document is
     open; close the documents first. Your files are not touched, and the recovery copies of other
@@ -172,7 +179,9 @@ message saying whether it was added.
   moves to the style bar. The web version will use the desktop's keys wherever the browser allows, and will list
   them in [Keyboard shortcuts](keyboard-shortcuts.md) once every shortcut works in the web version (coming
   soon).
-  **Keyboard Shortcuts…** in the app menu and in Preferences shows the list that is available now.
+  **Keyboard Shortcuts…** in the app menu, in Preferences and in the command palette opens the
+  editor, where you can change the keys (see Preferences above). The palette's own list of keys
+  only reads them; its **Change shortcuts…** button opens the editor.
 
 ## Side panels
 

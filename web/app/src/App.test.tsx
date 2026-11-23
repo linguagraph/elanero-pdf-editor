@@ -566,6 +566,19 @@ describe('App help, about and quick access (W4.3a S4)', () => {
     expect(open).toHaveBeenCalledWith(GUIDE_URL, '_blank', expect.any(String));
   });
 
+  it('opens the editable Keyboard Shortcuts dialog from the app menu', async () => {
+    renderApp();
+    await openMenuItem(t('command.keyboard-shortcuts.label'));
+    const dialog = await vi.waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (found === null) throw new Error('no dialog');
+      return found;
+    });
+    // The editor's filter box and its Change-capable recorder, not the read-only list.
+    expect(dialog.querySelector('input[type="search"]')).not.toBeNull();
+    expect(dialog.querySelector('.shortcut-recorder')).not.toBeNull();
+  });
+
   it('opens About Elanero as an overlay from the app menu', async () => {
     renderApp();
     await openMenuItem(t('command.about-elanero.label'));
