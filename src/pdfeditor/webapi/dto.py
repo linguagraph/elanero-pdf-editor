@@ -945,6 +945,8 @@ class JobPrepareResult:
     # The document state after the busy flag changed (a mutating job began its task); None for a
     # read-only job, whose prepare leaves the flag alone (W3.5).
     state: DocStateDto | None
+    # The size of the file the user holds, for a reduce while the document is clean; else None.
+    baseline: int | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -1030,6 +1032,9 @@ class ReduceSizeArgs:
     preset: str
     options: ReduceOptionsDto | None = None  # required for "custom" and refused for a named preset
     audit: bool = False  # also measure the space before and after (the result's audit values)
+    # The size to compare the result with: the file the user holds. jobs.prepare sends it as the
+    # baseline while the document is clean; None compares with a re-save of the copy.
+    before: int | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

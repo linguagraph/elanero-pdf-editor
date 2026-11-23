@@ -140,6 +140,10 @@ export async function runFileJobOutput(
   const { engine } = deps;
   const prepared = await engine.call('jobs.prepare', { handle, job, args });
   const { token } = prepared;
+  // A reduce's baseline (the file the user holds, issue #610) goes with its arguments; the engine
+  // sends one only for a reduce, so no other job's arguments change.
+  const runArgs =
+    typeof prepared.baseline === 'number' ? { ...args, before: prepared.baseline } : args;
   if (deps.signal?.aborted === true) {
     // Cancelled while prepare was in flight: nothing is on the bar and no worker has started.
     await engine.call('jobs.abort', { handle, token }).catch(() => undefined);
@@ -182,7 +186,7 @@ export async function runFileJobOutput(
       v: PROTOCOL_VERSION,
       id: 1,
       method: 'job.run',
-      params: { job, args, document: { $bin: 0 } },
+      params: { job, args: runArgs, document: { $bin: 0 } },
     });
     const onNotice = (notice: Notice): void => {
       const percent = progressPercent(notice);

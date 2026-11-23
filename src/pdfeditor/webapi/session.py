@@ -74,6 +74,7 @@ def open_document(params: dto.OpenParams) -> dto.OpenResult:
                 {"max_pages": limits.MAX_PAGES, "pages": pages},
             )
         handle = REGISTRY.open(session, params.password)
+        REGISTRY.set_held_size(handle, size)  # the file the user holds (see jobs.prepare)
         info = _info(session)
         with session.lock:
             state = state_of(session)
