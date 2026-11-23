@@ -1,7 +1,7 @@
-// The style bar over the paragraph editor (W6.8b slice 1, design section 6). One row of controls: the
-// font's name (read-only until the picker of slice 2), size, bold, italic, colour, alignment and line
-// spacing. It edits the style the editor holds and never commits by itself: the editor decides when
-// the typing and the style go to the engine. The bar is a toolbar with one tab stop at a time
+// The style bar over the paragraph editor (W6.8b slices 1 and 2, design section 6). One row of
+// controls: the font picker, size, bold, italic, colour, alignment and line spacing. It edits the
+// style the editor holds and never commits by itself: the editor decides when the typing and the
+// style go to the engine. The bar is a toolbar with one tab stop at a time
 // (roving focus); Left and Right move between its controls, except in the text fields, where they
 // move the caret.
 import {
@@ -17,16 +17,18 @@ import { t } from '../i18n/t';
 import { Icon } from '../theme/Icon';
 import { hexToColorJson } from '../prefs/colour';
 import { colorInputValue } from '../redaction/MarkStyleFields';
-import type { Align, TextStyleDto } from '../rpc/generated';
-import { clampRound, LINE_HEIGHT_RANGE, SIZE_RANGE } from './textStyle';
+import type { Align } from '../rpc/generated';
+import { FontPicker, type StopProps } from './FontPicker';
+import { faceToggle, type FontSection, documentNames, selectedOption } from './fontList';
+import { clampRound, LINE_HEIGHT_RANGE, SIZE_RANGE, type TextStyleArg } from './textStyle';
 
 export interface StyleBarProps {
   readonly rootRef: RefObject<HTMLDivElement | null>;
   readonly style: CSSProperties;
-  readonly value: TextStyleDto;
-  // The font the block uses, shown by name (the picker of slice 2 makes it a control).
-  readonly font: string;
-  readonly onChange: (next: TextStyleDto) => void;
+  readonly value: TextStyleArg;
+  // The picker's sections: the page's document fonts and the standard ones (fontList.ts).
+  readonly fonts: readonly FontSection[];
+  readonly onChange: (next: TextStyleArg) => void;
   // Ctrl+Enter from any control of the bar.
   readonly onCommit: () => void;
   // Escape from the bar: focus goes back to the text, which keeps its selection.
@@ -42,7 +44,7 @@ export function StyleBar({
   rootRef,
   style,
   value,
-  font,
+  fonts,
   onChange,
   onCommit,
   onEscape,
@@ -50,6 +52,8 @@ export function StyleBar({
 }: StyleBarProps) {
   // The control with the tab stop. Only one control is in the tab order at a time.
   const [stop, setStop] = useState(0);
+  // The document fonts a Bold or Italic press may switch to (design section 4.1).
+  const pageFonts = documentNames(fonts);
   // The native colour dialog can take the window's focus while the colour input is open: a blur to
   // no element is not a leave then (design section 6.2, the `picking` flag).
   const picking = useRef(false);
@@ -78,7 +82,9 @@ export function StyleBar({
     const target = event.target;
     if (!ROVING_KEYS.includes(event.key) || !(target instanceof HTMLElement)) return;
     if (target instanceof HTMLSelectElement) return;
-    if (target instanceof HTMLInputElement && target.type === 'number') return;
+    // Text and number fields keep the arrows for the caret (design section 6.2).
+    if (target instanceof HTMLInputElement && (target.type === 'number' || target.type === 'text'))
+      return;
     const stops = Array.from(root.querySelectorAll<HTMLElement>('[data-stop]'));
     const index = stops.indexOf(target);
     if (index < 0) return;
@@ -120,42 +126,37 @@ export function StyleBar({
       onPointerUp={stopPointer}
       onDoubleClick={stopPointer}
     >
-      <span className="edit-style-font" title={font}>
-        {font}
-      </span>
+      <FontPicker
+        sections={fonts}
+        selected={selectedOption(fonts, value)}
+        stop={stopProps(0)}
+        onPick={(option) => onChange({ ...value, font: option.name, font_ref: option.ref })}
+      />
       <label className="edit-style-field">
         <span className="visually-hidden">{t('edit.style.size')}</span>
         <NumberField
           value={value.size}
           range={SIZE_RANGE}
           step={0.5}
-          stop={stopProps(0)}
+          stop={stopProps(1)}
           onCommit={(size) => onChange({ ...value, size })}
         />
         <span aria-hidden="true">{t('edit.style.pt')}</span>
       </label>
-      <button
-        type="button"
-        className="edit-style-toggle"
-        aria-pressed={value.bold}
-        aria-label={t('edit.style.bold')}
-        title={t('edit.style.bold')}
-        {...stopProps(1)}
-        onClick={() => onChange({ ...value, bold: !value.bold })}
-      >
-        <Icon name="bold" size={16} />
-      </button>
-      <button
-        type="button"
-        className="edit-style-toggle"
-        aria-pressed={value.italic}
-        aria-label={t('edit.style.italic')}
-        title={t('edit.style.italic')}
-        {...stopProps(2)}
-        onClick={() => onChange({ ...value, italic: !value.italic })}
-      >
-        <Icon name="italic" size={16} />
-      </button>
+      <FaceButton
+        which="bold"
+        value={value}
+        pageFonts={pageFonts}
+        stop={stopProps(2)}
+        onChange={onChange}
+      />
+      <FaceButton
+        which="italic"
+        value={value}
+        pageFonts={pageFonts}
+        stop={stopProps(3)}
+        onChange={onChange}
+      />
       <label className="edit-style-colour" title={t('edit.style.colour')}>
         <span className="visually-hidden">{t('edit.style.colour')}</span>
         <span
@@ -168,7 +169,7 @@ export function StyleBar({
         <input
           type="color"
           value={colorInputValue(value.color)}
-          {...stopProps(3)}
+          {...stopProps(4)}
           onClick={() => {
             picking.current = true;
           }}
@@ -184,7 +185,7 @@ export function StyleBar({
         <span className="visually-hidden">{t('edit.style.align')}</span>
         <select
           value={value.align}
-          {...stopProps(4)}
+          {...stopProps(5)}
           onChange={(event) => onChange({ ...value, align: event.target.value as Align })}
         >
           <option value="left">{t('edit.style.align.left')}</option>
@@ -199,19 +200,12 @@ export function StyleBar({
           value={value.line_height}
           range={LINE_HEIGHT_RANGE}
           step={0.1}
-          stop={stopProps(5)}
+          stop={stopProps(6)}
           onCommit={(line_height) => onChange({ ...value, line_height })}
         />
       </label>
     </div>
   );
-}
-
-// The roving-focus props of one control (see StyleBar's stopProps).
-interface StopProps {
-  readonly 'data-stop': true;
-  readonly tabIndex: number;
-  readonly onFocus: () => void;
 }
 
 interface NumberFieldProps {
@@ -263,5 +257,39 @@ function NumberField({ value, range, step, stop, onCommit }: NumberFieldProps) {
         }
       }}
     />
+  );
+}
+
+interface FaceButtonProps {
+  readonly which: 'bold' | 'italic';
+  readonly value: TextStyleArg;
+  readonly pageFonts: readonly string[];
+  readonly stop: StopProps;
+  readonly onChange: (next: TextStyleArg) => void;
+}
+
+// Bold or Italic. A press that the font can't take (a document font with no face of that weight or
+// slant on the page) is disabled with the reason as its tooltip; it stays focusable so the reason
+// can be read (aria-disabled, not disabled).
+function FaceButton({ which, value, pageFonts, stop, onChange }: FaceButtonProps) {
+  const label = t(which === 'bold' ? 'edit.style.bold' : 'edit.style.italic');
+  const change = faceToggle(value, which, pageFonts);
+  const disabled = change === null;
+  const reason = t(which === 'bold' ? 'edit.style.noBold' : 'edit.style.noItalic');
+  return (
+    <button
+      type="button"
+      className="edit-style-toggle"
+      aria-pressed={which === 'bold' ? value.bold : value.italic}
+      aria-disabled={disabled}
+      aria-label={label}
+      title={disabled ? reason : label}
+      {...stop}
+      onClick={() => {
+        if (change !== null) onChange({ ...value, ...change });
+      }}
+    >
+      <Icon name={which} size={16} />
+    </button>
   );
 }

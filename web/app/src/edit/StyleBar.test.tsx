@@ -2,9 +2,10 @@ import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n/t';
-import type { TextStyleDto } from '../rpc/generated';
+import type { PageObjectDto } from '../rpc/generated';
+import { fontSections } from './fontList';
 import { StyleBar, type StyleBarProps } from './StyleBar';
-import { DEFAULT_TEXT_STYLE } from './textStyle';
+import { DEFAULT_TEXT_ARG, standardRef, type TextStyleArg } from './textStyle';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -23,19 +24,22 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const style: TextStyleDto = {
-  ...DEFAULT_TEXT_STYLE,
+const style: TextStyleArg = {
+  ...DEFAULT_TEXT_ARG,
   font: 'ABCDEF+Arial',
   size: 12,
   color: { r: 0, g: 0, b: 0, a: 1 },
 };
+
+// A standard font has every face, so Bold and Italic can always change the text.
+const standard: TextStyleArg = { ...style, font: 'Helvetica', font_ref: standardRef('Helvetica') };
 
 function mount(overrides: Partial<StyleBarProps> = {}) {
   const props = {
     rootRef: createRef<HTMLDivElement>(),
     style: {},
     value: style,
-    font: 'ABCDEF+Arial',
+    fonts: fontSections([], 'ABCDEF+Arial'),
     onChange: vi.fn(),
     onCommit: vi.fn(),
     onEscape: vi.fn(),
@@ -45,6 +49,22 @@ function mount(overrides: Partial<StyleBarProps> = {}) {
   act(() => root.render(<StyleBar {...props} />));
   const bar = host.querySelector<HTMLDivElement>('[role="toolbar"]') as HTMLDivElement;
   return { ...props, bar };
+}
+
+// A text block of the page with `font` (only the fields the picker reads).
+function textBlock(font: string): PageObjectDto {
+  return {
+    type: 'text',
+    key: font,
+    bbox: { x0: 0, y0: 0, x1: 1, y1: 1 },
+    text: 'x',
+    style: { ...style, font },
+    editable: true,
+    reason: '',
+    image_size: [0, 0],
+    stroke: false,
+    fill: false,
+  };
 }
 
 const stops = () => Array.from(host.querySelectorAll<HTMLElement>('[data-stop]'));
@@ -89,7 +109,7 @@ describe('the style bar', () => {
   it('is a toolbar named Text style, showing the font and the values', () => {
     const { bar } = mount();
     expect(bar.getAttribute('aria-label')).toBe(t('edit.style.toolbar'));
-    expect(host.textContent).toContain('ABCDEF+Arial');
+    expect(host.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toContain('Arial');
     expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('12');
     expect(button(t('edit.style.bold')).getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelector<HTMLInputElement>('input[type="color"]')?.value).toBe('#000000');
@@ -97,15 +117,15 @@ describe('the style bar', () => {
 
   it('gives one control the tab stop at a time', () => {
     mount();
-    expect(stops().map((el) => el.tabIndex)).toEqual([0, -1, -1, -1, -1, -1]);
+    expect(stops().map((el) => el.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1]);
   });
 
   it('toggles bold and italic through onChange, with the rest of the style kept', () => {
-    const { onChange } = mount();
+    const { onChange } = mount({ value: standard });
     button(t('edit.style.bold')).click();
-    expect(onChange).toHaveBeenLastCalledWith({ ...style, bold: true });
+    expect(onChange).toHaveBeenLastCalledWith({ ...standard, bold: true });
     button(t('edit.style.italic')).click();
-    expect(onChange).toHaveBeenLastCalledWith({ ...style, italic: true });
+    expect(onChange).toHaveBeenLastCalledWith({ ...standard, italic: true });
   });
 
   it('moves focus between the controls with the arrow keys, not from a text field', () => {
@@ -185,5 +205,48 @@ describe('the style bar', () => {
     leave(colour, outside);
     expect(onLeave).toHaveBeenCalledWith(outside);
     outside.remove();
+  });
+
+  it('disables Bold for a document font with no bold face on the page, with the reason', () => {
+    const { onChange } = mount({ value: style });
+    const bold = button(t('edit.style.bold'));
+    expect(bold.getAttribute('aria-disabled')).toBe('true');
+    expect(bold.title).toBe(t('edit.style.noBold'));
+    bold.click();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('switches a document font to its bold face on the page', () => {
+    const page = ['ABCDEF+Arial', 'ABCDEF+Arial-BoldMT'];
+    const { onChange } = mount({
+      value: style,
+      fonts: fontSections(
+        page.map((font) => textBlock(font)),
+        'ABCDEF+Arial',
+      ),
+    });
+    button(t('edit.style.bold')).click();
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...style,
+      font: 'ABCDEF+Arial-BoldMT',
+      bold: true,
+    });
+  });
+
+  it('picks a standard font through the picker, with its ref', () => {
+    const { onChange } = mount({ value: style });
+    const input = host.querySelector<HTMLInputElement>('[role="combobox"]') as HTMLInputElement;
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+    const serif = Array.from(host.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (o) => o.textContent === t('fonts.picker.serif'),
+    );
+    act(() => serif?.click());
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...style,
+      font: 'Times-Roman',
+      font_ref: standardRef('Times-Roman'),
+    });
   });
 });

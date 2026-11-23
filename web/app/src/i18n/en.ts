@@ -202,6 +202,18 @@ export const EN = {
   'edit.style.align.right': 'Right',
   'edit.style.align.justify': 'Justify',
   'edit.style.lineSpacing': 'Line spacing (multiple of the font size)',
+  'edit.style.font': 'Font',
+  'edit.style.noBold': 'This font has no bold face on this page. Choose a standard font.',
+  'edit.style.noItalic': 'This font has no italic face on this page. Choose a standard font.',
+  'fonts.picker.document': 'In this document',
+  'fonts.picker.standard': 'Standard',
+  'fonts.picker.sans': 'Sans (Helvetica)',
+  'fonts.picker.serif': 'Serif (Times)',
+  'fonts.picker.mono': 'Mono (Courier)',
+  'fonts.picker.subset': '{name} (subset)',
+  'fonts.picker.subsetHint':
+    'Only part of this font is in the file. Characters it lacks are set in a standard font.',
+  'fonts.picker.noMatch': 'No fonts match',
   'edit.font.notReused': "{font} couldn't be reused here, so {used} was used instead.",
   'edit.font.missingGlyphs':
     '{font} has no characters for: {chars}. They may not show. Choose an uploaded font that has them.',

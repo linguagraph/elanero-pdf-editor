@@ -41,9 +41,8 @@ standard fonts and the fonts installed on your PC. It takes into account whether
 embedded and whether it has the characters you type. Where the original font can't be used, Elanero
 uses a substitute and tells you so. Exact font reuse is not always possible.
 
-In the web version, the picker can't use the fonts installed on your computer. You can upload fonts
-under **Preferences ▸ Fonts** ([Fonts on the web](web.md#fonts)), and the picker offers them once it
-lists uploaded fonts.
+The web version lists the fonts of the current page rather than the whole document, and has no list
+of installed fonts; see [Fonts in the web version](web.md#fonts-in-the-web-version). You can upload fonts under **Preferences ▸ Fonts** ([Fonts on the web](web.md#fonts)); uploaded fonts join the picker's list once that section ships (W6.8b).
 
 To see the fonts a document uses, open **File ▸ Document Properties…** or use the **Space Usage**
 report in [Optimize and compare](optimize-compare.md#see-what-takes-up-space).
