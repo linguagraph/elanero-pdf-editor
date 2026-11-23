@@ -33,6 +33,17 @@ export async function clearLocalData(deps: ClearLocalDataDeps = {}): Promise<Cle
   return { keysRemoved: keys.removed, complete: keys.complete && folders };
 }
 
+// Runs a clear and, only when it is complete, tells the other tabs to drop their uploaded fonts. A
+// partial clear is not announced: the fonts it left behind are still on disk.
+export async function clearDataAndNotify(
+  clear: ClearAction,
+  fonts: { cleared(): void } | undefined,
+): Promise<ClearOutcome> {
+  const outcome = await clear();
+  if (outcome.complete) fonts?.cleared();
+  return outcome;
+}
+
 // Walks from the last index down: removing key i does not move the keys below it, so no key is
 // skipped.
 function clearPrefixedKeys(storage: () => Storage): { removed: number; complete: boolean } {

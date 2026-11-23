@@ -5,6 +5,7 @@ import type { EngineClient, EngineConnection } from '../engine/engineConnection'
 import { RpcError, type RpcErrorCode } from '../rpc/client';
 import type { FontAddResult, UploadedFontDto } from '../rpc/generated';
 import {
+  FONT_ID,
   type FontStore,
   type KeepOutcome,
   requestPersistence,
@@ -16,6 +17,7 @@ import { t } from '../i18n/t';
 
 // Hand copy of limits.MAX_FONT_BYTES (50 MiB); the worker re-checks it (design S3 question 8).
 export const MAX_FONT_FILE_BYTES = 50 * 1024 * 1024;
+const CHANNEL = 'elanero.fonts';
 // Codes that cannot succeed on a retry: a kept font with one of them is removed at start-up.
 const PERMANENT = new Set(['INVALID_FONT', 'FONT_NOT_EMBEDDABLE', 'FILE_TOO_LARGE']);
 
@@ -57,9 +59,27 @@ export type AddOutcome =
       readonly details: Record<string, unknown>;
     };
 
+// 'engineKept': the font left the list and the disk, but the engine could not drop it (the tab keeps
+// it usable until it closes). 'notRemoved': the disk refused, so nothing changed.
+export type RemoveOutcome =
+  | { readonly kind: 'removed' }
+  | { readonly kind: 'engineKept'; readonly code: RpcErrorCode }
+  | { readonly kind: 'notRemoved' };
+
+// What the tabs say to each other: ids only, never names or bytes (design S3 section 3.6).
+export type FontMessage =
+  { readonly kind: 'added' | 'removed'; readonly id: string } | { readonly kind: 'cleared' };
+
+// A BroadcastChannel as far as the library uses it.
+export interface ChannelLike {
+  postMessage(message: FontMessage): void;
+  addEventListener(type: 'message', listener: (event: { readonly data: unknown }) => void): void;
+}
+
 export interface FontLibraryDeps {
   readonly engine: Pick<EngineConnection, 'client' | 'whenReady' | 'onReady'>;
   readonly store: FontStore;
+  readonly channel?: () => ChannelLike | undefined;
   readonly persist?: () => Promise<unknown>;
   // Runs a start-up sync when the page is idle. Defaults to requestIdleCallback with a 2 s timeout.
   readonly schedule?: (run: () => void) => void;
@@ -73,8 +93,13 @@ export interface FontLibrary {
   // Resolves when the current engine holds every kept font (the first sync of each engine).
   ready(): Promise<void>;
   add(file: File): Promise<AddOutcome>;
+  remove(id: string): Promise<RemoveOutcome>;
+  removeAll(): Promise<RemoveOutcome>;
   // The bytes of a font the tab lists (kept or this tab only), for the preview face (W6.8b).
   bytes(id: string): Promise<BlobLike | undefined>;
+  // Clear all succeeded: the other tabs drop their copies too. The caller reloads this tab.
+  cleared(): void;
+  onRemoved(listener: (id: string) => void): () => void;
 }
 
 // One font the tab knows. A session font (kept false) holds its File for re-sends after a restart.
@@ -104,6 +129,23 @@ function defaultSchedule(run: () => void): void {
   } else {
     setTimeout(run, 0);
   }
+}
+
+function defaultChannel(): ChannelLike | undefined {
+  return typeof BroadcastChannel === 'function'
+    ? (new BroadcastChannel(CHANNEL) as unknown as ChannelLike)
+    : undefined;
+}
+
+// Accepts only messages this module sends: a foreign or malformed one is ignored.
+export function parseFontMessage(data: unknown): FontMessage | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const { kind, id } = data as { kind?: unknown; id?: unknown };
+  if (kind === 'cleared') return { kind: 'cleared' };
+  if ((kind === 'added' || kind === 'removed') && typeof id === 'string' && FONT_ID.test(id)) {
+    return { kind, id };
+  }
+  return undefined;
 }
 
 function byAddedThenId(a: Entry, b: Entry): number {
@@ -144,6 +186,8 @@ export function createFontLibrary(deps: FontLibraryDeps): FontLibrary {
   const notify = deps.notify ?? ((text: string) => toasts.push('warning', text));
   const entries = new Map<string, Entry>();
   const listeners = new Set<() => void>();
+  const removedListeners = new Set<(id: string) => void>();
+  const channel = (deps.channel ?? defaultChannel)();
   let usedBytes = 0;
   let maxBytes = 0;
   let storage: FontStorage = 'unknown';
@@ -227,26 +271,29 @@ export function createFontLibrary(deps: FontLibraryDeps): FontLibrary {
     }
   }
 
-  // Brings the engine up to the tab's fonts: every kept font and every session font it lacks.
-  async function reconcile(client: EngineClient, mine: number): Promise<void> {
+  // Brings the engine up to the tab's fonts: every kept font and every session font it lacks. `only`
+  // limits it to one id (another tab kept that font); the list is then not pruned.
+  async function reconcile(client: EngineClient, mine: number, only?: string): Promise<void> {
     const records = await store.list();
-    const onDisk = new Set(records.map((record) => record.id));
-    for (const entry of [...entries.values()]) {
-      if (entry.kept && !onDisk.has(entry.id)) entries.delete(entry.id);
+    if (only === undefined) {
+      const onDisk = new Set(records.map((record) => record.id));
+      for (const entry of [...entries.values()]) {
+        if (entry.kept && !onDisk.has(entry.id)) entries.delete(entry.id);
+      }
     }
     for (const record of records) {
       const entry = entries.get(record.id);
       if (entry === undefined) entries.set(record.id, fromRecord(record));
       else entry.kept = true;
     }
-    if (!(await store.available())) storage = 'session';
+    if (only === undefined && !(await store.available())) storage = 'session';
     if (entries.size === 0) return;
     let failed = false;
     let sent = false;
     for (const entry of [...entries.values()]) {
       // The engine was replaced: the new engine's own sync takes over, so this one stops here.
       if (mine !== generation) return;
-      if (entry.loaded) continue;
+      if (entry.loaded || (only !== undefined && entry.id !== only)) continue;
       const blob = entry.kept ? await store.read(entry.id) : entry.file;
       if (mine !== generation) return;
       if (blob === undefined) continue;
@@ -281,18 +328,51 @@ export function createFontLibrary(deps: FontLibraryDeps): FontLibrary {
     return { id, name, size, added, kept: true, loaded: false, dto: undefined, file: undefined };
   }
 
-  async function sync(client: EngineClient, mine: number): Promise<void> {
+  async function sync(client: EngineClient, mine: number, only?: string): Promise<void> {
     if (mine !== generation) return;
     syncing = true;
     publish();
     try {
-      await reconcile(client, mine);
+      await reconcile(client, mine, only);
     } finally {
       syncing = false;
       // Only the current engine's first full sync opens the gate.
-      if (mine === generation) gate.resolve();
+      if (mine === generation && only === undefined) gate.resolve();
       publish();
     }
+  }
+
+  // Removes one font: the disk first (so the user's intent survives a reload), then the engine. Only
+  // the tab the user acted in (announce) touches the disk and tells the others. A tab that hears of
+  // the removal drops its own copy and nothing else: another tab may have kept the font again since.
+  async function removeOne(id: string, announce: boolean): Promise<RemoveOutcome> {
+    const entry = entries.get(id);
+    if (entry === undefined) return { kind: 'removed' };
+    if (announce && entry.kept && !(await store.remove(id))) return { kind: 'notRemoved' };
+    let code: RpcErrorCode | undefined;
+    const client = engine.client();
+    if (client !== undefined && entry.loaded) {
+      try {
+        await client.call('fonts.remove', { id });
+      } catch (error) {
+        code = error instanceof RpcError ? error.code : 'ENGINE_ERROR';
+      }
+    }
+    entries.delete(id);
+    if (entry.kept && announce) channel?.postMessage({ kind: 'removed', id });
+    for (const listener of removedListeners) listener(id);
+    publish();
+    return code === undefined ? { kind: 'removed' } : { kind: 'engineKept', code };
+  }
+
+  async function removeEverything(announce: boolean): Promise<RemoveOutcome> {
+    let outcome: RemoveOutcome = { kind: 'removed' };
+    for (const id of [...entries.keys()]) {
+      const one = await removeOne(id, announce);
+      if (one.kind !== 'removed') outcome = one;
+    }
+    if (announce && !(await store.removeAll())) return { kind: 'notRemoved' };
+    return outcome;
   }
 
   // The engine is ready: every font is unloaded until a sync says otherwise; a sync runs at idle.
@@ -308,6 +388,23 @@ export function createFontLibrary(deps: FontLibraryDeps): FontLibrary {
     schedule(() => {
       if (mine === generation) void enqueue(() => sync(client, mine));
     });
+  });
+
+  // Another tab's change. The message is handled as one more job, so it never interleaves with ours.
+  channel?.addEventListener('message', (event) => {
+    const message = parseFontMessage(event.data);
+    if (message === undefined) return;
+    if (message.kind === 'cleared') {
+      void enqueue(() => removeEverything(false));
+    } else if (message.kind === 'removed') {
+      void enqueue(() => removeOne(message.id, false));
+    } else {
+      // Another tab kept this font: load it here too, so this picker offers it without a reload.
+      void enqueue(async () => {
+        const client = engine.client();
+        if (client !== undefined) await sync(client, generation, message.id);
+      });
+    }
   });
 
   return {
@@ -371,6 +468,7 @@ export function createFontLibrary(deps: FontLibraryDeps): FontLibrary {
           entry.file = undefined;
           storage = 'persistent';
           askPersist();
+          channel?.postMessage({ kind: 'added', id: font.id });
         } else if (outcome === 'unsupported') {
           storage = 'session';
         }
@@ -382,10 +480,25 @@ export function createFontLibrary(deps: FontLibraryDeps): FontLibrary {
       });
     },
 
+    remove: (id) => enqueue(() => removeOne(id, true)),
+
+    removeAll: () => enqueue(() => removeEverything(true)),
+
     async bytes(id) {
       const entry = entries.get(id);
       if (entry === undefined) return undefined;
       return entry.kept ? store.read(id) : entry.file;
+    },
+
+    cleared() {
+      channel?.postMessage({ kind: 'cleared' });
+    },
+
+    onRemoved(listener) {
+      removedListeners.add(listener);
+      return () => {
+        removedListeners.delete(listener);
+      };
     },
   };
 }

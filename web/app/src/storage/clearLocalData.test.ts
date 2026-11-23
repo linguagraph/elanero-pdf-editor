@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isSecretKey } from '../prefs/store';
-import { clearLocalData, LOCAL_DATA_FOLDERS, LOCAL_STORAGE_PREFIX } from './clearLocalData';
+import {
+  clearDataAndNotify,
+  clearLocalData,
+  type ClearOutcome,
+  LOCAL_DATA_FOLDERS,
+  LOCAL_STORAGE_PREFIX,
+} from './clearLocalData';
 import type { BlobLike, DirectoryLike, FileLike, WritableLike } from './opfs';
 import { StorageUnsupportedError } from './opfs';
 import { createFontStore, FONTS_FOLDER } from './fontStore';
@@ -236,5 +242,30 @@ describe('clearLocalData: OPFS folders', () => {
       root: () => Promise.reject(new Error('disk gone')),
     });
     expect(outcome.complete).toBe(false);
+  });
+});
+
+describe('clear and notify the other tabs', () => {
+  const done: ClearOutcome = { keysRemoved: 0, complete: true };
+  const partial: ClearOutcome = { keysRemoved: 0, complete: false };
+
+  it('tells the other tabs about the fonts once a clear is complete', async () => {
+    const fonts = { cleared: vi.fn() };
+    const outcome = await clearDataAndNotify(async () => done, fonts);
+
+    expect(outcome).toEqual(done);
+    expect(fonts.cleared).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not tell the other tabs when a clear is incomplete, and still returns the outcome', async () => {
+    const fonts = { cleared: vi.fn() };
+    const outcome = await clearDataAndNotify(async () => partial, fonts);
+
+    expect(outcome).toEqual(partial);
+    expect(fonts.cleared).not.toHaveBeenCalled();
+  });
+
+  it('clears without a font library, as the Preferences dialog does when none is open', async () => {
+    await expect(clearDataAndNotify(async () => done, undefined)).resolves.toEqual(done);
   });
 });
