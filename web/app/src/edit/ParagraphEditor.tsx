@@ -85,6 +85,9 @@ export function ParagraphEditor({
   const hintId = useId();
   const [value, setValue] = useState(object.text);
   const [busy, setBusy] = useState(false);
+  // What a Bold or Italic press the font can't take says, for a screen reader: the key does nothing,
+  // and this status tells why (cleared by the next style change or keystroke).
+  const [faceNote, setFaceNote] = useState<string | null>(null);
   const [family, setFamily] = useState<string>(() => familyOf(style?.font ?? ''));
   // The style the bar shows and the commit sends. `styleRef` is the same value, read by the keys,
   // blurs and unmount that run between renders. The opening style has no font ref (the block's
@@ -166,6 +169,7 @@ export function ParagraphEditor({
 
   const setStyle = (next: TextStyleArg) => {
     styleRef.current = next;
+    setFaceNote(null);
     setCurrent(next);
   };
 
@@ -227,12 +231,10 @@ export function ParagraphEditor({
       // Bold and italic toggle from the keyboard too (the bar's buttons are the other way in). A
       // press the font can't take does nothing, as the disabled button.
       event.preventDefault();
-      const change = faceToggle(
-        styleRef.current,
-        event.key.toLowerCase() === 'b' ? 'bold' : 'italic',
-        documentNames(sections),
-      );
+      const which = event.key.toLowerCase() === 'b' ? 'bold' : 'italic';
+      const change = faceToggle(styleRef.current, which, documentNames(sections));
       if (change !== null) setStyle({ ...styleRef.current, ...change });
+      else setFaceNote(t(which === 'bold' ? 'edit.style.noBold' : 'edit.style.noItalic'));
     }
   };
 
@@ -311,6 +313,7 @@ export function ParagraphEditor({
         }}
         onChange={(event) => {
           valueRef.current = event.target.value;
+          setFaceNote(null);
           setValue(event.target.value);
         }}
         onKeyDown={onKeyDown}
@@ -323,6 +326,9 @@ export function ParagraphEditor({
       />
       <span id={hintId} className="visually-hidden">
         {t('edit.text.hint')}
+      </span>
+      <span role="status" className="visually-hidden">
+        {faceNote}
       </span>
     </>
   );
