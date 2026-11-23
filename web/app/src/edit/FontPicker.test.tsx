@@ -123,6 +123,17 @@ describe('the font picker', () => {
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Times-Roman' }));
   });
 
+  it('a press on a heading keeps focus in the input and the popup open', () => {
+    const { input } = mount();
+    keyDown(input, 'ArrowDown');
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    act(() => {
+      headings()[0]?.dispatchEvent(press);
+    });
+    expect(press.defaultPrevented).toBe(true);
+    expect(input.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('Escape closes the popup and stops there, so the bar keeps its state', () => {
     const { input } = mount();
     keyDown(input, 'ArrowDown');
