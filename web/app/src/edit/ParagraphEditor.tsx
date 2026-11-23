@@ -8,6 +8,8 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type WheelEvent,
+  useCallback,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -17,12 +19,18 @@ import {
 } from 'react';
 import { cssBox, pointsToCss } from '../comments/coordinates';
 import type { PageRpc } from '../engine/engineConnection';
+import type { AddOutcome } from '../fonts/fontLibrary';
+import { FontLibraryContext, useUploadedFonts } from '../fonts/fontLibraryContext';
+import { toasts } from '../feedback/toasts';
+import { describeAddOutcome } from '../fonts/uploadMessages';
+import { useFontUpload } from '../fonts/useFontUpload';
 import { t } from '../i18n/t';
 import type { PageObjectDto, TextStyleDto } from '../rpc/generated';
 import type { ApplyText } from './applyText';
 import { backgroundFrom, canScrollBy, readableColour } from './editorStyle';
-import { documentNames, faceToggle, fontSections, isStandardName } from './fontList';
+import { documentNames, faceToggle, fontSections, isStandardName, uploadedFaces } from './fontList';
 import { familyOf, previewFamilyCss } from './previewFont';
+import { uploadedIdOf, uploadedPreviewFace } from './uploadedPreview';
 import { StyleBar } from './StyleBar';
 import { openingStyle, styleChanged, type TextStyleArg, toActionStyle } from './textStyle';
 
@@ -103,9 +111,30 @@ export function ParagraphEditor({
   const styleRef = useRef<TextStyleArg>(current);
   const openingStyleRef = useRef<TextStyleDto>(current);
   const font = current.font;
+  // The tab's uploaded fonts (none without a library: tests). The Uploaded section and its upload row
+  // exist only with the library.
+  const library = useContext(FontLibraryContext);
+  const uploadedFonts = useUploadedFonts(library);
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const reportUpload = useCallback(
+    (file: File, outcome: AddOutcome) => {
+      const message = describeAddOutcome(outcome, file.name, library?.getState().usedBytes ?? 0);
+      toasts.push(message.tone === 'alert' ? 'warning' : 'info', message.text);
+    },
+    [library],
+  );
+  const upload = useFontUpload(library, reportUpload, uploadInput);
+  const setUploadInput = useCallback((element: HTMLInputElement | null) => {
+    uploadInput.current = element;
+  }, []);
   const sections = useMemo(
-    () => fontSections(pageObjects, style?.font ?? ''),
-    [pageObjects, style?.font],
+    () =>
+      fontSections(
+        pageObjects,
+        style?.font ?? '',
+        library === undefined ? undefined : uploadedFonts,
+      ),
+    [pageObjects, style?.font, library, uploadedFonts],
   );
   // Set once the editor has closed, or while a commit is in flight. A blur or an unmount after
   // either must not commit again.
@@ -141,8 +170,27 @@ export function ParagraphEditor({
   // The document's own face, once the browser has it; until then the generic family. A standard
   // font has no document face to ask for: its generic family is shown at once.
   const standardPick = current.font_ref?.kind === 'standard';
+  // An uploaded face previews its own font file (uploadedPreview.ts). The id is kept with the CSS it
+  // loaded, so a face of another font is not shown while this one loads.
+  const uploadedId = uploadedIdOf(current.font_ref);
+  const [uploadedPreview, setUploadedPreview] = useState<{
+    readonly id: string;
+    readonly css: string | null;
+  } | null>(null);
   useEffect(() => {
-    if (standardPick) return undefined;
+    if (standardPick || uploadedId === null || library === undefined) return undefined;
+    let active = true;
+    uploadedPreviewFace(library, uploadedId)
+      .then((name) => {
+        if (active) setUploadedPreview({ id: uploadedId, css: name === null ? null : `"${name}"` });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [library, uploadedId, standardPick]);
+  useEffect(() => {
+    if (standardPick || uploadedId !== null) return undefined;
     let active = true;
     previewFamilyCss(rpc, handle, page, font)
       .then((css) => {
@@ -152,8 +200,14 @@ export function ParagraphEditor({
     return () => {
       active = false;
     };
-  }, [rpc, handle, page, font, standardPick]);
-  const previewFamily = standardPick ? familyOf(font) : family;
+  }, [rpc, handle, page, font, standardPick, uploadedId]);
+  const uploadedCss = uploadedPreview?.id === uploadedId ? uploadedPreview?.css : null;
+  const previewFamily =
+    uploadedId !== null
+      ? `${uploadedCss ?? ''}${uploadedCss ? ', ' : ''}${familyOf(font)}`
+      : standardPick
+        ? familyOf(font)
+        : family;
 
   // The box grows with its text up to the page's bottom edge, then scrolls. The offset parent is the
   // page's edit layer, whose height is the page's.
@@ -238,7 +292,12 @@ export function ParagraphEditor({
       // press the font can't take does nothing, as the disabled button.
       event.preventDefault();
       const which = event.key.toLowerCase() === 'b' ? 'bold' : 'italic';
-      const change = faceToggle(styleRef.current, which, documentNames(sections));
+      const change = faceToggle(
+        styleRef.current,
+        which,
+        documentNames(sections),
+        uploadedFaces(sections),
+      );
       if (change !== null) setStyle({ ...styleRef.current, ...change });
       else {
         noteCount.current += 1;
@@ -279,7 +338,9 @@ export function ParagraphEditor({
     getComputedStyle(document.documentElement).getPropertyValue('--color-editor-bg'),
   );
   const color = readableColour(current.color, background);
-  const ownFace = current.font_ref === null && !isStandardName(font);
+  // A document font and an uploaded face preview their own faces (no synthetic bold or slant).
+  const ownFace =
+    (current.font_ref === null && !isStandardName(font)) || current.font_ref?.kind === 'file';
 
   return (
     <>
@@ -292,6 +353,11 @@ export function ParagraphEditor({
         }}
         value={current}
         fonts={sections}
+        upload={
+          library === undefined
+            ? undefined
+            : { setInput: setUploadInput, onOpen: upload.open, onChange: upload.onChange }
+        }
         onChange={setStyle}
         onCommit={() => void end(valueRef.current)}
         onEscape={() => ref.current?.focus()}
