@@ -24,18 +24,20 @@ export function openingStyle(style: TextStyleDto | null): TextStyleDto {
   return style ?? DEFAULT_TEXT_STYLE;
 }
 
-// The wire form of a style. `font_ref` is always sent, null for a document font (the engine's own).
-export interface TextStyleArg extends TextStyleDto {
-  readonly font_ref: FontRefArg | null;
-}
-
-// A font reference as the engine takes it (the Python FontRef: kind, name, path, index). A standard
-// font names the base-14 face; an uploaded face (W6.9) names its catalogue path.
+// A font reference as the engine takes it (the Python FontRef: kind, name, path, index). A
+// standard font names the base-14 face; a document font is sent with null, as the engine reads the
+// page's own program; an uploaded face (W6.9, 8b-3) names its catalogue path.
 export interface FontRefArg {
   readonly kind: 'standard' | 'document' | 'file';
   readonly name: string;
   readonly path: string;
   readonly index: number;
+}
+
+// The wire form of a style. `font_ref` is always sent, null for a document font, so the engine
+// never relies on a default.
+export interface TextStyleArg extends TextStyleDto {
+  readonly font_ref: FontRefArg | null;
 }
 
 // The style a new block is set in, as the wire takes it (no font ref: the default standard font).
@@ -64,10 +66,10 @@ export function clampRound(
 }
 
 // The style as the engine takes it: clamped and rounded as on the desktop. Spacing is passed through.
-export function toActionStyle(style: TextStyleDto): TextStyleArg {
+export function toActionStyle(style: StyleInput): TextStyleArg {
   return {
     font: style.font,
-    font_ref: null,
+    font_ref: style.font_ref ?? null,
     size: clampRound(style.size, SIZE_RANGE),
     color: style.color,
     bold: style.bold,
@@ -84,9 +86,11 @@ function sameColour(a: ColorDto, b: ColorDto): boolean {
 }
 
 // Whether the bar changed the style since the editor opened (field by field, so a new field is
-// listed here on purpose).
-export function styleChanged(opening: TextStyleDto, current: TextStyleDto): boolean {
+// listed here on purpose). The opening style never carries a font ref, so a picked standard font
+// (a ref) is always a change.
+export function styleChanged(opening: TextStyleDto, current: StyleInput): boolean {
   return !(
+    (current.font_ref ?? null) === null &&
     opening.font === current.font &&
     opening.size === current.size &&
     sameColour(opening.color, current.color) &&

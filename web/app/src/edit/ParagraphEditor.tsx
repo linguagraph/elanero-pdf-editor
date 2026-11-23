@@ -11,6 +11,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -20,6 +21,7 @@ import { t } from '../i18n/t';
 import type { PageObjectDto, TextStyleDto } from '../rpc/generated';
 import type { ApplyText } from './applyText';
 import { backgroundFrom, canScrollBy, readableColour } from './editorStyle';
+import { documentNames, faceToggle, fontSections, isStandardName } from './fontList';
 import { familyOf, previewFamilyCss } from './previewFont';
 import { StyleBar } from './StyleBar';
 import { openingStyle, styleChanged, type TextStyleArg, toActionStyle } from './textStyle';
@@ -32,9 +34,11 @@ const BAR_HEIGHT_PX = 36;
 const BAR_GAP_PX = 4;
 const BAR_MIN_WIDTH_PX = 360;
 
+const NO_OBJECTS: readonly PageObjectDto[] = [];
+
 // The style a commit sends with the text: the bar's style when it changed the opening one, else null
 // (the engine then keeps the block's own style).
-function styleToSend(opening: TextStyleDto, current: TextStyleDto): TextStyleArg | null {
+function styleToSend(opening: TextStyleDto, current: TextStyleArg): TextStyleArg | null {
   return styleChanged(opening, current) ? toActionStyle(current) : null;
 }
 
@@ -58,6 +62,8 @@ export interface ParagraphEditorProps {
   readonly onDrop?: (text: string) => void;
   // A new block (Add Text, W6.8a 8a-2) is labelled as one; the owner's commit adds it.
   readonly newBlock?: boolean;
+  // The page's objects, from the Edit tool's list: the font picker's document fonts (fontList.ts).
+  readonly pageObjects?: readonly PageObjectDto[];
 }
 
 export function ParagraphEditor({
@@ -71,6 +77,7 @@ export function ParagraphEditor({
   commitOnLeave,
   onDrop,
   newBlock = false,
+  pageObjects = NO_OBJECTS,
 }: ParagraphEditorProps) {
   const style = object.style;
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -80,10 +87,19 @@ export function ParagraphEditor({
   const [busy, setBusy] = useState(false);
   const [family, setFamily] = useState<string>(() => familyOf(style?.font ?? ''));
   // The style the bar shows and the commit sends. `styleRef` is the same value, read by the keys,
-  // blurs and unmount that run between renders.
-  const [current, setCurrent] = useState<TextStyleDto>(() => openingStyle(style));
-  const styleRef = useRef<TextStyleDto>(current);
+  // blurs and unmount that run between renders. The opening style has no font ref (the block's
+  // font is found by name), so a picked standard font is a change.
+  const [current, setCurrent] = useState<TextStyleArg>(() => ({
+    ...openingStyle(style),
+    font_ref: null,
+  }));
+  const styleRef = useRef<TextStyleArg>(current);
   const openingStyleRef = useRef<TextStyleDto>(current);
+  const font = current.font;
+  const sections = useMemo(
+    () => fontSections(pageObjects, style?.font ?? ''),
+    [pageObjects, style?.font],
+  );
   // Set once the editor has closed, or while a commit is in flight. A blur or an unmount after
   // either must not commit again.
   const closed = useRef(false);
@@ -115,9 +131,11 @@ export function ParagraphEditor({
     }
   }, []);
 
-  // The document's own face, once the browser has it; until then the generic family.
-  const font = style?.font ?? '';
+  // The document's own face, once the browser has it; until then the generic family. A standard
+  // font has no document face to ask for: its generic family is shown at once.
+  const standardPick = current.font_ref?.kind === 'standard';
   useEffect(() => {
+    if (standardPick) return undefined;
     let active = true;
     previewFamilyCss(rpc, handle, page, font)
       .then((css) => {
@@ -127,7 +145,8 @@ export function ParagraphEditor({
     return () => {
       active = false;
     };
-  }, [rpc, handle, page, font]);
+  }, [rpc, handle, page, font, standardPick]);
+  const previewFamily = standardPick ? familyOf(font) : family;
 
   // The box grows with its text up to the page's bottom edge, then scrolls. The offset parent is the
   // page's edit layer, whose height is the page's.
@@ -145,7 +164,7 @@ export function ParagraphEditor({
     onClose();
   };
 
-  const setStyle = (next: TextStyleDto) => {
+  const setStyle = (next: TextStyleArg) => {
     styleRef.current = next;
     setCurrent(next);
   };
@@ -205,13 +224,15 @@ export function ParagraphEditor({
       event.preventDefault();
       focusBar();
     } else if ((event.ctrlKey || event.metaKey) && !event.altKey && /^[bi]$/i.test(event.key)) {
-      // Bold and italic toggle from the keyboard too (the bar's buttons are the other way in).
+      // Bold and italic toggle from the keyboard too (the bar's buttons are the other way in). A
+      // press the font can't take does nothing, as the disabled button.
       event.preventDefault();
-      const flip =
-        event.key.toLowerCase() === 'b'
-          ? { bold: !styleRef.current.bold }
-          : { italic: !styleRef.current.italic };
-      setStyle({ ...styleRef.current, ...flip });
+      const change = faceToggle(
+        styleRef.current,
+        event.key.toLowerCase() === 'b' ? 'bold' : 'italic',
+        documentNames(sections),
+      );
+      if (change !== null) setStyle({ ...styleRef.current, ...change });
     }
   };
 
@@ -246,6 +267,7 @@ export function ParagraphEditor({
     getComputedStyle(document.documentElement).getPropertyValue('--color-editor-bg'),
   );
   const color = readableColour(current.color, background);
+  const ownFace = current.font_ref === null && !isStandardName(font);
 
   return (
     <>
@@ -257,7 +279,7 @@ export function ParagraphEditor({
           minWidth: BAR_MIN_WIDTH_PX,
         }}
         value={current}
-        font={font}
+        fonts={sections}
         onChange={setStyle}
         onCommit={() => void end(valueRef.current)}
         onEscape={() => ref.current?.focus()}
@@ -276,12 +298,13 @@ export function ParagraphEditor({
           top: box.top,
           width: Math.max(box.width, MIN_WIDTH_PX),
           minHeight: Math.max(MIN_HEIGHT_PX, pointsToCss(lineHeightPt, zoom)),
-          fontFamily: family,
+          fontFamily: previewFamily,
           fontSize: `${pointsToCss(size, zoom)}px`,
           lineHeight: current.line_height,
           color,
-          fontWeight: current.bold ? 700 : 400,
-          fontStyle: current.italic ? 'italic' : 'normal',
+          // A document font previews its own face: the browser must not make it bold or slanted.
+          fontWeight: ownFace ? 'normal' : current.bold ? 700 : 400,
+          fontStyle: ownFace ? 'normal' : current.italic ? 'italic' : 'normal',
           textAlign: current.align,
           letterSpacing: `${pointsToCss(current.char_spacing, zoom)}px`,
           wordSpacing: `${pointsToCss(current.word_spacing, zoom)}px`,

@@ -370,6 +370,7 @@ export function EditLayer({
           onClose={onCloseText}
           commitOnLeave={commitTextOnLeave}
           onDrop={onDropText}
+          pageObjects={objects}
         />
       ) : null}
     </div>

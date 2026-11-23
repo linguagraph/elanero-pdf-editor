@@ -7,7 +7,7 @@ import { t } from '../i18n/t';
 import type { PageObjectDto, RectDto, RunResult } from '../rpc/generated';
 import { type CommitDeps, commitAdd, commitText, type SettledSelection } from './commit';
 import { ObjectCache } from './objectCache';
-import { DEFAULT_TEXT_STYLE, toActionStyle } from './textStyle';
+import { DEFAULT_TEXT_ARG, DEFAULT_TEXT_STYLE, toActionStyle } from './textStyle';
 
 const box = (x0: number, y0: number, x1: number, y1: number): RectDto => ({ x0, y0, x1, y1 });
 
@@ -97,7 +97,7 @@ describe('committing the style with the text', () => {
     expect(first.styleSent()).toEqual(style);
     const second = setup();
     await commitAdd(second.deps, { page: 0, rect: box(1, 2, 3, 4), text: 'Hi' });
-    expect(second.styleSent()).toEqual(DEFAULT_TEXT_STYLE);
+    expect(second.styleSent()).toEqual(DEFAULT_TEXT_ARG);
   });
 });
 

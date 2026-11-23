@@ -19,7 +19,7 @@ import type { RenderScheduler } from '../view/renderScheduler';
 import type { Affine } from './hitTest';
 import { reselect } from './hitTest';
 import type { ObjectCache } from './objectCache';
-import { DEFAULT_TEXT_STYLE, missingChars, type TextStyleArg } from './textStyle';
+import { DEFAULT_TEXT_ARG, missingChars, type TextStyleArg } from './textStyle';
 
 export { DEFAULT_TEXT_STYLE } from './textStyle';
 
@@ -311,7 +311,7 @@ export function newTextBlock(rect: RectDto): PageObjectDto {
     key: '',
     bbox: rect,
     text: '',
-    style: DEFAULT_TEXT_STYLE,
+    style: DEFAULT_TEXT_ARG,
     editable: true,
     reason: '',
     image_size: [0, 0],
@@ -336,7 +336,7 @@ export async function commitAdd(deps: CommitDeps, change: AddChange): Promise<Te
         page: change.page,
         rect: change.rect,
         text: change.text,
-        style: change.style ?? DEFAULT_TEXT_STYLE,
+        style: change.style ?? DEFAULT_TEXT_ARG,
       },
     });
   } catch (error) {
