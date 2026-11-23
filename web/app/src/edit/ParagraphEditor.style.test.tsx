@@ -239,14 +239,17 @@ describe('the style bar in the editor', () => {
       style: { ...DEFAULT_TEXT_STYLE, font: 'Calibri' },
     };
     const { area } = mount(calibri);
-    const status = () => host.querySelector('[role="status"]');
+    const region = () => host.querySelector('[role="status"]');
+    const text = () => region()?.textContent;
     keyDown(area, { key: 'b', ctrlKey: true });
-    expect(status()?.textContent).toBe(t('edit.style.noBold'));
-    const first = status();
+    expect(text()).toBe(t('edit.style.noBold'));
+    const firstRegion = region();
+    const first = region()?.firstElementChild;
     keyDown(area, { key: 'b', ctrlKey: true });
-    expect(status()?.textContent).toBe(t('edit.style.noBold'));
-    // A new status node, so a screen reader announces the repeated press.
-    expect(status()).not.toBe(first);
+    expect(text()).toBe(t('edit.style.noBold'));
+    // The live region stays the same node; only its child is replaced, so the repeated press is announced.
+    expect(region()).toBe(firstRegion);
+    expect(region()?.firstElementChild).not.toBe(first);
   });
 
   it('an arrow key clears the face note', () => {

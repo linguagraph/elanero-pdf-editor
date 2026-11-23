@@ -337,8 +337,9 @@ export function ParagraphEditor({
       <span id={hintId} className="visually-hidden">
         {t('edit.text.hint')}
       </span>
-      <span key={faceNote?.n ?? 0} role="status" className="visually-hidden">
-        {faceNote?.text ?? ''}
+      {/* The live region itself never unmounts, so screen readers announce its changed child. */}
+      <span role="status" className="visually-hidden">
+        <span key={faceNote?.n ?? 0}>{faceNote?.text ?? ''}</span>
       </span>
     </>
   );
