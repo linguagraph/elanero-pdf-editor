@@ -58,8 +58,18 @@ test.describe('engine staged', () => {
       .click();
     const layer = page.locator('[data-page="0"] .shape-layer');
     await expect(layer).toBeVisible();
+    // At Fit Width the A4 page is taller than the view, and the box's place is below the view's
+    // bottom, so a pointer there would miss the page. The view scrolls the box's middle (y 530) to
+    // its centre first.
+    const scroller = page.locator('.doc-view-scroll');
+    const view = await scroller.boundingBox();
+    if (view === null) throw new Error('the document view is not laid out');
+    const middle = await pagePixel(layer, 150, 530);
+    await scroller.evaluate((el, dy) => el.scrollBy(0, dy), middle.y - (view.y + view.height / 2));
     const start = await pagePixel(layer, 100, 500);
     const stop = await pagePixel(layer, 200, 560);
+    expect(start.y).toBeGreaterThan(view.y);
+    expect(stop.y).toBeLessThan(view.y + view.height);
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
     await page.mouse.move(stop.x, stop.y, { steps: 8 });
