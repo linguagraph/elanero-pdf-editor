@@ -1,8 +1,9 @@
-"""Translation calls for the web (W6.6): the service list, a translate call and a connection test.
+"""Translation calls for the web (W6.6): the service list and the translate call.
 
-The services are the desktop's clients, unchanged. The web differs in its transport (the engine
-worker's gated XHR, ``elanero_net``), the fixed LibreTranslate address and the limits. Credentials
-come in with each call and are never stored, logged or echoed; errors carry a fixed message.
+The web offers one service, the free MyMemory service, and no settings: no keys, no email and no
+custom server (those are the desktop's). The client is the desktop's, unchanged. The web differs in
+its transport (the engine worker's gated XHR, ``elanero_net``) and its limits. Errors carry a fixed
+message, and neither the text nor a setting is logged.
 """
 
 from __future__ import annotations
@@ -40,10 +41,8 @@ from pdfeditor.webapi.errors import (
 
 log = logging.getLogger(__name__)
 
-# The services the web offers, in the order the pickers show them (the CSP fixes the hosts).
-WEB_SERVICES: tuple[str, ...] = ("mymemory", "azure", "libretranslate")
-NEEDS_KEY: frozenset[str] = frozenset({"azure", "libretranslate"})
-WEB_LIBRETRANSLATE_URL = "https://libretranslate.com"  # the only LibreTranslate server reachable
+# The one service the web offers (W6.6 owner decision): the CSP and the origins list its host only.
+WEB_SERVICES: tuple[str, ...] = ("mymemory",)
 REQUEST_SECONDS = 10.0  # per request, below the desktop's 20 s
 DEADLINE_SECONDS = 30.0  # for one call, checked between requests (W6.6 section 3)
 MAX_TEXT_CHARS = 40_000  # the main thread's cap (W6.6 section 6), enforced here too
@@ -72,23 +71,15 @@ def _web_opener() -> Any:
     return lambda request, timeout: send(request, min(timeout, REQUEST_SECONDS))
 
 
-def _translator(service: str, credentials: dto.TranslationCredentials) -> Translator:
-    if service not in WEB_SERVICES:  # DeepL and anything else: refused before any request
-        raise RpcFailure(TRANSLATION_CONFIG, "this translation service is not offered on the web")
-    config = TranslationConfig(
-        mymemory_email=credentials.mymemory_email or "",
-        azure_key=credentials.azure_key or "",
-        azure_region=credentials.azure_region or "",
-        libretranslate_url=WEB_LIBRETRANSLATE_URL,
-        libretranslate_key=credentials.libre_key or "",
-        opener=_web_opener(),
-    )
-    return make_translator(service, config)
+def _translator() -> Translator:
+    # The email is always empty: the web sends none, so MyMemory's ``de=`` parameter is never set.
+    config = TranslationConfig(mymemory_email="", opener=_web_opener())
+    return make_translator(WEB_SERVICES[0], config)
 
 
-def _check_language(translator: Translator, path: str, code: str | None) -> None:
+def _check_language(translator: Translator, path: str, code: str) -> None:
     # A code the service does not list never reaches its request, so it cannot shape a URL.
-    if code is not None and code not in translator.languages():
+    if code not in translator.languages():
         raise RpcFailure(INVALID_ARGS, f"{path}: not a language of this service", {"path": path})
 
 
@@ -96,7 +87,7 @@ def _check_language(translator: Translator, path: str, code: str | None) -> None
 _FAILURES: tuple[tuple[type[TranslationError], str, str], ...] = (
     (OfflineError, TRANSLATION_OFFLINE, "The translation service could not be reached."),
     (QuotaError, TRANSLATION_QUOTA, "The translation service's limit has been reached."),
-    (AuthError, TRANSLATION_AUTH, "The translation service refused the key."),
+    (AuthError, TRANSLATION_AUTH, "The translation service refused the request."),
     (ConfigError, TRANSLATION_CONFIG, "The translation service is not set up."),
     (TooLongError, TRANSLATION_TOO_LONG, _TOO_LONG_MESSAGE),
     (SameLanguageError, TRANSLATION_SAME_LANGUAGE, "The text is already in that language."),
@@ -111,17 +102,15 @@ def _failure(exc: TranslationError) -> RpcFailure:
 
 def info(params: dto.Empty) -> dto.TranslationInfoResult:
     """The services, limits and languages, read from the clients. No request is sent."""
-    config = TranslationConfig(libretranslate_url=WEB_LIBRETRANSLATE_URL)
     services: list[dto.TranslationServiceDto] = []
     languages: dict[str, tuple[dto.LanguageDto, ...]] = {}
     for service in WEB_SERVICES:
-        translator = make_translator(service, config)
+        translator = make_translator(service, TranslationConfig())
         services.append(
             dto.TranslationServiceDto(
                 id=service,
                 name=translator.name,
                 privacy_url=translator.privacy_url,
-                needs_key=service in NEEDS_KEY,
                 detects_source=translator.detects_source,
                 max_chars=translator.max_text_chars,
             )
@@ -132,13 +121,13 @@ def info(params: dto.Empty) -> dto.TranslationInfoResult:
 
 
 def translate(params: dto.TranslateParams) -> dto.TranslateResult:
-    translator = _translator(params.service, params.credentials)
+    translator = _translator()
     _check_language(translator, "params.source", params.source)
     _check_language(translator, "params.target", params.target)
     if len(params.text) > MAX_TEXT_CHARS:
         raise RpcFailure(TRANSLATION_TOO_LONG, _TOO_LONG_MESSAGE, {"partial": ""})
-    # The count and the service are logged; the text and the credentials never are.
-    log.info("translation requested: %s, %d characters", params.service, len(params.text))
+    # Only the count is logged; the text never is.
+    log.info("translation requested: %d characters", len(params.text))
     try:
         result = translate_selection(
             translator, params.text, params.source, params.target, _Deadline(DEADLINE_SECONDS)
@@ -148,13 +137,3 @@ def translate(params: dto.TranslateParams) -> dto.TranslateResult:
     return dto.TranslateResult(
         text=result.text, detected=result.source_detected, service=result.service_id
     )
-
-
-def check_connection(params: dto.TranslationTestParams) -> dto.Empty:
-    """Send a short fixed text to check the service and the key. It is not document text."""
-    translator = _translator(params.service, params.credentials)
-    try:
-        translator.test_connection(_Deadline(DEADLINE_SECONDS))
-    except TranslationError as exc:
-        raise _failure(exc) from exc
-    return dto.Empty()

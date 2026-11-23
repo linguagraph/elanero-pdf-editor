@@ -15,17 +15,11 @@ from pdfeditor.services.translation.http import Opener, Reply, Request
 
 log = logging.getLogger(__name__)
 
-# The origins the browser may call directly (W0.3: CORS allowed for each). The clients'
-# default hosts must be in this set; the tests check that. LibreTranslate has no default host
-# in code (the user names the server), so this list is the source of truth for it. The web
-# app's Content-Security-Policy connect-src must match this set (W3 checks it).
-WEB_ENDPOINT_ORIGINS: frozenset[str] = frozenset(
-    {
-        "https://api.mymemory.translated.net",
-        "https://api.cognitive.microsofttranslator.com",
-        "https://libretranslate.com",
-    }
-)
+# The origins the browser may call directly (W0.3: CORS allowed). The web offers MyMemory only
+# (W6.6 owner decision), so this is its host alone; the engine gate's TRANSLATION_ORIGINS and the
+# web app's Content-Security-Policy connect-src must match it (tests check both). The desktop's
+# other services use their own transport and are not listed here.
+WEB_ENDPOINT_ORIGINS: frozenset[str] = frozenset({"https://api.mymemory.translated.net"})
 
 # Headers a browser refuses to set (User-Agent is forbidden) or sets itself.
 _SKIPPED_HEADERS = frozenset({"user-agent", "accept-encoding", "content-length"})

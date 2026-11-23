@@ -345,6 +345,22 @@ export const EN = {
   'prefs.section.appearance': 'Appearance',
   'prefs.section.viewing': 'Viewing',
   'prefs.section.privacy': 'Privacy',
+  'prefs.section.translation': 'Translation',
+  'prefs.translation.enable': 'Translate selected text online',
+  'prefs.translation.language': 'Default language',
+  'prefs.translation.sameAsApp': 'Same as the app',
+  'prefs.translation.languageHint':
+    'The language that translations go into unless you choose another.',
+  'prefs.translation.note':
+    'Translation uses MyMemory, a free online service. For other services, such as DeepL, Microsoft Azure or your own LibreTranslate server, use Elanero for Windows.',
+  'prefs.translation.mymemoryPrivacy': 'MyMemory privacy policy',
+  'prefs.translation.elaneroPrivacy': 'Elanero privacy policy',
+  'translate.notice.title': 'Translate selected text with MyMemory?',
+  'translate.notice.body':
+    'Only the text you select is sent, from your browser straight to MyMemory (Translated.net). It sees the text and your IP address. Nothing is sent until you choose Translate, and nothing is sent in the background. You can turn this off in Preferences ▸ Translation.',
+  'translate.notice.agree': 'Turn on',
+  'translate.notice.cancel': 'Cancel',
+  'translate.notice.privacy': 'Privacy policy',
   'prefs.clearAll.open': 'Clear all local data…',
   'prefs.clearAll.hint':
     'Removes your preferences, recent file names, uploaded fonts and stored secrets from this browser. Your files are not touched.',
@@ -1239,9 +1255,8 @@ export const EN = {
     'The translation service cannot be reached. Check your connection and try again.',
   'error.TRANSLATION_QUOTA':
     'The translation service has reached its usage limit. Try again later.',
-  'error.TRANSLATION_AUTH':
-    'The translation service rejected the key. Check the key in Preferences.',
-  'error.TRANSLATION_CONFIG': 'The translation service is not set up. Add its key in Preferences.',
+  'error.TRANSLATION_AUTH': 'The translation service refused the request. Try again later.',
+  'error.TRANSLATION_CONFIG': 'Choose the language of the selected text.',
   'error.TRANSLATION_TOO_LONG':
     'The selected text is too long to translate at once. Select less text and try again.',
   'error.TRANSLATION_SAME_LANGUAGE': 'The text is already in the target language.',

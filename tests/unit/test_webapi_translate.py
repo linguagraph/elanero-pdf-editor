@@ -1,5 +1,5 @@
-"""Translation calls on the web (W6.6 slice S1): the service list, each service's request through
-a fake gated XHR, the error codes, the deadline, and credentials that never leave the call.
+"""Translation calls on the web (W6.6 slices S1 and S2): the one service (MyMemory), its request
+through a fake gated XHR, the error codes, the deadline, and strict parameters (no settings).
 
 No test touches the network: ``elanero_net`` (the engine worker's gate) is replaced by a fake
 that scripts each reply. The file runs under Pyodide too.
@@ -17,7 +17,9 @@ from typing import Any
 import pytest
 
 from pdfeditor.services.translation import clear_cache
+from pdfeditor.services.translation.base import AuthError, ConfigError
 from pdfeditor.webapi import METHODS, dto, translate
+from pdfeditor.webapi.dto import BufferTable, from_json
 from pdfeditor.webapi.errors import (
     INVALID_ARGS,
     TRANSLATION_AUTH,
@@ -29,9 +31,6 @@ from pdfeditor.webapi.errors import (
     TRANSLATION_TOO_LONG,
     RpcFailure,
 )
-
-SECRET = "SECRET-KEY-do-not-log"
-EMAIL = "someone@example.test"
 
 
 class FakeNet:
@@ -95,19 +94,9 @@ def net(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeNet]:
 
 
 def params(
-    service: str = "mymemory",
-    text: str = "Hello world.",
-    source: str | None = "en",
-    target: str = "fr",
-    **credentials: str,
+    text: str = "Hello world.", source: str = "en", target: str = "fr"
 ) -> dto.TranslateParams:
-    return dto.TranslateParams(
-        service=service,
-        text=text,
-        source=source,
-        target=target,
-        credentials=dto.TranslationCredentials(**credentials),
-    )
+    return dto.TranslateParams(text=text, source=source, target=target)
 
 
 def mymemory_reply(text: str) -> tuple[int, str]:
@@ -121,27 +110,38 @@ def failure_of(call: Callable[[], object]) -> RpcFailure:
     return caught.value
 
 
-def test_the_web_service_list_is_the_three_services_with_the_clients_limits() -> None:
+def test_the_web_offers_mymemory_alone_with_its_limits() -> None:
     info = translate.info(dto.Empty())
-    assert [s.id for s in info.services] == ["mymemory", "azure", "libretranslate"]
-    by_id = {s.id: s for s in info.services}
-    assert by_id["mymemory"].max_chars == 2000 and not by_id["mymemory"].detects_source
-    assert not by_id["mymemory"].needs_key
-    assert by_id["azure"].max_chars == 10_000 and by_id["azure"].needs_key
-    assert by_id["libretranslate"].needs_key and by_id["libretranslate"].privacy_url
-    assert {code.code for code in info.languages["azure"]} >= {"en", "fr"}
+    assert [s.id for s in info.services] == ["mymemory"]
+    service = info.services[0]
+    assert service.max_chars == 2000 and not service.detects_source
+    assert service.privacy_url.startswith("https://")
     assert info.languages["mymemory"]
+    assert not hasattr(service, "needs_key")
 
 
 def test_the_methods_table_gets_translation_info_only_until_slice_three() -> None:
-    # The network methods join the table with the bubble (S3); until then no request can start.
+    # The network method joins the table with the bubble (S3); until then no request can start.
     assert "translation.info" in METHODS
-    assert "translation.translate" not in METHODS and "translation.test" not in METHODS
+    assert "translation.translate" not in METHODS
 
 
-def test_mymemory_sends_its_get_request_with_the_optional_email(net: Any) -> None:
+def test_the_parameters_are_strict_and_source_is_required() -> None:
+    good = {"text": "Hi.", "source": "en", "target": "fr"}
+    buffers = BufferTable([])
+    assert from_json(dto.TranslateParams, good, buffers, "params") == params("Hi.")
+    for extra in ({"service": "mymemory"}, {"credentials": {}}, {"mymemory_email": "a@b.test"}):
+        with pytest.raises(RpcFailure) as caught:
+            from_json(dto.TranslateParams, {**good, **extra}, buffers, "params")
+        assert caught.value.code == INVALID_ARGS
+    with pytest.raises(RpcFailure) as caught:
+        from_json(dto.TranslateParams, {"text": "Hi.", "target": "fr"}, buffers, "params")
+    assert caught.value.code == INVALID_ARGS
+
+
+def test_mymemory_sends_its_get_request_without_an_email(net: Any) -> None:
     fake = net([mymemory_reply("Bonjour le monde.")])
-    result = translate.translate(params(mymemory_email=EMAIL))
+    result = translate.translate(params())
     assert result == dto.TranslateResult(
         text="Bonjour le monde.", detected=None, service="mymemory"
     )
@@ -149,61 +149,36 @@ def test_mymemory_sends_its_get_request_with_the_optional_email(net: Any) -> Non
     assert request["method"] == "GET"
     assert request["url"].startswith("https://api.mymemory.translated.net/get?")
     assert "langpair=en%7Cfr" in request["url"] or "langpair=en|fr" in request["url"]
-    assert "de=" in request["url"]
-    assert SECRET not in request["url"]
+    assert "de=" not in request["url"]
     assert request["timeout"] == 10_000  # the web's 10 s per request, below the desktop's 20 s
     assert request["credentials"] is False
     assert "User-Agent" not in request["headers"]
 
 
-def test_azure_sends_the_key_in_a_header_and_never_in_the_address(net: Any) -> None:
-    reply = [{"translations": [{"text": "Bonjour", "to": "fr"}]}]
-    fake = net([(200, json.dumps(reply))])
-    result = translate.translate(params("azure", azure_key=SECRET, azure_region="westeurope"))
-    assert result.text == "Bonjour" and result.service == "azure"
-    request = fake.requests[0]
-    assert request["method"] == "POST"
-    assert request["url"].startswith("https://api.cognitive.microsofttranslator.com/translate?")
-    assert request["headers"]["Ocp-Apim-Subscription-Key"] == SECRET
-    assert request["headers"]["Ocp-Apim-Subscription-Region"] == "westeurope"
-    assert SECRET not in request["url"]
-    assert json.loads(request["body"]) == [{"Text": "Hello world."}]
-
-
-def test_libretranslate_uses_the_fixed_server_and_the_key_in_the_body(net: Any) -> None:
-    fake = net([(200, json.dumps({"translatedText": "Bonjour"}))])
-    translate.translate(params("libretranslate", libre_key=SECRET))
-    request = fake.requests[0]
-    assert request["url"] == "https://libretranslate.com/translate"
-    body = json.loads(request["body"])
-    assert body["api_key"] == SECRET and body["target"] == "fr"
-    assert SECRET not in request["url"]
-
-
-def test_deepl_and_unknown_services_are_refused_before_any_request(net: Any) -> None:
-    fake = net([])
-    for service in ("deepl", "libretranslate-custom", ""):
-        failure = failure_of(lambda s=service: translate.translate(params(s)))  # type: ignore[misc]
-        assert failure.code == TRANSLATION_CONFIG
-    assert fake.requests == []
-
-
 @pytest.mark.parametrize(
-    ("service", "status", "body", "code"),
+    ("status", "body", "code"),
     [
-        ("mymemory", 0, "", TRANSLATION_OFFLINE),
-        ("mymemory", 429, "", TRANSLATION_QUOTA),
-        ("mymemory", 500, "", TRANSLATION_SERVICE),
-        ("azure", 401, "", TRANSLATION_AUTH),
+        (0, "", TRANSLATION_OFFLINE),
+        (429, "", TRANSLATION_QUOTA),
+        (500, "", TRANSLATION_SERVICE),
     ],
 )
-def test_each_failure_maps_to_its_code(
-    net: Any, service: str, status: int, body: str, code: str
-) -> None:
+def test_each_failure_maps_to_its_code(net: Any, status: int, body: str, code: str) -> None:
     net([(status, body)])
-    failure = failure_of(lambda: translate.translate(params(service, azure_key=SECRET)))
+    failure = failure_of(lambda: translate.translate(params()))
     assert failure.code == code
     assert failure.details == {"partial": ""}
+
+
+def test_an_auth_refusal_maps_to_its_code_with_the_partial_text() -> None:
+    failure = translate._failure(AuthError("refused", partial="Bonjour"))
+    assert failure.code == TRANSLATION_AUTH
+    assert failure.details == {"partial": "Bonjour"}
+
+
+def test_a_missing_setup_or_language_maps_to_its_code() -> None:
+    failure = translate._failure(ConfigError("no language", partial=""))
+    assert failure.code == TRANSLATION_CONFIG
 
 
 def test_text_translated_before_a_failure_comes_back_as_partial(net: Any) -> None:
@@ -248,45 +223,26 @@ def test_the_same_language_is_refused_before_any_request(net: Any) -> None:
     assert fake.requests == []
 
 
-def test_a_language_the_service_does_not_list_is_invalid_args_and_names_only_the_field(
-    net: Any,
+@pytest.mark.parametrize(
+    ("source", "target", "path"),
+    [("xx", "fr", "params.source"), ("en", "fr&x=1", "params.target"), ("", "fr", "params.source")],
+)
+def test_a_language_the_service_does_not_list_is_invalid_args_before_any_request(
+    net: Any, source: str, target: str, path: str
 ) -> None:
     fake = net([])
-    failure = failure_of(
-        lambda: translate.translate(params("azure", target="fr&x=1", azure_key=SECRET))
-    )
+    failure = failure_of(lambda: translate.translate(params(source=source, target=target)))
     assert failure.code == INVALID_ARGS
-    assert failure.details == {"path": "params.target"}
-    assert SECRET not in failure.message
+    assert failure.details == {"path": path}
     assert fake.requests == []
 
 
-def test_credentials_and_text_never_reach_the_log(
-    net: Any, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_the_text_never_reaches_the_log(net: Any, caplog: pytest.LogCaptureFixture) -> None:
     net([mymemory_reply("Bonjour")])
     caplog.set_level(logging.DEBUG)
-    translate.translate(params(text="Secret text of the document.", mymemory_email=EMAIL))
-    failure_of(lambda: translate.translate(params("azure", azure_key=SECRET, target="xx")))
+    translate.translate(params(text="Secret text of the document."))
     assert "Secret text" not in caplog.text
-    assert SECRET not in caplog.text and EMAIL not in caplog.text
-
-
-def test_the_connection_test_sends_a_fixed_word_and_maps_failures(net: Any) -> None:
-    fake = net([mymemory_reply("Bonjour"), (429, "")])
-    assert (
-        translate.check_connection(
-            dto.TranslationTestParams("mymemory", dto.TranslationCredentials())
-        )
-        == dto.Empty()
-    )
-    assert "q=Hello" in fake.requests[0]["url"]
-    failure = failure_of(
-        lambda: translate.check_connection(
-            dto.TranslationTestParams("mymemory", dto.TranslationCredentials())
-        )
-    )
-    assert failure.code == TRANSLATION_QUOTA
+    assert "Bonjour" not in caplog.text
 
 
 @pytest.fixture(autouse=True)

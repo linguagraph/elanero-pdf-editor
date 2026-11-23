@@ -37,9 +37,9 @@ describe('translation gate (W6.6 section 3)', () => {
   it('refuses to open a request unless it is armed', () => {
     const net = gate();
     expect(() => net.openXhr()).toThrow(/not allowed/);
-    expect(() => net.openXhr().open('GET', 'https://libretranslate.com/translate', false)).toThrow(
-      /not allowed/,
-    );
+    expect(() =>
+      net.openXhr().open('GET', 'https://api.mymemory.translated.net/get', false),
+    ).toThrow(/not allowed/);
     expect(FakeNative.opened).toEqual([]);
   });
 
@@ -77,20 +77,32 @@ describe('translation gate (W6.6 section 3)', () => {
     const xhr = net.openXhr();
     xhr.timeout = 5000;
     xhr.withCredentials = true;
-    xhr.open('POST', 'https://libretranslate.com/translate', false);
+    xhr.open('POST', 'https://api.mymemory.translated.net/get', false);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.send('{"q":"hi"}');
     expect(xhr.timeout).toBe(5000);
     expect(xhr.status).toBe(200);
     expect(xhr.responseText).toBe('{}');
-    expect(FakeNative.opened).toEqual([['POST', 'https://libretranslate.com/translate', false]]);
+    expect(FakeNative.opened).toEqual([['POST', 'https://api.mymemory.translated.net/get', false]]);
     expect(FakeNative.calls).toEqual([
       ['setRequestHeader', 'Content-Type', 'application/json'],
       ['send', '{"q":"hi"}', false],
     ]);
   });
 
-  it('allows the three translation hosts when armed, and sends no credentials', () => {
+  it('refuses the withdrawn services (Azure, LibreTranslate) even when armed', () => {
+    const net = gate();
+    net.arm();
+    for (const url of [
+      'https://api.cognitive.microsofttranslator.com/translate',
+      'https://libretranslate.com/translate',
+    ]) {
+      expect(() => net.openXhr().open('POST', url, false)).toThrow(/host not allowed/);
+    }
+    expect(FakeNative.opened).toEqual([]);
+  });
+
+  it('allows the translation host when armed, and sends no credentials', () => {
     const net = gate();
     net.arm();
     for (const origin of TRANSLATION_ORIGINS) {
@@ -109,20 +121,22 @@ describe('translation gate (W6.6 section 3)', () => {
     net.arm();
     const refused = [
       'https://example.test/get',
-      'http://libretranslate.com/translate',
-      'https://libretranslate.com.example.test/translate',
-      'https://libretranslate.com@example.test/translate',
-      'https://user:pw@libretranslate.com/translate',
+      'http://api.mymemory.translated.net/get',
+      'https://api.mymemory.translated.net.example.test/get',
+      'https://api.mymemory.translated.net@example.test/get',
+      'https://user:pw@api.mymemory.translated.net/get',
       'https://api.deepl.com/v2/translate',
       'not a url',
     ];
     for (const url of refused) {
       expect(() => net.openXhr().open('GET', url, false), url).toThrow();
     }
-    expect(() => net.openXhr().open('GET', 'https://libretranslate.com/', true)).toThrow(
+    expect(() => net.openXhr().open('GET', 'https://api.mymemory.translated.net/', true)).toThrow(
       /synchronous/,
     );
-    expect(() => net.openXhr().open('PUT', 'https://libretranslate.com/', false)).toThrow(/method/);
+    expect(() => net.openXhr().open('PUT', 'https://api.mymemory.translated.net/', false)).toThrow(
+      /method/,
+    );
     expect(FakeNative.opened).toEqual([]);
   });
 
@@ -130,7 +144,7 @@ describe('translation gate (W6.6 section 3)', () => {
     const net = gate();
     net.arm();
     const xhr = net.openXhr();
-    xhr.open('GET', 'https://libretranslate.com/translate', false);
+    xhr.open('GET', 'https://api.mymemory.translated.net/get', false);
     xhr.withCredentials = true;
     xhr.send();
     expect(FakeNative.calls).toEqual([['send', undefined, false]]);
@@ -140,11 +154,13 @@ describe('translation gate (W6.6 section 3)', () => {
     const net = gate();
     net.arm();
     const xhr = net.openXhr();
-    xhr.open('POST', 'https://libretranslate.com/translate', false);
+    xhr.open('POST', 'https://api.mymemory.translated.net/get', false);
     net.disarm();
     expect(() => xhr.setRequestHeader('Content-Type', 'application/json')).toThrow();
     expect(() => xhr.send('{}')).toThrow();
-    expect(() => net.openXhr().open('GET', 'https://libretranslate.com/', false)).toThrow();
+    expect(() =>
+      net.openXhr().open('GET', 'https://api.mymemory.translated.net/', false),
+    ).toThrow();
   });
 
   it('has no native constructor when the worker captured none', () => {
@@ -154,7 +170,7 @@ describe('translation gate (W6.6 section 3)', () => {
   });
 
   it('is armed only for the translation calls', () => {
-    expect([...TRANSLATION_METHODS].sort()).toEqual(['translation.test', 'translation.translate']);
+    expect([...TRANSLATION_METHODS]).toEqual(['translation.translate']);
   });
 });
 
@@ -171,8 +187,8 @@ describe('translation hosts', () => {
   });
 
   it('accepts only https origins on the list', () => {
-    expect(isTranslationUrl('https://libretranslate.com/translate?x=1')).toBe(true);
-    expect(isTranslationUrl('https://libretranslate.com:443/translate')).toBe(true);
-    expect(isTranslationUrl('https://libretranslate.co/translate')).toBe(false);
+    expect(isTranslationUrl('https://api.mymemory.translated.net/get?x=1')).toBe(true);
+    expect(isTranslationUrl('https://api.mymemory.translated.net:443/get')).toBe(true);
+    expect(isTranslationUrl('https://api.mymemory.translated.net.co/get')).toBe(false);
   });
 });

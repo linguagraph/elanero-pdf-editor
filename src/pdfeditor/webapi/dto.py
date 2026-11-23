@@ -847,12 +847,11 @@ class FontRemoveParams:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class TranslationServiceDto:
-    """One translation service the web offers (W6.6). The three are fixed by the CSP."""
+    """The translation service the web offers (W6.6): MyMemory, the only one, with no settings."""
 
-    id: str  # "mymemory", "azure" or "libretranslate"
+    id: str  # "mymemory"
     name: str  # the service's name for the pickers and the notice
     privacy_url: str  # its privacy policy, linked from the consent notice
-    needs_key: bool  # a key is needed before any request can be sent
     detects_source: bool  # False: the source language must be named (MyMemory)
     max_chars: int  # the longest selection the service takes at once
 
@@ -870,23 +869,10 @@ class TranslationInfoResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class TranslationCredentials:
-    """The service settings the browser sends with each call. They are never stored, logged or
-    echoed; the main thread keeps the keys (W6.6 section 5)."""
-
-    mymemory_email: str | None = None  # optional; MyMemory's ``de=`` parameter
-    azure_key: str | None = None
-    azure_region: str | None = None
-    libre_key: str | None = None  # the LibreTranslate server's key, in the request body
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
 class TranslateParams:
-    service: str  # "mymemory", "azure" or "libretranslate"
     text: str  # the raw selected text; cleaned and split by the service layer
-    source: str | None  # None asks the service to detect the language
+    source: str  # a code from translation.info; MyMemory cannot detect it
     target: str  # a code from translation.info
-    credentials: TranslationCredentials
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -894,12 +880,6 @@ class TranslateResult:
     text: str  # the translation, paragraph breaks put back
     detected: str | None  # the source language the service reported, when it did
     service: str
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class TranslationTestParams:
-    service: str
-    credentials: TranslationCredentials
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

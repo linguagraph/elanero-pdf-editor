@@ -52,6 +52,15 @@ The settings for online translation of selected text: whether it is on, which se
 service keys and the default language. See [Translation](translation.md) for each option and what it
 sends.
 
+### In the web version
+
+The Translation page has three things: a switch to translate selected text online, a default
+language (the app's own, or a language MyMemory offers), and a note about the service. Turning the
+switch on first shows a notice that says what is sent and to whom; nothing is sent before you agree,
+and turning the switch off clears your agreement, so the notice asks again next time. The web
+version has one service, MyMemory, and no keys, email address or service settings. For DeepL,
+Microsoft Azure or your own LibreTranslate server, use Elanero for Windows.
+
 ## Performance
 
 - **Page image cache**: the memory used for rendered pages, in MB. The change takes effect after a
