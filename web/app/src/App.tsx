@@ -1003,6 +1003,7 @@ export function App({
         onShowShortcuts={() => setShortcutsOpen(true)}
         clearData={clearData}
         loadTranslationInfo={loadTranslationInfo}
+        fonts={fonts}
       />
       <SaveAsDialog
         tab={saveAsTab}

@@ -39,6 +39,13 @@ site, and your documents are not uploaded to any server.
   - `elanero.layout.panelWidths`: the widths of the side panels.
 
   A notice you dismiss is remembered for the browser tab only, in `sessionStorage`.
+- **Fonts you upload** (Preferences, Fonts) are kept in the browser's private storage, in a folder
+  named `fonts`: each font's file and a small record beside it. They stay until you remove them, so
+  they are there after you reload, and **Clear all local data** removes them. Open Elanero tabs in
+  the same browser hear the id of a font you add or remove over the browser's `elanero.fonts`
+  channel; the ids are not names or file contents and never leave your device. Where the browser
+  cannot keep fonts, they last only until the tab closes. After the first font is kept, the app asks
+  the browser to keep the storage; the browser decides, and the app does not see its answer.
 - **The app itself** is kept in the browser's offline cache (the service worker's cache), so it can
   open without a connection. Documents are never put in this cache.
 
@@ -156,9 +163,12 @@ How the web version section was checked (repository paths):
   documents close or the site data is cleared.
 - Clear all local data: web/app/src/storage/clearLocalData.ts (keys with prefix `elanero.`, OPFS
   folders fonts and secrets, not autosave/); button in web/app/src/prefs/PreferencesDialog.tsx.
-- Autosave copies are the only OPFS use: web/app/src/storage/ (folder autosave/<tab-id>, deleted in
-  autosaver.ts and autosaveStore.ts; never a password-protected document, save.autosave_bytes in
-  src/pdfeditor/webapi/save.py). No IndexedDB or cookies in web/app/src, web/app/public or
+- OPFS use is autosave copies and uploaded fonts only: web/app/src/storage/ (folder autosave/<tab-id>,
+  deleted in autosaver.ts and autosaveStore.ts; never a password-protected document, save.autosave_bytes
+  in src/pdfeditor/webapi/save.py); folder fonts/ (font files and one record per font, web/app/src/storage/
+  fontStore.ts, written by web/app/src/fonts/fontLibrary.ts, removed by Clear all local data). The
+  `elanero.fonts` BroadcastChannel carries font ids only (fontLibrary.ts, CHANNEL and parseFontMessage).
+  Persistent storage is requested once, its answer unused (storage/fontStore.ts, requestPersistence). No IndexedDB or cookies in web/app/src, web/app/public or
   web/app/index.html (grep). Documents otherwise live in the engine's in-memory file system:
   web/app/src/engine/loader.ts (unpacks into /home/pyodide) and docs/web/design/W1.1.md section 6.
 - Offline cache and documents never cached: web/app/public/sw.js (header comment and fetch

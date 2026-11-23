@@ -70,6 +70,7 @@ is reloaded until you press it.
     opened.
   - **Redaction**: the **Box colour**, **Text colour** and **Text on the box** used for new redaction
     marks (black, white and empty by default). Marks you have already drawn keep their style.
+  - **Fonts**: the fonts you upload for text (see [Fonts](#fonts) below). Changes apply at once.
   - **Shortcuts**: **Keyboard Shortcuts…** lists every keyboard shortcut. It opens on top of
     Preferences, and your unsaved changes there are kept.
   - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and
@@ -84,6 +85,31 @@ is reloaded until you press it.
   Zoom above 100% on a high-density screen can ask for more pixels than a page can be drawn at. The
   viewer then draws the page at the largest size it supports, so the page stays visible rather than
   going blank.
+
+## Fonts
+
+Add a font you have on your computer for the text you add or edit. Open **Preferences**, then
+**Fonts**, and click **Upload font…**. You can pick several files at once; each one gets its own
+message saying whether it was added.
+
+- **Types.** TrueType and OpenType fonts: `.ttf`, `.otf`, `.ttc` and `.otc` (a collection holds
+  several fonts in one file). Each file may be up to 50 MB. WOFF and WOFF2 web fonts are not
+  accepted: add the TTF or OTF file instead.
+- **Limits.** Up to 64 fonts and 256 MB in all. When you reach either, the message says what to
+  remove.
+- **Licences.** A font whose licence does not allow embedding in documents is refused. In a
+  collection, the faces whose licence does not allow it are left out, and the message says how many.
+  A licence that allows pictures of the characters only is refused too.
+- **Kept in this browser.** A font you add stays in this browser until you remove it, so it is there
+  after you reload. Clear all local data removes all of them.
+- **Only for this tab.** Some browsers can't keep fonts, and private windows clear them when they
+  close. The Fonts section then says so, and the fonts work until the tab closes.
+- **Remove.** Each font has a **Remove** button, and **Remove all fonts…** removes them all. Each asks
+  you to confirm. Text you have already added with a font keeps it; the font just can't be chosen for
+  new text.
+- **Other tabs.** When you add or remove a font in one Elanero tab, the other open tabs in the same
+  browser follow.
+- **Not yet.** Uploaded fonts are not available in headers, footers and watermarks yet.
 
 ## Ribbon and keyboard shortcuts
 
@@ -371,6 +397,9 @@ pages: all pages, the current page, or a range such as `1-3, 5`. Then choose the
   browser's local storage under the name `elanero.prefs`. **Clear all local data** in the Preferences
   dialog removes every key that starts with `elanero.`, and the uploaded fonts, but keeps other
   sites' data on the same address and the recovery copies of other open tabs.
+- **Uploaded fonts** are kept in the browser's private storage (not in a folder you can see) until
+  you remove them, so they are there after you reload. Clear all local data removes them. In a
+  browser or private window that clears its storage when the tab closes, they last until then.
 - **The app's files** are kept by the browser so the editor works offline.
 
 The web version sends nothing to any server while you edit, and has no accounts, analytics or
@@ -386,6 +415,7 @@ full policy, with what the desktop app stores, is in the
 | Light, dark and system theme | Yes | Yes |
 | Preferences: language, author name, reduce motion, default zoom, default page layout, redaction box style | Yes | Saved; default zoom and page layout apply now; the author name and redaction style apply to the comments and marks you add next |
 | Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
+| Upload fonts for text editing | Uses the fonts installed on your PC | Yes (Preferences, Fonts) |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
 | Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
