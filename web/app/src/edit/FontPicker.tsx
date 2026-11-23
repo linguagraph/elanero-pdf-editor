@@ -116,7 +116,9 @@ export function FontPicker({ sections, selected, stop, onPick }: FontPickerProps
         onBlur={close}
       />
       {open ? (
-        <div className="edit-font-popup">
+        // A press anywhere in the popup (a heading, the empty row, the padding) keeps focus in
+        // the input, so the blur does not close the popup or drop the typed filter.
+        <div className="edit-font-popup" onMouseDown={(event) => event.preventDefault()}>
           <div role="listbox" id={listId} ref={listRef} aria-label={t('edit.style.font')}>
             {shown.map((section) => {
               const headingId = `${id}-${section.id}`;
