@@ -5,6 +5,7 @@
 // (roving focus); Left and Right move between its controls, except in the text fields, where they
 // move the caret.
 import {
+  type ChangeEvent,
   type CSSProperties,
   type FocusEvent,
   type KeyboardEvent,
@@ -18,16 +19,36 @@ import { Icon } from '../theme/Icon';
 import { hexToColorJson } from '../prefs/colour';
 import { colorInputValue } from '../redaction/MarkStyleFields';
 import type { Align } from '../rpc/generated';
+import { FONT_ACCEPT } from '../fonts/useFontUpload';
 import { FontPicker, type StopProps } from './FontPicker';
-import { faceToggle, type FontSection, documentNames, selectedOption } from './fontList';
+import {
+  documentNames,
+  faceToggle,
+  type FontSection,
+  pickedStyle,
+  selectedOption,
+  uploadedFaces,
+  type UploadedFace,
+} from './fontList';
 import { clampRound, LINE_HEIGHT_RANGE, SIZE_RANGE, type TextStyleArg } from './textStyle';
+
+// The Uploaded section's file input: the editor owns the upload (useFontUpload), the bar shows it.
+export interface BarUpload {
+  // A callback ref: the owner keeps the element for the upload's open().
+  readonly setInput: (element: HTMLInputElement | null) => void;
+  readonly onOpen: () => void;
+  readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}
 
 export interface StyleBarProps {
   readonly rootRef: RefObject<HTMLDivElement | null>;
   readonly style: CSSProperties;
   readonly value: TextStyleArg;
-  // The picker's sections: the page's document fonts and the standard ones (fontList.ts).
+  // The picker's sections: the page's document fonts, the standard ones and, with the library, the
+  // uploaded ones (fontList.ts).
   readonly fonts: readonly FontSection[];
+  // Present when the tab has a font library: the Uploaded section's "Upload font…" row.
+  readonly upload?: BarUpload;
   readonly onChange: (next: TextStyleArg) => void;
   // Ctrl+Enter from any control of the bar.
   readonly onCommit: () => void;
@@ -45,6 +66,7 @@ export function StyleBar({
   style,
   value,
   fonts,
+  upload,
   onChange,
   onCommit,
   onEscape,
@@ -52,11 +74,34 @@ export function StyleBar({
 }: StyleBarProps) {
   // The control with the tab stop. Only one control is in the tab order at a time.
   const [stop, setStop] = useState(0);
-  // The document fonts a Bold or Italic press may switch to (design section 4.1).
+  // The document fonts a Bold or Italic press may switch to (design section 4.1), and the faces of
+  // the uploaded families (section 4.3).
   const pageFonts = documentNames(fonts);
+  const uploaded = uploadedFaces(fonts);
   // The native colour dialog can take the window's focus while the colour input is open: a blur to
-  // no element is not a leave then (design section 6.2, the `picking` flag).
+  // no element is not a leave then (design section 6.2, the `picking` flag). The file dialog does
+  // the same, so it sets the flag too.
   const picking = useRef(false);
+  const openUpload = () => {
+    picking.current = true;
+    upload?.onOpen();
+  };
+  // The owner's element binding, plus a native `cancel` listener: a cancelled file dialog fires no
+  // change, so the flag is cleared there, or the next blur to nothing is taken for the dialog. React
+  // does not wire `cancel` on an input, so the listener is added to the element itself.
+  const bindInput = upload?.setInput;
+  const bindFile = (element: HTMLInputElement | null) => {
+    bindInput?.(element);
+    if (element === null) return undefined;
+    const cancel = () => {
+      picking.current = false;
+    };
+    element.addEventListener('cancel', cancel);
+    return () => {
+      element.removeEventListener('cancel', cancel);
+      bindInput?.(null);
+    };
+  };
 
   const stopProps = (index: number): StopProps => ({
     'data-stop': true,
@@ -130,8 +175,22 @@ export function StyleBar({
         sections={fonts}
         selected={selectedOption(fonts, value)}
         stop={stopProps(0)}
-        onPick={(option) => onChange({ ...value, font: option.name, font_ref: option.ref })}
+        onPick={(option) => onChange({ ...value, ...pickedStyle(option, value) })}
+        onUpload={upload === undefined ? undefined : openUpload}
       />
+      {upload === undefined ? null : (
+        <input
+          ref={bindFile}
+          type="file"
+          accept={FONT_ACCEPT}
+          hidden
+          tabIndex={-1}
+          onChange={(event) => {
+            picking.current = false;
+            upload.onChange(event);
+          }}
+        />
+      )}
       <label className="edit-style-field">
         <span className="visually-hidden">{t('edit.style.size')}</span>
         <NumberField
@@ -147,6 +206,7 @@ export function StyleBar({
         which="bold"
         value={value}
         pageFonts={pageFonts}
+        uploaded={uploaded}
         stop={stopProps(2)}
         onChange={onChange}
       />
@@ -154,6 +214,7 @@ export function StyleBar({
         which="italic"
         value={value}
         pageFonts={pageFonts}
+        uploaded={uploaded}
         stop={stopProps(3)}
         onChange={onChange}
       />
@@ -264,16 +325,17 @@ interface FaceButtonProps {
   readonly which: 'bold' | 'italic';
   readonly value: TextStyleArg;
   readonly pageFonts: readonly string[];
+  readonly uploaded: readonly UploadedFace[];
   readonly stop: StopProps;
   readonly onChange: (next: TextStyleArg) => void;
 }
 
 // Bold or Italic. A press that the font can't take (a document font with no face of that weight or
-// slant on the page) is disabled with the reason as its tooltip; it stays focusable so the reason
-// can be read (aria-disabled, not disabled).
-function FaceButton({ which, value, pageFonts, stop, onChange }: FaceButtonProps) {
+// slant on the page, an uploaded family with none) is disabled with the reason as its tooltip; it
+// stays focusable so the reason can be read (aria-disabled, not disabled).
+function FaceButton({ which, value, pageFonts, uploaded, stop, onChange }: FaceButtonProps) {
   const label = t(which === 'bold' ? 'edit.style.bold' : 'edit.style.italic');
-  const change = faceToggle(value, which, pageFonts);
+  const change = faceToggle(value, which, pageFonts, uploaded);
   const disabled = change === null;
   const reason = t(which === 'bold' ? 'edit.style.noBold' : 'edit.style.noItalic');
   return (

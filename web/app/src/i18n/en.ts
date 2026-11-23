@@ -207,6 +207,7 @@ export const EN = {
   'edit.style.noItalic': 'This font has no italic face on this page. Choose a standard font.',
   'fonts.picker.document': 'In this document',
   'fonts.picker.standard': 'Standard',
+  'fonts.picker.uploaded': 'Uploaded',
   'fonts.picker.sans': 'Sans (Helvetica)',
   'fonts.picker.serif': 'Serif (Times)',
   'fonts.picker.mono': 'Mono (Courier)',

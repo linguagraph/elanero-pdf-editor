@@ -1,11 +1,12 @@
 import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fontDto, libraryFont } from '../fonts/testFontLibrary';
 import { t } from '../i18n/t';
 import type { PageObjectDto } from '../rpc/generated';
 import { fontSections } from './fontList';
 import { StyleBar, type StyleBarProps } from './StyleBar';
-import { DEFAULT_TEXT_ARG, standardRef, type TextStyleArg } from './textStyle';
+import { DEFAULT_TEXT_ARG, type FontRefArg, standardRef, type TextStyleArg } from './textStyle';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -248,5 +249,125 @@ describe('the style bar', () => {
       font: 'Times-Roman',
       font_ref: standardRef('Times-Roman'),
     });
+  });
+});
+
+// An uploaded family with a regular and a bold face (none italic), for Bold and Italic.
+const FAMILY_ID = 'e'.repeat(64);
+const FAMILY_PATH = `/fonts/${FAMILY_ID}.ttf`;
+const familyFace = (weight: number, index: number) => ({
+  index,
+  family: 'Test Sans',
+  style: weight >= 600 ? 'Bold' : 'Regular',
+  weight,
+  italic: false,
+  scripts: ['latin'],
+  variable: false,
+});
+const uploadedSections = fontSections([], 'ABCDEF+Arial', [
+  libraryFont({
+    id: FAMILY_ID,
+    name: 'Test.ttf',
+    dto: fontDto({
+      id: FAMILY_ID,
+      path: FAMILY_PATH,
+      faces: [familyFace(400, 0), familyFace(700, 1)],
+    }),
+  }),
+]);
+const familyStyle = (over: Partial<TextStyleArg> = {}): TextStyleArg => ({
+  ...style,
+  font: 'Test Sans',
+  font_ref: { kind: 'file', name: 'Test Sans', path: FAMILY_PATH, index: 0 } as FontRefArg,
+  ...over,
+});
+const fileRef = (index: number) =>
+  ({ kind: 'file', name: 'Test Sans', path: FAMILY_PATH, index }) as FontRefArg;
+
+// Opens the picker and picks its upload row; returns the combobox the focus is in.
+function openUploadRow() {
+  const combo = host.querySelector<HTMLInputElement>('[role="combobox"]') as HTMLInputElement;
+  keyDown(combo, { key: 'ArrowDown' });
+  const upload = Array.from(host.querySelectorAll<HTMLElement>('[role="option"]')).find(
+    (o) => o.textContent === t('fonts.upload.button'),
+  );
+  act(() => upload?.click());
+  return combo;
+}
+
+describe('the style bar with uploaded faces', () => {
+  it('Bold switches an uploaded family to its bold face, and back to the regular one', () => {
+    const { onChange } = mount({ value: familyStyle(), fonts: uploadedSections });
+    expect(button(t('edit.style.bold')).getAttribute('aria-disabled')).toBe('false');
+    button(t('edit.style.bold')).click();
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...familyStyle(),
+      bold: true,
+      font_ref: fileRef(1),
+    });
+    const back = mount({
+      value: familyStyle({ bold: true, font_ref: fileRef(1) }),
+      fonts: uploadedSections,
+    });
+    button(t('edit.style.bold')).click();
+    expect(back.onChange).toHaveBeenLastCalledWith({
+      ...familyStyle({ bold: true, font_ref: fileRef(1) }),
+      bold: false,
+      font_ref: fileRef(0),
+    });
+  });
+
+  it('Italic is disabled with its reason when the family has no italic face', () => {
+    const { onChange } = mount({ value: familyStyle(), fonts: uploadedSections });
+    const italic = button(t('edit.style.italic'));
+    expect(italic.getAttribute('aria-disabled')).toBe('true');
+    expect(italic.title).toBe(t('edit.style.noItalic'));
+    italic.click();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('picking a family takes the face of the current bold', () => {
+    const { onChange } = mount({ value: { ...style, bold: true }, fonts: uploadedSections });
+    const combo = host.querySelector<HTMLInputElement>('[role="combobox"]') as HTMLInputElement;
+    keyDown(combo, { key: 'ArrowDown' });
+    const family = Array.from(host.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (o) => o.textContent === 'Test Sans',
+    );
+    act(() => family?.click());
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...style,
+      bold: true,
+      font: 'Test Sans',
+      font_ref: fileRef(1),
+    });
+  });
+
+  it('the upload row sets picking, so a blur to nothing is not a leave until the file change', () => {
+    const upload = { setInput: vi.fn(), onOpen: vi.fn(), onChange: vi.fn() };
+    const { onLeave } = mount({ value: style, fonts: uploadedSections, upload });
+    const combo = openUploadRow();
+    expect(upload.onOpen).toHaveBeenCalledTimes(1);
+    leave(combo, null);
+    expect(onLeave).not.toHaveBeenCalled();
+    const file = host.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
+    act(() => {
+      file.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(upload.onChange).toHaveBeenCalledTimes(1);
+    leave(combo, null);
+    expect(onLeave).toHaveBeenCalledWith(null);
+  });
+
+  it('a cancelled file dialog clears picking, so the next blur to nothing is a leave', () => {
+    const upload = { setInput: vi.fn(), onOpen: vi.fn(), onChange: vi.fn() };
+    const { onLeave } = mount({ value: style, fonts: uploadedSections, upload });
+    const combo = openUploadRow();
+    const file = host.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
+    act(() => {
+      file.dispatchEvent(new Event('cancel'));
+    });
+    expect(upload.onChange).not.toHaveBeenCalled();
+    leave(combo, null);
+    expect(onLeave).toHaveBeenCalledWith(null);
   });
 });
