@@ -24,10 +24,30 @@ export function openingStyle(style: TextStyleDto | null): TextStyleDto {
   return style ?? DEFAULT_TEXT_STYLE;
 }
 
-// The wire form of a style. `font_ref` is always sent, as null: the picker that sets it is slice 2.
+// The wire form of a style. `font_ref` is always sent, null for a document font (the engine's own).
 export interface TextStyleArg extends TextStyleDto {
-  readonly font_ref: null;
+  readonly font_ref: FontRefArg | null;
 }
+
+// A font reference as the engine takes it (the Python FontRef: kind, name, path, index). A standard
+// font names the base-14 face; an uploaded face (W6.9) names its catalogue path.
+export interface FontRefArg {
+  readonly kind: 'standard' | 'document' | 'file';
+  readonly name: string;
+  readonly path: string;
+  readonly index: number;
+}
+
+// The style a new block is set in, as the wire takes it (no font ref: the default standard font).
+export const DEFAULT_TEXT_ARG: TextStyleArg = { ...DEFAULT_TEXT_STYLE, font_ref: null };
+
+// The bar's standard fonts (design section 4.2): the names the engine maps to base-14 faces.
+export function standardRef(name: string): FontRefArg {
+  return { kind: 'standard', name, path: '', index: 0 };
+}
+
+// A style the bar or a caller hands over: a missing font ref is a document font (null).
+export type StyleInput = TextStyleDto & { readonly font_ref?: FontRefArg | null };
 
 // Sizes and spacing the engine accepts (the desktop's clamp, design section 2).
 export const SIZE_RANGE = { min: 4, max: 144, digits: 1 } as const;
