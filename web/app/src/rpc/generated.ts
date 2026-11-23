@@ -1009,6 +1009,23 @@ export interface TextStyleDto {
   word_spacing: number;
 }
 
+export interface TranslateParams {
+  /** the raw selected text; cleaned and split by the service layer */
+  text: string;
+  /** a code from translation.info; MyMemory cannot detect it */
+  source: string;
+  /** a code from translation.info */
+  target: string;
+}
+
+export interface TranslateResult {
+  /** the translation, paragraph breaks put back */
+  text: string;
+  /** the source language the service reported, when it did */
+  detected: string | null;
+  service: string;
+}
+
 export interface TranslationInfoResult {
   services: TranslationServiceDto[];
   /** service id -> its languages */
@@ -1144,6 +1161,7 @@ export interface Methods {
   'text.layer': { params: PageParams; result: TextLayerResult; deadline: 'render' };
   'text.search': { params: SearchParams; result: SearchResult; deadline: 'slice' };
   'translation.info': { params: Empty; result: TranslationInfoResult; deadline: 'instant' };
+  'translation.translate': { params: TranslateParams; result: TranslateResult; deadline: 'network' };
 }
 export type MethodName = keyof Methods;
 
@@ -1196,6 +1214,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'text.layer': 'render',
   'text.search': 'slice',
   'translation.info': 'instant',
+  'translation.translate': 'network',
 };
 
 /** The calls that return one slice of a chunked operation (W1.2 section 9). */
@@ -1253,6 +1272,7 @@ export const RESULT_DECODERS: {
   'text.layer': decodeTextLayerResult,
   'text.search': decodeSearchResult,
   'translation.info': decodeTranslationInfoResult,
+  'translation.translate': decodeTranslateResult,
 };
 
 /** Every kind of change event (W1.2 section 7), sorted. */
@@ -2754,6 +2774,34 @@ export function decodeTextStyleDto(
     line_height: expectNumber(field(o, 'line_height', path), `${path}.line_height`),
     char_spacing: expectNumber(field(o, 'char_spacing', path), `${path}.char_spacing`),
     word_spacing: expectNumber(field(o, 'word_spacing', path), `${path}.word_spacing`),
+  };
+}
+
+export function decodeTranslateParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): TranslateParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['text', 'source', 'target'], path);
+  return {
+    text: expectString(field(o, 'text', path), `${path}.text`),
+    source: expectString(field(o, 'source', path), `${path}.source`),
+    target: expectString(field(o, 'target', path), `${path}.target`),
+  };
+}
+
+export function decodeTranslateResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): TranslateResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['text', 'detected', 'service'], path);
+  return {
+    text: expectString(field(o, 'text', path), `${path}.text`),
+    detected: orNull(field(o, 'detected', path), `${path}.detected`, (v1, p1) => expectString(v1, p1)),
+    service: expectString(field(o, 'service', path), `${path}.service`),
   };
 }
 
