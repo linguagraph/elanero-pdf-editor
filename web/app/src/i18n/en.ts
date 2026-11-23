@@ -1324,6 +1324,9 @@ export const EN = {
   },
   'extract.fonts.more': 'and {count} more',
   'extract.fonts.failed': 'The fonts could not be extracted. Try again.',
+  'fonts.load.dropped': '{name} can no longer be used as a font and was removed from this browser.',
+  'fonts.load.failed':
+    'Some uploaded fonts could not be loaded. They are still kept; reload the page to try again.',
   'compress.title': 'Reduce file size',
   'compress.intro': 'Saves a smaller copy; the open document is left unchanged.',
   'compress.preset.label': 'Preset',
