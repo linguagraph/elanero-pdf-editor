@@ -142,7 +142,8 @@ is reloaded until you press it.
   forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
   box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
   document, wrapping at the ends. Go to Page and the two document keys are also in the command
-  palette. The web version will use the desktop's keys wherever the browser allows, and will list
+  palette. In the text editor, **Ctrl+B** and **Ctrl+I** toggle bold and italic, and **Alt+F10**
+  moves to the style bar. The web version will use the desktop's keys wherever the browser allows, and will list
   them in [Keyboard shortcuts](keyboard-shortcuts.md) once every shortcut works in the web version (coming
   soon).
   **Keyboard Shortcuts…** in the app menu and in Preferences shows the list that is available now.
@@ -277,6 +278,18 @@ the sizes are known only once the files are written, so the list is not shown. C
 files** or **One ZIP file**; with more than 10 files, the ZIP is chosen for you. Together the files
 can be at most 512 MB. A larger split is refused, and nothing is made.
 
+## Fonts in the web version
+
+When you edit a paragraph, the font picker lists the fonts used by the text on the current page,
+then three standard fonts: Sans (Helvetica), Serif (Times) and Mono (Courier). The list does not
+show the fonts on your computer, because a web page cannot put those into a PDF. A font marked
+"(subset)" is only partly in the file: the characters it lacks are set in a standard font. If the
+text has characters that the chosen font does not have, Elanero uses a standard font for them and
+lists the missing characters in a notice. **Undo** in that notice puts the paragraph back.
+
+Bold and Italic are off when the font on the page has no bold or italic face of its own; choose a
+standard font to use them.
+
 ## What is not available yet
 
 These features are on the desktop today and are planned for the web version. Most of them are not
@@ -379,7 +392,7 @@ full policy, with what the desktop app stores, is in the
 | Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and the command palette (Ctrl+Shift+P) work, with some keys; the full shortcut list is coming soon |
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; Shape Style… sets the outline, fill and width of the next shapes for the session (shapes already on the page keep theirs; no opacity yet) |
-| Edit the words of a paragraph, add text | Yes | Coming soon |
+| Edit the words of a paragraph, add text | Yes | Yes, with undo, with font, size, bold, italic, colour, alignment and line spacing (see Fonts in the web version) |
 | Add, replace and export images (PNG and JPEG) | Yes | Yes, with undo; up to 50 MB and 25 megapixels per image; choose the file first, then click or drag to place it; Replace keeps the picture's box and changes every place it appears; Export Image downloads the selected picture as its own file |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |

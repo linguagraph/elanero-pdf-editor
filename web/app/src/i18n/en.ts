@@ -203,6 +203,8 @@ export const EN = {
   'edit.style.align.justify': 'Justify',
   'edit.style.lineSpacing': 'Line spacing (multiple of the font size)',
   'edit.style.font': 'Font',
+  'edit.style.noBold': 'This font has no bold face on this page. Choose a standard font.',
+  'edit.style.noItalic': 'This font has no italic face on this page. Choose a standard font.',
   'fonts.picker.document': 'In this document',
   'fonts.picker.standard': 'Standard',
   'fonts.picker.sans': 'Sans (Helvetica)',

@@ -7,6 +7,7 @@ import type { RectDto, RunResult } from '../rpc/generated';
 import { textLayerPassive } from '../text/textLayerPassive';
 import { acceptSignedEdit, requestEditTool } from './editTool';
 import { type CommitDeps, commitAdd, DEFAULT_TEXT_STYLE, newTextBlock } from './commit';
+import { DEFAULT_TEXT_ARG } from './textStyle';
 import { ObjectCache } from './objectCache';
 
 const box = (x0: number, y0: number, x1: number, y1: number): RectDto => ({ x0, y0, x1, y1 });
@@ -47,7 +48,7 @@ describe('adding a typed block (Add Text)', () => {
     expect(call).toHaveBeenCalledWith('actions.run', {
       handle: 'h1',
       name: 'content.add_text',
-      args: { page: 0, rect: RECT, text: 'New block', style: DEFAULT_TEXT_STYLE },
+      args: { page: 0, rect: RECT, text: 'New block', style: DEFAULT_TEXT_ARG },
     });
   });
 
@@ -95,7 +96,7 @@ describe('adding a typed block (Add Text)', () => {
   it('builds the stand-in block of a new paragraph at its box, with no key', () => {
     const block = newTextBlock(RECT);
     expect(block).toMatchObject({ type: 'text', key: '', bbox: RECT, text: '', editable: true });
-    expect(block.style).toBe(DEFAULT_TEXT_STYLE);
+    expect(block.style).toEqual(DEFAULT_TEXT_ARG);
   });
 });
 

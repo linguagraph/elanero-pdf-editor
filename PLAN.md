@@ -605,7 +605,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W6.7a** R1a select, move and delete page objects _(done: select, move and delete objects, with previews and undo)_
 - [x] **W6.7b** R1a add shapes; add, replace and export images _(done: shapes (#529, #622 desktop dialog, #593 web styling), add, replace and export images (#547, #571), rotated and cropped placement (#548); shapes spec passes in Chromium)_
 - [x] **W6.8a** R1b in-place paragraph editor and add text _(Add Text, slice 8a-2 (#573), merged)_
-- [ ] **W6.8b** R1b font picker
+- [ ] **W6.8b** R1b font picker _(partial: style bar merged (#607); font picker document and standard sections (8b-2); Uploaded section pending (8b-3))_
 - [ ] **W6.9** R1c Font upload _(partial: fonts.validate (#525); the security guard on font references (#544); pending: worker storage and catalogue (slice 2), OPFS persistence, the upload UI, docs/guide page)_
 
 **W7 Added features, #140**
