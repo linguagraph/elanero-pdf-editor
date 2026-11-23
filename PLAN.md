@@ -590,20 +590,20 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W5.1a** Document view: virtualised page list _(done: continuous, single and two-page layouts with fit modes and saved zoom)_
 - [x] **W5.1b** HiDPI tiles, render cache and prefetch _(done: HiDPI tiles, 256 MiB tile cache with prefetch, bounded engine page cache)_
 - [x] **W5.1c** Two-page layouts, Ctrl+wheel zoom, night reading
-- [ ] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(partial: thumbnails, bookmark editing, read-only attachments and layers done; pending: spring-loading and indent (see #552); a passing Chromium run of the bookmarks spec, merged in #584 but its run has failed, see W8.1)_
+- [x] **W5.2** Side panels: thumbnails, bookmarks, attachments, layers _(done: thumbnails, bookmark editing, add and drag, spring-loading and indent (#570), read-only attachments and layers; Playwright bookmarks spec passes in Chromium run 45228120426)_
 - [x] **W5.3** Links, navigation history, page jump, page labels
 - [x] **W5.4** Text selection and copy; search panel
 
 **W6 Required features, #139**
 
 - [x] **W6.1** R2 Page organizer _(done: organizer with thumbnails, multi-select, undoable edits and drag reorder)_
-- [ ] **W6.2** R3 Split dialog _(partial: split dialog (#251); preview, ZIP output, part names and document order (#530); pending: a passing Chromium run of the split spec (#579 merged, run failed, see W8.1))_
-- [ ] **W6.3** R6 Combine dialog _(partial: sources, reordering, progress, page ranges and preview done; pending: password entry, waiting on the W1.2 decision (see #557); shared range rule (see #558))_
-- [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job, result with both sizes (#262, #288, #270, #434, #427); space audit before and after (#527); pending: a passing Chromium run of the compress spec (#576 merged, run failed, see W8.1))_
+- [x] **W6.2** R3 Split dialog _(done: split dialog, preview, ZIP output, part names and document order (#530); Playwright split spec passes in Chromium (#579, run 45228120426))_
+- [x] **W6.3** R6 Combine dialog _(done: sources, reordering, progress, page ranges, preview, password entry for locked sources (#616, #632), shared range rule (#580))_
+- [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job, result with both sizes (#262, #288, #270, #434, #427); space audit before and after (#527); pending: the Lossless not-smaller spec, still fixme under #610; the reduce spec passes in Chromium run 45228120426)_
 - [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi; multi-page print (#522); streamed pages with progress, the 200-page question and 300 dpi (#536); pending: a passing Chromium run of the two-page test (#577 removed the fixme; no passing run yet, see W8.1))_
 - [ ] **W6.6** R4 Translate
 - [x] **W6.7a** R1a select, move and delete page objects _(done: select, move and delete objects, with previews and undo)_
-- [ ] **W6.7b** R1a add shapes; add, replace and export images _(partial: shapes (#529); add an image (#547); the rotated and cropped offset fixed (#548); pending: replace and export (slice 2b, in review), shape styling)_
+- [x] **W6.7b** R1a add shapes; add, replace and export images _(done: shapes (#529, #622 desktop dialog, #593 web styling), add, replace and export images (#547, #571), rotated and cropped placement (#548); shapes spec passes in Chromium)_
 - [x] **W6.8a** R1b in-place paragraph editor and add text _(Add Text, slice 8a-2 (#573), merged)_
 - [ ] **W6.8b** R1b font picker
 - [ ] **W6.9** R1c Font upload _(partial: fonts.validate (#525); the security guard on font references (#544); pending: worker storage and catalogue (slice 2), OPFS persistence, the upload UI, docs/guide page)_
