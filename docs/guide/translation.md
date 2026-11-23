@@ -72,6 +72,22 @@ Nothing else from the document is sent, and nothing is sent in the background. E
 policy is linked from the consent notice and from Preferences ▸ Translation. Translation can be turned
 off at any time in Preferences. See [Privacy](privacy.md).
 
+## In the web version
+
+The web version translates with MyMemory (Translated.net) only, and it has no translation settings:
+no keys, no accounts and no email address.
+
+- Select the text, then click **Translate** in the mini toolbar beside it, or run **Translate
+  selection** from the command palette (**Ctrl+K**). Copy is in the same toolbar.
+- **From** cannot detect the language. It starts at the language you chose last time, or English, so
+  check it and choose the language of the selected text yourself.
+- A selection can be up to 2,000 characters long per translation. For a longer passage, select less.
+- Translation needs a connection. The rest of the app keeps working offline.
+- MyMemory keeps a daily limit for each visitor, and the web version cannot raise it. When the limit
+  is reached, try again later.
+- Do not translate confidential text. MyMemory receives the text you select and may keep it.
+- For DeepL, Microsoft Azure or your own LibreTranslate server, use Elanero for Windows.
+
 ## Limits
 
 - Translation quality depends on the service. Check important text with a person who speaks the
