@@ -600,7 +600,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W6.2** R3 Split dialog _(done: split dialog, preview, ZIP output, part names and document order (#530); Playwright split spec passes in Chromium (#579, run 45228120426))_
 - [x] **W6.3** R6 Combine dialog _(done: sources, reordering, progress, page ranges, preview, password entry for locked sources (#616, #632), shared range rule (#580))_
 - [ ] **W6.4** R5 Compress dialog _(partial: presets, custom options, reduce_size job, result with both sizes (#262, #288, #270, #434, #427); space audit before and after (#527); pending: the Lossless not-smaller spec, still fixme under #610; the reduce spec passes in Chromium run 45228120426)_
-- [ ] **W6.5** R7 Print _(partial: print dialog, range parsing, dpi; multi-page print (#522); streamed pages with progress, the 200-page question and 300 dpi (#536); pending: a passing Chromium run of the two-page test (#577 removed the fixme; no passing run yet, see W8.1))_
+- [x] **W6.5** R7 Print _(done: print dialog, range parsing, dpi, multi-page print (#522), streamed pages with progress, the 200-page question and 300 dpi (#536); the two-page print test passes in Chromium (#577, #637; run 45256446510))_
 - [ ] **W6.6** R4 Translate
 - [x] **W6.7a** R1a select, move and delete page objects _(done: select, move and delete objects, with previews and undo)_
 - [x] **W6.7b** R1a add shapes; add, replace and export images _(done: shapes (#529, #622 desktop dialog, #593 web styling), add, replace and export images (#547, #571), rotated and cropped placement (#548); shapes spec passes in Chromium)_
