@@ -155,3 +155,46 @@
   background: none;
   cursor: pointer;
 }
+
+.fonts-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fonts-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fonts-name {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fonts-row .prefs-confirm {
+  flex-basis: 100%;
+}
+
+.fonts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.fonts-messages {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.fonts-messages p {
+  margin: 0;
+}

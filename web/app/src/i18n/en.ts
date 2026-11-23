@@ -1352,6 +1352,68 @@ export const EN = {
   'fonts.load.dropped': '{name} can no longer be used as a font and was removed from this browser.',
   'fonts.load.failed':
     'Some uploaded fonts could not be loaded. They are still kept; reload the page to try again.',
+  // Preferences ▸ Fonts (W6.9 slice 4, design section 4.4).
+  'fonts.section': 'Fonts',
+  'fonts.hint':
+    'Fonts you upload can be used for text you add or edit. Changes here apply at once.',
+  'fonts.storage.sessionOnly':
+    "This browser can't keep fonts after the tab closes. Fonts you add work until then.",
+  'fonts.list.empty': 'No fonts uploaded.',
+  'fonts.loading': 'Loading your fonts…',
+  'fonts.usage': '{used} of {max} used',
+  'fonts.row.faces': { one: '{count} face', other: '{count} faces' },
+  'fonts.row.notLoaded': 'not loaded',
+  'fonts.upload.button': 'Upload font…',
+  'fonts.upload.accept':
+    'TrueType and OpenType fonts (.ttf, .otf, .ttc, .otc), up to {limit} each.',
+  'fonts.upload.added': '{name} was added.',
+  'fonts.upload.addedFaces': {
+    one: '{name} was added ({count} face).',
+    other: '{name} was added ({count} faces).',
+  },
+  'fonts.upload.partial': {
+    one: "{name}: {refused} of its {total} face can't be embedded and left out.",
+    other: "{name}: {refused} of its {total} faces can't be embedded and left out.",
+  },
+  'fonts.upload.already': '{name} is already added.',
+  'fonts.upload.sessionOnly': "{name} was added for this tab only: this browser can't keep fonts.",
+  'fonts.upload.noSpace':
+    '{name} was added, but there is no room to keep it in this browser. It works until you close the tab.',
+  'fonts.upload.notKept':
+    '{name} was added, but could not be kept in this browser. It works until you close the tab.',
+  'fonts.error.tooLarge': '{name} is larger than {limit}, the most a font file can be.',
+  'fonts.error.woff': '{name} is a web font (WOFF or WOFF2). Add the TTF or OTF file instead.',
+  'fonts.error.noUsableFace':
+    '{name} has no font that can be used for text (it may contain only pictures of characters).',
+  'fonts.error.tooManyFaces': '{name} holds too many fonts. Add the single font file you need.',
+  'fonts.error.invalid': '{name} is not a font file that can be read.',
+  'fonts.error.restricted':
+    "{name} can't be added: its licence does not allow embedding it in documents.",
+  'fonts.error.bitmapOnly': "{name} can't be added: its licence allows embedding only as pictures.",
+  'fonts.error.fullCount':
+    '{name} was not added: at most {max} fonts can be added. Remove fonts you no longer need.',
+  'fonts.error.fullBytes':
+    '{name} was not added: fonts can use at most {max}, and {used} is used. Remove fonts you no longer need.',
+  'fonts.error.notSupported':
+    "Fonts can't be added because the font reader did not load. Reload the page.",
+  'fonts.error.failed': '{name} could not be added. Try again.',
+  'fonts.remove': 'Remove',
+  'fonts.remove.label': 'Remove {name}',
+  'fonts.remove.partial':
+    '{name} was removed from this browser, but stays usable until you close the tab.',
+  'fonts.remove.failed': '{name} could not be removed. Try again.',
+  'fonts.removeConfirm': 'Remove {name}? Text already added with it keeps it.',
+  'fonts.removeAll': 'Remove all fonts…',
+  'fonts.removeAllConfirm': {
+    one: 'Remove the uploaded font from this browser? Text already added with it keeps it.',
+    other:
+      'Remove all {count} uploaded fonts from this browser? Text already added with them keeps them.',
+  },
+  'fonts.removeAll.failed': 'The uploaded fonts could not all be removed. Try again.',
+  'fonts.confirm.remove': 'Remove',
+  'fonts.confirm.keep': 'Keep',
+  'fonts.removed': '{name} was removed.',
+  'fonts.removedAll': 'All uploaded fonts were removed.',
   'compress.title': 'Reduce file size',
   'compress.intro': 'Saves a smaller copy; the open document is left unchanged.',
   'compress.preset.label': 'Preset',

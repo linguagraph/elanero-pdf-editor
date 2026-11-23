@@ -997,6 +997,7 @@ export function App({
         hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
         onShowShortcuts={() => setShortcutsOpen(true)}
         clearData={clearData}
+        fonts={fonts}
       />
       <SaveAsDialog
         tab={saveAsTab}
