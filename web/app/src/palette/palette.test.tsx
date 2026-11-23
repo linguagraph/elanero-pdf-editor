@@ -374,6 +374,61 @@ describe('command palette', () => {
   });
 });
 
+// Dispatches a cancelable key press and reports whether the page left it alone.
+function notPrevented(target: EventTarget, init: KeyboardEventInit): boolean {
+  let proceed = true;
+  act(() => {
+    proceed = target.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
+    );
+  });
+  return proceed;
+}
+
+function textField(): HTMLInputElement {
+  const field = document.querySelector<HTMLInputElement>('#field');
+  if (field === null) throw new Error('no text field');
+  return field;
+}
+
+describe('keys in a text field, and the always-prevented keys', () => {
+  it('prevents Ctrl+S, Ctrl+O and Ctrl+P from a text field and the page, open or closed', () => {
+    render(OPEN_STATE, spies());
+    for (const open of [false, true]) {
+      if (open) openPalette();
+      for (const target of [textField(), document]) {
+        for (const key of ['s', 'o', 'p']) {
+          expect(notPrevented(target, { key, ctrlKey: true }), `Ctrl+${key} open=${open}`).toBe(
+            false,
+          );
+        }
+      }
+    }
+  });
+
+  it('does not prevent Ctrl+Shift+S or Ctrl+Alt+S', () => {
+    // With no Save As handler, a press of Ctrl+Shift+S runs nothing, so only the always-prevented
+    // rule could stop it. It must not.
+    const handlers = spies();
+    delete handlers['save-as'];
+    render(OPEN_STATE, handlers);
+    expect(notPrevented(document, { key: 'S', ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(notPrevented(document, { key: 's', ctrlKey: true, altKey: true })).toBe(true);
+    expect(notPrevented(textField(), { key: 'S', ctrlKey: true, shiftKey: true })).toBe(true);
+  });
+
+  it('does not run a command bound to another key from a text field', () => {
+    // Ctrl+Z is Undo. The same press on the page runs it, which shows the handler is wired.
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    notPrevented(textField(), { key: 'z', ctrlKey: true });
+    expect(handlers.undo).not.toHaveBeenCalled();
+
+    notPrevented(document.body, { key: 'z', ctrlKey: true });
+    expect(handlers.undo).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('command palette opened with a seed', () => {
   it('opens filtered by the seed query, with the input and the list showing it', () => {
     render(OPEN_STATE, spies());
