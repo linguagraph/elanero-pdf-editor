@@ -120,10 +120,10 @@ def test_the_web_offers_mymemory_alone_with_its_limits() -> None:
     assert not hasattr(service, "needs_key")
 
 
-def test_the_methods_table_gets_translation_info_only_until_slice_three() -> None:
-    # The network method joins the table with the bubble (S3); until then no request can start.
+def test_the_methods_table_has_the_two_translation_calls() -> None:
+    # translation.translate is the only call that reaches the network; the worker gate arms for it.
     assert "translation.info" in METHODS
-    assert "translation.translate" not in METHODS
+    assert "translation.translate" in METHODS
 
 
 def test_the_parameters_are_strict_and_source_is_required() -> None:
