@@ -213,18 +213,51 @@ describe('the style bar in the editor', () => {
   });
 
   it('picking a standard font does not preview a document font, and keeps the text upright', () => {
+    // Bold and italic on: a document font's own face is shown as is, so the textarea is kept
+    // upright (normal weight and style) until the pick makes it a standard font.
     const verdana: PageObjectDto = {
       ...paragraph,
-      style: { ...DEFAULT_TEXT_STYLE, font: 'Verdana' },
+      style: { ...DEFAULT_TEXT_STYLE, font: 'Verdana', bold: true, italic: true },
     };
     const { area, call } = mount(verdana);
     // The opening document font asks the engine for its program once.
     expect(call).toHaveBeenCalledWith('content.preview_font', expect.anything());
     call.mockClear();
+    expect(area.style.fontWeight).toBe('normal');
+    expect(area.style.fontStyle).toBe('normal');
     pickFont(t('fonts.picker.serif'));
     expect(call.mock.calls.some(([method]) => method === 'content.preview_font')).toBe(false);
-    // jsdom reads a 400 weight back as "normal".
-    expect(['400', 'normal']).toContain(area.style.fontWeight);
-    expect(area.style.fontStyle).toBe('normal');
+    // The standard font takes the bar's bold and italic: the pick keeps both, so the weight and
+    // slant now come from the browser, not from the document face's reset.
+    expect(area.style.fontWeight).toBe('700');
+    expect(area.style.fontStyle).toBe('italic');
+  });
+
+  it('a Bold press on a document font with no bold face is announced again on each press', () => {
+    const calibri: PageObjectDto = {
+      ...paragraph,
+      style: { ...DEFAULT_TEXT_STYLE, font: 'Calibri' },
+    };
+    const { area } = mount(calibri);
+    const status = () => host.querySelector('[role="status"]');
+    keyDown(area, { key: 'b', ctrlKey: true });
+    expect(status()?.textContent).toBe(t('edit.style.noBold'));
+    const first = status();
+    keyDown(area, { key: 'b', ctrlKey: true });
+    expect(status()?.textContent).toBe(t('edit.style.noBold'));
+    // A new status node, so a screen reader announces the repeated press.
+    expect(status()).not.toBe(first);
+  });
+
+  it('an arrow key clears the face note', () => {
+    const calibri: PageObjectDto = {
+      ...paragraph,
+      style: { ...DEFAULT_TEXT_STYLE, font: 'Calibri' },
+    };
+    const { area } = mount(calibri);
+    keyDown(area, { key: 'b', ctrlKey: true });
+    expect(host.querySelector('[role="status"]')?.textContent).toBe(t('edit.style.noBold'));
+    keyDown(area, { key: 'ArrowLeft' });
+    expect(host.querySelector('[role="status"]')?.textContent).toBe('');
   });
 });

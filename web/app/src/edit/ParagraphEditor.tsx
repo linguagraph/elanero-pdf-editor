@@ -86,8 +86,12 @@ export function ParagraphEditor({
   const [value, setValue] = useState(object.text);
   const [busy, setBusy] = useState(false);
   // What a Bold or Italic press the font can't take says, for a screen reader: the key does nothing,
-  // and this status tells why (cleared by the next style change or keystroke).
-  const [faceNote, setFaceNote] = useState<string | null>(null);
+  // and this status tells why (cleared by the next key or style change). `n` numbers each note, so a
+  // repeated press re-announces: the status node is keyed on it and is replaced.
+  const [faceNote, setFaceNote] = useState<{ readonly text: string; readonly n: number } | null>(
+    null,
+  );
+  const noteCount = useRef(0);
   const [family, setFamily] = useState<string>(() => familyOf(style?.font ?? ''));
   // The style the bar shows and the commit sends. `styleRef` is the same value, read by the keys,
   // blurs and unmount that run between renders. The opening style has no font ref (the block's
@@ -216,6 +220,8 @@ export function ParagraphEditor({
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Keys belong to the editor: the page's shortcuts (Delete, Undo) must not act on the objects.
     event.stopPropagation();
+    // Any key clears the last face note; a Bold or Italic press below sets it again if it applies.
+    setFaceNote(null);
     // An IME candidate is confirmed or cancelled by these keys, which must not close the editor.
     if (event.nativeEvent.isComposing) return;
     if (event.key === 'Escape') {
@@ -234,7 +240,11 @@ export function ParagraphEditor({
       const which = event.key.toLowerCase() === 'b' ? 'bold' : 'italic';
       const change = faceToggle(styleRef.current, which, documentNames(sections));
       if (change !== null) setStyle({ ...styleRef.current, ...change });
-      else setFaceNote(t(which === 'bold' ? 'edit.style.noBold' : 'edit.style.noItalic'));
+      else {
+        noteCount.current += 1;
+        const text = t(which === 'bold' ? 'edit.style.noBold' : 'edit.style.noItalic');
+        setFaceNote({ text, n: noteCount.current });
+      }
     }
   };
 
@@ -327,8 +337,8 @@ export function ParagraphEditor({
       <span id={hintId} className="visually-hidden">
         {t('edit.text.hint')}
       </span>
-      <span role="status" className="visually-hidden">
-        {faceNote}
+      <span key={faceNote?.n ?? 0} role="status" className="visually-hidden">
+        {faceNote?.text ?? ''}
       </span>
     </>
   );
