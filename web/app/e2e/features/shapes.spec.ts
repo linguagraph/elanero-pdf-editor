@@ -50,8 +50,12 @@ test.describe('engine staged', () => {
     await dialog.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(dialog).toBeHidden();
 
-    // Rectangle, then a drag from (100, 500) to (200, 560) in points.
-    await page.getByRole('button', { name: 'Rectangle', exact: true }).click();
+    // Rectangle, then a drag from (100, 500) to (200, 560) in points. The ribbon's Rectangle is the
+    // shape tool (add-rectangle); the view's Comment tools group has a Rectangle markup tool too.
+    await page
+      .getByRole('toolbar', { name: 'Ribbon' })
+      .getByRole('button', { name: 'Rectangle', exact: true })
+      .click();
     const layer = page.locator('[data-page="0"] .shape-layer');
     await expect(layer).toBeVisible();
     const start = await pagePixel(layer, 100, 500);
