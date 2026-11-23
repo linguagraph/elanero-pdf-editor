@@ -7,6 +7,7 @@ import { t } from './i18n/t';
 import { EngineLoadingScreen } from './feedback/LoadingScreen';
 import type { EngineConnection } from './engine/engineConnection';
 import type { FontLibrary } from './fonts/fontLibrary';
+import { clearDataAndNotify, clearLocalData } from './storage/clearLocalData';
 import type { WorkerClient } from './engine/start';
 import { PrintDialog } from './print/PrintDialog';
 import { PasswordPrompt } from './documents/PasswordPrompt';
@@ -144,6 +145,7 @@ const NO_LAUNCHES = installLaunchInbox(undefined, {
 
 export function App({
   engine,
+  fonts,
   startPrintWorker,
   jobs: jobsProp,
   launches = NO_LAUNCHES,
@@ -240,6 +242,9 @@ export function App({
     () => createSaver({ client: () => engine.client(), download: downloadBytes }),
     [engine],
   );
+  // Clear all local data (W6.9 slice 3): when it succeeds, the other tabs drop their copies of the
+  // uploaded fonts. This tab reloads after the clear, so it needs no more than that.
+  const clearData = useCallback(() => clearDataAndNotify(clearLocalData, fonts), [fonts]);
   // Files the OS hands to the app open through the same path as the Open button (W4.6 S1).
   useEffect(() => launches.attach(docs.openFiles), [launches, docs.openFiles]);
   useEffect(() => {
@@ -991,6 +996,7 @@ export function App({
         // opening (docs.pending) counts too: it can finish while the confirmation is showing.
         hasDocuments={docs.tabs.tabs.length > 0 || docs.pending.length > 0}
         onShowShortcuts={() => setShortcutsOpen(true)}
+        clearData={clearData}
       />
       <SaveAsDialog
         tab={saveAsTab}

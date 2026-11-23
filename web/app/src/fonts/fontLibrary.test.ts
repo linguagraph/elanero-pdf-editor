@@ -11,7 +11,14 @@ import {
 } from '../storage/fontStore';
 import { StorageUnsupportedError } from '../storage/opfs';
 import { MemoryDir, memoryRoot } from '../storage/testRoot';
-import { createFontLibrary, type FontLibrary, MAX_FONT_FILE_BYTES } from './fontLibrary';
+import {
+  type ChannelLike,
+  createFontLibrary,
+  type FontLibrary,
+  type FontMessage,
+  MAX_FONT_FILE_BYTES,
+  parseFontMessage,
+} from './fontLibrary';
 
 const estimate = async () => ({ quota: 10_000_000, usage: 0 });
 
@@ -77,20 +84,76 @@ function storeAnswering(outcome: KeepOutcome): FontStore {
   };
 }
 
+// A stand-in for the tabs' BroadcastChannel. Messages wait until the test delivers them, so the test
+// decides which tab hears of a change first. A channel never hears its own messages.
+class FakeHub {
+  private readonly sets: Set<(event: { readonly data: unknown }) => void>[] = [];
+  private readonly queue: { readonly from: number; readonly data: FontMessage }[] = [];
+
+  channel(): ChannelLike {
+    const index = this.sets.length;
+    const listeners = new Set<(event: { readonly data: unknown }) => void>();
+    this.sets.push(listeners);
+    return {
+      postMessage: (data) => {
+        this.queue.push({ from: index, data });
+      },
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+    };
+  }
+
+  // How many messages are queued and not yet delivered.
+  pending(): number {
+    return this.queue.length;
+  }
+
+  // Delivers the queued messages, in the order they were sent.
+  deliver(): void {
+    for (const { from, data } of this.queue.splice(0)) this.broadcast(from, data);
+  }
+
+  // A message this module did not send, as another page's script might.
+  inject(data: unknown): void {
+    this.broadcast(-1, data);
+  }
+
+  private broadcast(from: number, data: unknown): void {
+    this.sets.forEach((listeners, index) => {
+      if (index === from) return;
+      for (const listener of [...listeners]) listener({ data });
+    });
+  }
+}
+
+// Waits until the tab has run every job it queued.
+async function settle(library: FontLibrary): Promise<void> {
+  for (let turn = 0; turn < 1000 && library.getState().busy; turn += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 interface Tab {
   readonly library: FontLibrary;
   readonly engine: ReturnType<typeof fakeEngine>;
   readonly notes: string[];
 }
 
-// One tab: its own engine and library over the given storage. Start-up syncs run at once.
-function openTab(store: FontStore, persist: () => Promise<unknown> = async () => undefined): Tab {
+// One tab: its own engine and library over the given storage. Start-up syncs run at once. Tabs that
+// share a hub hear each other's broadcasts; a tab on its own gets a hub of its own.
+function openTab(
+  store: FontStore,
+  persist: () => Promise<unknown> = async () => undefined,
+  hub: FakeHub = new FakeHub(),
+): Tab {
   const engine = fakeEngine();
   const notes: string[] = [];
   const library = createFontLibrary({
     engine,
     store,
     persist,
+    channel: () => hub.channel(),
     schedule: (run) => run(),
     notify: (text) => notes.push(text),
   });
@@ -412,5 +475,255 @@ describe('font library', () => {
     expect(tab.library.getState().fonts).toEqual([
       expect.objectContaining({ name: 'Sans.ttf', kept: true, loaded: true, dto: secondDto }),
     ]);
+  });
+
+  it('removes a font from the disk, the engine and the list, and tells the listeners', async () => {
+    const root = new MemoryDir();
+    const tab = openTab(createFontStore(memoryRoot(root), estimate));
+    const engine = fakeClient();
+    tab.engine.setClient(engine.client);
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+    const id = tab.library.getState().fonts[0]?.id ?? '';
+    const removed = vi.fn();
+    tab.library.onRemoved(removed);
+
+    expect(await tab.library.remove(id)).toEqual({ kind: 'removed' });
+
+    expect(tab.library.getState().fonts).toEqual([]);
+    expect(engine.loaded.size).toBe(0);
+    expect(root.dirs.has(FONTS_FOLDER)).toBe(false);
+    expect(removed).toHaveBeenCalledWith(id);
+  });
+
+  it('removes every font and the fonts folder with removeAll', async () => {
+    const root = new MemoryDir();
+    const tab = openTab(createFontStore(memoryRoot(root), estimate));
+    tab.engine.setClient(fakeClient().client);
+    await tab.library.add(fontFile('A.ttf', 'a'));
+    await tab.library.add(fontFile('B.ttf', 'b'));
+
+    expect(await tab.library.removeAll()).toEqual({ kind: 'removed' });
+
+    expect(tab.library.getState().fonts).toEqual([]);
+    expect(root.dirs.has(FONTS_FOLDER)).toBe(false);
+  });
+
+  it('reports engineKept when the engine cannot drop the font, and removes it from the disk anyway', async () => {
+    const store = createFontStore(memoryRoot(new MemoryDir()), estimate);
+    const tab = openTab(store);
+    const engine = fakeClient();
+    tab.engine.setClient({
+      call: vi.fn(
+        async (method: string, params: { name?: string; data?: ArrayBuffer; id?: string }) =>
+          method === 'fonts.remove'
+            ? Promise.reject(new RpcError('ENGINE_ERROR', 'busy'))
+            : engine.call(method, params),
+      ),
+      chunked: vi.fn(),
+    } as unknown as EngineClient);
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+    const id = tab.library.getState().fonts[0]?.id ?? '';
+
+    expect(await tab.library.remove(id)).toEqual({ kind: 'engineKept', code: 'ENGINE_ERROR' });
+    expect(tab.library.getState().fonts).toEqual([]);
+    expect(await store.list()).toEqual([]);
+  });
+
+  it('keeps the font listed when the disk refuses the removal', async () => {
+    const store = createFontStore(memoryRoot(new MemoryDir()), estimate);
+    const tab = openTab(store);
+    tab.engine.setClient(fakeClient().client);
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+    const id = tab.library.getState().fonts[0]?.id ?? '';
+    vi.spyOn(store, 'remove').mockResolvedValueOnce(false);
+
+    expect(await tab.library.remove(id)).toEqual({ kind: 'notRemoved' });
+    expect(tab.library.getState().fonts).toEqual([expect.objectContaining({ id, kept: true })]);
+  });
+
+  it('loads a font another tab kept, without a reload, and only that font', async () => {
+    const hub = new FakeHub();
+    const root = new MemoryDir();
+    const first = openTab(createFontStore(memoryRoot(root), estimate), undefined, hub);
+    const second = openTab(createFontStore(memoryRoot(root), estimate), undefined, hub);
+    first.engine.setClient(fakeClient().client);
+    const engine = fakeClient();
+    second.engine.setClient(engine.client);
+
+    await first.library.add(fontFile('Sans.ttf', 'sans'));
+    hub.deliver();
+    await settle(second.library);
+
+    expect(second.library.getState().fonts).toEqual([
+      expect.objectContaining({ name: 'Sans.ttf', kept: true, loaded: true }),
+    ]);
+    // The second engine sent only the one font: the start-up sync had nothing to send.
+    expect(engine.calls()).toEqual(['fonts.add', 'fonts.list']);
+  });
+
+  it('drops every font when another tab clears local data, and leaves the disk to the tab that cleared', async () => {
+    const hub = new FakeHub();
+    const root = new MemoryDir();
+    const storeA = createFontStore(memoryRoot(root), estimate);
+    const storeB = createFontStore(memoryRoot(root), estimate);
+    const first = openTab(storeA, undefined, hub);
+    const second = openTab(storeB, undefined, hub);
+    first.engine.setClient(fakeClient().client);
+    const engine = fakeClient();
+    second.engine.setClient(engine.client);
+    await first.library.add(fontFile('Sans.ttf', 'sans'));
+    hub.deliver();
+    await settle(second.library);
+    const removeB = vi.spyOn(storeB, 'remove');
+    const removeAllB = vi.spyOn(storeB, 'removeAll');
+
+    first.library.cleared();
+    hub.deliver();
+    await settle(second.library);
+
+    expect(second.library.getState().fonts).toEqual([]);
+    expect(engine.calls()).toContain('fonts.remove');
+    expect(removeB).not.toHaveBeenCalled();
+    expect(removeAllB).not.toHaveBeenCalled();
+    expect(root.dirs.get(FONTS_FOLDER)?.files.size).toBe(2);
+  });
+
+  it('leaves the disk alone when a removal reaches a tab after another tab kept the font again', async () => {
+    const hub = new FakeHub();
+    const root = new MemoryDir();
+    const first = openTab(createFontStore(memoryRoot(root), estimate), undefined, hub);
+    const storeB = createFontStore(memoryRoot(root), estimate);
+    const second = openTab(storeB, undefined, hub);
+    const file = fontFile('Sans.ttf', 'sans');
+    first.engine.setClient(fakeClient().client);
+    second.engine.setClient(fakeClient().client);
+    await first.library.add(file);
+    hub.deliver();
+    await settle(second.library);
+    const id = first.library.getState().fonts[0]?.id ?? '';
+    const removedB = vi.fn();
+    second.library.onRemoved(removedB);
+    const removeB = vi.spyOn(storeB, 'remove');
+
+    await first.library.remove(id);
+    // A third tab starts after the removal and keeps the same font again; its 'added' follows the
+    // first tab's 'removed' in the hub.
+    const third = openTab(createFontStore(memoryRoot(root), estimate), undefined, hub);
+    third.engine.setClient(fakeClient().client);
+    await third.library.add(file);
+    hub.deliver();
+    await settle(second.library);
+
+    expect(removedB).toHaveBeenCalledWith(id);
+    expect(removeB).not.toHaveBeenCalled();
+    expect(await storeB.list()).toEqual([expect.objectContaining({ id })]);
+    expect(second.library.getState().fonts).toEqual([
+      expect.objectContaining({ id, kept: true, loaded: true }),
+    ]);
+  });
+
+  it('queues an added message for a font kept on disk, so the other tabs hear of it', async () => {
+    const hub = new FakeHub();
+    const tab = openTab(createFontStore(memoryRoot(new MemoryDir()), estimate), undefined, hub);
+    tab.engine.setClient(fakeClient().client);
+
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+
+    expect(hub.pending()).toBe(1);
+  });
+
+  it.each(['no-space', 'unsupported', 'failed'] as const)(
+    'queues no added message for a font whose store says %s',
+    async (outcome) => {
+      const hub = new FakeHub();
+      const tab = openTab(storeAnswering(outcome), undefined, hub);
+      tab.engine.setClient(fakeClient().client);
+
+      await tab.library.add(fontFile('Sans.ttf', 'sans'));
+
+      expect(hub.pending()).toBe(0);
+    },
+  );
+
+  it('queues no removed message when a session font is removed', async () => {
+    const hub = new FakeHub();
+    const store = createFontStore(async () => {
+      throw new StorageUnsupportedError('no storage');
+    }, estimate);
+    const tab = openTab(store, undefined, hub);
+    tab.engine.setClient(fakeClient().client);
+    await tab.library.add(fontFile('Mem.ttf', 'mem'));
+    const id = tab.library.getState().fonts[0]?.id ?? '';
+
+    expect(await tab.library.remove(id)).toEqual({ kind: 'removed' });
+    expect(hub.pending()).toBe(0);
+  });
+
+  it('queues no removed message when the disk refuses the removal', async () => {
+    const hub = new FakeHub();
+    const store = createFontStore(memoryRoot(new MemoryDir()), estimate);
+    const tab = openTab(store, undefined, hub);
+    tab.engine.setClient(fakeClient().client);
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+    const id = tab.library.getState().fonts[0]?.id ?? '';
+    // Drops the 'added' the add queued, so only what the removal queues is counted.
+    hub.deliver();
+    vi.spyOn(store, 'remove').mockResolvedValueOnce(false);
+
+    expect(await tab.library.remove(id)).toEqual({ kind: 'notRemoved' });
+    expect(hub.pending()).toBe(0);
+  });
+
+  it('queues a removed message for a kept font that is removed', async () => {
+    const hub = new FakeHub();
+    const store = createFontStore(memoryRoot(new MemoryDir()), estimate);
+    const tab = openTab(store, undefined, hub);
+    tab.engine.setClient(fakeClient().client);
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+    const id = tab.library.getState().fonts[0]?.id ?? '';
+    hub.deliver();
+
+    await tab.library.remove(id);
+    expect(hub.pending()).toBe(1);
+  });
+
+  it('ignores messages it did not send', async () => {
+    const hub = new FakeHub();
+    const store = createFontStore(memoryRoot(new MemoryDir()), estimate);
+    const tab = openTab(store, undefined, hub);
+    tab.engine.setClient(fakeClient().client);
+    await tab.library.add(fontFile('Sans.ttf', 'sans'));
+    const removeOne = vi.spyOn(store, 'remove');
+    const removeAll = vi.spyOn(store, 'removeAll');
+
+    for (const data of [
+      null,
+      'removed',
+      { kind: 'removed', id: '../x' },
+      { kind: 'removed' },
+      { kind: 'bogus', id: 'a'.repeat(64) },
+    ]) {
+      hub.inject(data);
+    }
+    await settle(tab.library);
+
+    expect(tab.library.getState().fonts).toEqual([expect.objectContaining({ kept: true })]);
+    expect(removeOne).not.toHaveBeenCalled();
+    expect(removeAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('font messages', () => {
+  it('accepts only the three kinds this module sends, with a font id for added and removed', () => {
+    const id = 'a'.repeat(64);
+
+    expect(parseFontMessage({ kind: 'added', id })).toEqual({ kind: 'added', id });
+    expect(parseFontMessage({ kind: 'removed', id })).toEqual({ kind: 'removed', id });
+    expect(parseFontMessage({ kind: 'cleared' })).toEqual({ kind: 'cleared' });
+    expect(parseFontMessage({ kind: 'removed', id: 'short' })).toBeUndefined();
+    expect(parseFontMessage({ kind: 'added' })).toBeUndefined();
+    expect(parseFontMessage({ kind: 'other', id })).toBeUndefined();
+    expect(parseFontMessage(null)).toBeUndefined();
+    expect(parseFontMessage('cleared')).toBeUndefined();
   });
 });
