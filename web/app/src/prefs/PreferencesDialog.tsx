@@ -1,7 +1,16 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from 'react';
 import { Checkbox, Radio, RadioGroup, TextField, Label, Input } from 'react-aria-components';
 import { t } from '../i18n/t';
 import type { MessageId } from '../i18n/en';
+import type { FontLibrary } from '../fonts/fontLibrary';
 import { Overlay } from '../layout/Overlay';
 import { clearLocalData, type ClearAction } from '../storage/clearLocalData';
 import { ACCENT_CHOICES, applyAccent, isAccentChoice } from '../theme/accent';
@@ -27,6 +36,7 @@ import {
   type Preferences,
   type ZoomChoice,
 } from './store';
+import { FontsSection } from './FontsSection';
 import './preferences.css';
 
 export interface PreferencesDialogProps {
@@ -40,6 +50,8 @@ export interface PreferencesDialogProps {
   reloadPage?: () => void;
   // Opens the Keyboard Shortcuts dialog above this one; the draft here is kept (W4.5 D3).
   onShowShortcuts?: () => void;
+  // The tab's uploaded fonts (W6.9 slice 4): the Fonts section. Tests leave it out.
+  fonts?: FontLibrary;
 }
 
 const THEME_LABELS: Readonly<Record<ThemeChoice, MessageId>> = {
@@ -86,6 +98,7 @@ export function PreferencesDialog({
   clearData = () => clearLocalData(),
   reloadPage = () => window.location.reload(),
   onShowShortcuts = () => undefined,
+  fonts,
 }: PreferencesDialogProps) {
   const cancel = () => {
     applyTheme(readStoredTheme());
@@ -101,6 +114,7 @@ export function PreferencesDialog({
         clearData={clearData}
         reloadPage={reloadPage}
         onShowShortcuts={onShowShortcuts}
+        fonts={fonts}
       />
     </Overlay>
   );
@@ -113,6 +127,7 @@ interface PreferencesFormProps {
   clearData: ClearAction;
   reloadPage: () => void;
   onShowShortcuts: () => void;
+  fonts: FontLibrary | undefined;
 }
 
 // Mounted only while the dialog is open (the overlay renders nothing when closed), so every open
@@ -124,6 +139,7 @@ function PreferencesForm({
   clearData,
   reloadPage,
   onShowShortcuts,
+  fonts,
 }: PreferencesFormProps) {
   const [draft, setDraft] = useState<Preferences>(readPreferences);
   const [confirming, setConfirming] = useState(false);
@@ -131,6 +147,12 @@ function PreferencesForm({
   const [clearFailed, setClearFailed] = useState(false);
   const keepRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
+  // Clear all waits for a font operation (a sync, an add, a removal): the reload would cut it short.
+  const subscribeFonts = useCallback(
+    (listener: () => void) => fonts?.subscribe(listener) ?? (() => undefined),
+    [fonts],
+  );
+  const fontsBusy = useSyncExternalStore(subscribeFonts, () => fonts?.getState().busy ?? false);
 
   // The confirmation takes focus, on Keep, so Enter does not clear by accident.
   useEffect(() => {
@@ -351,6 +373,8 @@ function PreferencesForm({
         </TextField>
       </section>
 
+      {fonts === undefined ? null : <FontsSection library={fonts} />}
+
       <section className="prefs-section" aria-labelledby={`${ids}-shortcuts`}>
         <h3 id={`${ids}-shortcuts`} className="prefs-heading">
           {t('prefs.section.shortcuts')}
@@ -373,7 +397,7 @@ function PreferencesForm({
               <button
                 type="button"
                 className="overlay-close prefs-danger"
-                disabled={hasDocuments || clearing}
+                disabled={hasDocuments || clearing || fontsBusy}
                 onClick={() => void clearAll()}
               >
                 {t('prefs.clearAll.clear')}
@@ -393,7 +417,7 @@ function PreferencesForm({
           <button
             type="button"
             className="overlay-close prefs-danger"
-            disabled={hasDocuments || clearing}
+            disabled={hasDocuments || clearing || fontsBusy}
             onClick={() => setConfirming(true)}
           >
             {t('prefs.clearAll.open')}

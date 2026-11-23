@@ -3,8 +3,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { fakeEngine } from '../engine/testEngine';
+import { fakeFontLibrary, type FakeFontLibrary } from '../fonts/testFontLibrary';
 import { t } from '../i18n/t';
 import { THEME_STORAGE_KEY } from '../theme/theme';
+import { PreferencesDialog } from './PreferencesDialog';
 import { PREFS_STORAGE_KEY, readPreferences } from './store';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -324,6 +326,46 @@ describe('Keyboard Shortcuts from Preferences and the app menu (W4.5 S2)', () =>
       item?.click();
     });
     expect(topDialog()?.textContent).toContain(t('palette.shortcutsList'));
+  });
+});
+
+describe('Preferences ▸ Fonts (W6.9 slice 4)', () => {
+  function renderWithFonts(fonts: FakeFontLibrary) {
+    act(() => {
+      root.render(
+        <PreferencesDialog isOpen onClose={() => undefined} hasDocuments={false} fonts={fonts} />,
+      );
+    });
+  }
+
+  function clearButton(): HTMLButtonElement {
+    const found = [...(topDialog()?.querySelectorAll('button') ?? [])].find(
+      (element) => element.textContent === t('prefs.clearAll.open'),
+    );
+    if (found === undefined) throw new Error('no Clear all button');
+    return found;
+  }
+
+  it('shows the Fonts section between Redaction and Shortcuts', () => {
+    renderWithFonts(fakeFontLibrary());
+    const text = topDialog()?.textContent ?? '';
+    const at = (phrase: string) => text.indexOf(phrase);
+    expect(at(t('fonts.section'))).toBeGreaterThan(at(t('prefs.section.redaction')));
+    expect(at(t('prefs.section.shortcuts'))).toBeGreaterThan(at(t('fonts.section')));
+  });
+
+  it('turns Clear all off while a font operation runs, and back on after', () => {
+    const fonts = fakeFontLibrary();
+    renderWithFonts(fonts);
+    expect(clearButton().disabled).toBe(false);
+    act(() => {
+      fonts.set({ busy: true });
+    });
+    expect(clearButton().disabled).toBe(true);
+    act(() => {
+      fonts.set({ busy: false });
+    });
+    expect(clearButton().disabled).toBe(false);
   });
 });
 
