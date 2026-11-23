@@ -34,7 +34,7 @@ export const DEADLINE_MS = {
   'edit': 10000,
   'instant': 3000,
   'io': 15000,
-  'network': 20000,
+  'network': 35000,
   'render': 5000,
   'slice': 5000,
 } as const;

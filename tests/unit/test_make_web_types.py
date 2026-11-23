@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import make_web_types  # noqa: E402
 
-from pdfeditor.webapi import METHODS, Method, dto  # noqa: E402
+from pdfeditor.webapi import METHODS, Method, dto, translate  # noqa: E402
 from pdfeditor.webapi.errors import ALL_CODES  # noqa: E402
 
 
@@ -75,11 +75,18 @@ def test_deadline_classes_are_the_w12_section10_values() -> None:
         "edit": 10_000,
         "instant": 3_000,
         "io": 15_000,
-        "network": 20_000,
+        "network": 35_000,
         "render": 5_000,
         "slice": 5_000,
     }
     assert set(make_web_types.DEADLINE_CLASS) == set(METHODS)
+
+
+def test_the_network_deadline_outlasts_the_translation_call_cap() -> None:
+    # The client rejects a call at its class deadline. A translation may run for the whole 30 s
+    # cap in Python, so the client must wait longer than that or it shows "not responding" first.
+    network_ms = make_web_types.DEADLINE_MS[make_web_types.DEADLINE_CLASS["translation.translate"]]
+    assert network_ms > translate.DEADLINE_SECONDS * 1000
 
 
 def test_error_code_union_is_every_code_sorted() -> None:

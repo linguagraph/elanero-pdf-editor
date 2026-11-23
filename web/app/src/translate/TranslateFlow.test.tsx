@@ -236,4 +236,27 @@ describe('TranslateBubble contents', () => {
       expect.objectContaining({ name: 'annotations.highlight_text' }),
     );
   });
+
+  it('Escape closes the bubble when focus is on the page, not the bubble', async () => {
+    window.localStorage.setItem(
+      PREFS_STORAGE_KEY,
+      JSON.stringify({
+        translationEnabled: true,
+        translationConsent: {
+          service: 'mymemory',
+          version: NOTICE_VERSION,
+          at: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+    );
+    const { ref } = setup();
+    act(() => ref.current?.translate());
+    await flush();
+    expect(document.querySelector('.translate-bubble')).not.toBeNull();
+    act(() => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flush();
+    expect(document.querySelector('.translate-bubble')).toBeNull();
+  });
 });

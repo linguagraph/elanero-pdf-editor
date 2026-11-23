@@ -46,7 +46,7 @@ DEADLINE_MS: dict[str, int] = {
     "edit": 10_000,
     "instant": 3_000,
     "io": 15_000,
-    "network": 20_000,
+    "network": 35_000,  # the 30 s call cap (translate.DEADLINE_SECONDS) plus 5 s of slack
     "render": 5_000,
     "slice": 5_000,
 }
