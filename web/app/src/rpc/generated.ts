@@ -523,6 +523,7 @@ export interface JobPrepareResult {
   /** a copy of the document, for the job worker; decrypted when the source is */
   document: ArrayBuffer;
   state: DocStateDto | null;
+  baseline: number | null;
 }
 
 export interface LanguageDto {
@@ -1989,13 +1990,14 @@ export function decodeJobPrepareResult(
   path: string,
 ): JobPrepareResult {
   const o = expectObject(value, path);
-  checkKeys(o, ['token', 'label', 'mutating', 'document', 'state'], path);
+  checkKeys(o, ['token', 'label', 'mutating', 'document', 'state', 'baseline'], path);
   return {
     token: expectString(field(o, 'token', path), `${path}.token`),
     label: expectString(field(o, 'label', path), `${path}.label`),
     mutating: expectBoolean(field(o, 'mutating', path), `${path}.mutating`),
     document: takeBinary(field(o, 'document', path), ctx, `${path}.document`),
     state: orNull(field(o, 'state', path), `${path}.state`, (v1, p1) => decodeDocStateDto(v1, ctx, p1)),
+    baseline: orNull(field(o, 'baseline', path), `${path}.baseline`, (v1, p1) => expectInteger(v1, p1)),
   };
 }
 

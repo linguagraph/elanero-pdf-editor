@@ -718,3 +718,98 @@ def test_extract_is_a_split_into_one_range_that_changes_nothing(
     assert ok(apply(handle, prepared["token"]))["applied"] is False
     assert (session.is_dirty, session.undo_stack.can_undo, session.structure_version) == before
     assert page_total(handle) == 5
+
+
+# -- reduce_size: the baseline is the file the user holds (issue #610) ------------------------
+
+
+def test_a_lossless_run_on_a_compact_copy_compares_with_the_opened_size(
+    web: None, fixture_pdf: Any
+) -> None:
+    """Regression for #610: the baseline is the opened file's size while the document is clean.
+    The re-save of the open copy is larger than the file, so comparing with it offered a copy that
+    was bigger than the one the user holds. Now the run compares with the opened size and offers
+    nothing (the copy is not smaller)."""
+    heavy = fixture_pdf("heavy").read_bytes()
+    first, copy = prepare(open_data(heavy, "heavy.pdf"), "reduce_size", {"preset": "screen"})
+    reply, out = run_job("reduce_size", {"preset": "screen", "before": first["baseline"]}, copy)
+    compact = binary(ok(reply)["files"][0]["data"], out)
+    assert len(compact) < len(heavy)
+
+    handle = open_data(compact, "reduced.pdf")
+    prepared, copy = prepare(handle, "reduce_size", {"preset": "lossless"})
+    assert prepared["baseline"] == len(compact)
+    reply, _ = run_job("reduce_size", {"preset": "lossless", "before": prepared["baseline"]}, copy)
+    value = ok(reply)["value"]
+    assert value["before"] == len(compact)  # the opened file, not a re-save of the copy
+    assert value["after"] >= value["before"]  # so the web offers no download (after < before)
+
+
+def test_a_dirty_document_has_no_baseline(web: None, fixture_pdf: Any) -> None:
+    """A changed document is not the file on disk, so the job falls back to a re-save (the desktop
+    compares with the on-disk file only while the document is clean)."""
+    handle = open_data(fixture_pdf("images").read_bytes(), "images.pdf")
+    prepared, _ = prepare(handle, "reduce_size", {"preset": "screen"})
+    assert prepared["baseline"] == len(fixture_pdf("images").read_bytes())
+    assert ok(apply(handle, prepared["token"]))["applied"] is False
+    assert ok(rotate(handle))["executed"] is True
+    prepared, _ = prepare(handle, "reduce_size", {"preset": "screen"})
+    assert prepared["baseline"] is None
+
+
+def test_a_negative_before_is_invalid_args_in_the_job_worker(web: None, fixture_pdf: Any) -> None:
+    _, copy = prepare(
+        open_data(fixture_pdf("images").read_bytes()), "reduce_size", {"preset": "screen"}
+    )
+    err = error(run_job("reduce_size", {"preset": "screen", "before": -1}, copy)[0])
+    assert err["code"] == INVALID_ARGS
+    assert err["details"]["path"] == "args.before"
+
+
+def test_a_lossless_run_without_a_baseline_falls_back_to_a_resave(
+    web: None, fixture_pdf: Any
+) -> None:
+    """No ``before`` sent (an older client, or a dirty document): the job still compares with a
+    re-save of the copy, so the result carries a positive size to compare with."""
+    _, copy = prepare(
+        open_data(fixture_pdf("images").read_bytes()), "reduce_size", {"preset": "lossless"}
+    )
+    value = ok(run_job("reduce_size", {"preset": "lossless"}, copy)[0])["value"]
+    assert value["before"] > 0
+
+
+def test_a_non_reduce_job_has_no_baseline(web: None, fixture_pdf: Any) -> None:
+    handle = open_data(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    args = {"mode": "ranges", "pages_per_file": 1, "ranges": [[2, 0]], "max_bytes": 0}
+    prepared, _ = prepare(handle, "split", args)
+    assert prepared["baseline"] is None
+
+
+def test_a_save_the_browser_did_not_write_keeps_the_opened_size_as_the_baseline(
+    web: None, fixture_pdf: Any
+) -> None:
+    """Regression for the held size (F2): save_bytes returns bytes the browser may fail to write.
+    Until mark_saved says they were written, the user still holds the opened file, so after an
+    undo back to the clean state the baseline is the opened size, not the unwritten save."""
+    data = fixture_pdf("images").read_bytes()
+    handle = open_data(data, "images.pdf")
+    assert ok(rotate(handle))["executed"] is True
+    reply, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    saved = binary(ok(reply)["data"], out)
+    assert len(saved) != len(data)  # otherwise the test could not tell the two sizes apart
+
+    assert ok(call("actions.undo", {"handle": handle}))  # back to the clean state
+    assert not REGISTRY.get(handle).is_dirty
+    prepared, _ = prepare(handle, "reduce_size", {"preset": "screen"})
+    assert prepared["baseline"] == len(data)
+
+
+def test_mark_saved_makes_the_saved_size_the_baseline(web: None, fixture_pdf: Any) -> None:
+    data = fixture_pdf("images").read_bytes()
+    handle = open_data(data, "images.pdf")
+    assert ok(rotate(handle))["executed"] is True
+    reply, out = call_raw("save.save_bytes", {"handle": handle, "mode": "copy"})
+    saved = binary(ok(reply)["data"], out)
+    assert ok(call("save.mark_saved", {"handle": handle}))["saved"] is True
+    prepared, _ = prepare(handle, "reduce_size", {"preset": "screen"})
+    assert prepared["baseline"] == len(saved)
