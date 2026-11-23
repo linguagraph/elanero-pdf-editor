@@ -26,8 +26,10 @@ function ctrl(chord: string): string {
 }
 
 // The table row for one command. Its button is named by the command, and the row holds its keys.
-function rowFor(dialog: Locator, name: RegExp): Locator {
-  return dialog.locator('tr', { has: dialog.getByRole('button', { name }) });
+// The inner locator is rooted at the page: a `has` locator is queried inside the row, where the
+// dialog itself is not, so a dialog-rooted inner locator matches no row.
+function rowFor(page: Page, dialog: Locator, name: RegExp): Locator {
+  return dialog.locator('tr').filter({ has: page.getByRole('button', { name }) });
 }
 
 // Records one chord in the recorder for the selected command and returns the recorder.
@@ -77,7 +79,9 @@ test('a rebound key runs its command, survives a reload, and Reset all restores 
   const restored = await openShortcutsFromPreferences(page);
   await restored.getByRole('button', { name: 'Reset all…', exact: true }).click();
   await restored.getByRole('button', { name: 'Reset all', exact: true }).click();
-  await expect(rowFor(restored, /^Open…$/).getByText('Default', { exact: true })).toBeVisible();
+  await expect(
+    rowFor(page, restored, /^Open…$/).getByText('Default', { exact: true }),
+  ).toBeVisible();
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   const defaultChooser = page.waitForEvent('filechooser');
