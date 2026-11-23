@@ -55,6 +55,10 @@ const TOOLTIP_DELAY_MS = 400;
 // Below this width the Search tools box is an icon (desktop SEARCH_BOX_MIN_WIDTH). The window's
 // width stands in for the tab row's, which the ribbon does not measure.
 const SEARCH_BOX_MIN_WIDTH = 1000;
+// Ribbon command icon sizes, the desktop's (ribbon.py ICON_SIZE and COMPACT_ICON_SIZE). The
+// quick-access bar's icons are smaller (desktop 16 px) and are passed in by QuickAccess.
+export const RIBBON_ICON_SIZE = 22;
+export const RIBBON_COMPACT_ICON_SIZE = 18;
 
 // The ribbon's form (W1.6 section 8, W4.3a S2): the window's width sets it, and the user's own
 // compact and collapse choices apply on top (ribbon/form.ts holds the table). A tier-collapsed
@@ -386,6 +390,8 @@ interface CommandButtonProps {
   onRun?: () => void;
   onBlocked?: (reason: string) => void;
   compact: boolean;
+  // The icon's size in px. Defaults to the ribbon's size for the form (full or compact).
+  iconSize?: number;
 }
 
 export function CommandButton({
@@ -396,6 +402,7 @@ export function CommandButton({
   onRun,
   onBlocked,
   compact,
+  iconSize = compact ? RIBBON_COMPACT_ICON_SIZE : RIBBON_ICON_SIZE,
 }: CommandButtonProps) {
   useShortcutBindings();
   const reason = commandDisabledReason(def, state, handlers);
@@ -429,7 +436,7 @@ export function CommandButton({
   };
   const content = (
     <>
-      {icon === undefined ? null : <Icon name={icon} size={20} />}
+      {icon === undefined ? null : <Icon name={icon} size={iconSize} />}
       {iconOnly ? null : <span className="ribbon-command-label">{label}</span>}
     </>
   );
