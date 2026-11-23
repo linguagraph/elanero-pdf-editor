@@ -100,6 +100,24 @@ describe('Ribbon', () => {
     expect(host.querySelector('[role="tablist"]')?.textContent).toContain(t(TAB_LABELS.home));
   });
 
+  it('draws the command icons at the desktop size: 22 px full, 18 px compact', () => {
+    // The medium tier forces the compact form, so the window must be wide enough for the full one.
+    const realWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    try {
+      render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+      expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('full');
+      expect(button('save').querySelector('svg')?.getAttribute('width')).toBe('22');
+      render(
+        <Ribbon registry={REGISTRY} state={{ ...withDoc, ribbonCompact: true }} handlers={{}} />,
+      );
+      expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('compact');
+      expect(button('save').querySelector('svg')?.getAttribute('width')).toBe('18');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+    }
+  });
+
   it('moves focus between tabs with the arrow keys', () => {
     render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
     const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];

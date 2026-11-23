@@ -8,6 +8,9 @@ import { useViewportWidth } from '../layout/useViewportWidth';
 import { CommandButton } from './Ribbon';
 import './ribbon.css';
 
+// The desktop's quick-access icons are 16 px (the ribbon's are 22, or 18 when compact).
+const QUICK_ACCESS_ICON_SIZE = 16;
+
 export interface QuickAccessProps {
   registry: Registry;
   state: CommandState;
@@ -34,6 +37,7 @@ export function QuickAccess({ registry, state, handlers }: QuickAccessProps) {
           state={state}
           handlers={handlers}
           compact
+          iconSize={QUICK_ACCESS_ICON_SIZE}
         />
       ))}
     </Toolbar>
