@@ -24,6 +24,8 @@ export type CombineOutcome =
   | { readonly status: 'done'; readonly name: string; readonly bytes: ArrayBuffer }
   | { readonly status: 'refused'; readonly message: string }
   | { readonly status: 'rangeError'; readonly problem: RangeProblem }
+  // The job found the source at this index encrypted (it was not, or not as far as the probe knew).
+  | { readonly status: 'lockedRow'; readonly index: number }
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly error: RpcError };
 
@@ -33,6 +35,8 @@ export interface CombineDeps {
   readonly startWorker: () => WorkerClient;
   // The rows' page counts, from the probe. A counted row's Pages text is checked in full mode.
   readonly probes?: ReadonlyMap<number, ProbeState>;
+  // The unprotected copies of the rows the user unlocked, by row id. Sent in place of the file.
+  readonly unlocked?: ReadonlyMap<number, ArrayBuffer>;
 }
 
 const NO_PROBES: ReadonlyMap<number, ProbeState> = new Map();
@@ -103,6 +107,15 @@ export function rangeProblems(
 
 const RANGE_KINDS: readonly string[] = ['invalid', 'out_of_range', 'empty'];
 const SOURCE_RANGE_PATH = /^args\.sources\[(\d+)\]\.ranges$/;
+const SOURCE_PATH = /^args\.sources\[(\d+)\]$/;
+
+// The index of the source the job refused as encrypted, or null for any other error.
+function lockedRowOf(error: RpcError): number | null {
+  const details = error.details;
+  if (error.code !== 'REFUSED' || details.reason !== 'encrypted_source') return null;
+  const match = typeof details.path === 'string' ? SOURCE_PATH.exec(details.path) : null;
+  return match?.[1] === undefined ? null : Number(match[1]);
+}
 
 // The job's page_range refusal as a row problem, or null when the error is anything else.
 function rangeProblemOf(error: RpcError): RangeProblem | null {
@@ -147,7 +160,9 @@ export async function runCombine(
   try {
     const sources = await Promise.all(
       items.map(async (item) => {
-        const data = await item.file.arrayBuffer();
+        // An unlocked row sends its copy: a slice, since the job's transfer detaches the buffer.
+        const copy = deps.unlocked?.get(item.id);
+        const data = copy === undefined ? await item.file.arrayBuffer() : copy.slice(0);
         const typed = isImageSourceName(item.name) || item.pages.trim() === '' ? null : item.pages;
         return typed === null
           ? { name: item.name, data }
@@ -166,6 +181,11 @@ export async function runCombine(
     if (problem !== null) {
       deps.store.finish(token, { ok: false, error: rpcError, quiet: true });
       return { status: 'rangeError', problem };
+    }
+    const lockedIndex = lockedRowOf(rpcError);
+    if (lockedIndex !== null) {
+      deps.store.finish(token, { ok: false, error: rpcError, quiet: true });
+      return { status: 'lockedRow', index: lockedIndex };
     }
     deps.store.finish(token, { ok: false, error: rpcError });
     return { status: 'failed', error: rpcError };

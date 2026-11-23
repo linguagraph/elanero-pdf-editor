@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProbeState } from './probe';
+import { lockedState, type ProbeState } from './probe';
 import { mergePreview } from './preview';
 import type { SourceItem } from './sources';
 
@@ -74,7 +74,7 @@ describe('mergePreview', () => {
   it('a locked or unreadable PDF is not counted until it is', () => {
     const items = [row(1, 'a.pdf'), row(2, 'b.pdf')];
     const probes = new Map<number, ProbeState>([
-      [1, { kind: 'locked' }],
+      [1, lockedState()],
       [2, { kind: 'unreadable' }],
     ]);
     const preview = mergePreview(items, probes);

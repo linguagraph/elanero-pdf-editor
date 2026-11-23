@@ -24,6 +24,8 @@ site, and your documents are not uploaded to any server.
   The password is kept only in the memory of the app's engine while that document is open, so the
   app can reopen it to save. It is never written to browser storage, never put in an autosave copy,
   and never sent anywhere. A password-protected document is never autosaved.
+  Combine uses the password of a protected file once, in the engine, to make an unprotected copy of
+  that file. The copy is held in the tab's memory until the Combine dialog closes, and is never saved.
 - **Preferences and recent items** are stored in the browser's `localStorage`, under keys that start
   with `elanero.`:
   - `elanero.theme`: your colour theme (system, light or dark), one word.

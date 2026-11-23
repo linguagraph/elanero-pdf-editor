@@ -778,8 +778,21 @@ export const EN = {
   'combine.row.unchecked.large': 'Large file: pages are counted when you combine.',
   'combine.row.unchecked.engine': 'Pages are counted when you combine.',
   'combine.row.unreadable': "This file can't be read. Remove it to combine.",
-  'combine.row.locked':
-    'This file is password protected, so it cannot be combined yet. Remove it to combine.',
+  'combine.password.label': 'Password',
+  'combine.password.labelFor': 'Password of {name}',
+  'combine.password.unlock': 'Unlock',
+  'combine.password.needed':
+    '{name} is protected. Enter its password to use its pages. The password is not saved.',
+  'combine.password.wrong': {
+    one: 'That password is not correct. {count} try left.',
+    other: 'That password is not correct. {count} tries left.',
+  },
+  'combine.password.gaveUp':
+    'Still locked. Remove the file, or add it again to try more passwords.',
+  'combine.password.notChecked': 'The password could not be checked. Try again.',
+  'combine.password.unlocked': 'Unlocked. The combined file has no password.',
+  'combine.password.tooLarge':
+    'This file is protected and too large to unlock in the browser. Remove it to combine.',
   'combine.preview.total': {
     one: 'The combined file will have {count} page.',
     other: 'The combined file will have {count} pages.',
@@ -789,8 +802,8 @@ export const EN = {
     other: 'Pages counted so far: {pages}. {count} files are counted when you combine.',
   },
   'combine.blocked.locked': {
-    one: 'Remove the password-protected file to combine.',
-    other: 'Remove the {count} password-protected files to combine.',
+    one: 'Unlock the password-protected file, or remove it, to combine.',
+    other: 'Unlock the {count} password-protected files, or remove them, to combine.',
   },
   'combine.blocked.unreadable': {
     one: "Remove the file that can't be read to combine.",
@@ -1336,6 +1349,9 @@ export const EN = {
   },
   'extract.fonts.more': 'and {count} more',
   'extract.fonts.failed': 'The fonts could not be extracted. Try again.',
+  'fonts.load.dropped': '{name} can no longer be used as a font and was removed from this browser.',
+  'fonts.load.failed':
+    'Some uploaded fonts could not be loaded. They are still kept; reload the page to try again.',
   'compress.title': 'Reduce file size',
   'compress.intro': 'Saves a smaller copy; the open document is left unchanged.',
   'compress.preset.label': 'Preset',

@@ -4,6 +4,8 @@ import { App } from './App';
 import { createEngineConnection } from './engine/engineConnection';
 import { engineBootOptions, jobWorkerBootOptions } from './engine/bootOptions';
 import { createJobWorkerPool } from './engine/jobPool';
+import { createFontLibrary } from './fonts/fontLibrary';
+import { createFontStore } from './storage/fontStore';
 import { startJobWorker } from './engine/start';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
@@ -21,6 +23,8 @@ function mount(root: HTMLElement): void {
   const engine = createEngineConnection({ boot: engineBootOptions() });
   // One job worker pool per tab (W3.1 slice 2): it starts no worker until App warms it.
   const jobs = createJobWorkerPool({ start: () => startJobWorker(jobWorkerBootOptions()) });
+  // The tab's uploaded fonts (W6.9 slice 3): kept in the browser, sent to each new engine.
+  const fonts = createFontLibrary({ engine, store: createFontStore() });
   // The OS "Open with" launches (W4.6 S1). The consumer is set here, before the first render, so a
   // launch is not held by the browser; App attaches the sink that opens the files.
   const launches = installLaunchInbox(launchQueueOf(window), {
@@ -29,7 +33,13 @@ function mount(root: HTMLElement): void {
   });
   createRoot(root).render(
     <StrictMode>
-      <App engine={engine} jobs={jobs} startPrintWorker={jobs.acquire} launches={launches} />
+      <App
+        engine={engine}
+        fonts={fonts}
+        jobs={jobs}
+        startPrintWorker={jobs.acquire}
+        launches={launches}
+      />
     </StrictMode>,
   );
   // Production only: the dev server's modules must not sit behind a service worker cache.

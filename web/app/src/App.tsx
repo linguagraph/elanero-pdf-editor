@@ -6,6 +6,7 @@ import { type CommandState } from './commands/registry';
 import { t } from './i18n/t';
 import { EngineLoadingScreen } from './feedback/LoadingScreen';
 import type { EngineConnection } from './engine/engineConnection';
+import type { FontLibrary } from './fonts/fontLibrary';
 import type { WorkerClient } from './engine/start';
 import { PrintDialog } from './print/PrintDialog';
 import { PasswordPrompt } from './documents/PasswordPrompt';
@@ -126,6 +127,8 @@ const BASE_COMMAND_STATE: CommandState = {
 export interface AppProps {
   // The engine link (W3.1). App starts it once, after the first paint, and stops it on unmount.
   readonly engine: EngineConnection;
+  // The tab's uploaded fonts (W6.9 slice 3); the font UI (slice 4) reads them. Tests leave it out.
+  readonly fonts?: FontLibrary;
   // Starts the job worker for a print (W6.5). Tests leave it out; printing then reports nothing.
   readonly startPrintWorker?: () => WorkerClient;
   // The job worker pool (W3.1 slice 2). Tests leave it out and get a pool of their own.

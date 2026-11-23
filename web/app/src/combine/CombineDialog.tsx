@@ -13,7 +13,15 @@ import { downloadBytes } from '../files/downloads';
 import { Overlay } from '../layout/Overlay';
 import { parsePageRanges, type PageRangeKind } from '../pages/pageRanges';
 import { mergePreview, type MergePreview, type PreviewRow } from './preview';
-import { ProbeQueue, type ProbeState } from './probe';
+import { PASSWORD_ATTEMPTS } from '../organizer/insertFile';
+import {
+  lockedState,
+  type LockedState,
+  PROBE_MAX_BYTES,
+  ProbeQueue,
+  type ProbeState,
+  unlockOne,
+} from './probe';
 import { rangeProblems, runCombine, type RangeProblem } from './run';
 import {
   ACCEPT,
@@ -65,15 +73,19 @@ function rowNote(state: ProbeState | undefined, placed: PreviewRow | undefined):
       return t('combine.row.counting');
     case 'counted': {
       const pages = tp('combine.row.pages', state.pages);
-      if (placed === undefined || placed.first === null || placed.last === null) return pages;
-      const where =
-        placed.first === placed.last
-          ? t('combine.row.placedOne', { first: placed.first })
-          : t('combine.row.placed', { first: placed.first, last: placed.last });
-      return `${pages}, ${where}`;
+      const text =
+        placed === undefined || placed.first === null || placed.last === null
+          ? pages
+          : `${pages}, ${
+              placed.first === placed.last
+                ? t('combine.row.placedOne', { first: placed.first })
+                : t('combine.row.placed', { first: placed.first, last: placed.last })
+            }`;
+      return state.unlocked === true ? `${text}. ${t('combine.password.unlocked')}` : text;
     }
     case 'locked':
-      return t('combine.row.locked');
+      // A protected row's password box carries its message; only a large one has no box.
+      return state.large ? t('combine.password.tooLarge') : null;
     case 'unreadable':
       return t('combine.row.unreadable');
     case 'unchecked':
@@ -122,6 +134,11 @@ function errorsFor(
   return errors;
 }
 
+// The locked state of a probe state, or null when the row is not locked.
+function lockedOf(state: ProbeState | undefined): LockedState | null {
+  return state?.kind === 'locked' ? state : null;
+}
+
 // The errors with one row's error set, or cleared when error is null. A new map: React state.
 function withError(
   errors: ReadonlyMap<number, RowError>,
@@ -156,6 +173,39 @@ export function CombineDialog({
   const probing = useRef<ProbeQueue | null>(null);
   // The rows that were still counting when the engine changed: the next queue counts them again.
   const countAgain = useRef<readonly SourceItem[]>([]);
+  // The unprotected copies from combine.unlock, by row id. Held only while the dialog is open.
+  const unlocked = useRef(new Map<number, ArrayBuffer>());
+  const unlocking = useRef(new Set<number>());
+  const itemsRef = useRef(items);
+  // Bumped on close and unmount, so an Unlock reply from before is dropped.
+  const epoch = useRef(0);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  });
+
+  // Closing drops every copy: each such row goes back to locked, so Combine asks for the password
+  // again. Unmounting drops them too.
+  useEffect(() => {
+    if (isOpen) return;
+    epoch.current += 1;
+    const ids = [...unlocked.current.keys()];
+    unlocked.current.clear();
+    if (ids.length === 0) return;
+    setProbes((current) => {
+      const next = new Map(current);
+      for (const id of ids) next.set(id, lockedState());
+      return next;
+    });
+  }, [isOpen]);
+
+  useEffect(
+    () => () => {
+      epoch.current += 1;
+      unlocked.current.clear();
+    },
+    [],
+  );
 
   // One queue for the engine. Its replies only set a row's state: ids are never reused, so a reply
   // for a removed row leaves an entry nothing reads. A removed row is forgotten (see removeRow), so
@@ -220,6 +270,7 @@ export function CombineDialog({
     if (removed !== undefined) {
       probing.current?.forget(removed.id);
       countAgain.current = countAgain.current.filter((item) => item.id !== removed.id);
+      unlocked.current.delete(removed.id);
     }
     setItems(removeSource(items, index));
   };
@@ -250,6 +301,41 @@ export function CombineDialog({
     setRowErrors((errors) => withError(errors, id, error));
   };
 
+  // Unlock: the field is read and cleared at once, and one call is made, with no retry. An empty
+  // field, or a press while that call is in flight, does nothing and uses no attempt.
+  const unlockRow = (item: SourceItem, field: HTMLInputElement | undefined): void => {
+    if (field === undefined || engine === undefined) return;
+    const password = field.value;
+    field.value = '';
+    const state = probes.get(item.id);
+    if (password === '' || state?.kind !== 'locked' || unlocking.current.has(item.id)) return;
+    unlocking.current.add(item.id);
+    const started = epoch.current;
+    void unlockOne(engine, item, password).then((outcome) => {
+      unlocking.current.delete(item.id);
+      if (epoch.current !== started || !itemsRef.current.some((row) => row.id === item.id)) return;
+      if (outcome.status === 'unlocked') {
+        unlocked.current.set(item.id, outcome.data);
+        const counted: ProbeState = {
+          kind: 'counted',
+          pages: outcome.pages,
+          encrypted: true,
+          unlocked: true,
+        };
+        setProbes((current) => new Map(current).set(item.id, counted));
+        return;
+      }
+      const next =
+        outcome.status === 'wrong'
+          ? lockedState(state.attempts + 1, 'wrong')
+          : lockedState(state.attempts, 'notChecked');
+      setProbes((current) => new Map(current).set(item.id, next));
+      if (outcome.status === 'wrong' && !next.gaveUp) {
+        focusId.current = item.id;
+      }
+    });
+  };
+
   const combine = async (): Promise<void> => {
     if (phase === 'working') return;
     setMessage(null);
@@ -259,7 +345,12 @@ export function CombineDialog({
       return;
     }
     setPhase('working');
-    const outcome = await runCombine(items, { store, startWorker, probes });
+    const outcome = await runCombine(items, {
+      store,
+      startWorker,
+      probes,
+      unlocked: unlocked.current,
+    });
     if (outcome.status === 'done') {
       setResult({ name: outcome.name, bytes: outcome.bytes });
       setPhase('done');
@@ -267,10 +358,71 @@ export function CombineDialog({
     }
     if (outcome.status === 'rangeError') showProblems([outcome.problem]);
     if (outcome.status === 'refused') setMessage(outcome.message);
+    if (outcome.status === 'lockedRow') {
+      // The job found this file encrypted: its row becomes locked, and a file too large to unlock
+      // here gets no password box.
+      const row = items[outcome.index];
+      if (row !== undefined) {
+        const large = row.file.size > PROBE_MAX_BYTES;
+        unlocked.current.delete(row.id);
+        setProbes((current) => new Map(current).set(row.id, lockedState(0, 'none', large)));
+        setMessage(tp('combine.blocked.locked', 1));
+        if (!large) focusId.current = row.id;
+      }
+    }
     setPhase('editing');
   };
 
   const preview = mergePreview(items, probes);
+
+  // The Password box of a locked row: uncontrolled, outside any form, so the value is never in state
+  // and a browser does not offer to save it. Its message says what happened last.
+  const passwordBox = (item: SourceItem, locked: LockedState) => {
+    const messageId = `combine-password-message-${item.id}`;
+    const message = locked.gaveUp
+      ? t('combine.password.gaveUp')
+      : locked.notice === 'wrong'
+        ? tp('combine.password.wrong', PASSWORD_ATTEMPTS - locked.attempts)
+        : locked.notice === 'notChecked'
+          ? t('combine.password.notChecked')
+          : t('combine.password.needed', { name: item.name });
+    const off = locked.gaveUp || phase === 'working';
+    return (
+      <div className="combine-password">
+        <label className="combine-pages">
+          <span>{t('combine.password.label')}</span>
+          <input
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={1024}
+            disabled={off}
+            aria-label={t('combine.password.labelFor', { name: item.name })}
+            aria-describedby={messageId}
+            ref={(element) => {
+              if (element) fieldRefs.current.set(item.id, element);
+              else fieldRefs.current.delete(item.id);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              unlockRow(item, event.currentTarget);
+            }}
+          />
+        </label>
+        <Button
+          className="combine-button"
+          isDisabled={off}
+          onPress={() => unlockRow(item, fieldRefs.current.get(item.id))}
+        >
+          {t('combine.password.unlock')}
+        </Button>
+        <p id={messageId} className="combine-row-note">
+          {message}
+        </p>
+      </div>
+    );
+  };
 
   // A job that is running keeps the dialog open: its result is shown here, so closing would lose it.
   const requestClose = (): void => {
@@ -311,7 +463,9 @@ export function CombineDialog({
             {items.map((item, index) => {
               const error = rowErrors.get(item.id);
               const errorId = `combine-pages-error-${item.id}`;
-              const note = rowNote(probes.get(item.id), preview.rows[index]);
+              const state = probes.get(item.id);
+              const locked = lockedOf(state);
+              const note = rowNote(state, preview.rows[index]);
               return (
                 <li
                   key={item.id}
@@ -320,6 +474,10 @@ export function CombineDialog({
                   <span className="combine-name">{item.name}</span>
                   {isImageSourceName(item.name) ? (
                     <span className="combine-pages-image">{t('combine.image')}</span>
+                  ) : locked !== null ? (
+                    locked.large ? null : (
+                      passwordBox(item, locked)
+                    )
                   ) : (
                     <label className="combine-pages">
                       <span>{t('combine.pages.label')}</span>
