@@ -23,6 +23,9 @@ on:
           - chromium
           - all
 
+env:
+  # Worker count for the feature suite (a repository variable, default 4).
+  E2E_WORKERS: ${{ vars.E2E_WORKERS || '4' }}
 permissions:
   contents: read
 
