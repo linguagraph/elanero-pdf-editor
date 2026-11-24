@@ -1,11 +1,16 @@
-import { act } from 'react';
+import { act, type SetStateAction } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { createToastStore, type ToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
-import type { CommentPageResult, PageCommentDto, PageThreadDto } from '../rpc/generated';
+import type {
+  CommentDto,
+  CommentPageResult,
+  PageCommentDto,
+  PageThreadDto,
+} from '../rpc/generated';
 import { CSS_PX_PER_POINT } from '../view/zoom';
 import { CommentSelectLayer, type CommentSelectLayerProps } from './CommentSelectLayer';
 import type { CommentRef } from './hitTest';
@@ -64,6 +69,7 @@ describe('CommentSelectLayer', () => {
   let container: HTMLDivElement;
   let root: Root;
   let onSelect: ReturnType<typeof vi.fn<(next: readonly CommentRef[]) => void>>;
+  let onOpenNote: ReturnType<typeof vi.fn<(next: SetStateAction<CommentRef | null>) => void>>;
   // The engine's answers to annotations.transform, and the toasts a move or resize shows.
   let runCall: ReturnType<typeof vi.fn>;
   let toastStore: ToastStore;
@@ -80,6 +86,7 @@ describe('CommentSelectLayer', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     onSelect = vi.fn();
+    onOpenNote = vi.fn();
     runCall = vi.fn(async () => ({
       executed: true,
       changed: { revisions: { '0': 2 } },
@@ -117,6 +124,8 @@ describe('CommentSelectLayer', () => {
         selection={next}
         onSelect={onSelect}
         transformDeps={transformDeps}
+        openNote={null}
+        onOpenNote={onOpenNote}
         {...props}
       />
     );
@@ -434,6 +443,8 @@ describe('CommentSelectLayer', () => {
             scheduler: { noteRevisions: vi.fn() },
             store: toastStore,
           }}
+          openNote={null}
+          onOpenNote={onOpenNote}
         />,
       );
     });
@@ -464,5 +475,101 @@ describe('CommentSelectLayer', () => {
     // The next ask for the page is a new read, not the list the stale comment came from.
     await cache.get(0, 1);
     expect(call.mock.calls.length).toBe(readsBefore + 1);
+  });
+
+  it('a press on a note and release without a move opens its popup, and selects the note', async () => {
+    await render([]);
+    await act(async () => {
+      pageEl().dispatchEvent(pressAt(15, 15));
+    });
+    await act(async () => {
+      pointerOnWindow('pointerup', 15, 15);
+    });
+    expect(onSelect).toHaveBeenLastCalledWith([{ page: 0, name: 'a' }]);
+    expect(onOpenNote).toHaveBeenCalledWith({ page: 0, name: 'a' });
+    expect(runCall).not.toHaveBeenCalled();
+  });
+
+  it('a note dragged on release moves and does not open its popup', async () => {
+    await render([]);
+    await act(async () => {
+      pageEl().dispatchEvent(pressAt(15, 15));
+    });
+    await act(async () => {
+      pointerOnWindow('pointerup', 25, 35);
+    });
+    expect(runCall).toHaveBeenCalledTimes(1);
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it('a locked note opens its popup on a click, and a drag over it sends nothing', async () => {
+    await render([], {}, pageWith({ movable: false, resizable: false, locked: true }));
+    await act(async () => {
+      pageEl().dispatchEvent(pressAt(15, 15));
+    });
+    await act(async () => {
+      pointerOnWindow('pointerup', 15, 15);
+    });
+    expect(onOpenNote).toHaveBeenCalledWith({ page: 0, name: 'a' });
+    await act(async () => {
+      pageEl().dispatchEvent(pressAt(15, 15));
+    });
+    await act(async () => {
+      pointerOnWindow('pointerup', 40, 40);
+    });
+    expect(runCall).not.toHaveBeenCalled();
+  });
+
+  it('a Ctrl-press on a note selects it without opening its popup', async () => {
+    await render([]);
+    await act(async () => {
+      pageEl().dispatchEvent(pressAt(15, 15, { ctrlKey: true }));
+    });
+    await act(async () => {
+      pointerOnWindow('pointerup', 15, 15);
+    });
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it('draws the popup of the open note with its text and replies, and none on another page', async () => {
+    const reply: CommentDto = {
+      page: 0,
+      name: 'r',
+      type: 'Text',
+      author: '',
+      contents: 'Done',
+      subject: '',
+      created: null,
+      modified: null,
+      state: 'None',
+      locked: false,
+      rect: { x0: 10, y0: 10, x1: 30, y1: 30 },
+    };
+    const withReply: CommentPageResult = {
+      revision: 1,
+      threads: [
+        {
+          comment: { ...comment('a', 10, 10), contents: 'Check this', author: 'Ada' },
+          replies: [reply],
+        },
+      ],
+    };
+    await render([], { openNote: { page: 0, name: 'a' } }, withReply);
+    const popup = container.querySelector<HTMLElement>('.comment-note-popup');
+    expect(popup).not.toBeNull();
+    expect(popup?.querySelector('textarea')?.value).toBe('Check this');
+    expect(popup?.textContent).toContain('Done');
+    await render([], { openNote: { page: 1, name: 'a' } }, withReply);
+    expect(container.querySelector('.comment-note-popup')).toBeNull();
+  });
+
+  it('forgets the open note when the page no longer holds it', async () => {
+    await render([], { openNote: { page: 0, name: 'a' } }, PAGE);
+    expect(onOpenNote).not.toHaveBeenCalled();
+    const gone: CommentPageResult = { revision: 1, threads: [thread(comment('b', 100, 300))] };
+    await render([], { openNote: { page: 0, name: 'a' } }, gone);
+    expect(onOpenNote).toHaveBeenCalledTimes(1);
+    const update = onOpenNote.mock.calls[0]?.[0];
+    expect(typeof update === 'function' && update({ page: 0, name: 'a' })).toBeNull();
   });
 });

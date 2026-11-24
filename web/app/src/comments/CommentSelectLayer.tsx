@@ -6,7 +6,7 @@
 // annotations.transform (transform.ts). The press listens in the capture phase on the window, so a
 // press on a comment wins over the text layer under it, and a press elsewhere reaches the text layer
 // unchanged. The layer itself takes no pointer events.
-import { useEffect, useRef, useState } from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { fitMatrix, HANDLE_PX, handleAt, handlePoints, resizeBox } from '../edit/hitTest';
 import { toasts } from '../feedback/toasts';
 import { t } from '../i18n/t';
@@ -19,34 +19,23 @@ import {
   nextCommentSelection,
   pruneCommentSelection,
 } from './hitTest';
+import { NotePopup } from './NotePopup';
 import type { CommentPageCache } from './pageCache';
+import { NOT_PAGE_SELECTOR } from './pageGuard';
 import { isMoveClick, transformComments, type TransformDeps, translation } from './transform';
 import './comments.css';
-
-// What a press or a key on these is not a page press: a control, a field, a menu, a dialog or a
-// popover over the page keeps its own press, so the selection does not change under it.
-const NOT_PAGE_SELECTOR = [
-  '.overlay-backdrop',
-  'input',
-  'textarea',
-  'select',
-  'button',
-  '[role=menu]',
-  '[role=menuitem]',
-  '[role=dialog]',
-  '[role=listbox]',
-  "[class*='popover']",
-  "[class*='menu']",
-].join(', ');
 
 // Keys that belong to a field or a dialog, so Escape there is theirs, not the selection's.
 const KEY_OWNER_SELECTOR =
   'input, textarea, select, [contenteditable], [role=dialog], [role=menu], .comments-panel';
 
+// The gap between a note and its popup, in CSS pixels (the desktop's 12 px offset).
+const NOTE_POPUP_GAP_PX = 12;
+
 // A gesture in progress, in page points. A move carries the comments that move (the movable
 // selected ones on this page); a click without a move then selects only the pressed comment when
-// `collapse` is set (a multi-selection). A resize carries the one comment, its handle and its box
-// at the press.
+// `collapse` is set (a multi-selection), and opens the popup when the press was on a note (`note`).
+// A resize carries the one comment, its handle and its box at the press.
 type Drag =
   | {
       readonly kind: 'move';
@@ -55,6 +44,7 @@ type Drag =
       readonly refs: readonly CommentRef[];
       readonly press: CommentRef;
       readonly collapse: boolean;
+      readonly note: boolean;
     }
   | {
       readonly kind: 'resize';
@@ -75,6 +65,10 @@ export interface CommentSelectLayerProps {
   readonly onSelect: (next: readonly CommentRef[]) => void;
   // The engine and the undo toast a move or a resize uses (annotations.transform).
   readonly transformDeps: TransformDeps;
+  // The note whose popup is open, over the whole document (one popup at a time, as the desktop).
+  // The setter takes an updater, so a popup closing does not clear a popup opened since.
+  readonly openNote: CommentRef | null;
+  readonly onOpenNote: Dispatch<SetStateAction<CommentRef | null>>;
 }
 
 // Whether the named comment of this page is in the selection.
@@ -109,9 +103,14 @@ export function CommentSelectLayer({
   selection,
   onSelect,
   transformDeps,
+  openNote,
+  onOpenNote,
 }: CommentSelectLayerProps) {
   const layerRef = useRef<HTMLDivElement>(null);
   const [reply, setReply] = useState<CommentPageResult | null>(null);
+  // The latest answer, read by an open popup when it closes: a note the page no longer holds is not
+  // saved (its unmount runs after the render that dropped it, so the state is not read there).
+  const latestReply = useRef<CommentPageResult | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   // Ends the gesture in progress (it removes its window listeners); null when there is none.
   const stopDrag = useRef<(() => void) | null>(null);
@@ -127,6 +126,7 @@ export function CommentSelectLayer({
         .get(page, revision)
         .then((next) => {
           if (!active) return;
+          latestReply.current = next;
           setReply(next);
           if (next.revision !== revision && retry) load(false);
         })
@@ -183,8 +183,11 @@ export function CommentSelectLayer({
           const dy = d.end.y - d.start.y;
           if (isMoveClick(dx, dy)) {
             if (d.collapse) onSelect([d.press]);
+            if (d.note) onOpenNote(d.press);
             return;
           }
+          // A locked comment is not moved, so a drag over it sends nothing.
+          if (d.refs.length === 0) return;
           void transformComments(transformDeps, d.refs, translation(dx, dy), false, onStale);
           return;
         }
@@ -263,8 +266,25 @@ export function CommentSelectLayer({
         event.preventDefault();
         event.stopPropagation();
         const ref = { page, name: hit.comment.name };
+        const note = hit.comment.type === 'Text';
         if (additive || !selectedOn(selection, page, ref.name)) {
           onSelect(nextCommentSelection(selection, ref, additive));
+          // A plain press on a note that was not selected is a gesture too: released without a move,
+          // it opens the note's popup; a move moves the note (if it may move).
+          if (!additive) {
+            startDrag(
+              {
+                kind: 'move',
+                start: point,
+                end: point,
+                refs: hit.comment.movable ? [ref] : [],
+                press: ref,
+                collapse: false,
+                note,
+              },
+              layer,
+            );
+          }
           return;
         }
         // A press on a selected comment moves the selected comments of this page that may move. A
@@ -273,26 +293,25 @@ export function CommentSelectLayer({
         if (!hit.comment.movable) {
           (transformDeps.store ?? toasts).push('info', t('comments.locked'));
         }
-        if (hit.comment.movable && movers.length > 0) {
-          startDrag(
-            {
-              kind: 'move',
-              start: point,
-              end: point,
-              refs: movers,
-              press: ref,
-              collapse: selection.length > 1,
-            },
-            layer,
-          );
-        }
+        startDrag(
+          {
+            kind: 'move',
+            start: point,
+            end: point,
+            refs: hit.comment.movable ? movers : [],
+            press: ref,
+            collapse: selection.length > 1,
+            note,
+          },
+          layer,
+        );
         return;
       }
       if (!additive && selection.length > 0) onSelect([]);
     };
     window.addEventListener('pointerdown', onPointerDown, { capture: true });
     return () => window.removeEventListener('pointerdown', onPointerDown, { capture: true });
-  }, [threads, selection, page, zoom, onSelect, transformDeps, cache]);
+  }, [threads, selection, page, zoom, onSelect, onOpenNote, transformDeps, cache]);
 
   // Escape clears the selection, unless a dialog or another handler has taken the key.
   useEffect(() => {
@@ -331,8 +350,48 @@ export function CommentSelectLayer({
   const only = selected.length === 1 ? selected[0] : undefined;
   const resizable = only !== undefined && only.resizable ? only : null;
 
+  // The popup of the open note, when it is on this page and the page still holds it. It is keyed by
+  // its note, so a popup for another note is a new one (and the old one saves on its unmount).
+  const popupThread =
+    openNote !== null && openNote.page === page
+      ? ((reply?.threads ?? []).find((th) => th.comment.name === openNote.name) ?? null)
+      : null;
+  const closePopup = (name: string) =>
+    onOpenNote((cur) => (cur !== null && cur.page === page && cur.name === name ? null : cur));
+
+  // The open note is forgotten when the page is drawn without it (deleted, or moved off), so a later
+  // Select tool does not bring the popup back. The page's answer is checked at its own revision.
+  useEffect(() => {
+    if (openNote === null || openNote.page !== page || threads === null) return;
+    if (!threads.some((th) => th.comment.name === openNote.name)) closePopup(openNote.name);
+    // closePopup is rebuilt each render; the effect reads only the values below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openNote, page, threads, onOpenNote]);
+  // Leaving the Select tool (or the page's layer going away) forgets this page's open note.
+  useEffect(
+    () => () => onOpenNote((cur) => (cur !== null && cur.page === page ? null : cur)),
+    [page, onOpenNote],
+  );
+
   return (
-    <div className="comment-select-layer" ref={layerRef} role="presentation">
+    <div className="comment-select-layer" ref={layerRef} role="presentation" tabIndex={-1}>
+      {popupThread !== null ? (
+        <NotePopup
+          key={popupThread.comment.name}
+          comment={popupThread.comment}
+          replies={popupThread.replies}
+          deps={transformDeps}
+          left={pointsToCss(popupThread.comment.bounds.x1, zoom) + NOTE_POPUP_GAP_PX}
+          top={pointsToCss(popupThread.comment.bounds.y0, zoom)}
+          onClose={() => closePopup(popupThread.comment.name)}
+          stillOnPage={() =>
+            (latestReply.current?.threads ?? []).some(
+              (th) => th.comment.name === popupThread.comment.name,
+            )
+          }
+          returnFocusTo={layerRef}
+        />
+      ) : null}
       {selected.map((c) => (
         <div key={c.name} className="comment-select-outline" style={cssBox(shown(c), zoom)} />
       ))}

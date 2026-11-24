@@ -2,7 +2,7 @@ import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
-import type { Methods } from '../rpc/generated';
+import type { CommentPageResult, Methods } from '../rpc/generated';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
 import { DocumentView, type DocumentViewHandle } from './DocumentView';
 import { computeColumn, computeSpreads, scrollTopForPage } from './layout';
@@ -15,7 +15,7 @@ type Pending = {
 };
 
 // A fake engine: session.pages answers at once; each render.page waits until the test answers it.
-function fakeRpc(pageCount: number, labels: readonly string[] = []) {
+function fakeRpc(pageCount: number, labels: readonly string[] = [], comments?: CommentPageResult) {
   const renders: Pending[] = [];
   const rpc = {
     call: vi.fn((method: string, params: unknown) => {
@@ -27,6 +27,7 @@ function fakeRpc(pageCount: number, labels: readonly string[] = []) {
         }));
         return Promise.resolve({ pages, labels: [...labels] });
       }
+      if (method === 'comments.page' && comments !== undefined) return Promise.resolve(comments);
       // The text layers (W5.4), the redaction list (W7.4b), the page links (W5.3) and the page's
       // comments (W7.1a) are asked for but never answered here: they are not renders.
       if (
@@ -641,5 +642,74 @@ describe('DocumentView handle: layout, night and the reported view state (W4.3a 
     await flush();
     expect(onViewChange).toHaveBeenLastCalledWith(expect.objectContaining({ night: true }));
     expect(readPreferences().nightReading).toBe(true);
+  });
+});
+
+describe('DocumentView note popup (W7.1a slice 8)', () => {
+  const bounds = { x0: 10, y0: 10, x1: 30, y1: 30 };
+  const comments: CommentPageResult = {
+    revision: 0,
+    threads: [
+      {
+        comment: {
+          page: 0,
+          name: 'a',
+          type: 'Text',
+          author: 'Ada',
+          contents: 'Check',
+          subject: '',
+          created: null,
+          modified: null,
+          state: 'None',
+          locked: false,
+          rect: bounds,
+          bounds,
+          hidden: false,
+          movable: true,
+          resizable: false,
+        },
+        replies: [],
+      },
+    ],
+  };
+
+  it('does not reopen the note when the tool goes away from Select and back', async () => {
+    const { rpc } = fakeRpc(1, [], comments);
+    const view = (tool: 'select' | 'hand') => <DocumentView rpc={rpc} handle="doc-1" tool={tool} />;
+    act(() => {
+      root.render(view('select'));
+    });
+    await flush();
+    const layer = host.querySelector<HTMLElement>('.comment-select-layer');
+    // jsdom lays nothing out: the layer's box is stubbed to cover the page, as the layer's own tests do.
+    if (layer !== null) layer.getBoundingClientRect = () => new DOMRect(0, 0, 2000, 2000);
+    const scale = parseFloat(host.querySelector<HTMLElement>('.doc-page')?.style.width ?? '') / 612;
+    // A press on the note (page point 15, 15) and its release without a move opens the popup.
+    const clientX = 15 * scale;
+    await act(async () => {
+      layer?.dispatchEvent(
+        new MouseEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          clientY: clientX,
+        }),
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new MouseEvent('pointerup', { bubbles: true, clientX, clientY: clientX }),
+      );
+    });
+    expect(host.querySelector('.comment-note-popup')).not.toBeNull();
+    act(() => {
+      root.render(view('hand'));
+    });
+    await flush();
+    act(() => {
+      root.render(view('select'));
+    });
+    await flush();
+    expect(host.querySelector('.comment-note-popup')).toBeNull();
   });
 });

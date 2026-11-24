@@ -500,6 +500,8 @@ export function DocumentView({
   // The comments the Select tool has selected (W7.1a slice 6), across pages, and the page lists the
   // selection reads (one cache per document, like the object lists).
   const [commentSelection, setCommentSelection] = useState<readonly CommentRef[]>([]);
+  // The note whose popup is open (W7.1a slice 8): one at a time, across pages.
+  const [openNote, setOpenNote] = useState<CommentRef | null>(null);
   // The standard stamp the stamp tool places (W7.3 S6), chosen from the stamp menu.
   const [stampName, setStampName] = useState<StandardStamp>('Approved');
   // The redaction tools (W7.4). The mark tool and a comment tool are not on together.
@@ -565,6 +567,7 @@ export function DocumentView({
     if (tool !== 'select') setCommentTool(null);
     if (tool !== 'edit') setEditSelection(null);
     if (tool !== 'select') setCommentSelection([]);
+    if (tool !== 'select') setOpenNote(null);
     // An existing block is typed in under the Edit tool, a new block under Add Text (W6.8a 8a-2);
     // leaving the tool that owns the open editor ends it, and the editor commits what was typed.
     const owned = textEdit?.newRect !== undefined ? 'add-text' : 'edit';
@@ -703,6 +706,7 @@ export function DocumentView({
     const refs = commentSelection;
     if (refs.length === 0) return;
     setCommentSelection([]);
+    setOpenNote(null);
     void deleteRefs({ rpc, handle, scheduler }, refs);
   }, [commentSelection, rpc, handle, scheduler]);
   // Delete and Backspace delete the Edit tool's selection; Delete alone deletes the selected comments
@@ -1693,6 +1697,8 @@ export function DocumentView({
                         selection={commentSelection}
                         onSelect={setCommentSelection}
                         transformDeps={commentDeps}
+                        openNote={openNote}
+                        onOpenNote={setOpenNote}
                       />
                     ) : null}
                     {commentTool !== null && sizes !== null ? (

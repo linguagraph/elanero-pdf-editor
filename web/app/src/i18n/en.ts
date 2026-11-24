@@ -1072,6 +1072,8 @@ export const EN = {
   'comments.export': 'Export…',
   'comments.export.label': 'Export comments',
   'comments.stale': 'This comment no longer exists. The list has been updated.',
+  'comments.popup.close': 'Close',
+  'comments.popup.unknownAuthor': 'Unknown',
   'comment.status.None': 'No status',
   'comment.status.Accepted': 'Accepted',
   'comment.status.Rejected': 'Rejected',
