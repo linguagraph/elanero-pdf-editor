@@ -2,7 +2,7 @@
 // with the dates, application and producer read-only) and Advanced (the file facts, PDF version
 // included), and Fonts (read with session.fonts when the tab is first shown). The values come from
 // session.info when the dialog opens; Apply runs one document.set_metadata with the changed fields
-// (apply.ts). The Security tab follows.
+// (apply.ts). The Security tab (session.security, read-only) reads when it is first shown.
 import { useEffect, useRef, useState } from 'react';
 import { Button, Tab, TabList, TabPanel, Tabs } from 'react-aria-components';
 import type { PageRpc } from '../engine/engineConnection';
@@ -23,6 +23,8 @@ import {
   MAX_FIELD_LENGTH,
   overLongFields,
 } from './metadata';
+import { SecurityPanel, type SecurityTabState } from './SecurityPanel';
+import { loadSecurity } from '../security/security';
 import './properties.css';
 
 export interface PropertiesDialogProps {
@@ -53,6 +55,9 @@ export function PropertiesDialog({
   );
 }
 
+const PROPERTIES_TABS = ['description', 'advanced', 'fonts', 'security'] as const;
+type PropertiesTab = (typeof PROPERTIES_TABS)[number];
+
 interface BodyProps {
   rpc: PageRpc;
   handle: string;
@@ -68,8 +73,9 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<'description' | 'advanced' | 'fonts'>('description');
+  const [tab, setTab] = useState<PropertiesTab>('description');
   const [fonts, setFonts] = useState<FontsState>({ kind: 'idle' });
+  const [security, setSecurity] = useState<SecurityTabState>({ kind: 'idle' });
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -99,6 +105,16 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
     setFonts({ kind: 'loading' });
     void loadFonts(rpc, handle, store).then((next) => {
       if (mounted.current) setFonts(next);
+    });
+  };
+
+  // session.security is read once, when the Security tab is first shown. It has no retry: a
+  // failure is shown inline and reported as a toast.
+  const loadSecurityTab = (): void => {
+    setSecurity({ kind: 'loading' });
+    void loadSecurity({ rpc, handle, store }).then((next) => {
+      if (!mounted.current) return;
+      setSecurity(next === undefined ? { kind: 'failed' } : { kind: 'ready', state: next });
     });
   };
 
@@ -145,9 +161,10 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
         className="properties-tabs"
         selectedKey={tab}
         onSelectionChange={(key) => {
-          const next = key === 'advanced' || key === 'fonts' ? key : 'description';
+          const next = PROPERTIES_TABS.find((candidate) => candidate === key) ?? 'description';
           setTab(next);
           if (next === 'fonts' && fonts.kind === 'idle') loadFontsTab();
+          if (next === 'security' && security.kind === 'idle') loadSecurityTab();
         }}
       >
         <TabList aria-label={t('properties.tabs.label')} className="properties-tablist">
@@ -162,6 +179,9 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
               ? t('properties.tab.fontsCount', { count: fonts.fonts.length })
               : t('properties.tab.fonts')}
           </Tab>
+          <Tab id="security" className="properties-tab">
+            {t('properties.tab.security')}
+          </Tab>
         </TabList>
         <TabPanel id="description" className="properties-panel">
           <DescriptionPanel info={info} values={values} busy={busy} onField={setField} />
@@ -171,6 +191,9 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
         </TabPanel>
         <TabPanel id="fonts" className="properties-panel">
           <FontsPanel state={fonts} onRetry={loadFontsTab} />
+        </TabPanel>
+        <TabPanel id="security" className="properties-panel">
+          <SecurityPanel state={security} />
         </TabPanel>
       </Tabs>
       {message === null ? null : (

@@ -13,7 +13,8 @@ from tests.hostcheck import record
 PLAIN = sorted(
     p
     for p in FIXTURES.glob("*.pdf")
-    if p.stem not in {"encrypted", "broken_xref", "damaged_pubsec_filter"}
+    if p.stem
+    not in {"encrypted", "encrypted_long_password", "broken_xref", "damaged_pubsec_filter"}
 )
 
 
