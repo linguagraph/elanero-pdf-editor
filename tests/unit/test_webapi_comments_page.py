@@ -12,11 +12,19 @@ from typing import Any
 import pytest
 
 from pdfeditor.webapi.errors import INVALID_ARGS, NO_DOCUMENT
-from tests.unit.test_webapi_comments_list import THREADED, listed, web  # noqa: F401
+from tests.unit.test_webapi_comments_list import (
+    NOTE_A,
+    NOTE_B,
+    NOTE_C,
+    THREADED,
+    listed,
+    web,  # noqa: F401
+)
 from tests.unit.test_webapi_jobs import call, error, ok, open_data
 
 # comments_flags (scripts/make_fixtures.py): page 0 has a highlight, a hidden and a locked note.
 FLAGS = "comments_flags"
+OVERLAP = "comments_overlap"
 
 
 def page_of(handle: str, page: int) -> dict[str, Any]:
@@ -24,18 +32,21 @@ def page_of(handle: str, page: int) -> dict[str, Any]:
     return result
 
 
-def test_each_page_lists_the_panel_threads_of_that_page(web: None, fixture_pdf: Any) -> None:  # noqa: F811
+def test_each_page_lists_its_threads_topmost_first_with_the_panel_replies(
+    web: None,  # noqa: F811
+    fixture_pdf: Any,
+) -> None:
+    # Page 0 draws note-a then note-b, so note-b (drawn last, and above) comes first. The panel
+    # lists the same threads top to bottom; the replies are the panel's.
     handle = open_data(fixture_pdf(THREADED).read_bytes(), "threaded.pdf")
-    panel = listed(handle)["threads"]
-    for page in (0, 1):
+    panel = {t["comment"]["name"]: t for t in listed(handle)["threads"]}
+    expected = {0: [NOTE_B, NOTE_A], 1: [NOTE_C]}
+    for page, names_in_order in expected.items():
         result = page_of(handle, page)
-        expected = [t for t in panel if t["comment"]["page"] == page]
-        assert [t["comment"]["name"] for t in result["threads"]] == [
-            t["comment"]["name"] for t in expected
-        ]
-        for got, want in zip(result["threads"], expected, strict=True):
-            assert got["replies"] == want["replies"]
-            assert isinstance(result["revision"], int)
+        assert [t["comment"]["name"] for t in result["threads"]] == names_in_order
+        assert isinstance(result["revision"], int)
+        for thread in result["threads"]:
+            assert thread["replies"] == panel[thread["comment"]["name"]]["replies"]
 
 
 def test_notes_have_tight_bounds_and_the_select_rules(web: None, fixture_pdf: Any) -> None:  # noqa: F811
@@ -90,3 +101,14 @@ def test_a_page_out_of_range_is_invalid_args(web: None, fixture_pdf: Any) -> Non
 
 def test_an_unknown_handle_is_no_document(web: None) -> None:  # noqa: F811
     assert error(call("comments.page", {"handle": "nope", "page": 0}))["code"] == NO_DOCUMENT
+
+
+def test_overlapping_comments_list_the_later_drawn_one_first(
+    web: None,  # noqa: F811
+    fixture_pdf: Any,
+) -> None:
+    # comments_overlap: over-note comes after under-note in /Annots, so it is drawn on top and
+    # must come first, whatever their positions (the panel's top-to-bottom order is not used).
+    handle = open_data(fixture_pdf(OVERLAP).read_bytes(), "overlap.pdf")
+    threads = page_of(handle, 0)["threads"]
+    assert [t["comment"]["name"] for t in threads] == ["over-note", "under-note"]

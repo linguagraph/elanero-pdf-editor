@@ -1507,6 +1507,40 @@ def comments_threaded() -> None:
         pdf.save(path)
 
 
+def comments_overlap() -> None:
+    """Two overlapping notes for comments.page's z order (W7.1a follow-up). Page 1: over-note is
+    later in /Annots, so it is drawn on top of under-note and is the one a click hits, though it
+    sits lower on the page, so a top-to-bottom order would put it last."""
+    import pikepdf
+
+    path = OUT / "comments_overlap.pdf"
+    doc = pymupdf.open()
+    doc.new_page(width=A4.width, height=A4.height).insert_text((72, 300), "Overlap.", fontsize=12)
+    _save(doc, "comments_overlap.pdf")
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        stamp = pikepdf.String("D:20260101100000Z")
+
+        def note(rect: list[int], name: str) -> pikepdf.Object:
+            return pdf.make_indirect(
+                pikepdf.Dictionary(
+                    Type=pikepdf.Name.Annot,
+                    Subtype=pikepdf.Name.Text,
+                    Rect=rect,
+                    F=4,
+                    NM=pikepdf.String(name),
+                    T=pikepdf.String("Ada"),
+                    Contents=pikepdf.String(name),
+                    CreationDate=stamp,
+                    M=stamp,
+                )
+            )
+
+        under = note([72, 672, 92, 692], "under-note")
+        over = note([80, 660, 100, 680], "over-note")  # lower on the page than under-note
+        pdf.pages[0].obj.Annots = pikepdf.Array([under, over])
+        pdf.save(path)
+
+
 def comments_flags() -> None:
     """Comments whose flags the web's comments.page reads (W7.1a slice 2): a highlight whose
     /QuadPoints are smaller than its /Rect (the tight bounds), a hidden note (/F 2), and a locked
@@ -1644,6 +1678,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "comments_flattenable_mixed": comments_flattenable_mixed,
     "comments_threaded": comments_threaded,
     "comments_flags": comments_flags,
+    "comments_overlap": comments_overlap,
     "annotations_form": annotations_form,
     "annotations_signed": annotations_signed,
     "damaged_pubsec_filter": damaged_pubsec_filter,
