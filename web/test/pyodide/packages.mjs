@@ -55,6 +55,26 @@ export function closure(lock, roots) {
   return [...seen].sort();
 }
 
+// The shard side of the staging (run_tests.mjs --shard): checks, without downloading, that dir holds
+// the lockfile copy, the wheel and every closure file with the lockfile's sha256. Throws otherwise.
+export function verifyStaged(dir, lock, roots, wheelName) {
+  const copy = path.join(dir, "pyodide-lock.json");
+  const original = path.join(pyodideNodeDir(), "pyodide-lock.json");
+  if (!fs.existsSync(copy)) throw new Error(`${copy} is missing: run --stage first`);
+  if (sha256(fs.readFileSync(copy)) !== sha256(fs.readFileSync(original))) {
+    throw new Error(`${copy} differs from ${original}: run --stage again`);
+  }
+  const wheel = path.join(dir, wheelName);
+  if (!fs.existsSync(wheel)) throw new Error(`${wheel} is missing: run --stage first`);
+  for (const name of closure(lock, roots)) {
+    const pkg = lock.packages[name];
+    const file = path.join(dir, pkg.file_name);
+    if (!fs.existsSync(file) || sha256(fs.readFileSync(file)) !== pkg.sha256) {
+      throw new Error(`${name} (${pkg.file_name}) is not staged as pyodide-lock.json says: run --stage`);
+    }
+  }
+}
+
 // Downloads one package file unless a copy with the lockfile's sha256 is already in dest.
 export async function fetchVerified(name, pkg, dest) {
   if (fs.existsSync(dest) && sha256(fs.readFileSync(dest)) === pkg.sha256) return "cached";
