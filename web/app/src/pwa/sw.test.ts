@@ -240,4 +240,25 @@ describe('service worker fetch handler (W4.6 S2)', () => {
     expect(await w.handle(urlOf('assets/app.js'), { method: 'POST' })).toBeUndefined();
     expect(await w.handle('https://other.test/assets/app.js')).toBeUndefined();
   });
+
+  it('sends an unlisted same-origin GET to the network and leaves every cache unchanged', async () => {
+    // A document the user opens is never listed, so it must come from the network and never be
+    // written into a cache (W8.6 F15). The check compares every cache's keys before and after.
+    const path = 'documents/contract.pdf';
+    const network = {
+      ...CONTENT,
+      [path]: { body: new Uint8Array([37, 80, 68, 70]), type: 'application/pdf' },
+    };
+    const w = world({ network });
+    await w.install();
+    const keysOf = (): Record<string, string[]> =>
+      Object.fromEntries(
+        [...w.caches.entries()].map(([name, cache]) => [name, [...cache.entries.keys()].sort()]),
+      );
+    const before = keysOf();
+    const response = await w.handle(urlOf(path));
+    expect(response?.status).toBe(200);
+    expect(w.log.some((entry) => entry.endsWith(path))).toBe(true);
+    expect(keysOf()).toEqual(before);
+  });
 });
