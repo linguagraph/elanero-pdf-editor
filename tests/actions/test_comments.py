@@ -277,6 +277,35 @@ def test_transform_move(open_copy: Opener) -> None:
     assert_rect(find(s, "fitz-A3").rect, before.rect, slack(before))
 
 
+def test_transform_nudges_with_one_merge_key_are_one_undo_step(open_copy: Opener) -> None:
+    """Held arrow keys send one transform per press under one key: undo takes them all back."""
+    s = open_copy("annotations")
+    before = find(s, "fitz-A3").rect
+    for _ in range(3):
+        comments.transform(
+            s,
+            TransformAnnotations(
+                (ref("fitz-A3"),), Matrix.translate(1, 0), False, "nudge:0:fitz-A3"
+            ),
+        )
+    assert_rect(find(s, "fitz-A3").rect, before.translated(3, 0), slack(find(s, "fitz-A3")))
+    assert s.undo()
+    assert_rect(find(s, "fitz-A3").rect, before, slack(find(s, "fitz-A3")))
+
+
+def test_transform_of_a_missing_comment_changes_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = state(s)
+    with pytest.raises(StaleObject):
+        comments.transform(
+            s,
+            TransformAnnotations(
+                (ref("fitz-A3"), ref("no-such-comment")), Matrix.translate(5, 5), False
+            ),
+        )
+    assert_same(state(s), before)
+
+
 def test_transform_highlight_and_ink_undo_is_exact(open_copy: Opener) -> None:
     s = open_copy("annotations")
     before = state(s)

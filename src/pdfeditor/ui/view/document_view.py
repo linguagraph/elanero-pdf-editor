@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from pdfeditor.actions import comments, edit_geometry
-from pdfeditor.actions.edit_geometry import OBJECT_TOL_PX
+from pdfeditor.actions.edit_geometry import OBJECT_TOL_PX, annotation_bounds
 from pdfeditor.core.commands import ChangeKind
 from pdfeditor.core.layout import (
     PAGE_GAP,
@@ -59,7 +59,7 @@ from pdfeditor.core.layout import (
 )
 from pdfeditor.core.render_cache import THUMBNAIL_TILE, TileKey
 from pdfeditor.core.session import DocumentSession, EventKind, SessionEvent
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef
+from pdfeditor.model.annotations import AnnotationModel, AnnotRef
 from pdfeditor.model.geometry import Point, Rect
 from pdfeditor.model.objects import PageObject
 from pdfeditor.model.outline import Link, LinkKind
@@ -1269,20 +1269,6 @@ class DocumentView(QGraphicsView):
         for item in self._items:
             item.update()
         self.content_changed.emit()
-
-
-def annotation_bounds(a: AnnotationModel) -> Rect:
-    """Tight bounds of an annotation's geometry (its /Rect can include line-ending margins)."""
-    points: list[Point] = []
-    if a.type.is_markup:
-        points = [p for q in a.quads for p in (q.ul, q.ur, q.ll, q.lr)]
-    elif a.type is AnnotationType.INK:
-        points = [p for stroke in a.ink for p in stroke]
-    elif a.type in (AnnotationType.LINE, AnnotationType.POLYGON, AnnotationType.POLYLINE):
-        points = list(a.vertices)
-    if points:
-        return Rect.from_points(points)
-    return a.rect.normalized()
 
 
 def annotation_tip_text(annot: AnnotationModel, page_annots: list[AnnotationModel]) -> str:

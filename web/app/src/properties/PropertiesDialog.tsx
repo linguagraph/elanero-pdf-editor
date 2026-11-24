@@ -1,8 +1,9 @@
 // The document properties dialog (W7.6): Description (title, author, subject and keywords to edit,
 // with the dates, application and producer read-only) and Advanced (the file facts, PDF version
-// included). The values come from session.info when the dialog opens; Apply runs one
-// document.set_metadata with the changed fields (apply.ts). Fonts and Security tabs follow.
-import { useEffect, useState } from 'react';
+// included), and Fonts (read with session.fonts when the tab is first shown). The values come from
+// session.info when the dialog opens; Apply runs one document.set_metadata with the changed fields
+// (apply.ts). The Security tab follows.
+import { useEffect, useRef, useState } from 'react';
 import { Button, Tab, TabList, TabPanel, Tabs } from 'react-aria-components';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
@@ -13,6 +14,8 @@ import { AdvancedPanel } from './AdvancedPanel';
 import { applyProperties, loadProperties } from './apply';
 import { DescriptionPanel } from './DescriptionPanel';
 import { FIELD_LABEL } from './facts';
+import { FontsPanel } from './FontsPanel';
+import { type FontsState, loadFonts } from './fonts';
 import {
   type EditableField,
   type EditableValues,
@@ -65,7 +68,16 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<'description' | 'advanced'>('description');
+  const [tab, setTab] = useState<'description' | 'advanced' | 'fonts'>('description');
+  const [fonts, setFonts] = useState<FontsState>({ kind: 'idle' });
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -81,6 +93,14 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
       live = false;
     };
   }, [rpc, handle, store]);
+
+  // session.fonts walks every page, so it runs once, when the tab is first shown or retried.
+  const loadFontsTab = (): void => {
+    setFonts({ kind: 'loading' });
+    void loadFonts(rpc, handle, store).then((next) => {
+      if (mounted.current) setFonts(next);
+    });
+  };
 
   const setField = (field: EditableField, value: string): void => {
     setValues((previous) => (previous === null ? previous : { ...previous, [field]: value }));
@@ -124,7 +144,11 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
       <Tabs
         className="properties-tabs"
         selectedKey={tab}
-        onSelectionChange={(key) => setTab(key === 'advanced' ? 'advanced' : 'description')}
+        onSelectionChange={(key) => {
+          const next = key === 'advanced' || key === 'fonts' ? key : 'description';
+          setTab(next);
+          if (next === 'fonts' && fonts.kind === 'idle') loadFontsTab();
+        }}
       >
         <TabList aria-label={t('properties.tabs.label')} className="properties-tablist">
           <Tab id="description" className="properties-tab">
@@ -133,12 +157,20 @@ function PropertiesBody({ rpc, handle, store, onDone }: BodyProps) {
           <Tab id="advanced" className="properties-tab">
             {t('properties.tab.advanced')}
           </Tab>
+          <Tab id="fonts" className="properties-tab">
+            {fonts.kind === 'ready'
+              ? t('properties.tab.fontsCount', { count: fonts.fonts.length })
+              : t('properties.tab.fonts')}
+          </Tab>
         </TabList>
         <TabPanel id="description" className="properties-panel">
           <DescriptionPanel info={info} values={values} busy={busy} onField={setField} />
         </TabPanel>
         <TabPanel id="advanced" className="properties-panel">
           <AdvancedPanel info={info} />
+        </TabPanel>
+        <TabPanel id="fonts" className="properties-panel">
+          <FontsPanel state={fonts} onRetry={loadFontsTab} />
         </TabPanel>
       </Tabs>
       {message === null ? null : (

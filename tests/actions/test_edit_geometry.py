@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 
 from pdfeditor.actions import edit_geometry as eg
-from pdfeditor.model.geometry import Point, Rect
+from pdfeditor.model.annotations import AnnotationModel, AnnotationType
+from pdfeditor.model.geometry import Point, Quad, Rect
 from pdfeditor.model.objects import ObjectType, PageObject
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -172,3 +173,52 @@ def test_vectors_file_matches_the_module() -> None:
     data = json.loads(VECTORS.read_text(encoding="utf-8"))
     assert data["constants"]["HANDLE_PX"] == eg.HANDLE_PX
     assert len(data["resize_box"]) > 0
+
+
+# -- comments: bounds, the Select tool's rules and the hit test (W7.1a slice 2) -------------------
+
+
+def test_comment_at_takes_the_topmost_visible_box() -> None:
+    low = (Rect(0.0, 0.0, 100.0, 50.0), False)
+    hidden = (Rect(20.0, 20.0, 30.0, 30.0), True)
+    top = (Rect(40.0, 40.0, 60.0, 60.0), False)
+    boxes = [low, hidden, top]
+    assert eg.comment_at(boxes, Point(50.0, 50.0), 0.0) == 2
+    assert eg.comment_at(boxes, Point(25.0, 25.0), 0.0) == 0  # the hidden one is skipped
+    assert eg.comment_at(boxes, Point(62.0, 62.0), 0.0) is None
+    assert eg.comment_at(boxes, Point(62.0, 62.0), 3.0) == 2  # the tolerance grows the box
+    assert eg.comment_at([], Point(0.0, 0.0), 5.0) is None
+
+
+def test_annotation_bounds_drops_a_line_ending_margin() -> None:
+    line = AnnotationModel(
+        AnnotationType.LINE,
+        0,
+        Rect(0.0, 0.0, 200.0, 200.0),  # the /Rect includes the arrow's margin
+        vertices=(Point(10.0, 20.0), Point(90.0, 60.0)),
+    )
+    assert eg.annotation_bounds(line) == Rect(10.0, 20.0, 90.0, 60.0)
+
+
+def test_annotation_bounds_of_text_markup_is_its_quads() -> None:
+    markup = AnnotationModel(
+        AnnotationType.HIGHLIGHT,
+        0,
+        Rect(0.0, 0.0, 500.0, 500.0),
+        quads=(Quad.from_rect(Rect(10.0, 10.0, 50.0, 20.0)),),
+    )
+    assert eg.annotation_bounds(markup) == Rect(10.0, 10.0, 50.0, 20.0)
+
+
+def test_select_rules_follow_the_type_and_the_lock() -> None:
+    def comment(kind: AnnotationType, locked: bool = False) -> AnnotationModel:
+        return AnnotationModel(kind, 0, Rect(0.0, 0.0, 20.0, 20.0), locked=locked)
+
+    assert eg.is_movable(comment(AnnotationType.SQUARE))
+    assert not eg.is_movable(comment(AnnotationType.HIGHLIGHT))
+    assert not eg.is_movable(comment(AnnotationType.SQUIGGLY))
+    assert not eg.is_movable(comment(AnnotationType.SQUARE, locked=True))
+    assert eg.is_resizable(comment(AnnotationType.SQUARE))
+    assert not eg.is_resizable(comment(AnnotationType.TEXT))  # a note keeps its icon size
+    assert not eg.is_resizable(comment(AnnotationType.FILE_ATTACHMENT))
+    assert not eg.is_resizable(comment(AnnotationType.SQUARE, locked=True))
