@@ -50,8 +50,8 @@ colours, so the accent shows again only when high contrast is off.
 When Windows is set to reduce animations, the web version turns off its transitions and animations
 in the app frame, the feedback messages and the canvas controls.
 
-The **Reduce motion** switch in **Preferences** is saved with your other settings, but it does not
-yet change the animations: only your system's setting does.
+The **Reduce motion** switch in **Preferences** turns the same animations off, whether or not your
+system's setting is on. Its change shows at once; **Cancel** puts back the saved choice.
 
 ## Touch screens
 

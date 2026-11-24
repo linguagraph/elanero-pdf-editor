@@ -1,0 +1,24 @@
+/* Reduced motion for the whole app (W8.5 S6). Two selectors carry the same four declarations:
+   the system setting (prefers-reduced-motion), and the Reduce motion switch in Preferences
+   (data-reduce-motion on the root element). Dialogs and popovers are portaled, so they are
+   covered by the `*` selectors rather than by the app frame's. The per-file blocks stay, and each
+   also has the attribute selector beside its media query (motion.test.ts checks that). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
