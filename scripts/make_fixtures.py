@@ -77,6 +77,20 @@ def images() -> None:
     _save(doc, "images.pdf")
 
 
+def attachments() -> None:
+    """Two embedded files and no signature: a text note and a one-page PDF (W7.9 A1 adds and
+    removes them; the PDF is what A2 opens as a document)."""
+    inner = pymupdf.open()
+    inner.new_page(width=A4.width, height=A4.height).insert_text((72, 72), "Inner PDF", fontsize=14)
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 60), "Page with attachments", fontsize=16)
+    doc.embfile_add("notes", b"attached notes\n", filename="notes.txt", desc="Attached notes")
+    doc.embfile_add("brief", inner.tobytes(), filename="brief.pdf", desc="A small PDF")
+    inner.close()
+    _save(doc, "attachments.pdf")
+
+
 def several_images() -> None:
     """Three different pictures on two pages: Extract Images takes each once, as a ZIP."""
     doc = pymupdf.open()
@@ -1509,6 +1523,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "text_multipage": text_multipage,
     "images": images,
     "several_images": several_images,
+    "attachments": attachments,
     "vector_art": vector_art,
     "annotations": annotations,
     "annotations_unnamed": annotations_unnamed,

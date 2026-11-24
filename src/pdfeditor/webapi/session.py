@@ -126,6 +126,7 @@ def document_capabilities(params: dto.HandleParams) -> dto.CapabilitiesResult:
         image_formats=formats,
         max_image_bytes=caps.max_image_bytes,
         max_image_pixels=caps.max_image_pixels,
+        max_attachment_bytes=caps.max_attachment_bytes,
     )
     return dto.CapabilitiesResult(engine=engine, platform=platform)
 

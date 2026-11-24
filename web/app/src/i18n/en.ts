@@ -1285,6 +1285,9 @@ export const EN = {
   'error.REFUSED.shapeNoPaint': 'A shape needs an outline or a fill.',
   'error.REFUSED.shapeWidth': "A shape's line width must be above 0 and at most 72 points.",
   'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
+  'error.REFUSED.attachmentEmpty': "This file is empty, so it can't be attached.",
+  'error.REFUSED.attachmentTooLarge': 'This file is too large to attach here (at most 100 MB).',
+  'error.REFUSED.attachmentName': "This file has no usable name, so it can't be attached.",
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',
   'error.BUSY': 'Wait for the current task to finish, then try again.',

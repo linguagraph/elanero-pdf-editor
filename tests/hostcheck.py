@@ -652,6 +652,27 @@ def _embedded_file_name_pikepdf(data: bytes, attachment: str) -> None:
         assert str(pdf.Root.Names.EmbeddedFiles.Names[0]) == attachment
 
 
+@host_check("embedded_bytes_pikepdf")
+def _embedded_bytes_pikepdf(data: bytes, marker: str, present: bool) -> None:
+    """``marker`` is in some stream of the file, after decoding. Embedded files are compressed, so
+    the raw bytes never show a marker; decoding is what makes the check mean anything."""
+    import pikepdf
+
+    needle = marker.encode()
+    found = False
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        for obj in pdf.objects:
+            if not isinstance(obj, pikepdf.Stream):
+                continue
+            try:
+                if needle in obj.read_bytes():
+                    found = True
+                    break
+            except pikepdf.PdfError:
+                continue  # a stream pikepdf cannot decode cannot hold the marker it reads
+    assert found is present
+
+
 @host_check("comments_unnamed_pikepdf")
 def _comments_unnamed_pikepdf(data: bytes) -> None:
     import pikepdf

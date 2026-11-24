@@ -28,6 +28,8 @@ class PlatformCapabilities:
     image_formats: frozenset[str] | None = None
     max_image_bytes: int | None = None
     max_image_pixels: int | None = None
+    # The largest file an attachment may embed, in bytes; None for no cap (W7.9 A1).
+    max_attachment_bytes: int | None = None
 
 
 _current = PlatformCapabilities()
