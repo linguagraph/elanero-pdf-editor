@@ -385,11 +385,17 @@ describe('the custom stamps in the stamp menu', () => {
     openMenu();
     await flush();
     act(() => itemWithText(t('stamp.custom.add'))?.click());
-    await flush();
-    expect(onChoose).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'custom', label: 'Seal' }),
+    // The pick, the save and the choice run as async steps: wait for the choice, not one flush.
+    await vi.waitFor(() =>
+      expect(onChoose).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'custom', label: 'Seal' }),
+      ),
     );
-    expect(toastStore.getState().visible[0]?.text).toBe(t('stamp.custom.added', { name: 'Seal' }));
+    await vi.waitFor(() =>
+      expect(toastStore.getState().visible[0]?.text).toBe(
+        t('stamp.custom.added', { name: 'Seal' }),
+      ),
+    );
     expect((await library.list()).map((stamp) => stamp.label)).toEqual(['Seal']);
   });
 
