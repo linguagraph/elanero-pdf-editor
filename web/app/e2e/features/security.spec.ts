@@ -2,9 +2,12 @@
 // be the one in csp.ts and must bind the workers too: a fetch to an origin outside connect-src is
 // refused from the page, the engine worker and the job worker. Opening and saving a document makes
 // no request to another origin, a link click does not navigate, and the password of a protected file
-// reaches neither the storage nor the console.
+// reaches neither the storage nor the console. A framed copy of the app refuses to start (F10), and
+// a PDF with an OpenAction script runs no script on open (F9, browser half only: the engine half is
+// not in this change).
 import { type BrowserContext, type Worker, expect, test } from '@playwright/test';
 import { CSP_POLICY } from '../../src/csp';
+import { FRAME_REFUSAL_MESSAGE } from '../../src/frame';
 import { STAGED, fixture, openApp, openPdf, pageSize, saveDownload, watchPage } from './support';
 
 // An origin no connect-src lists. A request that gets past the CSP reaches the route set up below.
@@ -68,9 +71,10 @@ test.describe('engine staged', () => {
   });
 
   test('a link annotation does not navigate the page on click', async ({ page, context }) => {
-    // Current behaviour, asserted exactly: PDF link activation is not built (W5.3 is partial, G5),
-    // so a click on a URI link does nothing. The page keeps its URL, no page opens, and no frame
-    // navigates. The link is on page 1 of outline.pdf at (72,130)-(200,150) pt.
+    // W5.3 is built: a web link asks first in the "Open link?" dialog (links.spec.ts covers the
+    // confirm and the refused kinds). This test pins the no-navigation half: the click shows the
+    // dialog and nothing else, so the page keeps its URL, no page opens and no frame navigates.
+    // The link is on page 1 of outline.pdf at (72,130)-(200,150) pt.
     const problems = watchPage(page);
     await openApp(page);
     await openPdf(page, 'outline.pdf', fixture('outline.pdf'));
@@ -85,11 +89,44 @@ test.describe('engine staged', () => {
     await page
       .locator('[data-page="0"]')
       .click({ position: { x: (136 / 595) * size.width, y: (140 / 842) * size.height } });
+    await expect(page.getByRole('dialog', { name: 'Open link?' })).toBeVisible();
     await page.waitForTimeout(500);
 
     expect(page.url()).toBe(before);
     expect(opened, 'pages opened by the click').toEqual([]);
     expect(navigations, 'frame navigations after the click').toEqual([]);
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
+
+  test('a PDF with an OpenAction script runs no script on open', async ({ page, context }) => {
+    // sensitive.pdf and xref_gap.pdf carry /OpenAction JavaScript (make_fixtures.py). The engine
+    // never hands that script to the browser, so opening them shows no dialog (alert, confirm,
+    // prompt), opens no page and logs no error or warning. The rule is observable, not a mechanism.
+    // This is a smoke check: the dialog, new-page and console assertions only fire if the browser
+    // runs the PDF's script, and no such path exists today, so they can pass trivially. The
+    // page.on('console') listener sees only the main page, not messages from the engine worker, and
+    // watchPage has the same limit. The strict console check has not been run yet; the first web-e2e
+    // run on this branch decides whether a benign-message allowlist is needed.
+    const dialogs: string[] = [];
+    page.on('dialog', async (dialog) => {
+      dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+      await dialog.dismiss();
+    });
+    const opened: string[] = [];
+    context.on('page', (created) => opened.push(created.url()));
+    const logged: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error' || message.type() === 'warning') logged.push(message.text());
+    });
+    const problems = watchPage(page);
+    await openApp(page);
+    await openPdf(page, 'sensitive.pdf', fixture('sensitive.pdf'));
+    await openPdf(page, 'xref_gap.pdf', fixture('xref_gap.pdf'));
+    await page.waitForTimeout(500);
+
+    expect(dialogs, 'dialogs raised by a PDF script').toEqual([]);
+    expect(opened, 'pages opened by a PDF script').toEqual([]);
+    expect(logged, 'console errors or warnings after open').toEqual([]);
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
@@ -146,5 +183,24 @@ test.describe('engine staged', () => {
     const leaks = [...stored, ...logged].filter((text) => text === password || word.test(text));
     expect(leaks, 'storage or console text that holds the password').toEqual([]);
     expect(problems, 'CSP or page errors').toEqual([]);
+  });
+});
+
+test.describe('frame refusal', () => {
+  // Clickjacking (main.tsx, frame.ts): a meta CSP cannot set frame-ancestors, so a framed copy of
+  // the app must refuse to start. The host page is served by the route below, on the same origin
+  // as the app, so the frame is same-origin. No engine is needed: the check runs before mount.
+  test('a framed copy of the app shows the refusal and no app content', async ({ page }) => {
+    await page.route('**/frame-host.html', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body><iframe src="/"></iframe></body></html>',
+      }),
+    );
+    await page.goto('/frame-host.html');
+    const frame = page.frameLocator('iframe');
+    await expect(frame.locator('body')).toHaveText(FRAME_REFUSAL_MESSAGE, { timeout: 60_000 });
+    await expect(frame.locator('#root')).toHaveCount(0);
+    await expect(frame.locator('.loading-screen')).toHaveCount(0);
   });
 });
