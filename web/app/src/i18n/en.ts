@@ -1084,12 +1084,18 @@ export const EN = {
   'comment.tool.oval': 'Oval',
   'comment.tool.line': 'Line',
   'comment.tool.arrow': 'Arrow',
+  'comment.tool.callout': 'Callout',
+  'comment.tool.pen': 'Pen',
+  'comment.tool.polygon': 'Polygon',
+  'comment.tool.polyline': 'Polyline',
   'comment.added': 'Comment added.',
   'comment.failed': 'The comment could not be added.',
   'comment.noteText': 'Note text',
   'comment.noteAdd': 'Add note',
   'comment.boxText': 'Text box text',
   'comment.boxAdd': 'Add text box',
+  'comment.calloutText': 'Callout text',
+  'comment.calloutAdd': 'Add callout',
   'comment.cancel': 'Cancel',
 
   // Thumbnails side panel (W5.2). The rail button shows the panel's name.

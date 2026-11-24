@@ -703,6 +703,13 @@ export function App({
           oval: () => viewRef.current?.setCommentTool(commentTool === 'oval' ? null : 'oval'),
           line: () => viewRef.current?.setCommentTool(commentTool === 'line' ? null : 'line'),
           arrow: () => viewRef.current?.setCommentTool(commentTool === 'arrow' ? null : 'arrow'),
+          callout: () =>
+            viewRef.current?.setCommentTool(commentTool === 'callout' ? null : 'callout'),
+          polygon: () =>
+            viewRef.current?.setCommentTool(commentTool === 'polygon' ? null : 'polygon'),
+          polyline: () =>
+            viewRef.current?.setCommentTool(commentTool === 'polyline' ? null : 'polyline'),
+          pen: () => viewRef.current?.setCommentTool(commentTool === 'pen' ? null : 'pen'),
           // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
           redact: () => viewRef.current?.setRedacting(!state.redacting),
           // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.

@@ -297,7 +297,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('text-box', 'command.text-box.label', 'comment.comments'),
     checked: (state) => state.commentTool === 'textbox',
   },
-  cmd('callout', 'command.callout.label', 'comment.comments'),
+  {
+    ...cmd('callout', 'command.callout.label', 'comment.comments'),
+    checked: (state) => state.commentTool === 'callout',
+  },
   cmd('stamp', 'command.stamp.label', 'comment.comments'),
   cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
   {
@@ -316,9 +319,18 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('arrow', 'command.arrow.label', 'comment.drawing'),
     checked: (state) => state.commentTool === 'arrow',
   },
-  cmd('polygon', 'command.polygon.label', 'comment.drawing'),
-  cmd('polyline', 'command.polyline.label', 'comment.drawing'),
-  cmd('pen', 'command.pen.label', 'comment.drawing'),
+  {
+    ...cmd('polygon', 'command.polygon.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'polygon',
+  },
+  {
+    ...cmd('polyline', 'command.polyline.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'polyline',
+  },
+  {
+    ...cmd('pen', 'command.pen.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'pen',
+  },
   cmd('comments-list', 'command.comments-list.label', 'comment.manage'),
   cmd('delete-comment', 'command.delete-comment.label', 'comment.manage'),
   cmd('flatten-all-comments', 'command.flatten-all-comments.label', 'comment.manage'),
