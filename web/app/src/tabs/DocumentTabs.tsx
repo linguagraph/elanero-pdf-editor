@@ -1,4 +1,5 @@
-import { Button, Tab, TabList, Tabs } from 'react-aria-components';
+import { useId } from 'react';
+import { Tab, TabList, TabPanel, Tabs } from 'react-aria-components';
 import { useLayoutRegions } from '../layout/LayoutContext';
 import { t } from '../i18n/t';
 import { DocumentTabMenu } from './DocumentTabMenu';
@@ -12,47 +13,87 @@ export interface DocumentTabsProps {
 }
 
 // The strip of open documents (W1.6 section 3). The tabs are a react-aria TabList, so the arrow
-// keys move between them and Home and End jump to the ends. Each tab has its own close button,
-// named after the document. A dot marks a tab with unsaved changes, and the screen reader text
-// says so too. At the tablet and phone tiers (below 1024 px) the strip becomes a drop-down list.
+// keys move between them and Home and End jump to the ends. Delete closes the focused tab (Ctrl+W
+// closes the active one too). The close mark is pointer-only and hidden from assistive technology:
+// a button inside the tab would be nested interactive content (W8.5 S8). A dot marks a tab with
+// unsaved changes, and the screen reader text says so too. At the tablet and phone tiers (below
+// 1024 px) the strip becomes a drop-down list.
+//
+// react-aria points the selected tab's aria-controls at a tab panel with the tab's key. The strip
+// renders only that one panel, hidden: the document view is not inside the strip, and an
+// aria-controls to a missing element fails axe.
 export function DocumentTabs({ state, onSelect, onClose }: DocumentTabsProps) {
   const { tier } = useLayoutRegions();
+  const hintId = useId();
   if (state.tabs.length === 0) return null;
   if (tier === 'tablet' || tier === 'phone') {
     return <DocumentTabMenu state={state} onSelect={onSelect} onClose={onClose} />;
   }
+  // react-aria does not pass onKeyDown through Tabs or TabList, so Delete is caught on this wrapper,
+  // in the capture phase: react-aria's collection handler may stop the event before it bubbles.
   return (
-    <Tabs
+    <div
       className="doc-tabs"
-      selectedKey={state.activeId === null ? undefined : String(state.activeId)}
-      onSelectionChange={(key) => {
-        onSelect(Number(key));
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Delete') return;
+        // The DOM id of a react-aria tab is not its key, so the tab's place in the strip finds it.
+        const dom = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+        const tab = (event.target as Element).closest('[role="tab"]');
+        const index = tab === null ? -1 : dom.indexOf(tab);
+        const target = state.tabs[index];
+        if (target !== undefined) {
+          event.preventDefault();
+          // Closing removes the focused tab, which would drop focus to the body. The neighbour
+          // (the next tab, or the previous one when the closed tab was last) takes focus first.
+          const neighbour = dom[index + 1] ?? dom[index - 1];
+          if (neighbour instanceof HTMLElement) neighbour.focus();
+          onClose(target.id);
+        }
       }}
     >
-      <TabList aria-label={t('tabs.label')} className="doc-tabs-list">
-        {state.tabs.map((tab) => (
-          <Tab key={tab.id} id={String(tab.id)} className="doc-tab">
-            <span className="doc-tab-name" title={tab.name}>
-              {tab.name}
-            </span>
-            {tab.dirty ? (
-              <span className="doc-tab-dirty">
-                <span aria-hidden="true">•</span>
-                <span className="visually-hidden">{t('tabs.unsaved')}</span>
+      <Tabs
+        selectedKey={state.activeId === null ? undefined : String(state.activeId)}
+        onSelectionChange={(key) => {
+          onSelect(Number(key));
+        }}
+      >
+        <span id={hintId} className="visually-hidden">
+          {t('tabs.closeHint')}
+        </span>
+        <TabList aria-label={t('tabs.label')} className="doc-tabs-list">
+          {state.tabs.map((tab) => (
+            <Tab key={tab.id} id={String(tab.id)} className="doc-tab" aria-describedby={hintId}>
+              <span className="doc-tab-name" title={tab.name}>
+                {tab.name}
               </span>
-            ) : null}
-            <Button
-              className="doc-tab-close"
-              aria-label={t('tabs.close', { name: tab.name })}
-              onPress={() => {
-                onClose(tab.id);
-              }}
-            >
-              <span aria-hidden="true">×</span>
-            </Button>
-          </Tab>
-        ))}
-      </TabList>
-    </Tabs>
+              {tab.dirty ? (
+                <span className="doc-tab-dirty">
+                  <span aria-hidden="true">•</span>
+                  <span className="visually-hidden">{t('tabs.unsaved')}</span>
+                </span>
+              ) : null}
+              <span
+                className="doc-tab-close"
+                aria-hidden="true"
+                title={t('tabs.close', { name: tab.name })}
+                onPointerDown={(event) => {
+                  // The press belongs to the close mark, not the tab: no selection change.
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClose(tab.id);
+                }}
+              >
+                ×
+              </span>
+            </Tab>
+          ))}
+        </TabList>
+        {state.activeId === null ? null : (
+          <TabPanel id={String(state.activeId)} className="doc-tabs-panel" />
+        )}
+      </Tabs>
+    </div>
   );
 }

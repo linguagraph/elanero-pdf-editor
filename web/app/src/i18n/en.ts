@@ -966,6 +966,7 @@ export const EN = {
   'tabs.label': 'Open documents',
   'tabs.close': 'Close {name}',
   'tabs.unsaved': 'Unsaved changes',
+  'tabs.closeHint': 'Press Delete to close',
   // Save (W4.8): the download under the document's name, and what the user does with it.
   'save.untitled': 'Document',
   'save.downloaded': 'Saved {name}. Replace the original with the downloaded file.',

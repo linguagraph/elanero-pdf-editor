@@ -152,6 +152,16 @@ async function until(check: () => boolean): Promise<void> {
   }
 }
 
+// Closes the document tab whose name contains the text: the close mark is pointer-only (W8.5 S8).
+function closeTab(name: string): void {
+  const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) =>
+    el.textContent?.includes(name),
+  );
+  const mark = tab?.querySelector<HTMLElement>('.doc-tab-close');
+  if (mark === undefined || mark === null) throw new Error(`no tab ${name}`);
+  mark.click();
+}
+
 function buttonNamed(text: string): HTMLButtonElement {
   const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent?.trim() === text || button.getAttribute('aria-label') === text,
@@ -383,12 +393,12 @@ describe('start page', () => {
     dropFiles([pdf('first.pdf')]);
     await until(() => tabNames().length === 1);
     act(() => {
-      buttonNamed(t('tabs.close', { name: 'first.pdf' })).click();
+      closeTab('first.pdf');
     });
     dropFiles([pdf('second.pdf')]);
     await until(() => tabNames().length === 1);
     act(() => {
-      buttonNamed(t('tabs.close', { name: 'second.pdf' })).click();
+      closeTab('second.pdf');
     });
     const names = [...host.querySelectorAll<HTMLElement>('.start-recent-name')].map(
       (el) => el.textContent,
@@ -465,14 +475,14 @@ describe('document tabs', () => {
     await until(() => tabNames().length === 2);
     expect(tabNames()).toEqual(['a.pdf', 'b.pdf']);
     act(() => {
-      buttonNamed(t('tabs.close', { name: 'b.pdf' })).click();
+      closeTab('b.pdf');
     });
     expect(tabNames()).toEqual(['a.pdf']);
     expect(calls.filter((call) => call.method === 'session.close')).toEqual([
       { method: 'session.close', params: { handle: 'doc-2' } },
     ]);
     act(() => {
-      buttonNamed(t('tabs.close', { name: 'a.pdf' })).click();
+      closeTab('a.pdf');
     });
     expect(host.querySelector('.doc-tabs [role="tablist"]')).toBeNull();
     expect(host.querySelector('.start-page')).not.toBeNull();
@@ -499,7 +509,7 @@ describe('document tabs', () => {
     await until(() => tabNames().length === 2);
     expect(getTabSession(2)?.handle).toBe('doc-2');
     act(() => {
-      buttonNamed(t('tabs.close', { name: 'b.pdf' })).click();
+      closeTab('b.pdf');
     });
     expect(getTabSession(2)).toBeNull();
     expect(getTabSession(1)?.handle).toBe('doc-1');

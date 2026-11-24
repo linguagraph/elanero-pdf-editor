@@ -88,16 +88,54 @@ describe('document tabs', () => {
     expect(tabs()[1]?.textContent).not.toContain(t('tabs.unsaved'));
   });
 
-  it('closes a tab from its named close button', () => {
-    const { onClose } = render(threeTabs());
-    const close = host.querySelector<HTMLElement>(
-      `[aria-label="${t('tabs.close', { name: 'b.pdf' })}"]`,
-    );
+  it('closes a tab from its pointer close mark, without selecting it', () => {
+    const { onClose, onSelect } = render(threeTabs());
+    const close = tabs()[1]?.querySelector<HTMLElement>('.doc-tab-close');
     expect(close).not.toBeNull();
     act(() => {
+      close?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
       close?.click();
     });
     expect(onClose).toHaveBeenCalledWith(2);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the close mark out of the accessibility tree and the tab order', () => {
+    render(threeTabs());
+    for (const close of host.querySelectorAll<HTMLElement>('.doc-tab-close')) {
+      expect(close.getAttribute('aria-hidden')).toBe('true');
+      expect(close.matches('button, a, input, [tabindex]')).toBe(false);
+    }
+    expect(host.querySelectorAll('button')).toHaveLength(0);
+  });
+
+  it('closes the focused tab with Delete', () => {
+    const { onClose } = render(activateTab(threeTabs(), 1));
+    tabs()[1]?.focus();
+    key(tabs()[1] as HTMLElement, 'Delete');
+    expect(onClose).toHaveBeenCalledWith(2);
+  });
+
+  it('moves focus to the next tab when Delete closes the middle one', () => {
+    const { onClose } = render(activateTab(threeTabs(), 1));
+    tabs()[1]?.focus();
+    key(tabs()[1] as HTMLElement, 'Delete');
+    expect(onClose).toHaveBeenCalledWith(2);
+    expect(document.activeElement).toBe(tabs()[2]);
+  });
+
+  it('moves focus to the previous tab when Delete closes the last one', () => {
+    const { onClose } = render(activateTab(threeTabs(), 3));
+    tabs()[2]?.focus();
+    key(tabs()[2] as HTMLElement, 'Delete');
+    expect(onClose).toHaveBeenCalledWith(3);
+    expect(document.activeElement).toBe(tabs()[1]);
+  });
+
+  it('does not close a tab when Delete is pressed on something that is not a tab', () => {
+    const { onClose } = render(threeTabs());
+    key(host.querySelector('[role="tablist"]') as HTMLElement, 'Delete');
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('moves between tabs with the arrow keys', () => {
@@ -131,6 +169,23 @@ describe('document tabs', () => {
       'true',
       'false',
     ]);
+  });
+
+  it('describes the Delete key on each tab', () => {
+    render(threeTabs());
+    for (const tab of tabs()) {
+      const hint = document.getElementById(tab.getAttribute('aria-describedby') ?? '');
+      expect(hint?.textContent).toBe(t('tabs.closeHint'));
+    }
+  });
+
+  it('makes the selected tab control a panel that exists, and no other tab', () => {
+    render(activateTab(threeTabs(), 2));
+    const controls = tabs().map((tab) => tab.getAttribute('aria-controls'));
+    expect(controls[0]).toBeNull();
+    expect(controls[1]).not.toBeNull();
+    expect(controls[2]).toBeNull();
+    expect(document.getElementById(controls[1] ?? '')?.getAttribute('role')).toBe('tabpanel');
   });
 
   it('selects a tab when it is clicked', () => {
