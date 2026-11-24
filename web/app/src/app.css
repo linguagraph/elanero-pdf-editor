@@ -36,6 +36,13 @@ body {
   font: inherit;
 }
 
+/* Touch screens: the header's Preferences button is at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .app-header-prefs {
+    min-height: var(--size-touch-target);
+  }
+}
+
 /* The app menu button and the logo sit together at the start of the header bar. */
 .app-header-start {
   display: flex;
