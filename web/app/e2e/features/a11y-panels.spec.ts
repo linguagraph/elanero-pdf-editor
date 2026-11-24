@@ -112,7 +112,7 @@ test.describe('engine staged', () => {
       test.use({ colorScheme: scheme });
 
       for (const panel of PANELS) {
-        test(`axe: ${panel.name} panel (${scheme})`, async ({ page }, testInfo) => {
+        test(`axe: ${panel.name} panel (${scheme}) @a11y`, async ({ page }, testInfo) => {
           await openDocument(page, panel.file);
           await page.getByRole('button', { name: panel.name, exact: true }).click();
           await expect(page.getByRole('button', { name: panel.name, exact: true })).toHaveAttribute(
@@ -124,7 +124,7 @@ test.describe('engine staged', () => {
       }
 
       for (const tab of TABS) {
-        test(`axe: ${tab} ribbon tab (${scheme})`, async ({ page }, testInfo) => {
+        test(`axe: ${tab} ribbon tab (${scheme}) @a11y`, async ({ page }, testInfo) => {
           await openDocument(page);
           await page.locator('.ribbon [role="tab"]', { hasText: tab }).click();
           await expect(page.locator('.ribbon [role="tab"][aria-selected="true"]')).toContainText(
@@ -135,7 +135,7 @@ test.describe('engine staged', () => {
       }
 
       for (const dialog of DIALOGS) {
-        test(`axe: ${dialog.title} dialog (${scheme})`, async ({ page }, testInfo) => {
+        test(`axe: ${dialog.title} dialog (${scheme}) @a11y`, async ({ page }, testInfo) => {
           await openDocument(page);
           await dialog.open(page);
           await expect(page.getByRole('dialog', { name: dialog.title, exact: true })).toBeVisible();
