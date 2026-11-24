@@ -49,6 +49,8 @@ export interface MarkDraft {
   readonly ready: boolean;
   readonly reason: MessageId | null;
   readonly args: (pages: readonly number[], replace: boolean) => MarkArgs;
+  // The binary arguments the args name (a picture watermark's picture), as the job's buffers.
+  readonly buffers?: readonly ArrayBuffer[];
 }
 
 export interface MarkFormProps {
@@ -192,7 +194,7 @@ export function MarkDialog(props: MarkDialogProps) {
     if (draft === null || !draft.ready || pages === undefined) return;
     const args = draft.args(pages, updating);
     onClose();
-    settle(runMark(jobDeps, handle, draft.action, args), t('marks.done.added'));
+    settle(runMark(jobDeps, handle, draft.action, args, draft.buffers), t('marks.done.added'));
   };
 
   const removeMarks = (pre: MarkPreFill) => {

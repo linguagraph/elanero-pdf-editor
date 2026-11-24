@@ -113,20 +113,42 @@ export function readActionReply(result: CallResult): ActionJobReply {
   };
 }
 
+// The copies a job's arguments take in the jobs.prepare call. A $bin marker names buffers[n - 1]
+// (the document is the job worker's buffer 0). The engine call transfers what it is given, so
+// prepare gets copies in the markers' place, and the originals stay for the job worker.
+function bindBuffers(value: unknown, buffers: readonly ArrayBuffer[]): unknown {
+  if (Array.isArray(value)) return value.map((item) => bindBuffers(item, buffers));
+  if (value === null || typeof value !== 'object') return value;
+  const keys = Object.keys(value);
+  if (keys.length === 1 && keys[0] === '$bin') {
+    const index = (value as { $bin: unknown }).$bin;
+    const buffer = typeof index === 'number' ? buffers[index - 1] : undefined;
+    if (buffer === undefined) {
+      throw new RpcError('INVALID_ARGS', 'args: a $bin marker names no buffer');
+    }
+    return buffer.slice(0);
+  }
+  return Object.fromEntries(
+    keys.map((key) => [key, bindBuffers((value as Record<string, unknown>)[key], buffers)]),
+  );
+}
+
 // Runs one action job on the document. Resolves with the outcome; rejects with an RpcError (the
-// prepare refusal, for one, keeps its details), or with ActionJobCancelled.
+// prepare refusal, for one, keeps its details), or with ActionJobCancelled. `buffers` are binary
+// arguments (a watermark's picture): args name them with $bin markers, the first one as $bin 1.
 export async function runActionJob(
   deps: ActionJobDeps,
   handle: string,
   name: string,
   args: Record<string, unknown>,
+  buffers: readonly ArrayBuffer[] = [],
 ): Promise<ActionJobOutcome> {
   const progress = deps.progress ?? jobProgress;
   const { engine } = deps;
   const prepared = await engine.call('jobs.prepare', {
     handle,
     job: 'action',
-    args: { name, args },
+    args: { name, args: bindBuffers(args, buffers) as Record<string, unknown> },
   });
   const { token } = prepared;
   // The job worker's copy counts against the heap warning (W3.9 D4). Read before the copy is sent.
@@ -163,7 +185,12 @@ export async function runActionJob(
       method: 'job.run',
       params: { job: 'action', args: { name, args }, document: { $bin: 0 } },
     });
-    const result = await Promise.race([worker.call(request, [prepared.document]), cancelled]);
+    // Copies: the transfer detaches a buffer, and the caller may still hold its own (a re-run).
+    const pictures = buffers.map((buffer) => buffer.slice(0));
+    const result = await Promise.race([
+      worker.call(request, [prepared.document, ...pictures]),
+      cancelled,
+    ]);
     const reply = readActionReply(result);
     const applied = await engine.call('jobs.apply', {
       handle,

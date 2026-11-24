@@ -66,6 +66,22 @@ const STORED_WATERMARK = {
   },
 };
 
+const STORED_PICTURE = {
+  ...STORED_WATERMARK,
+  watermark: {
+    text: '',
+    image: true,
+    image_name: 'logo.png',
+    font: 'helv',
+    font_size: 60,
+    color: { r: 0.75, g: 0.1, b: 0.1 },
+    opacity: 0.3,
+    angle: 45,
+    on_top: true,
+    scale: 0.25,
+  },
+};
+
 const READY = {
   'marks.get': () => NO_MARKS,
   'jobs.prepare': () => ({
@@ -252,5 +268,90 @@ describe('the watermark dialog', () => {
         replace_existing: true,
       },
     });
+  });
+});
+
+// Chooses a file the way the picker does: the input's change event with its files.
+function chooseFile(name: string, type: string, bytes: number[]): void {
+  const file = new File([new Uint8Array(bytes)], name, { type });
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: () => Promise.resolve(new Uint8Array(bytes).buffer),
+  });
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (input === null) throw new Error('no file input');
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// The watermark's own Image radio, found by its label (the page scope has radios too).
+function imageRadio(): HTMLInputElement {
+  const label = [...document.querySelectorAll('label')].find(
+    (candidate) => candidate.textContent === 'Image',
+  );
+  const radio = label?.querySelector<HTMLInputElement>('input');
+  if (radio === null || radio === undefined) throw new Error('no image radio');
+  return radio;
+}
+
+describe('the watermark dialog in picture mode', () => {
+  it('asks for a picture, then sends it as the job buffer 1 with its file name and width', async () => {
+    const { call } = setup();
+    await settle();
+    await act(async () => imageRadio().click());
+    expect(buttonNamed('Apply').disabled).toBe(true);
+    expect(document.body.textContent).toContain('Choose a PNG or JPEG picture.');
+
+    await act(async () => chooseFile('logo.png', 'image/png', [137, 80, 78, 71]));
+    await settle();
+    expect(document.body.textContent).toContain('logo.png');
+    expect(buttonNamed('Apply').disabled).toBe(false);
+
+    await act(async () => buttonNamed('Apply').click());
+    await settle();
+    expect(preparedJob(call)).toMatchObject({
+      name: 'marks.watermark',
+      args: {
+        spec: {
+          image: expect.any(ArrayBuffer),
+          image_path: 'logo.png',
+          scale: 0.5,
+          angle: 0,
+          text: '',
+          opacity: 0.3,
+          on_top: true,
+        },
+        pages: [0, 1, 2],
+        replace_existing: false,
+      },
+    });
+    const prepared = preparedJob(call)?.args as { spec: { image: ArrayBuffer } };
+    expect(prepared.spec.image.byteLength).toBe(4);
+  });
+
+  it('refuses a file that is not a PNG or JPEG and keeps Apply off', async () => {
+    setup();
+    await settle();
+    await act(async () => imageRadio().click());
+    await act(async () => chooseFile('plan.gif', 'image/gif', [71, 73, 70]));
+    await settle();
+    expect(document.body.textContent).toContain('Choose a PNG or JPEG picture of at most 50 MB.');
+    expect(buttonNamed('Apply').disabled).toBe(true);
+  });
+
+  it('asks for the picture again on an Update of a stored picture watermark', async () => {
+    const { call } = setup({ ...READY, 'marks.get': () => STORED_PICTURE });
+    await settle();
+    await act(async () => {
+      [...document.querySelectorAll('button')]
+        .find((button) => button.textContent?.startsWith('Replace'))
+        ?.click();
+    });
+    await settle();
+    expect(imageRadio().checked).toBe(true);
+    expect(document.body.textContent).toContain(
+      'Choose the picture again to update the watermark. It was logo.png.',
+    );
+    expect(buttonNamed('Apply').disabled).toBe(true);
+    expect(call).toHaveBeenCalledWith('marks.get', expect.anything());
   });
 });
