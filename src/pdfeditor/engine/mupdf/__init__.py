@@ -42,6 +42,7 @@ _CAPABILITIES = Capabilities(
     metadata_write=True,
     xmp=True,
     layers=True,
+    attachments_write=True,
 )
 
 

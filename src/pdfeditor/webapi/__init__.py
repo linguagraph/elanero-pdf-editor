@@ -96,6 +96,7 @@ METHODS: dict[str, Method] = {
     "attachments.list": Method(dto.HandleParams, attachments.list_attachments),
     "attachments.get": Method(dto.AttachmentParams, attachments.get_attachment),
     "layers.list": Method(dto.HandleParams, layers.list_layers),
+    "layers.set_visible": Method(dto.LayerVisibleParams, layers.set_layer_visible),
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "marks.get": Method(dto.MarkGetParams, actions.get_mark),
     "redaction.list": Method(dto.HandleParams, actions.list_redactions),

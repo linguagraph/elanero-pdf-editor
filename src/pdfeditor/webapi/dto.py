@@ -90,7 +90,7 @@ class FontsResult:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class LayerEntry:
-    id: int  # the engine's optional-content id, used by layers.set_visible (a later slice)
+    id: int  # the engine's optional-content id, passed back to layers.set_visible
     name: str  # from the file; untrusted text, shown as text only
     visible: bool  # the view state the document's default gives
     depth: int  # nesting depth in the layer tree (0 at the top)
@@ -100,6 +100,13 @@ class LayerEntry:
 @dataclasses.dataclass(frozen=True, slots=True)
 class LayersResult:
     layers: tuple[LayerEntry, ...]  # in the engine's UI order; empty when there are none
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class LayerVisibleParams:
+    handle: str
+    id: int  # a LayerEntry.id from the current list
+    visible: bool  # the view state to set; nothing is saved
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -235,6 +242,7 @@ class PlatformFlags:
     image_formats: tuple[str, ...] | None
     max_image_bytes: int | None
     max_image_pixels: int | None
+    max_attachment_bytes: int | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

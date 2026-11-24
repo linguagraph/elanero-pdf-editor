@@ -541,7 +541,7 @@ export interface LanguageDto {
 }
 
 export interface LayerEntry {
-  /** the engine's optional-content id, used by layers.set_visible (a later slice) */
+  /** the engine's optional-content id, passed back to layers.set_visible */
   id: number;
   /** from the file; untrusted text, shown as text only */
   name: string;
@@ -551,6 +551,14 @@ export interface LayerEntry {
   depth: number;
   /** a locked layer can't be toggled */
   locked: boolean;
+}
+
+export interface LayerVisibleParams {
+  handle: string;
+  /** a LayerEntry.id from the current list */
+  id: number;
+  /** the view state to set; nothing is saved */
+  visible: boolean;
 }
 
 export interface LayersResult {
@@ -777,6 +785,7 @@ export interface PlatformFlags {
   image_formats: string[] | null;
   max_image_bytes: number | null;
   max_image_pixels: number | null;
+  max_attachment_bytes: number | null;
 }
 
 export interface PointDto {
@@ -1174,6 +1183,7 @@ export interface Methods {
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'layers.list': { params: HandleParams; result: LayersResult; deadline: 'instant' };
+  'layers.set_visible': { params: LayerVisibleParams; result: LayersResult; deadline: 'instant' };
   'marks.get': { params: MarkGetParams; result: MarkDetailResult; deadline: 'instant' };
   'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
   'redaction.list': { params: HandleParams; result: RedactionListResult; deadline: 'instant' };
@@ -1228,6 +1238,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
   'layers.list': 'instant',
+  'layers.set_visible': 'instant',
   'marks.get': 'instant',
   'marks.list': 'instant',
   'redaction.list': 'instant',
@@ -1287,6 +1298,7 @@ export const RESULT_DECODERS: {
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
   'layers.list': decodeLayersResult,
+  'layers.set_visible': decodeLayersResult,
   'marks.get': decodeMarkDetailResult,
   'marks.list': decodeMarksResult,
   'redaction.list': decodeRedactionListResult,
@@ -2102,6 +2114,20 @@ export function decodeLayerEntry(
   };
 }
 
+export function decodeLayerVisibleParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LayerVisibleParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'id', 'visible'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    id: expectInteger(field(o, 'id', path), `${path}.id`),
+    visible: expectBoolean(field(o, 'visible', path), `${path}.visible`),
+  };
+}
+
 export function decodeLayersResult(
   value: unknown,
   ctx: DecodeContext,
@@ -2429,7 +2455,7 @@ export function decodePlatformFlags(
   path: string,
 ): PlatformFlags {
   const o = expectObject(value, path);
-  checkKeys(o, ['linearize', 'ocr', 'signing', 'system_fonts', 'office_import', 'threads', 'pdfa', 'tiff_compression', 'image_formats', 'max_image_bytes', 'max_image_pixels'], path);
+  checkKeys(o, ['linearize', 'ocr', 'signing', 'system_fonts', 'office_import', 'threads', 'pdfa', 'tiff_compression', 'image_formats', 'max_image_bytes', 'max_image_pixels', 'max_attachment_bytes'], path);
   return {
     linearize: expectBoolean(field(o, 'linearize', path), `${path}.linearize`),
     ocr: expectBoolean(field(o, 'ocr', path), `${path}.ocr`),
@@ -2442,6 +2468,7 @@ export function decodePlatformFlags(
     image_formats: orNull(field(o, 'image_formats', path), `${path}.image_formats`, (v1, p1) => expectArray(v1, p1).map((item2, index2) => expectString(item2, `${p1}[${index2}]`))),
     max_image_bytes: orNull(field(o, 'max_image_bytes', path), `${path}.max_image_bytes`, (v1, p1) => expectInteger(v1, p1)),
     max_image_pixels: orNull(field(o, 'max_image_pixels', path), `${path}.max_image_pixels`, (v1, p1) => expectInteger(v1, p1)),
+    max_attachment_bytes: orNull(field(o, 'max_attachment_bytes', path), `${path}.max_attachment_bytes`, (v1, p1) => expectInteger(v1, p1)),
   };
 }
 

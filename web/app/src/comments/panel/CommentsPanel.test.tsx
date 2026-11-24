@@ -105,22 +105,65 @@ function setup(threads: CommentThreadDto[] = THREADS, truncated = false, actionR
 
 type Setup = ReturnType<typeof setup>;
 
+// The app's dialogs, which the panel's Import and Export buttons open.
+interface Dialogs {
+  readonly onImport: () => void;
+  readonly onExport: () => void;
+}
+
+function dialogs(): Dialogs {
+  return { onImport: vi.fn(), onExport: vi.fn() };
+}
+
+function panel(
+  { controller, rpc }: Setup,
+  onGoTo: (page: number, name: string) => void,
+  opened: Dialogs,
+) {
+  return (
+    <CommentsPanel
+      controller={controller}
+      rpc={rpc as unknown as PageRpc}
+      handle="doc-1"
+      scheduler={{ noteRevisions: () => {} }}
+      onGoTo={onGoTo}
+      onClose={() => {}}
+      onImport={opened.onImport}
+      onExport={opened.onExport}
+    />
+  );
+}
+
 // Opens the panel and waits for its first read.
-async function mount({ controller, rpc }: Setup, onGoTo: (page: number, name: string) => void) {
+async function mount(
+  setupResult: Setup,
+  onGoTo: (page: number, name: string) => void,
+  opened: Dialogs = dialogs(),
+) {
+  const { controller } = setupResult;
   await act(async () => {
-    root.render(
-      <CommentsPanel
-        controller={controller}
-        rpc={rpc as unknown as PageRpc}
-        handle="doc-1"
-        scheduler={{ noteRevisions: () => {} }}
-        onGoTo={onGoTo}
-        onClose={() => {}}
-      />,
-    );
+    root.render(panel(setupResult, onGoTo, opened));
     controller.setOpen(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+function importButton(): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>(
+    `button[aria-label="${t('comments.import.label')}"]`,
+  );
+}
+
+function exportButton(): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>(
+    `button[aria-label="${t('comments.export.label')}"]`,
+  );
+}
+
+function toolbarGroup(): HTMLElement | null {
+  return container.querySelector<HTMLElement>(
+    `[role="group"][aria-label="${t('comments.toolbar')}"]`,
+  );
 }
 
 async function settle() {
@@ -483,3 +526,66 @@ function deleteButton(index: number): HTMLButtonElement {
 function threadEditButtons(): HTMLButtonElement[] {
   return [...container.querySelectorAll<HTMLButtonElement>('.comments-thread-edit button')];
 }
+
+describe('CommentsPanel toolbar (W7.1b S1)', () => {
+  it('shows Import in every state, and Export only with a list that has threads', async () => {
+    // Loading: the read has not come back yet, so the list is not loaded.
+    const loading = setup();
+    act(() => {
+      root.render(panel(loading, loading.onGoTo, dialogs()));
+      loading.controller.setOpen(true);
+    });
+    expect(importButton()).not.toBeNull();
+    expect(exportButton()).toBeNull();
+    expect(text()).toContain(t('comments.loading'));
+    await settle();
+
+    // Loaded with threads: both.
+    act(() => root.unmount());
+    root = createRoot(container);
+    const listed = setup();
+    await mount(listed, listed.onGoTo);
+    expect(importButton()).not.toBeNull();
+    expect(exportButton()).not.toBeNull();
+    // Both buttons sit in the labelled toolbar group, not loose in the panel.
+    expect(toolbarGroup()).not.toBeNull();
+    expect(toolbarGroup()?.contains(importButton())).toBe(true);
+    expect(toolbarGroup()?.contains(exportButton())).toBe(true);
+
+    // Loaded with no threads: Import only.
+    act(() => root.unmount());
+    root = createRoot(container);
+    const empty = setup([]);
+    await mount(empty, empty.onGoTo);
+    expect(text()).toContain(t('comments.empty'));
+    expect(importButton()).not.toBeNull();
+    expect(exportButton()).toBeNull();
+    expect(toolbarGroup()?.contains(importButton())).toBe(true);
+  });
+
+  it('opens the app dialogs from the Import and Export buttons', async () => {
+    const setupResult = setup();
+    const opened = dialogs();
+    await mount(setupResult, setupResult.onGoTo, opened);
+
+    act(() => importButton()?.click());
+    expect(opened.onImport).toHaveBeenCalledTimes(1);
+    expect(opened.onExport).not.toHaveBeenCalled();
+
+    act(() => exportButton()?.click());
+    expect(opened.onExport).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Import button when the list loads, so focus can return to it', async () => {
+    const setupResult = setup();
+    act(() => {
+      root.render(panel(setupResult, setupResult.onGoTo, dialogs()));
+      setupResult.controller.setOpen(true);
+    });
+    const before = importButton();
+    expect(before).not.toBeNull();
+    await settle();
+    expect(importButton()).toBe(before);
+    expect(container.querySelector('.comments-list')).not.toBeNull();
+  });
+});

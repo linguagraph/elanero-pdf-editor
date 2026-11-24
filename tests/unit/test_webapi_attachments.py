@@ -154,3 +154,53 @@ def test_the_attachment_survives_a_save_and_renders(
     finally:
         with reopened.lock:
             reopened.document.close()
+
+
+# -- W7.9 A1: add and remove through actions.run (the same path the web uses) -------------------
+
+
+def add_file(handle: str, filename: str, data: bytes) -> dict[str, Any]:
+    args = {"data": {"$bin": 0}, "filename": filename, "description": ""}
+    reply, _ = call(
+        "actions.run",
+        {"handle": handle, "name": "attachments.add", "args": args},
+        [data],
+    )
+    return reply
+
+
+def test_add_returns_the_free_name_and_the_list_shows_it(web: None, fixture_pdf: Any) -> None:
+    handle = handle_of(open_bytes(fixture_pdf("images").read_bytes()))
+    result = ok(add_file(handle, "notes.txt", b"second\n"))
+    assert result["label"] == "Add Attachment" and result["executed"] is True
+    assert result["value"] == "notes (2).txt"
+
+    reply, _ = call("attachments.list", {"handle": handle})
+    assert sorted(e["name"] for e in ok(reply)["entries"]) == ["notes", "notes (2).txt"]
+    reply, out = call("attachments.get", {"handle": handle, "name": "notes (2).txt"})
+    assert ok(reply)["filename"] == "notes (2).txt"
+    assert out == [b"second\n"]
+
+
+def test_a_refused_add_is_a_refused_reply_with_its_reason(web: None, fixture_pdf: Any) -> None:
+    handle = handle_of(open_bytes(fixture_pdf("images").read_bytes()))
+    reply = add_file(handle, "empty.txt", b"")
+    assert reply["ok"] is False
+    assert reply["error"]["code"] == "REFUSED"
+    assert reply["error"]["details"]["reason"] == "attachment_empty"
+
+
+def test_remove_over_rpc_then_undo_restores_the_entry(web: None, fixture_pdf: Any) -> None:
+    handle = handle_of(open_bytes(fixture_pdf("images").read_bytes()))
+    reply, _ = call(
+        "actions.run",
+        {"handle": handle, "name": "attachments.remove", "args": {"name": "notes"}},
+    )
+    assert ok(reply)["label"] == "Remove Attachment"
+    listed, _ = call("attachments.list", {"handle": handle})
+    assert ok(listed) == {"entries": []}
+
+    undone, _ = call("actions.undo", {"handle": handle})
+    assert ok(undone)  # the undo step ran
+    listed, _ = call("attachments.list", {"handle": handle})
+    assert [e["name"] for e in ok(listed)["entries"]] == ["notes"]

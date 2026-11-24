@@ -108,3 +108,19 @@
   width: 100%;
   font: inherit;
 }
+
+/* The Import and Export buttons (W7.1b S1). Each keeps a 44px target, as the rows do. */
+.comments-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comments-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font: inherit;
+}

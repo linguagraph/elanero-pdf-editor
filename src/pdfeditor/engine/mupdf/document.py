@@ -255,6 +255,11 @@ class MuDocument:
 
     def mark_page_changed(self, index: int) -> None:
         self._edits += 1  # any change; see incremental_bytes
+        self._invalidate_page(index)
+
+    def _invalidate_page(self, index: int) -> None:
+        """A new revision and dropped caches for one page, without counting as an edit. Only a
+        view change that writes no object (a layer toggle) may use this alone."""
         self._revisions[index] = self._revisions.get(index, 0) + 1
         self._sharing.dirty(index)
         page = self._pages.get(index)
@@ -470,6 +475,37 @@ class MuDocument:
     def extract_embedded_file(self, name: str) -> bytes:
         return bytes(self._fz.embfile_get(name))
 
+    def add_embedded_file(
+        self, name: str, data: bytes, filename: str, description: str = ""
+    ) -> None:
+        if name in self._fz.embfile_names():
+            raise EngineError(f"an attachment named {name!r} already exists")
+        self._edits += 1  # any change; see incremental_bytes
+        self._fz.embfile_add(name, data, filename=filename, ufilename=filename, desc=description)
+
+    def remove_embedded_file(self, name: str) -> None:
+        if name not in self._fz.embfile_names():
+            raise EngineError(f"no attachment named {name!r}")
+        self._edits += 1  # any change; see incremental_bytes
+        # PyMuPDF's ``embfile_del`` indexes the flat key/value array by entry, not by pair, so it
+        # removes the wrong file for any entry but the first. Find the key here and remove its
+        # pair, as ``embfile_names`` reads the same array.
+        pdf = pymupdf._as_pdf_document(self._fz)
+        names = pymupdf.mupdf.pdf_dict_getl(
+            pymupdf.mupdf.pdf_trailer(pdf),
+            pymupdf.PDF_NAME("Root"),
+            pymupdf.PDF_NAME("Names"),
+            pymupdf.PDF_NAME("EmbeddedFiles"),
+            pymupdf.PDF_NAME("Names"),
+        )
+        for i in range(0, pymupdf.mupdf.pdf_array_len(names), 2):
+            key = pymupdf.mupdf.pdf_to_text_string(pymupdf.mupdf.pdf_array_get(names, i))
+            if key == name:
+                pymupdf.mupdf.pdf_array_delete(names, i + 1)
+                pymupdf.mupdf.pdf_array_delete(names, i)
+                return
+        raise EngineError(f"no attachment named {name!r}")  # listed, yet not in the array
+
     def layers(self) -> list[LayerInfo]:
         return [
             LayerInfo(
@@ -483,11 +519,12 @@ class MuDocument:
         ]
 
     def set_layer_visible(self, layer_id: int, visible: bool) -> None:
-        self._edits += 1  # any change; see incremental_bytes
+        # No ``_edits`` bump: a view toggle writes no object (checked: the object digest is the
+        # same before and after), so a later in-place save may still reuse the cached update.
         self._fz.set_layer_ui_config(layer_id, 0 if visible else 2)
-        # Cached display lists bake in layer visibility.
+        # Cached display lists bake in layer visibility, so every page gets a new revision.
         for index in range(self.page_count):
-            self.mark_page_changed(index)
+            self._invalidate_page(index)
 
     def fonts(self) -> list[FontInfo]:
         seen: dict[int, FontInfo] = {}

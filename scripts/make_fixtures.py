@@ -77,6 +77,20 @@ def images() -> None:
     _save(doc, "images.pdf")
 
 
+def attachments() -> None:
+    """Two embedded files and no signature: a text note and a one-page PDF (W7.9 A1 adds and
+    removes them; the PDF is what A2 opens as a document)."""
+    inner = pymupdf.open()
+    inner.new_page(width=A4.width, height=A4.height).insert_text((72, 72), "Inner PDF", fontsize=14)
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 60), "Page with attachments", fontsize=16)
+    doc.embfile_add("notes", b"attached notes\n", filename="notes.txt", desc="Attached notes")
+    doc.embfile_add("brief", inner.tobytes(), filename="brief.pdf", desc="A small PDF")
+    inner.close()
+    _save(doc, "attachments.pdf")
+
+
 def several_images() -> None:
     """Three different pictures on two pages: Extract Images takes each once, as a ZIP."""
     doc = pymupdf.open()
@@ -1269,6 +1283,16 @@ def incremental_sigflags_empty_embedded() -> None:
         pdf.save(OUT / "incremental_sigflags_empty_embedded.pdf")
 
 
+def incremental_sigflags_layers() -> None:
+    """A copy of ``layers`` with /SigFlags 3, so the in-place (incremental) save path is on and a
+    layer toggle can be tested against it (copy of tests/engine/test_mupdf_incremental.py)."""
+    import pikepdf
+
+    with pikepdf.open(OUT / "layers.pdf") as pdf:
+        pdf.Root.AcroForm = pikepdf.Dictionary(SigFlags=3, Fields=pikepdf.Array())
+        pdf.save(OUT / "incremental_sigflags_layers.pdf")
+
+
 def structure_indirect_values() -> None:
     """A tagged file whose /Lang, /DisplayDocTitle and /Alt are indirect objects (copy of
     tests/engine/test_structure.py test_indirect_values_are_read)."""
@@ -1569,6 +1593,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "text_multipage": text_multipage,
     "images": images,
     "several_images": several_images,
+    "attachments": attachments,
     "vector_art": vector_art,
     "annotations": annotations,
     "annotations_unnamed": annotations_unnamed,
@@ -1595,6 +1620,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "deleted_pages_destinations": deleted_pages_destinations,
     "page_marks_acrobat_like": page_marks_acrobat_like,
     "incremental_sigflags_empty_embedded": incremental_sigflags_empty_embedded,
+    "incremental_sigflags_layers": incremental_sigflags_layers,
     "structure_indirect_values": structure_indirect_values,
     "comments_literal_hash_nm": comments_literal_hash_nm,
     "undo_signed_catalog": undo_signed_catalog,
