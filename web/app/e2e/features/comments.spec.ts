@@ -51,8 +51,9 @@ function thread(list: Locator, text: string): Locator {
 
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
-  // A taller viewport than the default 720 px, so the page points used below stay on screen.
-  test.use({ viewport: { width: 1280, height: 1000 } });
+  // A taller viewport than the default 720 px, so the page points used below stay on screen. At
+  // 1280 px the Comment tab's Manage group overflows and the Comments List button is not clickable.
+  test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('a sticky note, a rectangle, a reply, a status and an edit: the saved file keeps them', async ({
     page,

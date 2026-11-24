@@ -43,8 +43,9 @@ async function addNote(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Add note', exact: true }).click();
 }
 
-// A rectangle from (150, 300) to (350, 400). Its tool is pressed again to turn it off: the Select
-// layer is drawn only when no comment tool is on.
+// A rectangle from (150, 300) to (350, 400). A drawn comment returns the tool to Select (W7.1a), so
+// the test waits for Rectangle to be released rather than pressing it again: a second press would
+// re-arm the rectangle tool and the click would draw nothing.
 async function addRectangle(page: Page): Promise<void> {
   await openCommentTab(page);
   await page.locator('.ribbon [data-command="rectangle"]').click();
@@ -54,7 +55,10 @@ async function addRectangle(page: Page): Promise<void> {
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 });
   await page.mouse.up();
-  await page.locator('.ribbon [data-command="rectangle"]').click();
+  await expect(page.locator('.ribbon [data-command="rectangle"]')).not.toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 }
 
 test.describe('engine staged', () => {
