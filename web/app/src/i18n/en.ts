@@ -1141,6 +1141,24 @@ export const EN = {
   'attachments.noDescription': 'No description',
   'attachments.save': 'Save',
   'attachments.saveFailed': 'The attachment could not be saved.',
+  'attachments.add': 'Add file…',
+  'attachments.added': 'Added {name}.',
+  'attachments.addFailed': 'The file could not be attached.',
+  'attachments.tooLarge': 'This file is too large to attach here (at most {mb} MB).',
+  'attachments.open': 'Open as new tab',
+  'attachments.openFailed':
+    'The attachment could not be opened. Only PDF attachments can be opened.',
+  'attachments.remove': 'Remove',
+  'attachments.remove.title': 'Remove attachment?',
+  'attachments.remove.body':
+    'Remove {name} from this PDF? You can undo this until you close the document.',
+  'attachments.remove.confirm': 'Remove',
+  'attachments.remove.cancel': 'Cancel',
+  'attachments.removed': 'Removed {name}.',
+  'attachments.removeFailed': 'The attachment could not be removed.',
+  'attachments.stale': 'That attachment is no longer in the document.',
+  'attachments.signedHint':
+    'This document is signed. Adding or removing attachments would invalidate the signatures.',
   'attachments.size.bytes': '{count} B',
   'attachments.size.kb': '{value} KB',
   'attachments.size.mb': '{value} MB',
@@ -1325,6 +1343,8 @@ export const EN = {
   'error.REFUSED.attachmentEmpty': "This file is empty, so it can't be attached.",
   'error.REFUSED.attachmentTooLarge': 'This file is too large to attach here (at most 100 MB).',
   'error.REFUSED.attachmentName': "This file has no usable name, so it can't be attached.",
+  'error.REFUSED.signedDocument':
+    'This document is signed, so this change would break its signatures. Save a copy first and change that.',
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',
   'error.BUSY': 'Wait for the current task to finish, then try again.',

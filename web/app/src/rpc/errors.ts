@@ -89,6 +89,7 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   attachment_empty: 'error.REFUSED.attachmentEmpty',
   attachment_too_large: 'error.REFUSED.attachmentTooLarge',
   attachment_name: 'error.REFUSED.attachmentName',
+  signed_document: 'error.REFUSED.signedDocument',
   // The layer toggle refusals (W7.9 L1): no layers in this document, or a locked layer.
   layers_unsupported: 'error.REFUSED.layersUnsupported',
   layer_locked: 'error.REFUSED.layerLocked',
