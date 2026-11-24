@@ -617,7 +617,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W7.4** A7 Redaction and sanitize _(redaction marks, apply and sanitize are done in the web app (#259); sanitize leak tests per category (#467) and the refusal on signed documents (#468); the Redactions panel is W7.4b, done)_
 - [x] **W7.4b** Redactions panel in the web app (as on the desktop): the list of redaction marks with their fill, overlay text and text colour; select, edit and delete a mark; go to its page. Marks made in the viewer appear in the list. _(done: redactions panel with list, properties and Apply; user guide updated)_
 - [x] **W7.5** A8 Password protection and permissions _(done: save fixes, security RPC, Encrypt and Remove Security dialogs)_
-- [ ] **W7.6** A9 Document properties and metadata editing _(partial: properties dialog with editable Info fields and Undo done; pending: fonts, PDF version and security panels, Playwright run)_
+- [ ] **W7.6** A9 Document properties and metadata editing _(partial: properties dialog with editable Info fields and Undo done; Description, Advanced (PDF version), Fonts and Security tabs built, with their Python and Vitest tests; the Playwright spec (`properties.spec.ts`, axe per tab, password check on the Security tab) is written but not yet run; pending: a passing Chromium run in web-e2e, blocked by #567)_
 - [x] **W7.7** A10 Export pages as images and text _(done: export to text, Markdown, HTML, Word, images; real-app run not verified)_
 - [x] **W7.8** A11 Compare documents
 - [ ] **W7.9** A12–A13 Flatten annotations; attachments and layers _(partial: flatten annotations done with confirmation and tests; pending: attachments and layers (A13))_
