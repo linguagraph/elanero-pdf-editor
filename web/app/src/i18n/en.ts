@@ -1101,10 +1101,16 @@ export const EN = {
   'comment.tool.note': 'Sticky note',
   'comment.tool.rectangle': 'Rectangle',
   'comment.tool.highlight': 'Highlight',
+  'comment.tool.textbox': 'Text box',
+  'comment.tool.oval': 'Oval',
+  'comment.tool.line': 'Line',
+  'comment.tool.arrow': 'Arrow',
   'comment.added': 'Comment added.',
   'comment.failed': 'The comment could not be added.',
   'comment.noteText': 'Note text',
   'comment.noteAdd': 'Add note',
+  'comment.boxText': 'Text box text',
+  'comment.boxAdd': 'Add text box',
   'comment.cancel': 'Cancel',
 
   // Thumbnails side panel (W5.2). The rail button shows the panel's name.
@@ -1152,8 +1158,8 @@ export const EN = {
   'attachments.size.mb': '{value} MB',
   'attachments.size.gb': '{value} GB',
 
-  // Layers side panel (W5.2, W7.9 S3): read-only list of the optional content layers. Toggling
-  // them is not built yet (W7.9 S4).
+  // Layers side panel (W5.2, W7.9 S3 and L2): the optional content layers, shown or hidden with a
+  // checkbox. The change is for this view only; it is not saved.
   'layers.title': 'Layers',
   'layers.list': 'Optional content layers',
   'layers.empty': 'This document has no layers.',
@@ -1163,6 +1169,8 @@ export const EN = {
   'layers.visible': 'Visible',
   'layers.hidden': 'Hidden',
   'layers.locked': 'Locked',
+  'layers.viewOnly': 'Showing or hiding a layer changes this view only. It is not saved.',
+  'layers.toggleFailed': 'The layer could not be shown or hidden. Try again.',
 
   // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
   'bookmarks.title': 'Bookmarks',
@@ -1686,7 +1694,8 @@ export const EN = {
   'marks.wm.title': 'Watermark',
   'marks.wm.text': 'Watermark text',
   'marks.wm.angle': 'Angle',
-  'marks.wm.onTop': 'Draw over the page content',
+  'marks.wm.subtitle': 'Text stamped across the pages.',
+  'marks.wm.behind': 'Behind page content',
   'marks.wm.textRequired': 'Enter the watermark text.',
   'marks.bg.title': 'Background',
   'marks.bg.subtitle': 'A colour behind the page content.',

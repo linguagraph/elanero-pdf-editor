@@ -48,6 +48,7 @@ import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { BackgroundDialog } from './marks/BackgroundDialog';
 import { HeaderFooterDialog } from './marks/HeaderFooterDialog';
+import { WatermarkDialog } from './marks/WatermarkDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto, HistoryResult, TranslateParams } from './rpc/generated';
@@ -240,6 +241,8 @@ export function App({
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   // Header & Footer and Bates numbers (W7.3 S3): one dialog, in the mode its command opened.
   const [headerFooterMode, setHeaderFooterMode] = useState<'headerFooter' | 'bates' | null>(null);
+  // Watermark (W7.3 S4): the text mode of the watermark dialog.
+  const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
@@ -397,6 +400,24 @@ export function App({
       stale = true;
     };
   }, [scheduler, jobs]);
+  // The layers panel reads its list again after a change that moves the structure (a snapshot
+  // restore). A layer toggle replies with the list only, so its change event is what redraws the
+  // pages it names. A restart reopens the document under a new handle, which the panel reads again.
+  const [layersRevision, setLayersRevision] = useState(0);
+  const sessionHandle = session?.handle;
+  useEffect(
+    () =>
+      engine.onEvents((events) => {
+        for (const event of events) {
+          if (event.kind !== 'changed' || event.handle !== sessionHandle) continue;
+          scheduler?.noteRevisions(event.revisions);
+          if (event.changes.some((change) => change.kind === 'structure')) {
+            setLayersRevision((value) => value + 1);
+          }
+        }
+      }),
+    [engine, sessionHandle, scheduler],
+  );
   const viewRef = useRef<DocumentViewHandle>(null);
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
@@ -728,6 +749,11 @@ export function App({
             viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
           rectangle: () =>
             viewRef.current?.setCommentTool(commentTool === 'rectangle' ? null : 'rectangle'),
+          'text-box': () =>
+            viewRef.current?.setCommentTool(commentTool === 'textbox' ? null : 'textbox'),
+          oval: () => viewRef.current?.setCommentTool(commentTool === 'oval' ? null : 'oval'),
+          line: () => viewRef.current?.setCommentTool(commentTool === 'line' ? null : 'line'),
+          arrow: () => viewRef.current?.setCommentTool(commentTool === 'arrow' ? null : 'arrow'),
           // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
           redact: () => viewRef.current?.setRedacting(!state.redacting),
           // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.
@@ -776,6 +802,7 @@ export function App({
           'add-background': () => setBackgroundOpen(true),
           'add-header-footer': () => setHeaderFooterMode('headerFooter'),
           'add-bates-numbers': () => setHeaderFooterMode('bates'),
+          'add-watermark': () => setWatermarkOpen(true),
           // Edit Text & Images (W6.7a S4) turns the Edit tool on; a signed document asks once per tab.
           'edit-text-images': () => {
             if (activeId === null) return;
@@ -937,6 +964,7 @@ export function App({
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
+            revision={layersRevision}
             onClose={() => closePanel('left')}
           />
         ) : documentShown &&
@@ -1177,6 +1205,19 @@ export function App({
           currentPage={viewState.page}
           signed={activeTab.signed}
           fileName={activeTab.name}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <WatermarkDialog
+          isOpen={watermarkOpen}
+          onClose={() => setWatermarkOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={jobs.acquire}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          signed={activeTab.signed}
           onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}
