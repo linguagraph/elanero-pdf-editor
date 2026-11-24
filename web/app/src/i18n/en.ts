@@ -1085,6 +1085,11 @@ export const EN = {
   'comments.delete.open': 'Delete',
   'comments.delete.done': 'Comment deleted.',
   'comments.locked': 'This comment is locked. Unlock it to change or delete it.',
+  'comments.toolbar': 'Comment actions',
+  'comments.import': 'Import…',
+  'comments.import.label': 'Import comments',
+  'comments.export': 'Export…',
+  'comments.export.label': 'Export comments',
   'comments.stale': 'This comment no longer exists. The list has been updated.',
   'comment.status.None': 'No status',
   'comment.status.Accepted': 'Accepted',
@@ -1115,10 +1120,16 @@ export const EN = {
   'comment.tool.note': 'Sticky note',
   'comment.tool.rectangle': 'Rectangle',
   'comment.tool.highlight': 'Highlight',
+  'comment.tool.textbox': 'Text box',
+  'comment.tool.oval': 'Oval',
+  'comment.tool.line': 'Line',
+  'comment.tool.arrow': 'Arrow',
   'comment.added': 'Comment added.',
   'comment.failed': 'The comment could not be added.',
   'comment.noteText': 'Note text',
   'comment.noteAdd': 'Add note',
+  'comment.boxText': 'Text box text',
+  'comment.boxAdd': 'Add text box',
   'comment.cancel': 'Cancel',
 
   // Thumbnails side panel (W5.2). The rail button shows the panel's name.
@@ -1148,8 +1159,8 @@ export const EN = {
   'attachments.size.mb': '{value} MB',
   'attachments.size.gb': '{value} GB',
 
-  // Layers side panel (W5.2, W7.9 S3): read-only list of the optional content layers. Toggling
-  // them is not built yet (W7.9 S4).
+  // Layers side panel (W5.2, W7.9 S3 and L2): the optional content layers, shown or hidden with a
+  // checkbox. The change is for this view only; it is not saved.
   'layers.title': 'Layers',
   'layers.list': 'Optional content layers',
   'layers.empty': 'This document has no layers.',
@@ -1159,6 +1170,8 @@ export const EN = {
   'layers.visible': 'Visible',
   'layers.hidden': 'Hidden',
   'layers.locked': 'Locked',
+  'layers.viewOnly': 'Showing or hiding a layer changes this view only. It is not saved.',
+  'layers.toggleFailed': 'The layer could not be shown or hidden. Try again.',
 
   // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
   'bookmarks.title': 'Bookmarks',
@@ -1319,7 +1332,12 @@ export const EN = {
     "This picture is stored inside the page content, so it can't be replaced or exported.",
   'error.REFUSED.shapeNoPaint': 'A shape needs an outline or a fill.',
   'error.REFUSED.shapeWidth': "A shape's line width must be above 0 and at most 72 points.",
+  'error.REFUSED.layersUnsupported': "This document's layers can't be shown or hidden here.",
+  'error.REFUSED.layerLocked': "This layer is locked and can't be shown or hidden.",
   'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
+  'error.REFUSED.attachmentEmpty': "This file is empty, so it can't be attached.",
+  'error.REFUSED.attachmentTooLarge': 'This file is too large to attach here (at most 100 MB).',
+  'error.REFUSED.attachmentName': "This file has no usable name, so it can't be attached.",
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',
   'error.BUSY': 'Wait for the current task to finish, then try again.',
@@ -1660,9 +1678,14 @@ export const EN = {
   'marks.hf.right': 'Right',
   'marks.hf.tokens':
     'Insert tokens such as <<page>>, <<pages>>, <<label>>, <<date>>, <<file>> or <<bates>>.',
+  'marks.hf.subtitle': 'Text stamped at the top and bottom of each page.',
+  'marks.hf.slot': '{row} {column}',
+  'marks.hf.style': 'Text style',
   'marks.hf.marginX': 'Side margin',
-  'marks.hf.marginTop': 'Top margin',
-  'marks.hf.marginBottom': 'Bottom margin',
+  'marks.hf.marginY': 'Top and bottom margin',
+  'marks.font': 'Font',
+  'marks.bates.section': 'Bates number',
+  'marks.bates.preview': 'First number: {value}',
   'marks.bates.prefix': 'Prefix',
   'marks.bates.start': 'Start number',
   'marks.bates.digits': 'Digits',
@@ -1670,7 +1693,8 @@ export const EN = {
   'marks.wm.title': 'Watermark',
   'marks.wm.text': 'Watermark text',
   'marks.wm.angle': 'Angle',
-  'marks.wm.onTop': 'Draw over the page content',
+  'marks.wm.subtitle': 'Text stamped across the pages.',
+  'marks.wm.behind': 'Behind page content',
   'marks.wm.textRequired': 'Enter the watermark text.',
   'marks.bg.title': 'Background',
   'marks.bg.subtitle': 'A colour behind the page content.',
@@ -1685,6 +1709,7 @@ export const EN = {
   'marks.signedNote':
     'This document is signed. The marks change the pages, so the signatures will show that they changed after signing. Save a copy: a save over the original is refused.',
   'marks.reason.noPages': 'Choose at least one page.',
+  'marks.reason.noText': 'Enter text in at least one slot.',
   'marks.reason.value': 'Enter a value inside the range shown.',
   'marks.kind.HeaderFooter': 'header and footer',
   'marks.kind.Bates': 'Bates numbers',

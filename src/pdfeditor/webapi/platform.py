@@ -7,7 +7,12 @@ Nothing else decides "this is the web" for these questions: features read the fl
 from __future__ import annotations
 
 from pdfeditor.model.platform import PlatformCapabilities, configure
-from pdfeditor.webapi.limits import MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, SNAPSHOT_BUDGET_BYTES
+from pdfeditor.webapi.limits import (
+    MAX_ATTACHMENT_BYTES,
+    MAX_IMAGE_BYTES,
+    MAX_IMAGE_PIXELS,
+    SNAPSHOT_BUDGET_BYTES,
+)
 
 # Undo snapshots live in the worker's memory file system; the budget is in webapi.limits.
 WEB_SNAPSHOT_BUDGET = SNAPSHOT_BUDGET_BYTES
@@ -27,6 +32,7 @@ WEB_PLATFORM = PlatformCapabilities(
     image_formats=frozenset({"PNG", "JPEG"}),
     max_image_bytes=MAX_IMAGE_BYTES,
     max_image_pixels=MAX_IMAGE_PIXELS,
+    max_attachment_bytes=MAX_ATTACHMENT_BYTES,
 )
 
 

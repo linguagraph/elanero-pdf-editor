@@ -6,12 +6,15 @@ import { APP_VERSION } from './version';
 import { GUIDE_URL } from './help/guide';
 import { type EngineClient, setTabSession } from './engine/engineConnection';
 import { fakeEngine } from './engine/testEngine';
+import type { RpcEvent } from './rpc/generated';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
 import { RedactionController } from './redaction/controller';
+import { RenderScheduler } from './view/renderScheduler';
 import type { MessageId } from './i18n/en';
 import { TAB_LABELS } from './commands/registry';
 import { closePanel, openPanel } from './layout/sidePanels';
+import { toasts } from './feedback/toasts';
 
 // jsdom has no CSS.escape, and react-aria calls it when a tab takes focus.
 if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'function') {
@@ -723,6 +726,244 @@ describe('App Save (W4.8 S2)', () => {
   });
 });
 
+// The document's state as the engine sends it after a change: Undo and Redo are enabled by it.
+function undoableState(): RpcEvent {
+  return {
+    kind: 'state',
+    handle: 'doc-1',
+    state: {
+      page_count: 1,
+      structure_version: 0,
+      dirty: true,
+      busy: '',
+      can_undo: true,
+      can_redo: true,
+      undo_label: 'Move',
+      redo_label: 'Move',
+      require_full_save: false,
+      history: 1,
+    },
+  };
+}
+
+// A document with an empty comments list that counts each read. Undo and Redo reply as a done step,
+// Save and Save As as a saved file, and every other call goes to the drawing engine. With
+// refuseSave, the engine refuses to write the file, so the save fails.
+function refreshEngine(options: { refuseSave?: boolean } = {}): {
+  client: EngineClient;
+  lists: () => number;
+} {
+  const base = drawingEngine().client;
+  const baseCall = base.call as unknown as (m: string, p: unknown) => Promise<unknown>;
+  const calls: string[] = [];
+  const call = vi.fn((method: string, params: Record<string, unknown>) => {
+    calls.push(method);
+    if (method === 'comments.list') return Promise.resolve({ threads: [], truncated: false });
+    if (method === 'actions.undo' || method === 'actions.redo') {
+      return Promise.resolve({ done: true, label: 'Move', changed: null, state: {} });
+    }
+    if (method === 'save.save_bytes' && options.refuseSave) {
+      return Promise.reject(new Error('refused'));
+    }
+    if (method === 'save.save_bytes') {
+      return Promise.resolve({
+        data: new ArrayBuffer(8),
+        size: 8,
+        incremental: false,
+        verified: true,
+        name: 'report',
+      });
+    }
+    if (method === 'save.mark_saved') return Promise.resolve({ saved: true, state: {} });
+    return baseCall(method, params);
+  });
+  return {
+    client: { call } as unknown as EngineClient,
+    lists: () => calls.filter((method) => method === 'comments.list').length,
+  };
+}
+
+describe('App comments list refresh (W7.1b S2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  let downloads: string[];
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    openPanel('comments');
+    closePanel('right');
+    downloads = [];
+    URL.createObjectURL = vi.fn(() => 'blob:refresh-test');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download);
+    });
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // Opens the one-page document with the comments panel open; the open reads the list once.
+  async function openDocument(engine: ReturnType<typeof refreshEngine>): Promise<void> {
+    const connection = fakeEngine(engine.client);
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(<App engine={connection} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('refresh.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => engine.lists() === 1);
+    act(() => {
+      connection.emit([undoableState()]);
+    });
+  }
+
+  function key(init: KeyboardEventInit): void {
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
+      );
+    });
+  }
+
+  function saveButton(): HTMLElement | null {
+    return host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+  }
+
+  // Waits for the list reads to reach the count, then checks that nothing else reads it.
+  async function expectListsTo(
+    engine: ReturnType<typeof refreshEngine>,
+    count: number,
+  ): Promise<void> {
+    await until(() => engine.lists() === count);
+    expect(engine.lists()).toBe(count);
+  }
+
+  it('reads the comments list again after Undo', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    key({ key: 'z', ctrlKey: true });
+    await expectListsTo(engine, 2);
+  });
+
+  it('reads the comments list again after Redo', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    key({ key: 'y', ctrlKey: true });
+    await expectListsTo(engine, 2);
+  });
+
+  it('reads the comments list again after Save', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    act(() => {
+      saveButton()?.click();
+    });
+    await expectListsTo(engine, 2);
+    expect(downloads).toEqual(['refresh.pdf']);
+  });
+
+  it('reads the comments list again after Save As', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    key({ key: 'S', ctrlKey: true, shiftKey: true });
+    const submit = await vi.waitFor(() => {
+      const found = document.querySelector<HTMLButtonElement>('.saveas-form button[type="submit"]');
+      if (found === null) throw new Error('no Save As form');
+      return found;
+    });
+    act(() => {
+      submit.click();
+    });
+    await expectListsTo(engine, 2);
+    expect(downloads).toEqual(['refresh.pdf']);
+  });
+
+  it('does not read the comments list again after a save the engine refused', async () => {
+    const engine = refreshEngine({ refuseSave: true });
+    await openDocument(engine);
+    const pushed = vi.spyOn(toasts, 'push');
+    act(() => {
+      saveButton()?.click();
+    });
+    // The failure is reported as a toast, which is the outcome the list refresh depends on.
+    await until(() => pushed.mock.calls.length > 0);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(engine.lists()).toBe(1);
+    expect(downloads).toEqual([]);
+  });
+
+  it('reads the comments list again after a save whose download the browser blocked', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    // The browser refuses the download: the click throws, as a blocked pop-up does.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    act(() => {
+      saveButton()?.click();
+    });
+    await until(() => engine.lists() === 2);
+    expect(engine.lists()).toBe(2);
+    expect(downloads).toEqual([]);
+  });
+
+  it('does not read the list while the panel is closed, and reads it once when the panel opens', async () => {
+    const engine = refreshEngine();
+    closePanel('left');
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(engine.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('refresh.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => saveButton()?.getAttribute('aria-disabled') === null);
+
+    act(() => {
+      saveButton()?.click();
+    });
+    await until(() => downloads.length > 0);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(engine.lists()).toBe(0);
+
+    act(() => {
+      openPanel('comments');
+    });
+    await expectListsTo(engine, 1);
+  });
+});
+
 describe('App comment and redaction tools (W4.3a S7)', () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -833,6 +1074,28 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     });
     expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('false');
     expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
+  });
+
+  it('the box and line ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    for (const [command, key] of [
+      ['text-box', 'comment.tool.textbox'],
+      ['oval', 'comment.tool.oval'],
+      ['line', 'comment.tool.line'],
+      ['arrow', 'comment.tool.arrow'],
+    ] as const) {
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('true');
+      expect(toolbarPressed(t(key))).toBe('true');
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('false');
+      expect(toolbarPressed(t(key))).toBe('false');
+    }
   });
 
   it('Edit Text & Images is off with its reason when the engine lacks content_edit', async () => {
@@ -1082,5 +1345,312 @@ describe('App: Organize Pages and the view toggles (W4.3a S6)', () => {
       ribbonButton('night-reading').click();
     });
     expect(ribbonButton('night-reading').getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe('App Comments panel (W7.1b S1)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  const innerWidth = window.innerWidth;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: innerWidth });
+  });
+
+  // One note on page 1, so the panel has a list (and Export is shown); the drawing engine answers
+  // everything else.
+  function commentsEngine(): EngineClient {
+    const scripted = drawingEngine();
+    const inner = scripted.client as unknown as {
+      call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+    };
+    const call = (method: string, params: Record<string, unknown>) =>
+      method === 'comments.list'
+        ? Promise.resolve({
+            threads: [
+              {
+                comment: {
+                  page: 0,
+                  name: 'n1',
+                  type: 'Text',
+                  author: 'Ana',
+                  contents: 'Check the total',
+                  subject: '',
+                  created: null,
+                  modified: null,
+                  state: 'None',
+                  locked: false,
+                  rect: { x0: 0, y0: 0, x1: 10, y1: 10 },
+                },
+                replies: [],
+                status: 'None',
+              },
+            ],
+            truncated: false,
+          })
+        : inner.call(method, params);
+    return { call } as unknown as EngineClient;
+  }
+
+  // Opens a one-page document through the start page's drop zone, as the user does.
+  async function openDocument(): Promise<void> {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(commentsEngine())} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('comments.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+  }
+
+  function commentsPanelButton(): HTMLElement {
+    const el = host.querySelector<HTMLElement>('[data-panel="comments"]');
+    if (el === null) throw new Error('no Comments rail button');
+    return el;
+  }
+
+  function panelButton(label: string): HTMLButtonElement | null {
+    return (
+      [...host.querySelectorAll<HTMLButtonElement>('#app-panel-left button')].find(
+        (button) => button.getAttribute('aria-label') === label,
+      ) ?? null
+    );
+  }
+
+  it('Comments List on the Comment tab shows the panel and reads the list, and stays open when pressed again', async () => {
+    await openDocument();
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (element) => element.textContent === t('ribbon.tab.comment'),
+    );
+    if (tab === undefined) throw new Error('no Comment tab');
+    act(() => {
+      tab.click();
+    });
+    act(() => {
+      host.querySelector<HTMLElement>('[data-command="comments-list"]')?.click();
+    });
+    expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
+    await until(() => host.querySelector('.comments-thread') !== null);
+
+    act(() => {
+      host.querySelector<HTMLElement>('[data-command="comments-list"]')?.click();
+    });
+    expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('with the left rail hidden, the app menu lists Comments and opens the panel', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await openDocument();
+    act(() => {
+      host.querySelector<HTMLButtonElement>(`button[aria-label="${t('appMenu.label')}"]`)?.click();
+    });
+    const commentsItem = (): HTMLElement | undefined =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (element) => element.textContent?.trim() === t('comments.title'),
+      );
+    await until(() => commentsItem() !== undefined);
+    const item = commentsItem();
+    if (item === undefined) throw new Error('no Comments menu item');
+    act(() => {
+      item.click();
+    });
+    expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('comments.title'));
+  });
+
+  it('the panel Import button opens the Import Comments dialog', async () => {
+    await openDocument();
+    act(() => {
+      openPanel('comments');
+    });
+    await until(() => panelButton(t('comments.import.label')) !== null);
+    act(() => {
+      panelButton(t('comments.import.label'))?.click();
+    });
+    await until(() => document.body.textContent?.includes(t('commentsImport.title')) === true);
+  });
+
+  it('the panel Export button opens the Export Comments dialog once the list has a thread', async () => {
+    await openDocument();
+    act(() => {
+      openPanel('comments');
+    });
+    await until(() => panelButton(t('comments.export.label')) !== null);
+    act(() => {
+      panelButton(t('comments.export.label'))?.click();
+    });
+    await until(() => document.body.textContent?.includes(t('commentsExport.title')) === true);
+  });
+});
+
+describe('App: change events reach the render scheduler and the layers panel (W7.9 L2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // The drawing engine, with layers.list answered (an empty list); every other call is its own.
+  function layersEngine() {
+    const base = drawingEngine();
+    const forward = base.client.call as unknown as (
+      method: string,
+      params: Record<string, unknown>,
+    ) => Promise<unknown>;
+    const call = vi.fn((method: string, params: Record<string, unknown>) =>
+      method === 'layers.list' ? Promise.resolve({ layers: [] }) : forward(method, params),
+    );
+    return { client: { call } as unknown as EngineClient, renders: base.renders, call };
+  }
+
+  // Opens the one-page document (handle doc-1) with the Layers panel open on the left.
+  async function openWithLayers(scripted: ReturnType<typeof layersEngine>) {
+    const engine = fakeEngine(scripted.client);
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    openPanel('layers');
+    act(() => {
+      root.render(<App engine={engine} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('layers.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+    await until(() => layerListReads(scripted) > 0);
+    return engine;
+  }
+
+  function layerListReads(scripted: ReturnType<typeof layersEngine>): number {
+    return scripted.call.mock.calls.filter(([method]) => method === 'layers.list').length;
+  }
+
+  it('routes a changed event for the open document to the render scheduler', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const note = vi.spyOn(RenderScheduler.prototype, 'noteRevisions');
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-1',
+          changes: [{ kind: 'content', pages: [0] }],
+          revisions: { '0': 5 },
+        },
+      ]);
+    });
+
+    expect(note).toHaveBeenCalledWith({ '0': 5 });
+  });
+
+  it('ignores a changed event for another document', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const note = vi.spyOn(RenderScheduler.prototype, 'noteRevisions');
+    const before = layerListReads(scripted);
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-9',
+          changes: [{ kind: 'structure', pages: [] }],
+          revisions: { '0': 5 },
+        },
+      ]);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(note).not.toHaveBeenCalled();
+    expect(layerListReads(scripted)).toBe(before);
+  });
+
+  it('reads the layers list again when a structure change reaches the open document', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const before = layerListReads(scripted);
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-1',
+          changes: [{ kind: 'structure', pages: [] }],
+          revisions: {},
+        },
+      ]);
+    });
+    await until(() => layerListReads(scripted) > before);
+
+    expect(layerListReads(scripted)).toBe(before + 1);
+  });
+
+  it('does not read the layers list again for a content change', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const before = layerListReads(scripted);
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-1',
+          changes: [{ kind: 'content', pages: [0] }],
+          revisions: { '0': 2 },
+        },
+      ]);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(layerListReads(scripted)).toBe(before);
   });
 });

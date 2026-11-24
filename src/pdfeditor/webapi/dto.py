@@ -90,7 +90,7 @@ class FontsResult:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class LayerEntry:
-    id: int  # the engine's optional-content id, used by layers.set_visible (a later slice)
+    id: int  # the engine's optional-content id, passed back to layers.set_visible
     name: str  # from the file; untrusted text, shown as text only
     visible: bool  # the view state the document's default gives
     depth: int  # nesting depth in the layer tree (0 at the top)
@@ -100,6 +100,13 @@ class LayerEntry:
 @dataclasses.dataclass(frozen=True, slots=True)
 class LayersResult:
     layers: tuple[LayerEntry, ...]  # in the engine's UI order; empty when there are none
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class LayerVisibleParams:
+    handle: str
+    id: int  # a LayerEntry.id from the current list
+    visible: bool  # the view state to set; nothing is saved
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -235,6 +242,7 @@ class PlatformFlags:
     image_formats: tuple[str, ...] | None
     max_image_bytes: int | None
     max_image_pixels: int | None
+    max_attachment_bytes: int | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -716,6 +724,28 @@ class CommentThreadDto:
 class CommentListResult:
     threads: tuple[CommentThreadDto, ...]  # page, then y, then x (comment_threads order)
     truncated: bool  # True when some threads were left out at the entry cap
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageCommentDto(CommentDto):
+    """A thread's root comment as the page's hit testing needs it (W7.1a section 3.1)."""
+
+    bounds: RectDto  # tight bounds of the geometry (the /Rect can include a line ending)
+    hidden: bool  # a hidden comment is never hit
+    movable: bool  # the Select tool may move it (not locked, not text markup)
+    resizable: bool  # the Select tool may resize it (not locked, not an icon)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageThreadDto:
+    comment: PageCommentDto
+    replies: tuple[CommentDto, ...]  # oldest first
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommentPageResult:
+    revision: int  # the page revision the threads were read at
+    threads: tuple[PageThreadDto, ...]  # top to bottom, then left to right, as the panel orders
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

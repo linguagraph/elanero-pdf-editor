@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
+from pdfeditor.model.annotations import AnnotationModel, AnnotationType
 from pdfeditor.model.geometry import Matrix, Point, Rect
 from pdfeditor.model.objects import PageObject
 
@@ -25,6 +26,18 @@ OBJECT_TOL_PX = 2.0
 MIN_DRAG = 3.0
 # The smallest side a resize may leave, in the box's own units (4 scene pixels on the desktop).
 MIN_SIZE = 4.0
+
+# Comments the Select tool cannot resize or move (the desktop's select tool and the web agree on
+# these). Icons keep a fixed size; text markup follows the text it marks.
+NOT_RESIZABLE = frozenset({AnnotationType.TEXT, AnnotationType.FILE_ATTACHMENT})
+NOT_MOVABLE = frozenset(
+    {
+        AnnotationType.HIGHLIGHT,
+        AnnotationType.UNDERLINE,
+        AnnotationType.STRIKEOUT,
+        AnnotationType.SQUIGGLY,
+    }
+)
 
 # Where each handle sits, as (column, row) with 0 = low edge, 1 = middle, 2 = high edge. The
 # order is the handle index used everywhere: left to right along the top, then the middle row,
@@ -97,6 +110,43 @@ def object_at(objects: Iterable[PageObject], point: Point, tol: float) -> PageOb
 def objects_in(objects: Iterable[PageObject], box: Rect) -> list[PageObject]:
     """The objects whose outline meets ``box`` (a rubber band selects by intersection)."""
     return [o for o in objects if o.bbox.intersects(box)]
+
+
+def annotation_bounds(a: AnnotationModel) -> Rect:
+    """Tight bounds of an annotation's geometry (its /Rect can include line-ending margins)."""
+    points: list[Point] = []
+    if a.type.is_markup:
+        points = [p for q in a.quads for p in (q.ul, q.ur, q.ll, q.lr)]
+    elif a.type is AnnotationType.INK:
+        points = [p for stroke in a.ink for p in stroke]
+    elif a.type in (AnnotationType.LINE, AnnotationType.POLYGON, AnnotationType.POLYLINE):
+        points = list(a.vertices)
+    if points:
+        return Rect.from_points(points)
+    return a.rect.normalized()
+
+
+def is_movable(a: AnnotationModel) -> bool:
+    """Whether the Select tool may move the comment: not locked, and not text markup."""
+    return not a.locked and a.type not in NOT_MOVABLE
+
+
+def is_resizable(a: AnnotationModel) -> bool:
+    """Whether the Select tool may resize the comment: not locked, and not an icon."""
+    return not a.locked and a.type not in NOT_RESIZABLE
+
+
+def comment_at(boxes: Sequence[tuple[Rect, bool]], point: Point, tol: float) -> int | None:
+    """The index of the topmost box that holds ``point``, grown by ``tol``.
+
+    Each entry is a comment's bounds and whether it is hidden; hidden ones are never hit. The
+    last entry is the topmost, so the search runs from the end, as the desktop's ``annotation_at``.
+    """
+    for index in range(len(boxes) - 1, -1, -1):
+        box, hidden = boxes[index]
+        if not hidden and box.inflated(tol).contains(point):
+            return index
+    return None
 
 
 def reselect(objects: Sequence[PageObject], boxes: Sequence[Rect]) -> list[str]:

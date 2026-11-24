@@ -61,6 +61,9 @@ MAX_PROBE_BYTES = 64 * 1024**2
 # the pixel cap is well below the render ceiling. 25 MP takes a 24 MP camera photo.
 MAX_IMAGE_BYTES = 50 * 1024**2
 MAX_IMAGE_PIXELS = 25_000_000
+# An embedded file is held by its Undo step and written into the saved file, so it is capped
+# well below MAX_JOB_BYTES, the most the browser copies for any job (W7.9 A1).
+MAX_ATTACHMENT_BYTES = 100 * 1024**2
 
 # The engine heap (W1.1 section 7): the front end warns once the wasm linear memory passes this.
 # Linear memory only grows, so this is a high-water mark, and a warning is never an error.

@@ -77,6 +77,20 @@ def images() -> None:
     _save(doc, "images.pdf")
 
 
+def attachments() -> None:
+    """Two embedded files and no signature: a text note and a one-page PDF (W7.9 A1 adds and
+    removes them; the PDF is what A2 opens as a document)."""
+    inner = pymupdf.open()
+    inner.new_page(width=A4.width, height=A4.height).insert_text((72, 72), "Inner PDF", fontsize=14)
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 60), "Page with attachments", fontsize=16)
+    doc.embfile_add("notes", b"attached notes\n", filename="notes.txt", desc="Attached notes")
+    doc.embfile_add("brief", inner.tobytes(), filename="brief.pdf", desc="A small PDF")
+    inner.close()
+    _save(doc, "attachments.pdf")
+
+
 def several_images() -> None:
     """Three different pictures on two pages: Extract Images takes each once, as a ZIP."""
     doc = pymupdf.open()
@@ -1285,6 +1299,16 @@ def incremental_sigflags_empty_embedded() -> None:
         pdf.save(OUT / "incremental_sigflags_empty_embedded.pdf")
 
 
+def incremental_sigflags_layers() -> None:
+    """A copy of ``layers`` with /SigFlags 3, so the in-place (incremental) save path is on and a
+    layer toggle can be tested against it (copy of tests/engine/test_mupdf_incremental.py)."""
+    import pikepdf
+
+    with pikepdf.open(OUT / "layers.pdf") as pdf:
+        pdf.Root.AcroForm = pikepdf.Dictionary(SigFlags=3, Fields=pikepdf.Array())
+        pdf.save(OUT / "incremental_sigflags_layers.pdf")
+
+
 def structure_indirect_values() -> None:
     """A tagged file whose /Lang, /DisplayDocTitle and /Alt are indirect objects (copy of
     tests/engine/test_structure.py test_indirect_values_are_read)."""
@@ -1483,6 +1507,66 @@ def comments_threaded() -> None:
         pdf.save(path)
 
 
+def comments_flags() -> None:
+    """Comments whose flags the web's comments.page reads (W7.1a slice 2): a highlight whose
+    /QuadPoints are smaller than its /Rect (the tight bounds), a hidden note (/F 2), and a locked
+    note (/F 128). The notes are on the one page, so the page read covers all three."""
+    import pikepdf
+
+    doc = pymupdf.open()
+    doc.new_page(width=A4.width, height=A4.height).insert_text((72, 300), "Flags.", fontsize=12)
+    _save(doc, "comments_flags.pdf")
+
+    def stamp() -> pikepdf.String:
+        return pikepdf.String("D:20260101100000Z")
+
+    def annot(rect: list[int], name: str, flags: int, **extra: object) -> pikepdf.Object:
+        return pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot,
+            Rect=rect,
+            F=flags,
+            NM=pikepdf.String(name),
+            T=pikepdf.String("Ada"),
+            CreationDate=stamp(),
+            M=stamp(),
+            **extra,
+        )
+
+    path = OUT / "comments_flags.pdf"
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        page = pdf.pages[0].obj
+        highlight = pdf.make_indirect(
+            annot(
+                [72, 600, 300, 640],
+                "markup-a",
+                4,
+                Subtype=pikepdf.Name.Highlight,
+                QuadPoints=[72, 630, 200, 630, 72, 610, 200, 610],
+                C=[1, 1, 0],
+            )
+        )
+        hidden = pdf.make_indirect(
+            annot(
+                [320, 700, 340, 720],
+                "hidden-a",
+                6,  # Hidden (2) and Print (4)
+                Subtype=pikepdf.Name.Text,
+                Contents=pikepdf.String("Hidden note"),
+            )
+        )
+        locked = pdf.make_indirect(
+            annot(
+                [360, 700, 380, 720],
+                "locked-a",
+                132,  # Locked (128) and Print (4)
+                Subtype=pikepdf.Name.Text,
+                Contents=pikepdf.String("Locked note"),
+            )
+        )
+        page.Annots = pikepdf.Array([highlight, hidden, locked])
+        pdf.save(path)
+
+
 def damaged_pubsec_filter() -> None:
     """A copy of report whose trailer names an /Encrypt dictionary with the Adobe.PubSec
     handler: the rewrite is pikepdf's, the trailer edit is bytes (copy of
@@ -1525,6 +1609,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "text_multipage": text_multipage,
     "images": images,
     "several_images": several_images,
+    "attachments": attachments,
     "vector_art": vector_art,
     "annotations": annotations,
     "annotations_unnamed": annotations_unnamed,
@@ -1552,11 +1637,13 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "deleted_pages_destinations": deleted_pages_destinations,
     "page_marks_acrobat_like": page_marks_acrobat_like,
     "incremental_sigflags_empty_embedded": incremental_sigflags_empty_embedded,
+    "incremental_sigflags_layers": incremental_sigflags_layers,
     "structure_indirect_values": structure_indirect_values,
     "comments_literal_hash_nm": comments_literal_hash_nm,
     "undo_signed_catalog": undo_signed_catalog,
     "comments_flattenable_mixed": comments_flattenable_mixed,
     "comments_threaded": comments_threaded,
+    "comments_flags": comments_flags,
     "annotations_form": annotations_form,
     "annotations_signed": annotations_signed,
     "damaged_pubsec_filter": damaged_pubsec_filter,

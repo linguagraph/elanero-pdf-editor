@@ -33,7 +33,8 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   'whats-different',
   'install-app',
   'open-recent',
-  // The Comments panel's exports are not in the shared table yet; W7.1b adds the panel entry points.
+  // The web's export and import dialogs are not in the shared table. The Comments panel's Import and
+  // Export buttons open the same dialogs (W7.1b), so the ids stay web-only.
   'export-comments',
   'import-comments',
   'translate-selection',
@@ -293,7 +294,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('sticky-note', 'command.sticky-note.label', 'comment.comments'),
     checked: (state) => state.commentTool === 'note',
   },
-  cmd('text-box', 'command.text-box.label', 'comment.comments'),
+  {
+    ...cmd('text-box', 'command.text-box.label', 'comment.comments'),
+    checked: (state) => state.commentTool === 'textbox',
+  },
   cmd('callout', 'command.callout.label', 'comment.comments'),
   cmd('stamp', 'command.stamp.label', 'comment.comments'),
   cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
@@ -301,9 +305,18 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('rectangle', 'command.rectangle.label', 'comment.drawing'),
     checked: (state) => state.commentTool === 'rectangle',
   },
-  cmd('oval', 'command.oval.label', 'comment.drawing'),
-  cmd('line', 'command.line.label', 'comment.drawing'),
-  cmd('arrow', 'command.arrow.label', 'comment.drawing'),
+  {
+    ...cmd('oval', 'command.oval.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'oval',
+  },
+  {
+    ...cmd('line', 'command.line.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'line',
+  },
+  {
+    ...cmd('arrow', 'command.arrow.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'arrow',
+  },
   cmd('polygon', 'command.polygon.label', 'comment.drawing'),
   cmd('polyline', 'command.polyline.label', 'comment.drawing'),
   cmd('pen', 'command.pen.label', 'comment.drawing'),

@@ -1,6 +1,7 @@
 // The gesture layer over one page while a comment tool is on (W7.1a, W1.5 section 6). A click
-// places a sticky note, which then asks for its text; a drag draws the box of a rectangle or a
-// highlight. The layer only reports the page points it worked out; the engine builds the comment.
+// places a sticky note, and a text box is a drag or a click; each then asks for its text. A drag
+// draws the box of a rectangle, oval or highlight, and a drag between two ends draws a line or
+// arrow. The layer only reports the page points it worked out; the engine builds the comment.
 import { type FormEvent, type PointerEvent, useState } from 'react';
 import { t } from '../i18n/t';
 import {
@@ -11,11 +12,16 @@ import {
   pointsToCss,
   rectBetween,
 } from './coordinates';
-import { type CommentToolId, isDragTool } from './tools';
+import { type CommentToolId, GESTURE_KIND } from './tools';
 import './comments.css';
 
 // A drag shorter than this (page points) is a click, not a box.
 const MIN_DRAG_PT = 2;
+
+// The zero-area box at a point: a note's icon corner, or a text box drawn as a click.
+function pointRect(point: PagePoint): PageRect {
+  return { x0: point.x, y0: point.y, x1: point.x, y1: point.y };
+}
 
 export interface CommentLayerProps {
   readonly tool: CommentToolId;
@@ -23,15 +29,18 @@ export interface CommentLayerProps {
   readonly zoom: number;
   readonly widthPt: number;
   readonly heightPt: number;
-  // The box the user drew, or for a note the point it sits at (x0, y0), and the note's text.
-  readonly onPlace: (rect: PageRect, text: string) => void;
+  // The gesture's box (a zero-area box at the point for a click), the text (empty for a
+  // gesture without one), and for a line or arrow its two ends (empty otherwise).
+  readonly onPlace: (rect: PageRect, text: string, points: readonly PagePoint[]) => void;
 }
 
 export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: CommentLayerProps) {
   const [start, setStart] = useState<PagePoint | null>(null);
   const [current, setCurrent] = useState<PagePoint | null>(null);
-  const [notePoint, setNotePoint] = useState<PagePoint | null>(null);
+  // The text form that is open, with the box its text will go in.
+  const [pending, setPending] = useState<PageRect | null>(null);
   const [noteText, setNoteText] = useState('');
+  const kind = GESTURE_KIND[tool];
 
   // The pointer offset is taken from the layer, which covers exactly the page box.
   const pointOf = (event: PointerEvent<HTMLDivElement>): PagePoint => {
@@ -40,10 +49,10 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
   };
 
   const onDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || notePoint !== null) return;
+    if (event.button !== 0 || pending !== null) return;
     const point = pointOf(event);
-    if (!isDragTool(tool)) {
-      setNotePoint(point);
+    if (kind === 'click') {
+      setPending(pointRect(point));
       setNoteText('');
       return;
     }
@@ -58,21 +67,32 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
   // Ends a drag on release, or when the pointer leaves the page (the box then stops at the edge).
   const finish = (event: PointerEvent<HTMLDivElement>) => {
     if (start === null) return;
-    const box = rectBetween(start, pointOf(event));
+    const end = pointOf(event);
+    const box = rectBetween(start, end);
     setStart(null);
     setCurrent(null);
-    if (box.x1 - box.x0 < MIN_DRAG_PT && box.y1 - box.y0 < MIN_DRAG_PT) return;
-    onPlace(box, '');
+    const drag = box.x1 - box.x0 >= MIN_DRAG_PT || box.y1 - box.y0 >= MIN_DRAG_PT;
+    if (kind === 'text') {
+      // A click gives the engine's default size, from the point clicked.
+      setPending(drag ? box : pointRect(start));
+      setNoteText('');
+      return;
+    }
+    if (!drag) return;
+    onPlace(box, '', kind === 'line' ? [start, end] : []);
   };
 
   const submitNote = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (notePoint === null || noteText.trim() === '') return;
-    const at = { x0: notePoint.x, y0: notePoint.y, x1: notePoint.x, y1: notePoint.y };
-    setNotePoint(null);
-    onPlace(at, noteText);
+    if (pending === null || noteText.trim() === '') return;
+    const rect = pending;
+    setPending(null);
+    onPlace(rect, noteText, []);
   };
 
+  const isNote = kind === 'click';
+  const showBox = start !== null && current !== null && kind !== 'line';
+  const showLine = start !== null && current !== null && kind === 'line';
   return (
     <div
       className="comment-layer"
@@ -82,17 +102,34 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
       onPointerUp={finish}
       onPointerLeave={finish}
     >
-      {start !== null && current !== null ? (
-        <div className="comment-preview" style={cssBox(rectBetween(start, current), zoom)} />
+      {showBox && start !== null && current !== null ? (
+        <div
+          className={tool === 'oval' ? 'comment-preview comment-preview-oval' : 'comment-preview'}
+          style={cssBox(rectBetween(start, current), zoom)}
+        />
       ) : null}
-      {notePoint !== null ? (
+      {showLine && start !== null && current !== null ? (
+        <svg
+          className="comment-line-preview"
+          viewBox={`0 0 ${widthPt} ${heightPt}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <line x1={start.x} y1={start.y} x2={current.x} y2={current.y} />
+        </svg>
+      ) : null}
+      {pending !== null && pending.x1 > pending.x0 && pending.y1 > pending.y0 ? (
+        <div className="comment-preview" style={cssBox(pending, zoom)} />
+      ) : null}
+      {pending !== null ? (
         <form
           className="comment-note-form"
-          style={{ left: pointsToCss(notePoint.x, zoom), top: pointsToCss(notePoint.y, zoom) }}
+          style={{ left: pointsToCss(pending.x0, zoom), top: pointsToCss(pending.y0, zoom) }}
           onSubmit={submitNote}
         >
           <textarea
-            aria-label={t('comment.noteText')}
+            aria-label={isNote ? t('comment.noteText') : t('comment.boxText')}
             rows={3}
             value={noteText}
             onChange={(event) => setNoteText(event.target.value)}
@@ -100,9 +137,9 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
           />
           <div className="comment-note-actions">
             <button type="submit" disabled={noteText.trim() === ''}>
-              {t('comment.noteAdd')}
+              {isNote ? t('comment.noteAdd') : t('comment.boxAdd')}
             </button>
-            <button type="button" onClick={() => setNotePoint(null)}>
+            <button type="button" onClick={() => setPending(null)}>
               {t('comment.cancel')}
             </button>
           </div>
