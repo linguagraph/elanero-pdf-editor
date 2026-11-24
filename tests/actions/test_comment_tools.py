@@ -24,6 +24,7 @@ from pdfeditor.actions.comment_tools import (
     build_markup,
     build_note,
     build_shape,
+    standard_stamp_box,
 )
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType
@@ -675,3 +676,68 @@ def test_the_mark_text_wire_args_convert() -> None:
     args = from_json(MarkText, wire, BufferTable([]), "args")
     assert args.kind is MarkupKind.UNDERLINE
     assert args.areas[0].quads[0] == Quad.from_rect(Rect(10, 20, 90, 32))
+
+
+# -- standard stamps (W7.3 S6) --------------------------------------------------------------------
+
+
+def stamp(s: DocumentSession, name: str, at: Point) -> object:
+    """A click at ``at`` with the stamp tool; the click is a zero-size rect, as the web sends."""
+    return make(s, CreateAnnotation(CommentTool.STAMP, 0, Rect(at.x, at.y, at.x, at.y), stamp=name))
+
+
+def test_a_stamp_is_centred_on_the_click_with_its_name(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    made = made_on_page(s, stamp(s, "Approved", Point(300, 300)))
+    assert made.type is AnnotationType.STAMP
+    assert made.icon == "Approved"
+    # MuPDF fits the stamp's own aspect inside the box it is given, so the box shrinks about
+    # its centre: the centre stays on the click.
+    assert made.rect.center.x == pytest.approx(300, abs=0.01)
+    assert made.rect.center.y == pytest.approx(300, abs=0.01)
+    assert standard_stamp_box(Point(300, 300)) == Rect(220, 275, 380, 325)
+
+
+def test_a_stamp_off_the_page_adds_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    assert not stamp(s, "Draft", Point(5000, 5000)).executed  # type: ignore[attr-defined]
+    assert not s.undo_stack.can_undo
+
+
+@pytest.mark.parametrize("name", ["", "Custom", "image:logo.png"])
+def test_an_unknown_stamp_name_is_refused(open_copy: Opener, name: str) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    with pytest.raises(Refused):
+        stamp(s, name, Point(300, 300))
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_undo_removes_a_stamp(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    assert stamp(s, "Final", Point(300, 300)).executed  # type: ignore[attr-defined]
+    assert s.undo()
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_round_trip_of_a_stamp(open_copy: Opener, tmp_path: Path) -> None:
+    """The stamp saves, reopens with its name, and renders ink inside its box (pikepdf and
+    pypdfium2, the round-trip rule)."""
+    s = open_copy("annotations")
+    stamp(s, "Approved", Point(300, 300))
+    out = s.save(tmp_path / "stamp.pdf")
+
+    reopened = reopen(out)
+    try:
+        with reopened.lock:
+            stamps = [
+                m for m in reopened.document.page(0).annotations() if m.type is AnnotationType.STAMP
+            ]
+        assert [m.icon for m in stamps] == ["Approved"]
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    record("annot_keys_pikepdf", out, subtype="/Stamp", present=["/Name"])
+    record("ink_region_pdfium", out, page=0, clip=[220.0, 275.0, 380.0, 325.0])
+    record("render_first_page_pdfium", out)

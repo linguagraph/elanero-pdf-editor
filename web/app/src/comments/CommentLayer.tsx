@@ -4,7 +4,13 @@
 // arrow. A callout takes its tip on a click, then its box. A pen draws a stroke while dragged, and
 // a polygon or polyline collects a click per vertex until a double-click (or Enter) finishes it.
 // The layer only reports the page points it worked out; the engine builds the comment.
-import { type FormEvent, type PointerEvent, useEffect, useState } from 'react';
+import {
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent,
+  useEffect,
+  useState,
+} from 'react';
 import { t } from '../i18n/t';
 import {
   cssBox,
@@ -119,6 +125,11 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
   const onDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || pending !== null) return;
     const point = pointOf(event);
+    if (kind === 'stamp') {
+      // A stamp is centred on the click: the engine centres it on this point.
+      onPlace(pointRect(point), '', []);
+      return;
+    }
     if (kind === 'click') {
       setPending(pointRect(point));
       setNoteText('');
@@ -193,6 +204,16 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
     onPlace(box, '', kind === 'line' ? [start, end] : []);
   };
 
+  // With the stamp tool on, Enter (with the page focused) places the stamp at the page's centre.
+  // A held key repeats, and each repeat would place another stamp, so only the first press counts.
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (kind !== 'stamp' || event.key !== 'Enter' || event.repeat || isControl(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    onPlace(pointRect({ x: widthPt / 2, y: heightPt / 2 }), '', []);
+  };
+
   const onDoubleClick = () => {
     if (kind !== 'poly') return;
     placePoly(tool, path, onPlace);
@@ -233,6 +254,8 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
     <div
       className="comment-layer"
       role="presentation"
+      tabIndex={kind === 'stamp' ? 0 : undefined}
+      onKeyDown={onKeyDown}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={finish}

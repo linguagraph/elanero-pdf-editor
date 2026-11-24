@@ -346,7 +346,7 @@ built in the web version yet:
 - the full set of keyboard shortcuts (the ribbon and the command palette work; see
   [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
 - editing the words of a paragraph, adding text, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
-- comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and image watermarks;
+- comments other than sticky notes, rectangles, highlights, the drawing and text comments, editing and deleting comments from the Comments panel, custom image stamps and image watermarks;
 - the Security tab of document properties (the title, author, subject and keywords can be edited, and the Advanced and Fonts tabs show the file's facts and fonts; see the table below);
 - the **Install App** command.
 
@@ -462,7 +462,7 @@ full policy, with what the desktop app stores, is in the
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
 | Web and email links | Yes | Yes: web and email links ask first, and show the full address |
-| Other comments, stamps | Yes | Coming soon |
+| Other comments, custom image stamps | Yes | Coming soon (the 14 standard stamps are on the Comment tab) |
 | Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
