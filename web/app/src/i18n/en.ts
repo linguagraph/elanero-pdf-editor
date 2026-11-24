@@ -1111,6 +1111,8 @@ export const EN = {
   'comment.tool.polyline': 'Polyline',
   'comment.added': 'Comment added.',
   'comment.failed': 'The comment could not be added.',
+  'markup.selectTextFirst': 'Select some text on a page first, then press the markup button.',
+  'markup.selectionTooLarge': 'A markup works on up to 300 pages at a time. Select fewer pages.',
   'comment.noteText': 'Note text',
   'comment.noteAdd': 'Add note',
   'comment.boxText': 'Text box text',
