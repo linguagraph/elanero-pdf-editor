@@ -25,6 +25,7 @@ from pdfeditor.webapi import (
     fonts,
     jobs,
     layers,
+    limits,
     memory,
     render,
     save,
@@ -35,7 +36,6 @@ from pdfeditor.webapi import (
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 from pdfeditor.webapi.events import CallRecorder, call_events, event, state_of
-from pdfeditor.webapi.limits import MAX_JSON_DEPTH
 from pdfeditor.webapi.registry import REGISTRY
 
 log = logging.getLogger(__name__)
@@ -234,7 +234,7 @@ def _check_depth(request_json: str) -> None:
             continue
         elif token in "[{":
             depth += 1
-            if depth > MAX_JSON_DEPTH:
+            if depth > limits.MAX_JSON_DEPTH:  # read at call time, so a test can lower it
                 raise RpcFailure(INVALID_REQUEST, "the request is nested too deeply")
         elif token in "]}":
             depth -= 1
