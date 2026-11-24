@@ -396,6 +396,9 @@ export function App({
   // Bumped after an Undo or Redo that changed only the outline: the bookmarks reload, and the view
   // stays where the reader is (a remount would put it back on page 1).
   const [outlineRevision, setOutlineRevision] = useState(0);
+  // Bumped after an Undo or Redo: an add or a remove of an attachment changes no page, so the
+  // attachments panel reloads its list on this counter.
+  const [attachmentsRevision, setAttachmentsRevision] = useState(0);
   // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
@@ -616,6 +619,7 @@ export function App({
     const refresh = historyRefresh(reply.changed);
     if (refresh.structure) setStructureRevision((value) => value + 1);
     else if (refresh.outline) setOutlineRevision((value) => value + 1);
+    if (reply.done) setAttachmentsRevision((value) => value + 1);
   };
   const runHistory = (direction: HistoryDirection) => {
     if (session !== null) {
@@ -891,6 +895,11 @@ export function App({
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
+            revision={attachmentsRevision}
+            signed={activeTab?.signed ?? false}
+            onHistoryStep={onHistoryStep}
+            startWorker={jobs.acquire}
+            onOpenFiles={docs.openFiles}
             onClose={() => closePanel('left')}
           />
         ) : documentShown && leftPanelOpen === 'layers' && activeId !== null && session !== null ? (

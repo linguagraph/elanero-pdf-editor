@@ -214,8 +214,13 @@ message saying whether it was added.
 - **Attachments.** The **Attachments** button on the left rail lists the files embedded in the
   document, with the size of each. Click a file to see its name, size and description, then press
   **Save** to download it to your computer. The file is saved as it is; the browser never opens or
-  runs it. If the document has no attachments, the panel says so. The panel is read-only for now:
-  you cannot add or remove attachments yet.
+  runs it. If the document has no attachments, the panel says so.
+  **Add file…** embeds a file of any type in the document under its own name (a second file with
+  the same name gets a number, as in "notes (2).txt"). Select an attachment and press **Remove** to
+  take it out; a dialog asks first. Each add or remove can be undone with the Undo button or the
+  Undo notice, until you close the document. A PDF attachment also has **Open as new tab**, which
+  opens it in its own tab. Other file types can only be saved. A signed document cannot have
+  attachments added or removed, because that would break its signatures; save a copy first.
 - **Layers.** The **Layers** button on the left rail lists the optional content layers of the
   document, in the order the file gives them. Each row shows whether the layer is visible in the
   document's default view, and a layer that the file locks is marked **Locked**. Nested layers
