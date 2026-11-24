@@ -85,6 +85,9 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   // The shape style refusals (W6.7b slice 3a): no outline and no fill, or a width out of range.
   shape_no_paint: 'error.REFUSED.shapeNoPaint',
   shape_width: 'error.REFUSED.shapeWidth',
+  // The layer toggle refusals (W7.9 L1): no layers in this document, or a locked layer.
+  layers_unsupported: 'error.REFUSED.layersUnsupported',
+  layer_locked: 'error.REFUSED.layerLocked',
 };
 
 function refusedReason(details: Details): Variant | undefined {

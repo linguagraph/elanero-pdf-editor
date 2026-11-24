@@ -541,7 +541,7 @@ export interface LanguageDto {
 }
 
 export interface LayerEntry {
-  /** the engine's optional-content id, used by layers.set_visible (a later slice) */
+  /** the engine's optional-content id, passed back to layers.set_visible */
   id: number;
   /** from the file; untrusted text, shown as text only */
   name: string;
@@ -551,6 +551,14 @@ export interface LayerEntry {
   depth: number;
   /** a locked layer can't be toggled */
   locked: boolean;
+}
+
+export interface LayerVisibleParams {
+  handle: string;
+  /** a LayerEntry.id from the current list */
+  id: number;
+  /** the view state to set; nothing is saved */
+  visible: boolean;
 }
 
 export interface LayersResult {
@@ -1174,6 +1182,7 @@ export interface Methods {
   'jobs.apply': { params: JobApplyParams; result: JobApplyResult; deadline: 'action' };
   'jobs.prepare': { params: JobPrepareParams; result: JobPrepareResult; deadline: 'action' };
   'layers.list': { params: HandleParams; result: LayersResult; deadline: 'instant' };
+  'layers.set_visible': { params: LayerVisibleParams; result: LayersResult; deadline: 'instant' };
   'marks.get': { params: MarkGetParams; result: MarkDetailResult; deadline: 'instant' };
   'marks.list': { params: HandleParams; result: MarksResult; deadline: 'instant' };
   'redaction.list': { params: HandleParams; result: RedactionListResult; deadline: 'instant' };
@@ -1228,6 +1237,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'jobs.apply': 'action',
   'jobs.prepare': 'action',
   'layers.list': 'instant',
+  'layers.set_visible': 'instant',
   'marks.get': 'instant',
   'marks.list': 'instant',
   'redaction.list': 'instant',
@@ -1287,6 +1297,7 @@ export const RESULT_DECODERS: {
   'jobs.apply': decodeJobApplyResult,
   'jobs.prepare': decodeJobPrepareResult,
   'layers.list': decodeLayersResult,
+  'layers.set_visible': decodeLayersResult,
   'marks.get': decodeMarkDetailResult,
   'marks.list': decodeMarksResult,
   'redaction.list': decodeRedactionListResult,
@@ -2099,6 +2110,20 @@ export function decodeLayerEntry(
     visible: expectBoolean(field(o, 'visible', path), `${path}.visible`),
     depth: expectInteger(field(o, 'depth', path), `${path}.depth`),
     locked: expectBoolean(field(o, 'locked', path), `${path}.locked`),
+  };
+}
+
+export function decodeLayerVisibleParams(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LayerVisibleParams {
+  const o = expectObject(value, path);
+  checkKeys(o, ['handle', 'id', 'visible'], path);
+  return {
+    handle: expectString(field(o, 'handle', path), `${path}.handle`),
+    id: expectInteger(field(o, 'id', path), `${path}.id`),
+    visible: expectBoolean(field(o, 'visible', path), `${path}.visible`),
   };
 }
 
