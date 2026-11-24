@@ -33,7 +33,7 @@ from pdfeditor.core.session import DocumentSession
 from pdfeditor.model import platform as model_platform
 from pdfeditor.model.annotations import IMAGE_STAMP, AnnotationModel, AnnotationType
 from pdfeditor.model.geometry import MarkupArea, PageRects, Point, Quad, Rect
-from pdfeditor.webapi.dto import BufferTable, from_json
+from pdfeditor.webapi.dto import BufferTable, from_json, to_json
 from pdfeditor.webapi.limits import MAX_IMAGE_BYTES
 from pdfeditor.webapi.platform import WEB_PLATFORM
 from tests.actions.conftest import Opener
@@ -95,6 +95,17 @@ def test_each_tool_adds_one_comment_with_its_label(open_copy: Opener) -> None:
         name = result.value[0].name  # type: ignore[attr-defined]
         assert any(a.name == name and a.type is kind for a in on_page(s))
     assert len(on_page(s)) == before + 3
+
+
+def test_create_returns_the_name_of_the_comment_it_added(open_copy: Opener) -> None:
+    """The web selects the new comment by this name (W7.1a Question 3): the reply's value is one
+    AnnotRef, which the RPC sends as {page, name}, and the name is the comment's own."""
+    s = open_copy("annotations")
+    result = create(s, CommentTool.NOTE, Rect(300, 300, 300, 300), "Hi")
+    wire = to_json(result.value, [])  # type: ignore[attr-defined]
+    assert wire == [{"page": 0, "name": result.value[0].name}]  # type: ignore[attr-defined]
+    assert wire[0]["name"]
+    assert made_on_page(s, result).contents == "Hi"
 
 
 def test_a_click_off_the_page_adds_nothing(open_copy: Opener) -> None:
