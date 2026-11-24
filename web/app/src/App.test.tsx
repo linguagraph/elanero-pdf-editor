@@ -169,11 +169,7 @@ describe('App job worker warm-up', () => {
     expect(jobs.warm).toHaveBeenCalledTimes(1);
 
     act(() => {
-      host
-        .querySelector<HTMLButtonElement>(
-          `button[aria-label="${t('tabs.close', { name: 'first.pdf' })}"]`,
-        )
-        ?.click();
+      host.querySelector<HTMLElement>('[role="tab"] .doc-tab-close')?.click();
     });
     dropFiles([pdf('second.pdf')]);
     await until(() => tabNames().some((name) => name.includes('second.pdf')));

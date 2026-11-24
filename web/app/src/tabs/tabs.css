@@ -7,6 +7,12 @@
   overflow-x: auto;
 }
 
+/* The tab panel react-aria gives the selected tab (aria-controls): the document view is elsewhere, so
+   the panel is empty and hidden from view and from assistive technology. */
+.doc-tabs-panel {
+  display: none;
+}
+
 /* The drop-down list that replaces the strip below 1024 px (W1.6 section 8). */
 .doc-tabs-menu {
   flex: 1 1 auto;
@@ -90,19 +96,17 @@
   color: var(--color-warning);
 }
 
+/* The close mark is a span, not a button: the tab's keyboard path is Delete (W8.5 S8). */
 .doc-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   width: 1.5rem;
   height: 1.5rem;
-  border: 0;
   border-radius: var(--radius-small);
-  background: none;
   color: var(--color-text-muted);
-  font: inherit;
   cursor: pointer;
-}
-
-.doc-tab-close:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
 }
 
 /* Touch targets are at least 44 px under a coarse pointer (W1.6, touch; W8.5 S5). */

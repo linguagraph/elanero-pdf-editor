@@ -24,6 +24,8 @@ import { PageLinkLayer } from '../links/PageLinkLayer';
 import type { LinksResult } from '../rpc/generated';
 import { ExportDialog } from '../export/ExportDialog';
 import { FlattenDialog } from '../flatten/FlattenDialog';
+import { DocumentTabs } from '../tabs/DocumentTabs';
+import { activateTab, addTab, EMPTY_TABS } from '../tabs/tabState';
 import { runAxe } from '../test/axe';
 
 // Component axe checks (W8.5 S1). Each test renders one screen and fails on a serious or critical
@@ -129,6 +131,19 @@ describe('component axe checks (W8.5 S1)', () => {
       expect(tab.getAttribute('aria-selected')).toBe('true');
       await expectAccessible(host);
     }
+  });
+
+  it('document tab strip', async () => {
+    let tabs = addTab(EMPTY_TABS, { name: 'a.pdf', handle: 'a', pages: 1 });
+    tabs = addTab(tabs, { name: 'b.pdf', handle: 'b', pages: 1 });
+    render(
+      <DocumentTabs
+        state={activateTab(tabs, 2)}
+        onSelect={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    await expectAccessible(host);
   });
 
   it('command palette, open', async () => {

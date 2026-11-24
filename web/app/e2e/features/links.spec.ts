@@ -5,7 +5,7 @@
 // check is recorded (as text.spec.ts). window.open is stubbed to log its arguments and open nothing,
 // so the run makes no third-party request.
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { checkAxe, KNOWN_TAB_ISSUES } from './axe';
+import { checkAxe } from './axe';
 import { STAGED, fixture, openApp, openPdf, watchPage } from './support';
 
 // The window.open calls the stub logged, one entry per call: its arguments.
@@ -130,7 +130,7 @@ test.describe('engine staged', () => {
   });
 
   // The accessibility line (#554): axe on the document with its link layer, then with the confirm
-  // dialog open. Only the tab strip's known issues (axe.ts) are excused.
+  // dialog open.
   test('axe: the link layer and the confirm dialog', async ({ page }, testInfo) => {
     const problems = watchPage(page);
     await stubWindowOpen(page);
@@ -139,11 +139,11 @@ test.describe('engine staged', () => {
 
     const link = page.getByRole('link', { name: 'Link to example.org', exact: true });
     await expect(link).toBeVisible();
-    await checkAxe(page, testInfo, KNOWN_TAB_ISSUES);
+    await checkAxe(page, testInfo);
 
     await link.click();
     await expect(page.getByRole('dialog', { name: 'Open link?' })).toBeVisible();
-    await checkAxe(page, testInfo, KNOWN_TAB_ISSUES);
+    await checkAxe(page, testInfo);
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });

@@ -4,7 +4,7 @@
 // needs the staged engine (STAGED), so the specs skip without it, as the other engine specs do.
 import { expect, type Page, test } from '@playwright/test';
 import { PREFS_STORAGE_KEY } from '../../src/prefs/store';
-import { checkAxe, KNOWN_TAB_ISSUES } from './axe';
+import { checkAxe } from './axe';
 import { fixture, openApp, openPdf, STAGED, watchPage } from './support';
 
 const SCHEMES = ['light', 'dark'] as const;
@@ -54,7 +54,7 @@ test.describe('engine staged', () => {
       test(`axe: document view (${scheme})`, async ({ page }, testInfo) => {
         const problems = watchPage(page);
         await openDocument(page);
-        await checkAxe(page, testInfo, KNOWN_TAB_ISSUES);
+        await checkAxe(page, testInfo);
         expect(problems, 'CSP or page errors').toEqual([]);
       });
     });
