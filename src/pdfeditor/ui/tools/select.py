@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QApplication, QGraphicsView
 
 from pdfeditor.actions import comments
 from pdfeditor.actions.comments import TransformAnnotations
+from pdfeditor.actions.edit_geometry import NOT_MOVABLE, NOT_RESIZABLE, annotation_bounds
 from pdfeditor.model.annotations import (
     AnnotationModel,
     AnnotationType,
@@ -30,14 +31,6 @@ from pdfeditor.ui.tools.base import Tool
 if TYPE_CHECKING:
     from pdfeditor.ui.view.document_view import DocumentView
 
-# Icons keep a fixed size; text markup follows the text it marks.
-NOT_RESIZABLE = {AnnotationType.TEXT, AnnotationType.FILE_ATTACHMENT}
-NOT_MOVABLE = {
-    AnnotationType.HIGHLIGHT,
-    AnnotationType.UNDERLINE,
-    AnnotationType.STRIKEOUT,
-    AnnotationType.SQUIGGLY,
-}
 HANDLE_PX = 6
 _CURSORS = [
     Qt.CursorShape.SizeFDiagCursor,
@@ -49,12 +42,6 @@ _CURSORS = [
     Qt.CursorShape.SizeVerCursor,
     Qt.CursorShape.SizeFDiagCursor,
 ]
-
-
-def _bounds(model: AnnotationModel) -> Rect:
-    from pdfeditor.ui.view.document_view import annotation_bounds
-
-    return annotation_bounds(model)
 
 
 def _handles(r: QRectF) -> list[QPointF]:
@@ -104,7 +91,7 @@ class SelectTool(Tool):
         model = selected[0]
         if model.type in NOT_RESIZABLE or model.locked:
             return None
-        box = view.page_rect_to_scene(model.page_index, _bounds(model))
+        box = view.page_rect_to_scene(model.page_index, annotation_bounds(model))
         tol = HANDLE_PX / max(view.transform().m11(), 0.01)
         for i, h in enumerate(_handles(box)):
             if abs(h.x() - scene.x()) <= tol and abs(h.y() - scene.y()) <= tol:
@@ -148,7 +135,7 @@ class SelectTool(Tool):
         if handle is None:
             return Matrix.translate(now.x - start.x, now.y - start.y)
         # resize: move the grabbed edges in scene space, then map back to page space
-        old = _bounds(models[0])
+        old = annotation_bounds(models[0])
         box = view.page_rect_to_scene(page, old)
         left, top, right, bottom = box.left(), box.top(), box.right(), box.bottom()
         col, row = [(0, 0), (1, 0), (2, 0), (0, 1), (2, 1), (0, 2), (1, 2), (2, 2)][handle]
@@ -225,7 +212,7 @@ class SelectTool(Tool):
             self._drag_matrix = self._drag_to(view, scene)
             page, models, _s, _h = self._annot_drag
             view.set_annotation_preview(
-                {page: [_bounds(transformed(a, self._drag_matrix)) for a in models]}
+                {page: [annotation_bounds(transformed(a, self._drag_matrix)) for a in models]}
             )
             return True
         if not self._dragging or view.selection is None:

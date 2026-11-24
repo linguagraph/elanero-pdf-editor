@@ -226,3 +226,14 @@ class PageRects:
 
     page: int
     rects: tuple[Rect, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MarkupArea:
+    """One page's share of a text selection: one quad per line, in visible page space. ``text``
+    is the selected text on that page (it becomes the comment's contents). Kept here, not in the
+    actions module, because the wire rule allows nested dataclasses only from model and services."""
+
+    page: int
+    quads: tuple[Quad, ...]
+    text: str = ""

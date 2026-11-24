@@ -1,0 +1,89 @@
+/* The marks dialogs (W7.3): the shared shell and its forms. Colours and sizes come from the theme. */
+.mark-form,
+.mark-existing {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.mark-existing p,
+.mark-subtitle,
+.mark-note,
+.mark-reason {
+  margin: 0;
+}
+
+.mark-note {
+  color: var(--color-text-muted);
+}
+
+.mark-error {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+.mark-reason:empty {
+  display: none;
+}
+
+.mark-fields,
+.mark-scope {
+  display: grid;
+  gap: var(--space-2);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.mark-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.mark-suffixed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.mark-scope-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mark-range {
+  min-height: 44px;
+  min-width: 0;
+  flex: 1 1 8rem;
+}
+
+.mark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.mark-form-part,
+.mark-details {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The header and footer slots: a row label, then one column per left, center and right. */
+.mark-grid {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mark-grid-head {
+  color: var(--color-text-muted);
+}
+
+.mark-slot {
+  min-height: 44px;
+  min-width: 0;
+}

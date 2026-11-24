@@ -158,6 +158,8 @@ class TransformAnnotations:
     refs: tuple[AnnotRef, ...]
     matrix: Matrix
     resize: bool
+    # Consecutive moves with the same key are one undo step (a held arrow key, W7.1a section 3.5).
+    merge_key: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,7 +307,7 @@ def transform(session: DocumentSession, args: TransformAnnotations) -> ActionRes
     ensure_idle(session)
     label = "Resize Comment" if args.resize else "Move Comment"
     commands: list[Command] = [
-        UpdateAnnotationCommand(cur, reshaped(cur, args.matrix, args.resize), label)
+        UpdateAnnotationCommand(cur, reshaped(cur, args.matrix, args.resize), label, args.merge_key)
         for cur in (_current(session, ref) for ref in args.refs)
     ]
     return ActionResult(label, None, execute_all(session, commands, label))

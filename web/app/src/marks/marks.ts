@@ -217,6 +217,19 @@ export function headerFooterArgs(
   };
 }
 
+// The first Bates number the form would stamp, formatted as the engine does (stamping.bates_number):
+// the start zero-padded to the digits, between the prefix and the suffix. Undefined while the start
+// or the digits are not valid.
+export function batesPreview(bates: BatesForm): string | undefined {
+  if (!Number.isInteger(bates.start) || !inLimit(bates.start, MARK_LIMITS.batesStart)) {
+    return undefined;
+  }
+  if (!Number.isInteger(bates.digits) || !inLimit(bates.digits, MARK_LIMITS.batesDigits)) {
+    return undefined;
+  }
+  return `${bates.prefix}${String(bates.start).padStart(bates.digits, '0')}${bates.suffix}`;
+}
+
 export type WatermarkArgs = {
   spec: {
     text: string;
