@@ -80,6 +80,7 @@ DEADLINE_CLASS: dict[str, str] = {
     "marks.list": "instant",
     "redaction.list": "instant",
     "comments.list": "instant",
+    "comments.page": "instant",
     "render.page": "render",
     "render.tile": "render",
     "save.mark_saved": "instant",

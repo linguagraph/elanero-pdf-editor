@@ -63,27 +63,28 @@ def comment_threads(doc: Document) -> list[Thread]:
     """All comments in page order, each with its (transitive) replies, oldest first."""
     threads: list[Thread] = []
     for index in range(doc.page_count):
-        models = [a for a in doc.page(index).annotations() if a.type.is_comment]
-        by_id = {a.id: a for a in models}
-
-        page_threads: dict[int | None, Thread] = {}
-        for a in models:
-            if a.in_reply_to is None:
-                page_threads[a.id] = Thread(a)
-        for a in models:
-            if a.in_reply_to is not None:
-                root = _root_of(a, by_id)
-                thread = page_threads.setdefault(root.id, Thread(root))
-                if a is not root:
-                    thread.replies.append(a)
-        for thread in page_threads.values():
-            thread.replies.sort(
-                key=lambda r: (r.created or r.modified or _EPOCH).replace(tzinfo=None)
-            )
-        threads.extend(
-            sorted(page_threads.values(), key=lambda t: (t.comment.rect.y0, t.comment.rect.x0))
-        )
+        threads.extend(page_threads(doc, index))
     return threads
+
+
+def page_threads(doc: Document, index: int) -> list[Thread]:
+    """One page's comments, top to bottom, each with its replies (the web's per-page read)."""
+    models = [a for a in doc.page(index).annotations() if a.type.is_comment]
+    by_id = {a.id: a for a in models}
+
+    threads: dict[int | None, Thread] = {}
+    for a in models:
+        if a.in_reply_to is None:
+            threads[a.id] = Thread(a)
+    for a in models:
+        if a.in_reply_to is not None:
+            root = _root_of(a, by_id)
+            thread = threads.setdefault(root.id, Thread(root))
+            if a is not root:
+                thread.replies.append(a)
+    for thread in threads.values():
+        thread.replies.sort(key=lambda r: (r.created or r.modified or _EPOCH).replace(tzinfo=None))
+    return sorted(threads.values(), key=lambda t: (t.comment.rect.y0, t.comment.rect.x0))
 
 
 def flattenable(doc: Document) -> tuple[int, int]:

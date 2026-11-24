@@ -190,6 +190,31 @@ def _reselect_cases(objects: list[PageObject]) -> list[dict[str, Any]]:
     ]
 
 
+# Comment bounds with a hidden flag: the last overlapping entry is the topmost, and a hidden
+# one is never hit (W7.1a section 3.2).
+COMMENT_BOXES = [
+    (Rect(0.0, 0.0, 100.0, 50.0), False),
+    (Rect(200.0, 200.0, 220.0, 220.0), True),
+    (Rect(50.0, 40.0, 60.0, 45.0), False),
+    (Rect(50.0, 40.0, 60.0, 45.0), False),  # the same box on top: index 3 wins
+]
+
+
+def _comment_at_cases() -> list[dict[str, Any]]:
+    points = [Point(55.0, 42.0), Point(0.0, 0.0), Point(210.0, 210.0), Point(230.0, 230.0)]
+    points += [Point(100.5, 25.0), Point(61.0, 46.0), Point(-1.0, 25.0)]
+    return [
+        {
+            "boxes": [[_rect(box), hidden] for box, hidden in COMMENT_BOXES],
+            "point": _pt(point),
+            "tol": tol,
+            "expected": eg.comment_at(COMMENT_BOXES, point, tol),
+        }
+        for point in points
+        for tol in (0.0, 2.0)
+    ]
+
+
 def build() -> dict[str, Any]:
     objects = _objects()
     return {
@@ -212,6 +237,7 @@ def build() -> dict[str, Any]:
         "object_at": _object_at_cases(objects),
         "objects_in": _objects_in_cases(objects),
         "reselect": _reselect_cases(objects),
+        "comment_at": _comment_at_cases(),
     }
 
 
