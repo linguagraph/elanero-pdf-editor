@@ -31,6 +31,36 @@
   pointer-events: none;
 }
 
+/* The focusable comment of PageCommentList: over the comment, with no paint of its own; the focus
+   ring shows where the keyboard is. The mouse goes to the selection layer, so it takes no pointer. */
+.comment-list-item {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
+
+.comment-list-item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Forced colours: the outline and handles keep their edges in the system colours. */
+@media (forced-colors: active) {
+  .comment-select-outline,
+  .comment-list-item:focus-visible {
+    border-color: Highlight;
+    outline-color: Highlight;
+  }
+
+  .comment-select-handle {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+}
+
 .comment-preview {
   position: absolute;
   border: 1px dashed var(--color-focus-ring);

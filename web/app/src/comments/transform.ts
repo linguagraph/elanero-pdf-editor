@@ -34,13 +34,15 @@ export function isMoveClick(dx: number, dy: number): boolean {
 
 // Sends one annotations.transform for the refs and offers Undo for the step. Returns whether the
 // engine applied it. A stale reference (the comment was removed) is reported and onStale runs, so
-// the caller clears its selection; the engine changes nothing in that case.
+// the caller clears its selection; the engine changes nothing in that case. A non-empty mergeKey
+// makes consecutive sends with it one undo step (the presses of a held arrow key, keyboard.ts).
 export async function transformComments(
   deps: TransformDeps,
   refs: readonly CommentRef[],
   matrix: Affine,
   resize: boolean,
   onStale: () => void,
+  mergeKey = '',
 ): Promise<boolean> {
   const store = deps.store ?? toasts;
   const [a, b, c, d, e, f] = matrix;
@@ -52,6 +54,7 @@ export async function transformComments(
         refs: refs.map((r) => ({ page: r.page, name: r.name })),
         matrix: { a, b, c, d, e, f },
         resize,
+        ...(mergeKey === '' ? {} : { merge_key: mergeKey }),
       },
     });
     if (!reply.executed) return false;

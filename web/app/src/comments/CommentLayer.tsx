@@ -29,7 +29,8 @@ import {
   POLYGON_CLOSE_PT,
   polyVertices,
 } from './pointGeometry';
-import { type CommentToolId, GESTURE_KIND } from './tools';
+import { centredPlacement } from './keyboard';
+import { type CommentToolId, COMMENT_TOOL_LABEL, GESTURE_KIND } from './tools';
 import './comments.css';
 
 // A drag shorter than this (page points) is a click, not a box.
@@ -204,14 +205,29 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
     onPlace(box, '', kind === 'line' ? [start, end] : []);
   };
 
-  // With the stamp tool on, Enter (with the page focused) places the stamp at the page's centre.
-  // A held key repeats, and each repeat would place another stamp, so only the first press counts.
+  // Enter (or Space) with the page focused places the tool's default comment at the page's centre
+  // (keyboard.ts): a note or a text box opens its form, a callout opens its form over its box, and a
+  // stamp is placed. A held key repeats, and each repeat would place another, so only the first press
+  // counts. A key from a control (a form's field) is left to the control.
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (kind !== 'stamp' || event.key !== 'Enter' || event.repeat || isControl(event.target)) {
+    if (event.repeat || isControl(event.target)) return;
+    if (kind === 'stamp') {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      onPlace(pointRect({ x: widthPt / 2, y: heightPt / 2 }), '', []);
       return;
     }
+    if ((event.key !== 'Enter' && event.key !== ' ') || pending !== null) return;
+    const placement = centredPlacement(tool, widthPt, heightPt);
+    if (placement === null) return;
     event.preventDefault();
-    onPlace(pointRect({ x: widthPt / 2, y: heightPt / 2 }), '', []);
+    if (placement.kind === 'place') {
+      onPlace(placement.rect, '', placement.points);
+      return;
+    }
+    setPending(placement.rect);
+    setPendingTip(placement.tip);
+    setNoteText('');
   };
 
   const onDoubleClick = () => {
@@ -235,6 +251,11 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
     setPendingTip(null);
   };
 
+  // Pen, polygon and polyline have no keyboard placement, so their layer says nothing about Enter.
+  const hint =
+    kind === 'stamp' || centredPlacement(tool, widthPt, heightPt) !== null
+      ? t('comment.layer.hint')
+      : undefined;
   const isNote = kind === 'click';
   const isCallout = kind === 'callout';
   const showBox =
@@ -253,8 +274,10 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
   return (
     <div
       className="comment-layer"
-      role="presentation"
-      tabIndex={kind === 'stamp' ? 0 : undefined}
+      role="application"
+      aria-label={t(COMMENT_TOOL_LABEL[tool])}
+      aria-description={hint}
+      tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerDown={onDown}
       onPointerMove={onMove}

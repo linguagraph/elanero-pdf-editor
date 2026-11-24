@@ -105,6 +105,21 @@ describe('the stamp tool on a page', () => {
     });
     expect(onPlace).toHaveBeenCalledWith({ x0: 306, y0: 396, x1: 306, y1: 396 }, '', []);
   });
+
+  it('Space places the stamp at the centre of the page, as Enter does', () => {
+    const onPlace = vi.fn();
+    act(() =>
+      root.render(
+        <CommentLayer tool="stamp" zoom={1} widthPt={612} heightPt={792} onPlace={onPlace} />,
+      ),
+    );
+    const el = layer();
+    if (el === null) throw new Error('no layer');
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    });
+    expect(onPlace).toHaveBeenCalledWith({ x0: 306, y0: 396, x1: 306, y1: 396 }, '', []);
+  });
 });
 
 describe('placing a stamp', () => {
@@ -187,14 +202,15 @@ describe('the stamp key on other tools', () => {
 
   const layer = () => container.querySelector<HTMLDivElement>('.comment-layer');
 
-  it('only the stamp tool makes the page focusable', () => {
+  it('every comment tool layer is a focusable application (W7.1a slice 9)', () => {
     for (const tool of ['note', 'rectangle', 'polygon'] as const) {
       act(() =>
         root.render(
           <CommentLayer tool={tool} zoom={1} widthPt={612} heightPt={792} onPlace={vi.fn()} />,
         ),
       );
-      expect(layer()?.hasAttribute('tabindex')).toBe(false);
+      expect(layer()?.getAttribute('tabindex')).toBe('0');
+      expect(layer()?.getAttribute('role')).toBe('application');
     }
     act(() =>
       root.render(
