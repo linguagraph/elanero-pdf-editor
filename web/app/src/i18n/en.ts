@@ -420,10 +420,10 @@ export const EN = {
   'translate.noteAdded': 'The translation was added as a note.',
   'prefs.clearAll.open': 'Clear all local data…',
   'prefs.clearAll.hint':
-    'Removes your preferences, recent file names, uploaded fonts and stored secrets from this browser. Your files are not touched.',
+    'Removes your preferences, recent file names, uploaded fonts, custom stamps and stored secrets from this browser. Your files are not touched.',
   'prefs.clearAll.blocked': 'Close all documents first.',
   'prefs.clearAll.confirm':
-    'This cannot be undone. Your preferences, recent file names, uploaded fonts and stored secrets are removed, then the page reloads. Recovery copies used by other open Elanero tabs are kept.',
+    'This cannot be undone. Your preferences, recent file names, uploaded fonts, custom stamps and stored secrets are removed, then the page reloads. Recovery copies used by other open Elanero tabs are kept.',
   'prefs.clearAll.clear': 'Clear',
   'prefs.clearAll.keep': 'Keep',
   'prefs.clearAll.incomplete':
@@ -1138,7 +1138,10 @@ export const EN = {
   'comment.list.label': '{name}: {text}',
   'comment.list.locked': '{label}, locked',
   'stamp.menu': 'Stamp',
-  'stamp.menuLabel': 'Standard stamps',
+  'stamp.menuLabel': 'Stamps',
+  'stamp.custom.add': 'Add Custom Stamp…',
+  'stamp.custom.remove': 'Remove Custom Stamp',
+  'stamp.custom.section': 'Custom stamps',
   'stamp.placed': '{name} stamp added on page {page}.',
   'stamp.custom.tooLarge': 'This image is too large for a stamp (at most {mb} MB).',
   'stamp.custom.wrongType': 'Choose a PNG or JPEG image.',

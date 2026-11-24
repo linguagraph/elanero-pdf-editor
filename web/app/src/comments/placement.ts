@@ -9,8 +9,9 @@ import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { PagePoint, PageRect } from './coordinates';
-import type { StandardStamp } from './stamps';
+import type { CustomStampRef, StandardStamp } from './stamps';
 import { STAMP_LABEL } from './stamps';
+import type { StampLibrary } from './stampLibrary';
 import type { CommentToolId } from './tools';
 
 export interface PlacementDeps {
@@ -18,11 +19,23 @@ export interface PlacementDeps {
   readonly handle: string;
   readonly scheduler: Pick<RenderScheduler, 'noteRevisions'>;
   readonly store?: ToastStore;
+  // The custom stamp library, read when a custom stamp is placed (W7.3b S2).
+  readonly stamps: Pick<StampLibrary, 'read'>;
 }
 
 function reportFailure(store: ToastStore, error: unknown): void {
   if (error instanceof RpcError) reportRpcError(store, error);
   else store.push('error', t('comment.failed'));
+}
+
+// The picture of a custom stamp, or 'gone' when the library no longer has it (removed in another
+// tab).
+async function customImage(
+  deps: PlacementDeps,
+  id: string,
+): Promise<ArrayBuffer | 'gone' | undefined> {
+  const blob = await deps.stamps.read(id);
+  return blob === undefined ? 'gone' : blob.arrayBuffer();
 }
 
 // Runs annotations.create for one gesture and shows the Undo toast when a comment was added.
@@ -33,10 +46,20 @@ export async function placeComment(
   rect: PageRect,
   text: string,
   points: readonly PagePoint[] = [],
-  stamp: StandardStamp | '' = '',
+  stamp: StandardStamp | '' | CustomStampRef = '',
 ): Promise<void> {
   const store = deps.store ?? toasts;
   try {
+    // A custom stamp is placed by its picture: read it now. A sent buffer is detached, so each
+    // placement reads the bytes again.
+    const custom = typeof stamp === 'string' ? null : stamp;
+    const image = custom === null ? undefined : await customImage(deps, custom.id);
+    if (image === 'gone') {
+      store.push('error', t('stamp.custom.unreadable'));
+      return;
+    }
+    const name =
+      typeof stamp === 'string' ? (stamp === '' ? '' : t(STAMP_LABEL[stamp])) : stamp.label;
     // The author is read at each comment, so a changed name applies to the next one (W4.5 S3).
     const reply = await deps.rpc.call('actions.run', {
       handle: deps.handle,
@@ -45,18 +68,20 @@ export async function placeComment(
         tool,
         page,
         rect,
-        text,
+        text: custom === null ? text : custom.label,
         points,
-        // Only a stamp names one (the engine refuses a stamp without a name).
-        ...(tool === 'stamp' ? { stamp } : {}),
+        // Only a stamp names one (the engine refuses a stamp without a name). A custom stamp has
+        // no name and carries its picture instead.
+        ...(tool === 'stamp' ? { stamp: typeof stamp === 'string' ? stamp : '' } : {}),
+        ...(image === undefined ? {} : { image }),
         author: readPreferences().authorName,
       },
     });
     if (!reply.executed) return;
     deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
     const message =
-      tool === 'stamp' && stamp !== ''
-        ? t('stamp.placed', { name: t(STAMP_LABEL[stamp]), page: page + 1 })
+      tool === 'stamp' && name !== ''
+        ? t('stamp.placed', { name, page: page + 1 })
         : t('comment.added');
     offerUndo('info', message, {
       rpc: deps.rpc,

@@ -6,9 +6,12 @@ round-trip rule), and every tool gets an undo step with the desktop's label.
 
 from __future__ import annotations
 
+import io
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from pdfeditor import actions as layer
 from pdfeditor.actions.base import Refused
@@ -27,9 +30,12 @@ from pdfeditor.actions.comment_tools import (
     standard_stamp_box,
 )
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType
+from pdfeditor.model import platform as model_platform
+from pdfeditor.model.annotations import IMAGE_STAMP, AnnotationModel, AnnotationType
 from pdfeditor.model.geometry import MarkupArea, PageRects, Point, Quad, Rect
 from pdfeditor.webapi.dto import BufferTable, from_json
+from pdfeditor.webapi.limits import MAX_IMAGE_BYTES
+from pdfeditor.webapi.platform import WEB_PLATFORM
 from tests.actions.conftest import Opener
 from tests.hostcheck import record
 
@@ -740,4 +746,141 @@ def test_round_trip_of_a_stamp(open_copy: Opener, tmp_path: Path) -> None:
             reopened.document.close()
     record("annot_keys_pikepdf", out, subtype="/Stamp", present=["/Name"])
     record("ink_region_pdfium", out, page=0, clip=[220.0, 275.0, 380.0, 325.0])
+    record("render_first_page_pdfium", out)
+
+
+# -- custom image stamps (W7.3b S2) ---------------------------------------------------------------
+
+
+def png_bytes(size: tuple[int, int], color: tuple[int, int, int] = (20, 20, 20)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def png_with_pixels(width: int, height: int) -> bytes:
+    """A 1-bit PNG whose header declares more pixels than the web's cap; the file stays small."""
+    buf = io.BytesIO()
+    Image.new("1", (width, height), 0).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def image_stamp(s: DocumentSession, data: bytes, at: Point, label: str = "Logo") -> object:
+    """A click at ``at`` with a custom image stamp (a zero-size rect, as the web sends)."""
+    args = CreateAnnotation(
+        CommentTool.STAMP, 0, Rect(at.x, at.y, at.x, at.y), text=label, image=data
+    )
+    return make(s, args)
+
+
+@pytest.fixture
+def web_platform() -> Iterator[None]:
+    """The browser's image rules (formats and caps) for the test, then the desktop's again."""
+    previous = model_platform.current()
+    model_platform.configure(WEB_PLATFORM)
+    try:
+        yield
+    finally:
+        model_platform.configure(previous)
+
+
+def test_a_custom_stamp_is_sized_by_stamp_rect_and_centred(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    # 400 x 200 px is 300 x 150 pt at 96 DPI; the longer side is cut to 200 pt (stamp_rect).
+    made = made_on_page(s, image_stamp(s, png_bytes((400, 200)), Point(300, 300)))
+    assert made.type is AnnotationType.STAMP
+    assert made.icon == IMAGE_STAMP
+    assert made.contents == "Logo"
+    assert made.rect.x0 == pytest.approx(200) and made.rect.x1 == pytest.approx(400)
+    assert made.rect.y0 == pytest.approx(250) and made.rect.y1 == pytest.approx(350)
+
+
+def test_a_custom_stamp_off_the_page_adds_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    assert not image_stamp(s, png_bytes((40, 40)), Point(5000, 5000)).executed  # type: ignore[attr-defined]
+    assert not s.undo_stack.can_undo
+
+
+def test_a_custom_stamp_with_a_standard_name_is_refused(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    args = CreateAnnotation(
+        CommentTool.STAMP, 0, Rect(300, 300, 300, 300), stamp="Approved", image=png_bytes((40, 40))
+    )
+    with pytest.raises(Refused):
+        make(s, args)
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_a_gif_is_refused_as_a_stamp_image(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), (0, 0, 200)).save(buf, format="GIF")
+    with pytest.raises(Refused) as caught:
+        image_stamp(s, buf.getvalue(), Point(300, 300))
+    assert caught.value.reason == "image_format"
+
+
+@pytest.mark.parametrize(
+    ("data", "reason"),
+    [
+        pytest.param(b"", "image_unreadable", id="empty"),
+        pytest.param(b"not an image at all", "image_unreadable", id="garbage"),
+        pytest.param(b"\x00" * (MAX_IMAGE_BYTES + 1), "image_too_large", id="too_large"),
+        pytest.param(png_with_pixels(5000, 5001), "image_too_many_pixels", id="too_many_pixels"),
+    ],
+)
+def test_a_custom_stamp_image_over_the_web_limits_is_refused(
+    open_copy: Opener, web_platform: None, data: bytes, reason: str
+) -> None:
+    s = open_copy("annotations")
+    with pytest.raises(Refused) as caught:
+        image_stamp(s, data, Point(300, 300))
+    assert caught.value.reason == reason
+
+
+def test_undo_removes_a_custom_stamp(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    assert image_stamp(s, png_bytes((40, 40)), Point(300, 300)).executed  # type: ignore[attr-defined]
+    assert s.undo()
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_the_web_wire_args_carry_the_stamp_image() -> None:
+    """The picture arrives as a $bin buffer and becomes the action's bytes."""
+    data = png_bytes((40, 30))
+    wire = {
+        "tool": "stamp",
+        "page": 0,
+        "rect": {"x0": 10.0, "y0": 20.0, "x1": 10.0, "y1": 20.0},
+        "text": "Logo",
+        "stamp": "",
+        "image": {"$bin": 0},
+    }
+    args = from_json(CreateAnnotation, wire, BufferTable([data]), "args")
+    assert args.image == data
+    assert args.text == "Logo"
+
+
+def test_round_trip_of_a_custom_stamp(open_copy: Opener, tmp_path: Path) -> None:
+    """The stamp saves with its picture and label, reopens as an image stamp, and draws ink in
+    its box (pikepdf and pypdfium2, the round-trip rule)."""
+    s = open_copy("annotations")
+    image_stamp(s, png_bytes((400, 200)), Point(300, 300))
+    out = s.save(tmp_path / "custom_stamp.pdf")
+
+    reopened = reopen(out)
+    try:
+        with reopened.lock:
+            stamps = [
+                m for m in reopened.document.page(0).annotations() if m.type is AnnotationType.STAMP
+            ]
+        assert [m.icon for m in stamps] == [IMAGE_STAMP]
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    record("stamp_image_pikepdf", out, page=0)
+    record("annot_keys_pikepdf", out, subtype="/Stamp", present=["/Name"], contents="Logo")
+    record("ink_region_pdfium", out, page=0, clip=[200.0, 250.0, 400.0, 350.0])
     record("render_first_page_pdfium", out)

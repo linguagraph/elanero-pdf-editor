@@ -39,6 +39,9 @@ site, and your documents are not uploaded to any server.
   - `elanero.layout.panelWidths`: the widths of the side panels.
 
   A notice you dismiss is remembered for the browser tab only, in `sessionStorage`.
+- **Custom stamps you add** (the web Stamp menu) are kept in the browser's private storage, in a
+  folder named `stamps`: each picture and a small record beside it. They stay until you remove
+  them, and **Clear all local data** removes them. Nothing is sent anywhere.
 - **Fonts you upload** (Preferences, Fonts) are kept in the browser's private storage, in a folder
   named `fonts`: each font's file and a small record beside it. They stay until you remove them, so
   they are there after you reload, and **Clear all local data** removes them. Open Elanero tabs in
@@ -168,7 +171,9 @@ How the web version section was checked (repository paths):
 - OPFS use is autosave copies and uploaded fonts only: web/app/src/storage/ (folder autosave/<tab-id>,
   deleted in autosaver.ts and autosaveStore.ts; never a password-protected document, save.autosave_bytes
   in src/pdfeditor/webapi/save.py); folder fonts/ (font files and one record per font, web/app/src/storage/
-  fontStore.ts, written by web/app/src/fonts/fontLibrary.ts, removed by Clear all local data). The
+  fontStore.ts, written by web/app/src/fonts/fontLibrary.ts, removed by Clear all local data); folder
+  stamps/ (custom stamp pictures and records, web/app/src/storage/stampStore.ts, written by
+  web/app/src/comments/stampLibrary.ts, removed by Clear all local data). The
   `elanero.fonts` BroadcastChannel carries font ids only (fontLibrary.ts, CHANNEL and parseFontMessage).
   Persistent storage is requested once, its answer unused (storage/fontStore.ts, requestPersistence). No IndexedDB or cookies in web/app/src, web/app/public or
   web/app/index.html (grep). Documents otherwise live in the engine's in-memory file system:
