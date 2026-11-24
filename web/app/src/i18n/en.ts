@@ -1101,10 +1101,16 @@ export const EN = {
   'comment.tool.note': 'Sticky note',
   'comment.tool.rectangle': 'Rectangle',
   'comment.tool.highlight': 'Highlight',
+  'comment.tool.textbox': 'Text box',
+  'comment.tool.oval': 'Oval',
+  'comment.tool.line': 'Line',
+  'comment.tool.arrow': 'Arrow',
   'comment.added': 'Comment added.',
   'comment.failed': 'The comment could not be added.',
   'comment.noteText': 'Note text',
   'comment.noteAdd': 'Add note',
+  'comment.boxText': 'Text box text',
+  'comment.boxAdd': 'Add text box',
   'comment.cancel': 'Cancel',
 
   // Thumbnails side panel (W5.2). The rail button shows the panel's name.

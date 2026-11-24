@@ -1076,6 +1076,28 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
   });
 
+  it('the box and line ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    for (const [command, key] of [
+      ['text-box', 'comment.tool.textbox'],
+      ['oval', 'comment.tool.oval'],
+      ['line', 'comment.tool.line'],
+      ['arrow', 'comment.tool.arrow'],
+    ] as const) {
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('true');
+      expect(toolbarPressed(t(key))).toBe('true');
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('false');
+      expect(toolbarPressed(t(key))).toBe('false');
+    }
+  });
+
   it('Edit Text & Images is off with its reason when the engine lacks content_edit', async () => {
     await openDocument(false, false);
     selectTab(t('ribbon.tab.edit'));
