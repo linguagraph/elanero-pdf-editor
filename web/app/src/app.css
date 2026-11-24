@@ -96,3 +96,11 @@ body {
   border-radius: 4px;
   cursor: pointer;
 }
+
+/* Touch screens: the banner's button is at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .update-banner button {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}

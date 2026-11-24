@@ -133,6 +133,17 @@ test.describe('engine staged', () => {
       timeout: 60_000,
     });
 
+    // Document properties reads the same file (W7.6 slice D): its Security tab must show the file's
+    // facts and keep the password out of storage and the console too. Cancel closes it again.
+    await page.getByRole('searchbox', { name: 'Search tools' }).fill('Properties');
+    await page.getByRole('option', { name: /^Properties/ }).click();
+    const properties = page.getByRole('dialog', { name: 'Document properties' });
+    await expect(properties).toBeVisible();
+    await properties.getByRole('tab', { name: 'Security', exact: true }).click();
+    await expect(properties.locator('dt:text-is("Printing") + dd')).toHaveText('Allowed');
+    await properties.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(properties).toBeHidden();
+
     const stored = await page.evaluate(() => {
       const values: string[] = [];
       for (const area of [window.localStorage, window.sessionStorage]) {

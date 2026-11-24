@@ -166,6 +166,17 @@
   font-weight: 700;
 }
 
+/* Touch screens: the edit bar's controls and the font list rows are at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .edit-style-bar button,
+  .edit-style-bar input,
+  .edit-style-bar select,
+  .edit-font-option {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 .edit-font-empty {
   padding: var(--space-1) var(--space-2);
   color: var(--color-text-muted);

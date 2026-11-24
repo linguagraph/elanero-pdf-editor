@@ -8,10 +8,13 @@ a minimal packet when there is none.
 
 from __future__ import annotations
 
+import logging
 import re
 import xml.etree.ElementTree as ET
 
 from pdfeditor.model.metadata import Metadata
+
+log = logging.getLogger(__name__)
 
 NS = {
     "x": "adobe:ns:meta/",
@@ -52,14 +55,30 @@ _FIELDS: dict[str, tuple[str, str, str | None]] = {
 }
 
 
+# Refused before parsing, as the check in services/xfdf.py (check_size) does: a DOCTYPE or ENTITY
+# is the only way to define entities (billion laughs, external entities), and expat reads str input
+# as UTF-8, so the literal check is sound whatever encoding the packet declares. core cannot import
+# services, so this is a copy of that limit, not a shared constant.
+MAX_PACKET_BYTES = 8 * 1024 * 1024
+_HOSTILE_MARKERS = ("<!doctype", "<!entity")  # matched against body.lower(): markers are case-free
+
+
+class _Unreadable(ValueError):
+    """The packet is refused (too large, or declares a DTD) or is not well-formed XML."""
+
+
 def _parse(xml: str) -> ET.Element | None:
+    if len(xml) > MAX_PACKET_BYTES or len(xml.encode("utf-8")) > MAX_PACKET_BYTES:
+        raise _Unreadable(f"packet is larger than {MAX_PACKET_BYTES} bytes")
     body = re.sub(r"<\?xpacket[^>]*\?>", "", xml).strip()
     if not body:
         return None
+    if any(marker in body.lower() for marker in _HOSTILE_MARKERS):
+        raise _Unreadable("packet declares a DTD or entities")
     try:
         return ET.fromstring(body)
-    except ET.ParseError:
-        return None
+    except ET.ParseError as exc:
+        raise _Unreadable(str(exc)) from exc
 
 
 def _new_root() -> ET.Element:
@@ -93,7 +112,12 @@ def _set_field(
 
 def sync_xmp(xml: str, meta: Metadata) -> str:
     """``xml`` with the Info fields of ``meta`` written in; "" stays "" when meta is empty."""
-    root = _parse(xml) if xml else None
+    try:
+        root = _parse(xml) if xml else None
+    except _Unreadable as exc:
+        # keep the packet as it is: a fresh one would silently drop e.g. the PDF/A identification
+        log.warning("XMP packet left unchanged: %s", exc)
+        return xml
     if root is None:
         if not any(getattr(meta, f) for f in _FIELDS):
             return xml
@@ -113,7 +137,10 @@ def sync_xmp(xml: str, meta: Metadata) -> str:
 
 def read_xmp_field(xml: str, prefix: str, name: str) -> str:
     """The text of a simple or first-list-item property ("" if absent); for tests and checks."""
-    root = _parse(xml)
+    try:
+        root = _parse(xml)
+    except _Unreadable:
+        return ""
     if root is None:
         return ""
     tag = _q(prefix, name)

@@ -10,6 +10,7 @@ import {
 import type { BlobLike, DirectoryLike, FileLike, WritableLike } from './opfs';
 import { StorageUnsupportedError } from './opfs';
 import { createFontStore, FONTS_FOLDER } from './fontStore';
+import { createStampStore, STAMPS_FOLDER } from './stampStore';
 import { MemoryDir as TreeDir, memoryRoot } from './testRoot';
 
 // An in-memory Storage, enough for clearLocalData (length, key, removeItem).
@@ -199,8 +200,37 @@ describe('clearLocalData: OPFS folders', () => {
     expect(await store.list()).toEqual([]);
   });
 
+  it('removes the custom stamps a stamp store kept, so Clear all leaves none behind', async () => {
+    const root = new TreeDir();
+    const store = createStampStore(memoryRoot(root), async () => ({ quota: 10_000, usage: 0 }));
+    const id = 'd'.repeat(64);
+    const kept = await store.write(
+      {
+        id,
+        label: 'Seal',
+        size: 3,
+        type: 'png',
+        width: 2,
+        height: 2,
+        added: '2026-01-01T00:00:00.000Z',
+      },
+      new Blob(['ddd']),
+    );
+    expect(kept).toBe('kept');
+    expect(root.dirs.has(STAMPS_FOLDER)).toBe(true);
+
+    const outcome = await clearLocalData({
+      storage: () => asStorage(new MemoryStorage()),
+      root: memoryRoot(root),
+    });
+
+    expect(outcome.complete).toBe(true);
+    expect(root.dirs.has(STAMPS_FOLDER)).toBe(false);
+    expect(await store.list()).toEqual([]);
+  });
+
   it('lists exactly the folders it removes, and never autosave', () => {
-    expect([...LOCAL_DATA_FOLDERS]).toEqual(['fonts', 'secrets']);
+    expect([...LOCAL_DATA_FOLDERS]).toEqual(['fonts', 'stamps', 'secrets']);
     expect(LOCAL_DATA_FOLDERS).not.toContain('autosave');
   });
 

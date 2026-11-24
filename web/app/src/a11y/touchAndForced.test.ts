@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { TOUCH_TARGET_PX } from '../theme/tokens.ts';
 
 // The touch-target and forced-colour checks of the document view (W8.5 S5). jsdom has no layout, so
 // these read the stylesheets as text: each control's size under `pointer: coarse` must be at least
@@ -64,11 +65,14 @@ function rulesIn(block: string): Map<string, Map<string, string>> {
   return rules;
 }
 
+// A size written as `var(--size-touch-target)` resolves to the token, so the rules that use it are
+// checked against the same number the token holds (tokens.ts, W8.5 S7).
 function px(value: string | undefined): number {
+  if (value === 'var(--size-touch-target)') return TOUCH_TARGET_PX;
   return value ? parseFloat(value) : 0;
 }
 
-// The controls the brief lists for the document view, with the sizes their coarse rule must set.
+// The controls the brief lists, with the sizes their coarse rule must set.
 const COARSE_TARGETS: Array<[file: string, selector: string, props: string[]]> = [
   ['view/canvasPill.css', '.canvas-pill button', ['min-width', 'min-height']],
   ['view/canvasPill.css', '.canvas-pill input', ['min-width', 'min-height']],
@@ -76,6 +80,25 @@ const COARSE_TARGETS: Array<[file: string, selector: string, props: string[]]> =
   ['tabs/tabs.css', '.doc-tab-close', ['width', 'height']],
   ['ribbon/ribbon.css', '.ribbon-command', ['min-width', 'min-height']],
   ['ribbon/ribbon.css', '.ribbon-tab', ['min-width', 'min-height']],
+  ['ribbon/ribbon.css', '.app-menu-item', ['min-height']],
+  ['edit/edit.css', '.edit-style-bar button', ['min-width', 'min-height']],
+  ['edit/edit.css', '.edit-style-bar input', ['min-width', 'min-height']],
+  ['edit/edit.css', '.edit-style-bar select', ['min-width', 'min-height']],
+  ['edit/edit.css', '.edit-font-option', ['min-width', 'min-height']],
+  ['theme/ThemeSwitch.css', '.theme-switch-option', ['min-width', 'min-height']],
+  ['app.css', '.update-banner button', ['min-width', 'min-height']],
+  ['combine/combine.css', '.combine-pages input', ['min-width', 'min-height']],
+  ['combine/combine.css', '.combine-button', ['min-width', 'min-height']],
+  ['properties/properties.css', '.properties-field input', ['min-width', 'min-height']],
+  ['properties/properties.css', '.properties-button', ['min-width', 'min-height']],
+  ['properties/properties.css', '.properties-tab', ['min-width', 'min-height']],
+  ['security/security.css', '.security-field input', ['min-width', 'min-height']],
+  ['security/security.css', '.security-field select', ['min-width', 'min-height']],
+  ['security/security.css', '.security-check', ['min-width', 'min-height']],
+  ['layout/layout.css', '.overlay-close', ['min-width', 'min-height']],
+  ['feedback/feedback.css', '.feedback-primary', ['min-width', 'min-height']],
+  ['translate/translate.css', '.translate-bubble button', ['min-width', 'min-height']],
+  ['translate/translate.css', '.translate-bubble select', ['min-width', 'min-height']],
 ];
 
 describe('touch targets under pointer: coarse', () => {
@@ -119,6 +142,10 @@ describe('forced colours keep the marks of a selected or pressed control', () =>
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('the token is in the generated stylesheet at the same size tokens.ts gives', () => {
+    expect(read('theme/tokens.css')).toContain(`--size-touch-target: ${TOUCH_TARGET_PX}px;`);
   });
 
   it('the forced-colours focus ring stays on the controls (the tokens block sets the outline)', () => {

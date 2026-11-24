@@ -82,6 +82,16 @@
   outline-offset: 2px;
 }
 
+/* Touch screens: the fields, buttons and tabs are at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .properties-field input,
+  .properties-button,
+  .properties-tab {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 .properties-panel {
   display: flex;
   flex-direction: column;
