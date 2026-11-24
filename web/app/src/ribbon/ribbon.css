@@ -199,6 +199,28 @@
   cursor: default;
 }
 
+/* The custom stamps' thumbnails (W7.3b S2) fill a 24 px box; the note is the standing session-only
+   warning; the separator divides the standard stamps from the custom ones and the commands. */
+.stamp-menu-thumb {
+  width: 24px;
+  height: 24px;
+  margin-inline-end: var(--space-2);
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.app-menu-note {
+  max-width: 260px;
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+}
+
+.app-menu-separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--color-border);
+}
+
 /* Touch screens: the app menu's items (the document tab menu uses them too) are at least the touch
    target in height (W8.5 S7). */
 @media (pointer: coarse) {

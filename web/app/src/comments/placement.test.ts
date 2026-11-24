@@ -32,6 +32,7 @@ function setup(executed = true) {
     rpc: { call } as unknown as PageRpc,
     handle: 'h1',
     scheduler: { noteRevisions },
+    stamps: { read: async () => undefined },
     store,
   };
   return { call, noteRevisions, store, deps };
@@ -40,6 +41,35 @@ function setup(executed = true) {
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+describe('placing a custom stamp', () => {
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e]);
+  const picture = { size: 3, arrayBuffer: async () => bytes.buffer, text: async () => '' };
+  const id = 'a'.repeat(64);
+
+  it('sends the picture as a buffer and the label as the text, with no stamp name', async () => {
+    const { call, deps } = setup();
+    const read = vi.fn(async () => picture);
+    await placeComment({ ...deps, stamps: { read } }, 'stamp', 0, rect, '', [], {
+      id,
+      label: 'Logo',
+    });
+    expect(read).toHaveBeenCalledWith(id);
+    const params = call.mock.calls[0] as unknown as [string, { args: Record<string, unknown> }];
+    const { args } = params[1];
+    expect(args['image']).toBeInstanceOf(ArrayBuffer);
+    expect(args['text']).toBe('Logo');
+    expect(args['stamp']).toBe('');
+  });
+
+  it('a stamp the library no longer has is reported and nothing is sent', async () => {
+    const { call, store, deps } = setup();
+    const stamps = { read: async () => undefined };
+    await placeComment({ ...deps, stamps }, 'stamp', 0, rect, '', [], { id, label: 'Gone' });
+    expect(call).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('stamp.custom.unreadable'));
+  });
+});
 
 describe('placing a comment', () => {
   it('runs annotations.create with the tool, the page and the box', async () => {

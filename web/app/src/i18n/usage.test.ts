@@ -61,15 +61,6 @@ interface Allowed {
 const ALLOWED_LITERALS: readonly Allowed[] = [];
 
 const UNUSED_ALLOWED: Readonly<Record<string, string>> = {
-  // The custom stamp library's messages (W7.3b S1); the S2 menu and placement wiring uses them.
-  'stamp.custom.noSpace': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.saveFailed': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.sessionOnly': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.unreadable': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.added': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.already': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.removed': 'the stamp library messages wait for the W7.3b S2 menu',
-  'stamp.custom.removeFailed': 'the stamp library messages wait for the W7.3b S2 menu',
   'security.owner.title':
     'the owner step sits under the dialog title, so no separate title is shown (W7.5 S4)',
   'sample.pages':
