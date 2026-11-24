@@ -48,6 +48,7 @@ import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { BackgroundDialog } from './marks/BackgroundDialog';
 import { HeaderFooterDialog } from './marks/HeaderFooterDialog';
+import { WatermarkDialog } from './marks/WatermarkDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto, HistoryResult, TranslateParams } from './rpc/generated';
@@ -240,6 +241,8 @@ export function App({
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   // Header & Footer and Bates numbers (W7.3 S3): one dialog, in the mode its command opened.
   const [headerFooterMode, setHeaderFooterMode] = useState<'headerFooter' | 'bates' | null>(null);
+  // Watermark (W7.3 S4): the text mode of the watermark dialog.
+  const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
@@ -790,6 +793,7 @@ export function App({
           'add-background': () => setBackgroundOpen(true),
           'add-header-footer': () => setHeaderFooterMode('headerFooter'),
           'add-bates-numbers': () => setHeaderFooterMode('bates'),
+          'add-watermark': () => setWatermarkOpen(true),
           // Edit Text & Images (W6.7a S4) turns the Edit tool on; a signed document asks once per tab.
           'edit-text-images': () => {
             if (activeId === null) return;
@@ -1187,6 +1191,19 @@ export function App({
           currentPage={viewState.page}
           signed={activeTab.signed}
           fileName={activeTab.name}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <WatermarkDialog
+          isOpen={watermarkOpen}
+          onClose={() => setWatermarkOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={jobs.acquire}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          signed={activeTab.signed}
           onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}
