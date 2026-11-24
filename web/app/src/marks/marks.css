@@ -50,6 +50,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+  min-height: 24px;
+}
+
+/* A 13px radio alone is below the 24px target-size minimum: the margin keeps a 24px
+   clickable area around it and spaces it from its neighbours (axe target-size). */
+.mark-scope-option > input[type='radio'] {
+  margin: 6px;
 }
 
 .mark-range {
