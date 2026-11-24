@@ -84,6 +84,7 @@ import { CommentsPanel } from './comments/panel/CommentsPanel';
 import { CommentsController } from './comments/panel/controller';
 import { useCommentsCount } from './comments/panel/useComments';
 import { type CommentToolId, toggleCommentTool } from './comments/tools';
+import { MARKUP_COMMAND_KINDS, type MarkupKind, pressMarkup } from './comments/markup';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -706,6 +707,30 @@ export function App({
     setPendingImage(tab, file);
     if (!requestEditTool(tab, signed, 'image')) setSignedEditAsk({ tabId: tab, tool: 'image' });
   };
+  // The text markups (W7.1a slice 5) mark the view's text selection, read as Mark Text reads it.
+  // With no selection, noSelection runs (Highlight's drag tool; the others say so).
+  const pressMarkupCommand = (kind: MarkupKind, noSelection: () => void) => {
+    const view = viewRef.current;
+    if (view === null || session === null || scheduler === null) {
+      toasts.push('info', t('redact.notReady'));
+      return;
+    }
+    void pressMarkup(
+      kind,
+      {
+        rpc: session.rpc,
+        handle: session.handle,
+        scheduler,
+        pageSpan: () => view.selectedPageSpan(),
+        model: () => view.selectedAreas(),
+        clearModel: () => view.clearTextSelection(),
+        loadPages: (pages) => view.loadTextPages(pages),
+        selection: window.getSelection(),
+        lookup: (page) => view.cachedLines(page),
+      },
+      noSelection,
+    );
+  };
   const handlers: CommandHandlers = {
     ...baseHandlers,
     ...(documentShown
@@ -746,7 +771,13 @@ export function App({
           'sticky-note': () =>
             viewRef.current?.setCommentTool(commentTool === 'note' ? null : 'note'),
           highlight: () =>
-            viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+            pressMarkupCommand(MARKUP_COMMAND_KINDS.highlight, () =>
+              viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+            ),
+          underline: () => pressMarkupCommand(MARKUP_COMMAND_KINDS.underline, () => undefined),
+          strikethrough: () =>
+            pressMarkupCommand(MARKUP_COMMAND_KINDS.strikethrough, () => undefined),
+          squiggly: () => pressMarkupCommand(MARKUP_COMMAND_KINDS.squiggly, () => undefined),
           rectangle: () =>
             viewRef.current?.setCommentTool(commentTool === 'rectangle' ? null : 'rectangle'),
           'text-box': () =>
