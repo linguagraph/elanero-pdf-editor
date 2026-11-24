@@ -4,7 +4,7 @@ import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { RpcError } from '../rpc/client';
-import { type PlacementDeps, placeComment } from './placement';
+import { createdComment, type PlacementDeps, placeComment } from './placement';
 
 const rect = { x0: 72, y0: 72, x1: 144, y1: 144 };
 
@@ -144,5 +144,42 @@ describe('placing a comment', () => {
     await settle();
     expect(noteRevisions).not.toHaveBeenCalled();
     expect(store.getState().visible.at(-1)?.text).toBe(t('toast.undo.stale'));
+  });
+});
+
+describe('the comment a placement adds (W7.1a)', () => {
+  it('resolves to the page and name the engine returned for the new comment', async () => {
+    const { call, deps } = setup();
+    call.mockImplementationOnce(
+      async () =>
+        ({
+          label: 'Add Rectangle',
+          executed: true,
+          value: [{ page: 0, name: 'abc123' }],
+          changed: { changes: [], revisions: { '0': 3 } },
+          state: { history: 7 },
+        }) as never,
+    );
+    await expect(placeComment(deps, 'rectangle', 0, rect, '')).resolves.toEqual({
+      page: 0,
+      name: 'abc123',
+    });
+  });
+
+  it('resolves to null when nothing was added, so the tool stays on', async () => {
+    const { deps } = setup(false);
+    await expect(placeComment(deps, 'rectangle', 0, rect, '')).resolves.toBeNull();
+  });
+
+  it('reads only one well-formed reference from the value', () => {
+    expect(createdComment([{ page: 2, name: 'n' }])).toEqual({ page: 2, name: 'n' });
+    expect(createdComment(null)).toBeNull();
+    expect(createdComment([{ page: 2 }])).toBeNull();
+    expect(
+      createdComment([
+        { page: 0, name: 'a' },
+        { page: 0, name: 'b' },
+      ]),
+    ).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { PagePoint, PageRect } from './coordinates';
+import type { CommentRef } from './hitTest';
 import type { CustomStampRef, StandardStamp } from './stamps';
 import { STAMP_LABEL } from './stamps';
 import type { StampLibrary } from './stampLibrary';
@@ -38,7 +39,18 @@ async function customImage(
   return blob === undefined ? 'gone' : blob.arrayBuffer();
 }
 
-// Runs annotations.create for one gesture and shows the Undo toast when a comment was added.
+// The comment annotations.create added, from the reply's value: the one AnnotRef the action returns
+// (W7.1a). Null for any other value.
+export function createdComment(value: unknown): CommentRef | null {
+  if (!Array.isArray(value) || value.length !== 1) return null;
+  const [first] = value as readonly unknown[];
+  if (typeof first !== 'object' || first === null) return null;
+  const { page, name } = first as { page?: unknown; name?: unknown };
+  return typeof page === 'number' && typeof name === 'string' ? { page, name } : null;
+}
+
+// Runs annotations.create for one gesture and shows the Undo toast when a comment was added. It
+// resolves to the new comment, or null when nothing was added.
 export async function placeComment(
   deps: PlacementDeps,
   tool: CommentToolId,
@@ -47,7 +59,7 @@ export async function placeComment(
   text: string,
   points: readonly PagePoint[] = [],
   stamp: StandardStamp | '' | CustomStampRef = '',
-): Promise<void> {
+): Promise<CommentRef | null> {
   const store = deps.store ?? toasts;
   try {
     // A custom stamp is placed by its picture: read it now. A sent buffer is detached, so each
@@ -56,7 +68,7 @@ export async function placeComment(
     const image = custom === null ? undefined : await customImage(deps, custom.id);
     if (image === 'gone') {
       store.push('error', t('stamp.custom.unreadable'));
-      return;
+      return null;
     }
     const name =
       typeof stamp === 'string' ? (stamp === '' ? '' : t(STAMP_LABEL[stamp])) : stamp.label;
@@ -77,7 +89,7 @@ export async function placeComment(
         author: readPreferences().authorName,
       },
     });
-    if (!reply.executed) return;
+    if (!reply.executed) return null;
     deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
     const message =
       tool === 'stamp' && name !== ''
@@ -90,7 +102,9 @@ export async function placeComment(
       onUndone: (undone) => deps.scheduler.noteRevisions(undone.changed?.revisions ?? {}),
       store,
     });
+    return createdComment(reply.value);
   } catch (error) {
     reportFailure(store, error);
+    return null;
   }
 }

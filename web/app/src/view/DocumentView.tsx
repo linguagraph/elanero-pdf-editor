@@ -1483,7 +1483,17 @@ export function DocumentView({
           : stamp.kind === 'standard'
             ? stamp.name
             : { id: stamp.id, label: stamp.label };
-      void placeComment(commentDeps, commentTool, page, rect, text, points, placed);
+      // A comment that is added returns the tool to Select with the new comment selected, as the
+      // desktop does by default (W7.1a Question 3). A failure keeps the tool on to retry.
+      const drawnOn = tabId;
+      void placeComment(commentDeps, commentTool, page, rect, text, points, placed).then(
+        (added) => {
+          if (added === null) return;
+          setCommentTool(null);
+          setCommentSelection([added]);
+          onToolChange?.('select', drawnOn);
+        },
+      );
     }
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
