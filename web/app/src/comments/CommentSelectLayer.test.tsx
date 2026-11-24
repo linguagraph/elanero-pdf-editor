@@ -255,6 +255,37 @@ describe('CommentSelectLayer', () => {
     expect(onSelect).toHaveBeenLastCalledWith([]);
   });
 
+  it('Escape from a list button clears the selection and returns focus to the page layer', async () => {
+    const { layer } = await render([{ page: 0, name: 'a' }]);
+    const item = container.querySelector<HTMLButtonElement>('button.comment-list-item');
+    if (item === null) throw new Error('no list item');
+    await act(async () => {
+      item.focus();
+    });
+    expect(document.activeElement).toBe(item);
+    await act(async () => {
+      item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenLastCalledWith([]);
+    expect(document.activeElement).toBe(layer);
+  });
+
+  it('Escape in a field leaves focus where it is', async () => {
+    const { layer } = await render([{ page: 0, name: 'a' }]);
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    await act(async () => {
+      input.focus();
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
+    expect(document.activeElement).not.toBe(layer);
+    input.remove();
+  });
+
   it('drops a selected comment that the page no longer holds', async () => {
     await render([
       { page: 0, name: 'gone' },

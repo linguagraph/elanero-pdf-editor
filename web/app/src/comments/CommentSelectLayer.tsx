@@ -376,7 +376,9 @@ export function CommentSelectLayer({
     return () => window.removeEventListener('pointerdown', onPointerDown, { capture: true });
   }, [threads, selection, page, zoom, onSelect, onOpenNote, transformDeps, cache]);
 
-  // Escape clears the selection, unless a dialog or another handler has taken the key.
+  // Escape clears the selection, unless a dialog or another handler has taken the key. A keyboard
+  // user who was in the page's comment list (or on the body) keeps their place: focus goes back to
+  // the page's layer, not lost to the body when the list's buttons are left.
   useEffect(() => {
     if (selection.length === 0) return undefined;
     const onKey = (event: KeyboardEvent) => {
@@ -385,6 +387,15 @@ export function CommentSelectLayer({
       const target = event.target;
       if (target instanceof Element && target.closest(KEY_OWNER_SELECTOR) !== null) return;
       event.preventDefault();
+      const layer = layerRef.current;
+      const active = document.activeElement;
+      const onBody = active === null || active === document.body;
+      const inList =
+        layer !== null &&
+        active instanceof HTMLElement &&
+        active !== layer &&
+        layer.contains(active);
+      if (layer !== null && (onBody || inList)) layer.focus();
       onSelect([]);
     };
     window.addEventListener('keydown', onKey);
