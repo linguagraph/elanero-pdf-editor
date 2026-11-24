@@ -77,6 +77,8 @@ import { CropLayer } from '../crop/CropLayer';
 import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
 import { CommentToolbar } from '../comments/CommentToolbar';
+import { type StandardStamp } from '../comments/stamps';
+import { StampMenu } from '../comments/stampTool';
 import type { PagePoint, PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
@@ -491,6 +493,8 @@ export function DocumentView({
   const scrollRef = useRef<HTMLDivElement>(null);
   // The comment tool on, if any (W7.1a): a click or drag on a page then places a comment.
   const [commentTool, setCommentTool] = useState<CommentToolId | null>(null);
+  // The standard stamp the stamp tool places (W7.3 S6), chosen from the stamp menu.
+  const [stampName, setStampName] = useState<StandardStamp>('Approved');
   // The redaction tools (W7.4). The mark tool and a comment tool are not on together.
   const redactionTools = useRedaction({
     rpc,
@@ -508,6 +512,13 @@ export function DocumentView({
       if (chosen !== null) onToolChange?.('select');
     },
     [redactionTools.controller, onToolChange],
+  );
+  const chooseStamp = useCallback(
+    (stamp: StandardStamp) => {
+      setStampName(stamp);
+      chooseCommentTool('stamp');
+    },
+    [chooseCommentTool],
   );
   const chooseRedacting = useCallback(
     (on: boolean) => {
@@ -1422,7 +1433,8 @@ export function DocumentView({
   const commentDeps = { rpc, handle, scheduler };
   const place = (page: number, rect: PageRect, text: string, points: readonly PagePoint[]) => {
     if (commentTool !== null) {
-      void placeComment(commentDeps, commentTool, page, rect, text, points);
+      const stamp = commentTool === 'stamp' ? stampName : '';
+      void placeComment(commentDeps, commentTool, page, rect, text, points, stamp);
     }
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
@@ -1523,6 +1535,7 @@ export function DocumentView({
           {t('view.night')}
         </button>
         <CommentToolbar tool={commentTool} onChoose={chooseCommentTool} />
+        <StampMenu onChoose={chooseStamp} />
         <RedactionBar
           state={redactionTools.state}
           onToggle={() => chooseRedacting(!redactionTools.state.active)}

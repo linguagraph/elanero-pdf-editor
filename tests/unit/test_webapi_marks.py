@@ -10,6 +10,8 @@ it under Pyodide).
 from __future__ import annotations
 
 import json
+import struct
+import zlib
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -77,10 +79,33 @@ def marks_list(handle: str) -> list[dict[str, Any]]:
     return items
 
 
-def run_mark(handle: str, name: str, args: dict[str, Any]) -> dict[str, Any]:
-    """Runs a marks action as the web does (prepare, job, apply) and returns the job's result."""
+def rebind(value: Any, index: int) -> Any:
+    """The same arguments with every $bin marker naming ``index`` (jobs.prepare numbers its own)."""
+    if isinstance(value, dict):
+        if set(value) == {"$bin"}:
+            return {"$bin": index}
+        return {key: rebind(item, index) for key, item in value.items()}
+    if isinstance(value, list):
+        return [rebind(item, index) for item in value]
+    return value
+
+
+def run_mark(
+    handle: str, name: str, args: dict[str, Any], picture: bytes | None = None
+) -> dict[str, Any]:
+    """Runs a marks action as the web does (prepare, job, apply) and returns the job's result.
+
+    A picture is the job's second buffer: the job's arguments name it as $bin 1, and jobs.prepare
+    gets it as its own $bin 0, as the web's action job sends it.
+    """
     action = {"name": name, "args": args}
-    reply, out = call_raw("jobs.prepare", {"handle": handle, "job": "action", "args": action})
+    extra = [picture] if picture is not None else []
+    prepare_action = {"name": name, "args": rebind(args, 0)}
+    reply, out = call_raw(
+        "jobs.prepare",
+        {"handle": handle, "job": "action", "args": prepare_action},
+        extra,
+    )
     prepared = ok(reply)
     assert prepared["mutating"] is True
     copy = binary(prepared["document"], out)
@@ -93,7 +118,7 @@ def run_mark(handle: str, name: str, args: dict[str, Any]) -> dict[str, Any]:
             "params": {"job": "action", "args": action, "document": {"$bin": 0}},
         }
     )
-    job_json, job_out = jobworker.dispatch(job_reply, [copy], None, None)
+    job_json, job_out = jobworker.dispatch(job_reply, [copy, *extra], None, None)
     result = ok(json.loads(job_json))
     assert result["kind"] == "document"
 
@@ -167,6 +192,26 @@ def watermark_args() -> dict[str, Any]:
         "pages": [0],
         "replace_existing": False,
     }
+
+
+def picture_watermark_args() -> dict[str, Any]:
+    spec = {"image": {"$bin": 1}, "image_path": "logo.png", "opacity": 1.0, "scale": 0.5}
+    return {"spec": spec, "pages": [0], "replace_existing": False}
+
+
+def png(width: int, height: int, *, solid: bool = True) -> bytes:
+    """A PNG of one red colour, or only its header when ``solid`` is False (a size check)."""
+
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        crc = struct.pack(">I", zlib.crc32(kind + body))
+        return struct.pack(">I", len(body)) + kind + body + crc
+
+    signature = b"\x89PNG\r\n\x1a\n"
+    header = chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    if not solid:
+        return signature + header
+    rows = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+    return signature + header + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
 
 
 def background_args() -> dict[str, Any]:
@@ -254,6 +299,79 @@ def test_undo_restores_the_document_without_the_mark(web: None, fixture_pdf: Any
 
     reply, _ = call_raw("actions.undo", {"handle": handle})
     assert ok(reply)["done"] is True
+    assert marks_list(handle) == []
+
+
+def test_picture_watermark_is_drawn_and_removed(
+    web: None, fixture_pdf: Any, tmp_path: Path
+) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    result = run_mark(handle, "marks.watermark", picture_watermark_args(), png(8, 8))
+    assert result["label"] == "Add Watermark"
+    assert marks_list(handle) == [{"kind": "Watermark", "pages": 1, "foreign": False}]
+
+    saved = save(handle)
+    record("opens_pikepdf", saved)
+    record("red_pixels_pdfium", saved, page=0, clip=PAGE_CENTRE, minimum=0)
+    reopen_check(saved, tmp_path)
+
+    spec = mark_get(handle, "Watermark")["watermark"]
+    assert spec["image"] is True
+    assert spec["image_name"] == "logo.png"
+    assert spec["text"] == ""
+    assert spec["scale"] == 0.5
+
+    removed = run_mark(handle, "marks.remove", {"kind": "Watermark"})
+    assert removed["value"] == 1
+    assert marks_list(handle) == []
+
+
+def test_picture_watermark_refuses_what_is_not_a_png_or_jpeg(web: None, fixture_pdf: Any) -> None:
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    huge = png(6000, 6000, solid=False)  # the header alone: 36 MP, over the 25 MP cap
+    pictures = {
+        "a PDF": b"%PDF-1.4\n%%EOF\n",
+        "a GIF": b"GIF89a" + bytes(20),
+        "a megapixel bomb": huge,
+    }
+    for label, picture in pictures.items():
+        reply, _ = call_raw(
+            "jobs.prepare",
+            {
+                "handle": handle,
+                "job": "action",
+                "args": {"name": "marks.watermark", "args": rebind(picture_watermark_args(), 0)},
+            },
+            [picture],
+        )
+        assert reply["ok"] is False, label
+        assert reply["error"]["code"] == INVALID_ARGS, label
+        assert reply["error"]["details"] == {"path": "args.args.spec.image"}, label
+    assert marks_list(handle) == []
+
+
+def test_picture_watermark_refuses_a_picture_over_the_byte_cap(
+    web: None, fixture_pdf: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # jobs.py reads limits.MAX_IMAGE_BYTES through the module at call time, so the module attribute
+    # is the one to patch. A valid PNG over the cap is refused before its size is even read.
+    monkeypatch.setattr("pdfeditor.webapi.limits.MAX_IMAGE_BYTES", 64)
+    handle = open_bytes(fixture_pdf("text_multipage").read_bytes(), "text_multipage.pdf")
+    picture = png(8, 8)
+    assert len(picture) > 64
+    reply, _ = call_raw(
+        "jobs.prepare",
+        {
+            "handle": handle,
+            "job": "action",
+            "args": {"name": "marks.watermark", "args": rebind(picture_watermark_args(), 0)},
+        },
+        [picture],
+    )
+    assert reply["ok"] is False
+    assert reply["error"]["code"] == INVALID_ARGS
+    assert reply["error"]["details"] == {"path": "args.args.spec.image"}
+    assert "larger than" in reply["error"]["message"]
     assert marks_list(handle) == []
 
 

@@ -52,10 +52,23 @@ export const MARK_LIMITS = {
   watermarkSize: { min: 6, max: 400 },
   opacity: { min: 0.05, max: 1 },
   angle: { min: -180, max: 180 },
+  imageScale: { min: 0.05, max: 1 }, // a picture's width as a fraction of the page width
   margin: { min: 0, max: 500 },
   batesStart: { min: 0, max: 1_000_000_000 },
   batesDigits: { min: 1, max: 15 },
 } as const;
+
+// The picture a watermark can take (W7.3 question 3): PNG or JPEG, at most the web's byte cap. The
+// pixel cap is checked by the job's arguments on the engine side (webapi/jobs.py).
+export const PICTURE_TYPES: readonly string[] = ['image/png', 'image/jpeg'];
+export const PICTURE_MAX_BYTES = 50 * 1024 * 1024;
+
+// A picture chosen for a watermark: its file name (shown, and stored as the settings' image_path),
+// and its bytes, which travel to the job worker as a buffer and never into the settings.
+export interface WatermarkPicture {
+  readonly name: string;
+  readonly bytes: ArrayBuffer;
+}
 
 export type HeaderFooterSlot =
   | 'header_left'
@@ -85,12 +98,15 @@ export interface BatesForm {
 }
 
 export interface WatermarkForm {
+  // A text watermark (`image` false) or a picture one; the picture itself is not in the form.
+  readonly image: boolean;
   readonly text: string;
   readonly font: MarkFont;
   readonly fontSize: number;
   readonly color: string; // #rrggbb
   readonly opacity: number; // a fraction, 0.05 to 1
-  readonly angle: number;
+  readonly angle: number; // text only
+  readonly scale: number; // a picture's width as a fraction of the page width; picture only
   readonly onTop: boolean;
 }
 
@@ -239,31 +255,40 @@ export type WatermarkArgs = {
     opacity: number;
     angle: number;
     on_top: boolean;
+    // A picture watermark only: the picture is the job's buffer 1, named by this marker.
+    image?: { $bin: 1 };
+    image_path?: string;
+    scale?: number;
   };
   pages: readonly number[];
   replace_existing: boolean;
 };
 
-// The argument of marks.watermark. Text only: an image watermark needs the job's buffers.
+// The argument of marks.watermark. A picture (given when the form is in picture mode) is the
+// job's buffer 1; its file name goes in image_path, as the desktop stores it. The angle is not
+// used by a picture, so a picture sends 0 rather than the text field's value.
 export function watermarkArgs(
   form: WatermarkForm,
   pages: readonly number[],
   replace: boolean,
+  picture: WatermarkPicture | null = null,
 ): WatermarkArgs {
   const color = hexToColor(form.color) ?? { r: 0, g: 0, b: 0 };
-  return {
-    spec: {
-      text: form.text,
-      font: form.font,
-      font_size: form.fontSize,
-      color,
-      opacity: form.opacity,
-      angle: form.angle,
-      on_top: form.onTop,
-    },
-    pages,
-    replace_existing: replace,
+  const spec: WatermarkArgs['spec'] = {
+    text: form.image ? '' : form.text,
+    font: form.font,
+    font_size: form.fontSize,
+    color,
+    opacity: form.opacity,
+    angle: form.image ? 0 : form.angle,
+    on_top: form.onTop,
   };
+  if (form.image && picture !== null) {
+    spec.image = { $bin: 1 };
+    spec.image_path = picture.name;
+    spec.scale = form.scale;
+  }
+  return { spec, pages, replace_existing: replace };
 }
 
 export type BackgroundArgs = {
@@ -312,15 +337,27 @@ export function canRunHeaderFooter(form: HeaderFooterForm, pages: readonly numbe
   return Number.isInteger(form.bates.start) && inLimit(form.bates.start, MARK_LIMITS.batesStart);
 }
 
-// Whether the watermark form can run: text that is not blank, pages, a valid colour, a size,
-// an angle and an opacity inside the desktop's ranges.
-export function canRunWatermark(form: WatermarkForm, pages: readonly number[]): boolean {
+// Whether the watermark form can run. Pages, a valid colour, a size and an opacity inside the
+// desktop's ranges, then by mode: a text watermark needs text that is not blank and an angle in
+// range; a picture watermark needs a picture (`picked`) and a width in range.
+export function canRunWatermark(
+  form: WatermarkForm,
+  pages: readonly number[],
+  picked: boolean,
+): boolean {
   if (pages.length === 0) return false;
-  if (form.text.trim() === '') return false;
   if (hexToColor(form.color) === undefined) return false;
   if (!inLimit(form.fontSize, MARK_LIMITS.watermarkSize)) return false;
-  if (!inLimit(form.angle, MARK_LIMITS.angle)) return false;
-  return inLimit(form.opacity, MARK_LIMITS.opacity);
+  if (!inLimit(form.opacity, MARK_LIMITS.opacity)) return false;
+  if (form.image) return picked && inLimit(form.scale, MARK_LIMITS.imageScale);
+  if (form.text.trim() === '') return false;
+  return inLimit(form.angle, MARK_LIMITS.angle);
+}
+
+// Whether a chosen file can be a picture watermark: its type and its size (the job checks the
+// pixels, which the browser does not decode here).
+export function isPictureFile(file: { readonly type: string; readonly size: number }): boolean {
+  return PICTURE_TYPES.includes(file.type) && file.size <= PICTURE_MAX_BYTES;
 }
 
 // Whether the background colour can run: pages, a valid colour, and an opacity inside the range.
@@ -389,12 +426,14 @@ function headerFooterForm(spec: HeaderFooterSpecDto): HeaderFooterForm {
 
 function watermarkForm(spec: WatermarkSpecDto): WatermarkForm {
   return {
+    image: spec.image,
     text: spec.text,
     font: fontOf(spec.font),
     fontSize: spec.font_size,
     color: colorToHex(spec.color),
     opacity: spec.opacity,
     angle: spec.angle,
+    scale: spec.scale,
     onTop: spec.on_top,
   };
 }
@@ -428,13 +467,15 @@ export function fromMarkDetail(detail: MarkDetailResult): MarkPreFill | undefine
   return pre;
 }
 
-// Runs one mark action as a mutating job. Resolves with the outcome; rejects with an RpcError or
-// ActionJobCancelled, as the job runner does.
+// Runs one mark action as a mutating job. `buffers` are the binary arguments the args name (a
+// picture watermark's). Resolves with the outcome; rejects with an RpcError or ActionJobCancelled,
+// as the job runner does.
 export function runMark(
   deps: ActionJobDeps,
   handle: string,
   name: string,
   args: Record<string, unknown>,
+  buffers: readonly ArrayBuffer[] = [],
 ): Promise<ActionJobOutcome> {
-  return runActionJob(deps, handle, name, args);
+  return runActionJob(deps, handle, name, args, buffers);
 }

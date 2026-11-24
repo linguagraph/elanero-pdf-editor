@@ -93,8 +93,9 @@ arrow offers **Add**, **Update** and **Remove**, so you can change or take off a
   replaced for each page: `<<page>>`, `<<pages>>`, `<<label>>`, `<<date>>`, `<<file>>` and
   `<<bates>>`.
 - **Bates Numbering**: sequential legal numbers on every page, with a prefix and a number of digits.
-- **Watermark**: text (for example `CONFIDENTIAL`) or an image across the pages, with font and
-  opacity settings.
+- **Watermark**: text (for example `CONFIDENTIAL`) or a PNG or JPEG picture across the pages, with
+  font and opacity settings for text, and the picture's width. Update asks for the picture again,
+  since the mark does not keep it.
 - **Background**: a color behind the page content, with its opacity.
 
 Most of these dialogs let you choose which pages a mark applies to: all pages, the current page

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from pdfeditor import actions as layer
+from pdfeditor.actions.marks import AddWatermark
 from pdfeditor.core.commands.snapshot import SNAPSHOT_OPTIONS, SnapshotCommand
 from pdfeditor.core.engine_lock import ENGINE_LOCK
 from pdfeditor.core.jobs import JobContext, ProgressFn
@@ -59,6 +60,7 @@ from pdfeditor.services.assembly import (
 from pdfeditor.services.comments import comment_threads, page_labels, summary_csv, summary_pdf
 from pdfeditor.services.compare import CompareOptions
 from pdfeditor.services.compare import compare as compare_documents
+from pdfeditor.services.custom_stamps import image_size
 from pdfeditor.services.export import TextFormat, export_document
 from pdfeditor.services.export.images import (
     ImageFormat,
@@ -177,7 +179,27 @@ def _convert_action(data: object, buffers: BufferTable) -> ActionJob:
     typed = from_json(action.args, spec.args, buffers, "args.args")
     # The job worker holds no uploaded fonts, so a job can't typeset with a FILE ref (W6.9 s2 §7).
     check_no_file_refs(typed, "args.args")
+    _check_watermark_picture(typed)
     return ActionJob(action.name, typed)
+
+
+def _check_watermark_picture(typed: object) -> None:
+    # A picture watermark is PNG or JPEG within the web's byte and pixel caps (the custom-stamp
+    # rule). Below 100 % opacity the job worker decodes it with PIL, so the pixel cap guards that
+    # worker's memory as well as the picture's own size.
+    if not isinstance(typed, AddWatermark) or typed.spec.image is None:
+        return
+    path = "args.args.spec.image"
+    data = typed.spec.image
+    if len(data) > limits.MAX_IMAGE_BYTES:
+        mb = limits.MAX_IMAGE_BYTES // 1024**2
+        raise RpcFailure(INVALID_ARGS, f"{path}: larger than {mb} MB", {"path": path})
+    size = image_size(data)
+    if size is None:
+        raise RpcFailure(INVALID_ARGS, f"{path}: not a PNG or JPEG picture", {"path": path})
+    if size[0] * size[1] > limits.MAX_IMAGE_PIXELS:
+        megapixels = limits.MAX_IMAGE_PIXELS // 1_000_000
+        raise RpcFailure(INVALID_ARGS, f"{path}: more than {megapixels} megapixels", {"path": path})
 
 
 def _session(session: DocumentSession | None) -> DocumentSession:

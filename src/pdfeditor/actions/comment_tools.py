@@ -17,7 +17,13 @@ from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
 from pdfeditor.actions.edit_geometry import MIN_DRAG
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef, callout_line
+from pdfeditor.model.annotations import (
+    STANDARD_STAMPS,
+    AnnotationModel,
+    AnnotationType,
+    AnnotRef,
+    callout_line,
+)
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import MarkupArea, PageRects, Point, Quad, Rect, simplify
 
@@ -34,6 +40,8 @@ INK_TOLERANCE = 0.6
 # Polygon or polyline vertices closer than this (Manhattan, points) are one: a double-click
 # leaves a duplicate behind (the desktop's PolyTool.finish drops it).
 REPEAT_TOLERANCE = 1.0
+# A standard stamp's box, in points, centred on the click (the desktop's StampTool).
+STAMP_SIZE = (160.0, 50.0)
 
 
 def build_note(page: int, point: Point, text: str, author: str = "") -> AnnotationModel:
@@ -90,6 +98,29 @@ def build_markup(
         author=author,
         contents=text,
         quads=quads or (Quad.from_rect(rect),),
+    )
+
+
+def standard_stamp_box(center: Point) -> Rect:
+    """The box a standard stamp takes when it is placed at ``center``."""
+    w, h = STAMP_SIZE
+    return Rect(center.x - w / 2, center.y - h / 2, center.x + w / 2, center.y + h / 2)
+
+
+def build_stamp(page: int, rect: Rect, name: str, author: str = "") -> AnnotationModel:
+    """A standard stamp named ``name`` (one of ``STANDARD_STAMPS``) in ``rect``. The caller
+    checks the name; the desktop's StampTool and the web's STAMP tool both build through here."""
+    style = DEFAULT_STYLES[AnnotationType.STAMP]
+    return AnnotationModel(
+        AnnotationType.STAMP,
+        page,
+        rect,
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        icon=name,
     )
 
 
@@ -203,6 +234,7 @@ class CommentTool(StrEnum):
     OVAL = "oval"
     POLYGON = "polygon"
     POLYLINE = "polyline"
+    STAMP = "stamp"
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +245,8 @@ class CreateAnnotation:
     A note uses the top-left corner of ``rect``. Box tools use ``rect``; a box too small to be a
     drag gets the tool's default size where the tool has one (text box, callout). A callout's
     ``rect`` is its box and its single tip is ``points[0]``. Pen, line, arrow, polygon and
-    polyline use ``points`` and ignore ``rect``."""
+    polyline use ``points`` and ignore ``rect``. A stamp is placed at the top-left corner of
+    ``rect`` (a click is a zero-size rect) and takes its name from ``stamp``."""
 
     tool: CommentTool
     page: int
@@ -221,6 +254,7 @@ class CreateAnnotation:
     text: str = ""
     author: str = ""
     points: tuple[Point, ...] = ()
+    stamp: str = ""
 
 
 _UNDO_LABELS = {
@@ -235,6 +269,7 @@ _UNDO_LABELS = {
     CommentTool.OVAL: "Add Oval",
     CommentTool.POLYGON: "Add Polygon",
     CommentTool.POLYLINE: "Add Polyline",
+    CommentTool.STAMP: "Add Stamp",
 }
 
 # Tools whose comment is a box of text: a blank one adds nothing. A sticky note may be blank (the
@@ -318,6 +353,13 @@ def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
     _check_text(args.text)
     if tool in _TEXT_TOOLS and not args.text.strip():
         return None
+    if tool is CommentTool.STAMP:
+        if args.stamp not in STANDARD_STAMPS:
+            raise Refused("a stamp must be one of the standard stamps")
+        point = Point(args.rect.x0, args.rect.y0)
+        if not (page.x0 <= point.x <= page.x1 and page.y0 <= point.y <= page.y1):
+            return None  # the click is off the page
+        return build_stamp(args.page, standard_stamp_box(point), args.stamp, args.author)
     if tool is CommentTool.NOTE:
         point = Point(args.rect.x0, args.rect.y0)
         icon = Rect(point.x, point.y, point.x + NOTE_SIZE, point.y + NOTE_SIZE)

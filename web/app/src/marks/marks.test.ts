@@ -9,6 +9,9 @@ import {
   canRunBackground,
   canRunHeaderFooter,
   canRunWatermark,
+  isPictureFile,
+  PICTURE_MAX_BYTES,
+  type WatermarkPicture,
   colorToHex,
   fromMarkDetail,
   getMark,
@@ -40,13 +43,20 @@ const HEADER_FOOTER: HeaderFooterForm = {
 };
 
 const WATERMARK: WatermarkForm = {
+  image: false,
   text: 'CONFIDENTIAL',
   font: 'hebo',
   fontSize: 60,
   color: '#bf1a1a',
   opacity: 0.3,
   angle: 45,
+  scale: 0.5,
   onTop: true,
+};
+
+const PICTURE: WatermarkPicture = {
+  name: 'logo.png',
+  bytes: new Uint8Array([137, 80, 78, 71]).buffer,
 };
 
 describe('hexToColor and colorToHex', () => {
@@ -141,6 +151,32 @@ describe('watermarkArgs', () => {
   });
 });
 
+describe('watermarkArgs in picture mode', () => {
+  it('names the picture as buffer 1 and sends its file name and width', () => {
+    const form = { ...WATERMARK, image: true, text: '', scale: 0.4, angle: 12 };
+    const args = watermarkArgs(form, [0], false, PICTURE);
+    expect(args.spec).toEqual({
+      text: '',
+      font: 'hebo',
+      font_size: 60,
+      color: { r: 0xbf / 255, g: 0x1a / 255, b: 0x1a / 255 },
+      opacity: 0.3,
+      angle: 0,
+      on_top: true,
+      image: { $bin: 1 },
+      image_path: 'logo.png',
+      scale: 0.4,
+    });
+  });
+
+  it('sends no picture keys in text mode, even when a picture was chosen', () => {
+    const args = watermarkArgs(WATERMARK, [0], false, PICTURE);
+    expect(args.spec).not.toHaveProperty('image');
+    expect(args.spec).not.toHaveProperty('image_path');
+    expect(args.spec.angle).toBe(45);
+  });
+});
+
 describe('backgroundArgs and removeArgs', () => {
   it('builds the background and remove arguments', () => {
     expect(backgroundArgs('#ff0000', 1, [0], false)).toEqual({
@@ -215,22 +251,46 @@ describe('canRunHeaderFooter', () => {
 
 describe('canRunWatermark and canRunBackground', () => {
   it('refuses blank watermark text, no pages, and an opacity outside 0.05 to 1', () => {
-    expect(canRunWatermark(WATERMARK, [0])).toBe(true);
-    expect(canRunWatermark({ ...WATERMARK, text: '   ' }, [0])).toBe(false);
-    expect(canRunWatermark(WATERMARK, [])).toBe(false);
-    expect(canRunWatermark({ ...WATERMARK, opacity: 1.5 }, [0])).toBe(false);
-    expect(canRunWatermark({ ...WATERMARK, opacity: 0 }, [0])).toBe(false);
-    expect(canRunWatermark({ ...WATERMARK, opacity: 0.04 }, [0])).toBe(false);
-    expect(canRunWatermark({ ...WATERMARK, opacity: 0.05 }, [0])).toBe(true);
+    expect(canRunWatermark(WATERMARK, [0], false)).toBe(true);
+    expect(canRunWatermark({ ...WATERMARK, text: '   ' }, [0], false)).toBe(false);
+    expect(canRunWatermark(WATERMARK, [], false)).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, opacity: 1.5 }, [0], false)).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, opacity: 0 }, [0], false)).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, opacity: 0.04 }, [0], false)).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, opacity: 0.05 }, [0], false)).toBe(true);
   });
 
   it('refuses a size outside 6 to 400 and an angle outside -180 to 180', () => {
-    expect(canRunWatermark({ ...WATERMARK, fontSize: 5 }, [0])).toBe(false);
-    expect(canRunWatermark({ ...WATERMARK, fontSize: 6 }, [0])).toBe(true);
-    expect(canRunWatermark({ ...WATERMARK, fontSize: 400 }, [0])).toBe(true);
-    expect(canRunWatermark({ ...WATERMARK, fontSize: 401 }, [0])).toBe(false);
-    expect(canRunWatermark({ ...WATERMARK, angle: -180 }, [0])).toBe(true);
-    expect(canRunWatermark({ ...WATERMARK, angle: 181 }, [0])).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, fontSize: 5 }, [0], false)).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, fontSize: 6 }, [0], false)).toBe(true);
+    expect(canRunWatermark({ ...WATERMARK, fontSize: 400 }, [0], false)).toBe(true);
+    expect(canRunWatermark({ ...WATERMARK, fontSize: 401 }, [0], false)).toBe(false);
+    expect(canRunWatermark({ ...WATERMARK, angle: -180 }, [0], false)).toBe(true);
+    expect(canRunWatermark({ ...WATERMARK, angle: 181 }, [0], false)).toBe(false);
+  });
+
+  it('needs a chosen picture and a width of 5 to 100 % in picture mode', () => {
+    const picture = { ...WATERMARK, image: true, text: '', scale: 0.5 };
+    expect(canRunWatermark(picture, [0], false)).toBe(false);
+    expect(canRunWatermark(picture, [0], true)).toBe(true);
+    expect(canRunWatermark({ ...picture, scale: 0.04 }, [0], true)).toBe(false);
+    expect(canRunWatermark({ ...picture, scale: 0.05 }, [0], true)).toBe(true);
+    expect(canRunWatermark({ ...picture, scale: 1 }, [0], true)).toBe(true);
+    expect(canRunWatermark({ ...picture, scale: 1.01 }, [0], true)).toBe(false);
+    expect(canRunWatermark({ ...picture, scale: Number.NaN }, [0], true)).toBe(false);
+  });
+
+  it('takes the angle out of the check in picture mode', () => {
+    const picture = { ...WATERMARK, image: true, text: '', angle: Number.NaN };
+    expect(canRunWatermark(picture, [0], true)).toBe(true);
+  });
+
+  it('accepts only PNG and JPEG files of at most 50 MB', () => {
+    expect(isPictureFile({ type: 'image/png', size: 10 })).toBe(true);
+    expect(isPictureFile({ type: 'image/jpeg', size: PICTURE_MAX_BYTES })).toBe(true);
+    expect(isPictureFile({ type: 'image/jpeg', size: PICTURE_MAX_BYTES + 1 })).toBe(false);
+    expect(isPictureFile({ type: 'image/gif', size: 10 })).toBe(false);
+    expect(isPictureFile({ type: 'application/pdf', size: 10 })).toBe(false);
   });
 
   it('checks the colour, opacity and pages of a background', () => {
@@ -356,12 +416,14 @@ describe('fromMarkDetail', () => {
     });
     expect(pre?.watermark).toEqual({
       form: {
+        image: true,
         text: '',
         font: 'hebo',
         fontSize: 60,
         color: '#000000',
         opacity: 0.3,
         angle: 45,
+        scale: 0.5,
         onTop: false,
       },
       image: true,
@@ -414,6 +476,48 @@ describe('runMark', () => {
         params: { handle: 'h1', job: 'action', args: { name: WATERMARK_ACTION, args } },
       },
     ]);
+  });
+
+  it('sends a picture as a copy in jobs.prepare and names it as buffer 1 for the job', async () => {
+    const calls: { method: string; params: unknown }[] = [];
+    const engine: ActionJobEngine = {
+      call: (method, params) => {
+        calls.push({ method, params });
+        if (method === 'jobs.prepare') {
+          return Promise.resolve({
+            token: 't1',
+            label: 'Add Watermark',
+            mutating: true,
+            document: new ArrayBuffer(2),
+            state: null,
+          } as never);
+        }
+        return Promise.reject(new Error('stop'));
+      },
+    };
+    const workerCalls: { buffers: readonly ArrayBuffer[] }[] = [];
+    const startWorker = () => ({
+      call: (_request: string, buffers: readonly ArrayBuffer[] = []) => {
+        workerCalls.push({ buffers });
+        return Promise.reject(new Error('stop'));
+      },
+      terminate: () => undefined,
+    });
+    const args = watermarkArgs({ ...WATERMARK, image: true, text: '' }, [0], false, PICTURE);
+    await expect(
+      runMark({ engine, startWorker }, 'h1', WATERMARK_ACTION, args, [PICTURE.bytes]),
+    ).rejects.toThrow('stop');
+
+    const prepare = calls[0]?.params as { args: { args: { spec: { image: unknown } } } };
+    const prepared = prepare.args.args.spec.image;
+    expect(prepared).toBeInstanceOf(ArrayBuffer);
+    expect((prepared as ArrayBuffer).byteLength).toBe(4);
+    expect(prepared).not.toBe(PICTURE.bytes);
+    // The job worker gets the document as buffer 0 and the picture (a copy) as buffer 1.
+    expect(workerCalls).toHaveLength(1);
+    expect(workerCalls[0]?.buffers.map((buffer) => buffer.byteLength)).toEqual([2, 4]);
+    // The caller's own picture is not detached by the transfers.
+    expect(PICTURE.bytes.byteLength).toBe(4);
   });
 
   it('exports the four action names the engine registers', () => {

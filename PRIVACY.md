@@ -83,6 +83,9 @@ site, and your documents are not uploaded to any server.
   open, clear the site's data for the Elanero web address in your browser's settings. Closing the
   browser tab does not remove them by itself.
 
+The project's security review of the web version, with the status of each finding, is in
+[docs/web/security-review.md](docs/web/security-review.md).
+
 ## Desktop app (Windows)
 
 _This section is the existing policy for the Microsoft Store app, the installer and the portable

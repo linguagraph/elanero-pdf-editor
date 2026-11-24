@@ -83,7 +83,8 @@ import { SignedWarningDialog } from './edit/signedWarning';
 import { CommentsPanel } from './comments/panel/CommentsPanel';
 import { CommentsController } from './comments/panel/controller';
 import { useCommentsCount } from './comments/panel/useComments';
-import type { CommentToolId } from './comments/tools';
+import { type CommentToolId, toggleCommentTool } from './comments/tools';
+import { MARKUP_COMMAND_KINDS, type MarkupKind, pressMarkup } from './comments/markup';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -425,6 +426,9 @@ export function App({
   // Bumped after an Undo or Redo that changed only the outline: the bookmarks reload, and the view
   // stays where the reader is (a remount would put it back on page 1).
   const [outlineRevision, setOutlineRevision] = useState(0);
+  // Bumped after an Undo or Redo: an add or a remove of an attachment changes no page, so the
+  // attachments panel reloads its list on this counter.
+  const [attachmentsRevision, setAttachmentsRevision] = useState(0);
   // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
@@ -663,6 +667,7 @@ export function App({
     const refresh = historyRefresh(reply.changed);
     if (refresh.structure) setStructureRevision((value) => value + 1);
     else if (refresh.outline) setOutlineRevision((value) => value + 1);
+    if (reply.done) setAttachmentsRevision((value) => value + 1);
   };
   const runHistory = (direction: HistoryDirection) => {
     if (session !== null) {
@@ -701,6 +706,30 @@ export function App({
     if (file === null) return;
     setPendingImage(tab, file);
     if (!requestEditTool(tab, signed, 'image')) setSignedEditAsk({ tabId: tab, tool: 'image' });
+  };
+  // The text markups (W7.1a slice 5) mark the view's text selection, read as Mark Text reads it.
+  // With no selection, noSelection runs (Highlight's drag tool; the others say so).
+  const pressMarkupCommand = (kind: MarkupKind, noSelection: () => void) => {
+    const view = viewRef.current;
+    if (view === null || session === null || scheduler === null) {
+      toasts.push('info', t('redact.notReady'));
+      return;
+    }
+    void pressMarkup(
+      kind,
+      {
+        rpc: session.rpc,
+        handle: session.handle,
+        scheduler,
+        pageSpan: () => view.selectedPageSpan(),
+        model: () => view.selectedAreas(),
+        clearModel: () => view.clearTextSelection(),
+        loadPages: (pages) => view.loadTextPages(pages),
+        selection: window.getSelection(),
+        lookup: (page) => view.cachedLines(page),
+      },
+      noSelection,
+    );
   };
   const handlers: CommandHandlers = {
     ...baseHandlers,
@@ -742,7 +771,13 @@ export function App({
           'sticky-note': () =>
             viewRef.current?.setCommentTool(commentTool === 'note' ? null : 'note'),
           highlight: () =>
-            viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+            pressMarkupCommand(MARKUP_COMMAND_KINDS.highlight, () =>
+              viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+            ),
+          underline: () => pressMarkupCommand(MARKUP_COMMAND_KINDS.underline, () => undefined),
+          strikethrough: () =>
+            pressMarkupCommand(MARKUP_COMMAND_KINDS.strikethrough, () => undefined),
+          squiggly: () => pressMarkupCommand(MARKUP_COMMAND_KINDS.squiggly, () => undefined),
           rectangle: () =>
             viewRef.current?.setCommentTool(commentTool === 'rectangle' ? null : 'rectangle'),
           'text-box': () =>
@@ -750,6 +785,18 @@ export function App({
           oval: () => viewRef.current?.setCommentTool(commentTool === 'oval' ? null : 'oval'),
           line: () => viewRef.current?.setCommentTool(commentTool === 'line' ? null : 'line'),
           arrow: () => viewRef.current?.setCommentTool(commentTool === 'arrow' ? null : 'arrow'),
+          callout: () =>
+            viewRef.current?.setCommentTool(commentTool === 'callout' ? null : 'callout'),
+          polygon: () =>
+            viewRef.current?.setCommentTool(commentTool === 'polygon' ? null : 'polygon'),
+          polyline: () =>
+            viewRef.current?.setCommentTool(commentTool === 'polyline' ? null : 'polyline'),
+          pen: () => viewRef.current?.setCommentTool(commentTool === 'pen' ? null : 'pen'),
+          // The ribbon's Stamp toggles the stamp tool with the stamp last chosen in the stamp menu.
+          stamp: () =>
+            toggleCommentTool(commentTool, 'stamp', (tool) =>
+              viewRef.current?.setCommentTool(tool),
+            ),
           // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
           redact: () => viewRef.current?.setRedacting(!state.redacting),
           // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.
@@ -948,6 +995,11 @@ export function App({
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
+            revision={attachmentsRevision}
+            signed={activeTab?.signed ?? false}
+            onHistoryStep={onHistoryStep}
+            startWorker={jobs.acquire}
+            onOpenFiles={docs.openFiles}
             onClose={() => closePanel('left')}
           />
         ) : documentShown && leftPanelOpen === 'layers' && activeId !== null && session !== null ? (

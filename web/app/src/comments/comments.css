@@ -26,11 +26,24 @@
   pointer-events: none;
 }
 
-.comment-line-preview line {
+.comment-line-preview line,
+.comment-line-preview polyline {
+  fill: none;
   stroke: var(--color-focus-ring);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
   vector-effect: non-scaling-stroke;
+}
+
+/* The tip of a callout, placed before its box (W7.1a slice 4). */
+.comment-tip {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--color-focus-ring);
+  pointer-events: none;
 }
 
 .comment-note-form {

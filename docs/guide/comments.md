@@ -39,8 +39,20 @@ The **Drawing** group:
 - **Pen**: draw freehand. Strokes are smoothed when you release the mouse.
 
 In the web version, the comment toolbar has Sticky Note, Text Box, Rectangle, Highlight, Oval,
-Line and Arrow. A text box, like a sticky note, asks for its text once you place it. A line or
-arrow is drawn by dragging from one end to the other; a click without a drag adds nothing.
+Line, Arrow, Callout, Pen, Polygon and Polyline. Beside them, the **Stamp** menu lists the 14
+standard stamps (Approved, Draft, Confidential and the rest); choose one, then click a page to
+place it centred on the click, or press Enter to place it at the centre of the page. Your own image
+stamps are not in the web version yet. A text box, like a sticky note, asks for its text
+once you place it. A line or arrow is drawn by dragging from one end to the other; a click without
+a drag adds nothing. A callout takes two steps: click its tip, then drag its box (or click for the
+default size), then type its text. A pen draws a stroke while you drag. A polygon or polyline takes
+a click for each corner and finishes on a double-click or Enter; a polygon also closes when you
+click its first corner. Pen, polygon and polyline have no keyboard placement.
+
+The Text Markup group (Highlight, Underline, Strikeout and Squiggly) marks the text you have
+selected, one comment per page, as the desktop does. Press the button after selecting text, and the
+markup is added at once; Undo removes it. With no text selected, Highlight turns on its drag tool
+for a box (for a page with no text), and the other three ask you to select text first.
 
 ## Manage comments
 
