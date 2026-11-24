@@ -338,7 +338,7 @@ built in the web version yet:
   [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
 - editing the words of a paragraph, adding text, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
 - comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and watermarks;
-- the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
+- the Security tab of document properties (the title, author, subject and keywords can be edited, and the Advanced and Fonts tabs show the file's facts and fonts; see the table below);
 - the **Install App** command.
 
 ## Browser support
@@ -446,7 +446,7 @@ full policy, with what the desktop app stores, is in the
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
-| Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change) |
+| Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change). The Advanced and Fonts tabs show the PDF version and file facts, and the fonts the pages use, read only |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
 | Web and email links | Yes | Yes: web and email links ask first, and show the full address |
