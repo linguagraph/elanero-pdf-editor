@@ -124,6 +124,15 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [registry, state, handlers, isOpen, open]);
 
+  // The list's Change shortcuts button closes the palette and runs the keyboard-shortcuts command,
+  // which opens the editor. It runs after the close, as Go to Page does, so the editor keeps focus.
+  function changeShortcuts(): void {
+    const def = registry.get(KEYBOARD_SHORTCUTS_ID);
+    if (def === undefined) return;
+    setIsOpen(false);
+    pendingRun.current = def;
+  }
+
   function run(def: CommandDef): void {
     if (def.id === KEYBOARD_SHORTCUTS_ID) {
       setView('shortcuts');
@@ -155,7 +164,12 @@ export function CommandPalette({ registry, state, handlers }: CommandPaletteProp
           onRun={run}
         />
       ) : (
-        <ShortcutList registry={registry} state={state} onBack={() => setView('commands')} />
+        <ShortcutList
+          registry={registry}
+          state={state}
+          onBack={() => setView('commands')}
+          onChange={changeShortcuts}
+        />
       )}
     </Overlay>
   );

@@ -241,6 +241,25 @@ describe('command palette', () => {
     expect(kbd).not.toContain('Ctrl+W');
   });
 
+  it('Change shortcuts in the list closes the palette and opens the editor once', async () => {
+    const handlers = spies();
+    render(OPEN_STATE, handlers);
+    openPalette();
+    type('keyboard');
+    key(input(), { key: 'Enter' });
+    const change = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === t('palette.changeShortcuts'),
+    );
+    if (change === undefined) throw new Error('no Change shortcuts button');
+    act(() => {
+      change.click();
+    });
+
+    // The editor runs after the palette has closed (its focus restore must not undo the move).
+    await vi.waitFor(() => expect(handlers['keyboard-shortcuts']).toHaveBeenCalledTimes(1));
+    expect(document.querySelector('.palette-input')).toBeNull();
+  });
+
   it('ranks by the words of the label, so initials and letters in order find a command', () => {
     render(OPEN_STATE, spies());
     openPalette();

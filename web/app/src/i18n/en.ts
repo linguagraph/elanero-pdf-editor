@@ -137,6 +137,7 @@ export const EN = {
   'palette.back': 'Back to commands',
   'palette.shortcutsList': 'Keyboard shortcuts',
   'palette.noShortcuts': 'No keyboard shortcuts yet.',
+  'palette.changeShortcuts': 'Change shortcuts…',
   'palette.recent': 'Recent',
   'palette.menuLocation': 'App menu',
 
@@ -461,7 +462,8 @@ export const EN = {
   'prefs.layout.twoPage': 'Two pages',
   'prefs.layout.twoPageCover': 'Two pages, first page alone',
   'prefs.section.shortcuts': 'Shortcuts',
-  'prefs.shortcuts.hint': 'Lists every keyboard shortcut in Elanero.',
+  'prefs.shortcuts.hint':
+    'Change the keys for any command. Changes apply at once and are kept in this browser.',
   'prefs.shortcuts.open': 'Keyboard Shortcuts…',
   'prefs.section.redaction': 'Redaction',
   'prefs.redaction.hint': 'The style of new redaction boxes. Boxes already drawn keep their style.',

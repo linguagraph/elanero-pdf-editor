@@ -282,6 +282,32 @@ describe('ShortcutsDialog editing (W4.x, #330 W2)', () => {
     expect(document.activeElement).toBe(filter);
   });
 
+  it('takes focus back to the filter one frame after the dialog opens if focus was lost', async () => {
+    render(() => undefined);
+    const filter = document.querySelector<HTMLInputElement>('input[type="search"]');
+    // What the browser can do after mount: focus moved to the dialog element, or to the body.
+    act(() => {
+      dialog()?.focus();
+    });
+    expect(document.activeElement).not.toBe(filter);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.activeElement).toBe(filter);
+  });
+
+  it('does not move focus from a control the user moved to inside the dialog', async () => {
+    render(() => undefined);
+    const row = button(t('command.open.label'));
+    act(() => {
+      row?.focus();
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.activeElement).toBe(row);
+  });
+
   it('returns focus to Reset all when Keep keeps the bindings', () => {
     render(() => undefined);
     clickButton(t('shortcuts.resetAll'));

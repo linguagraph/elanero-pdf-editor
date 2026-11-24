@@ -104,6 +104,24 @@ function ShortcutEditor({ registry, state }: { registry: Registry; state: Comman
     }
   }, [confirmingReset]);
 
+  // The filter's autoFocus can be undone after mount: react-aria's Dialog focuses the dialog
+  // element when nothing inside it has focus yet, and in a browser that lands after the input
+  // was focused (the dialog is nested over Preferences). So the filter takes focus one frame
+  // later. It does not take it back from a control the user has moved to inside this dialog.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const filter = filterRef.current;
+      if (filter === null || document.activeElement === filter) return;
+      const active = document.activeElement;
+      const dialogEl = filter.closest('[role="dialog"]');
+      const movedWithin =
+        active !== null && active !== document.body && dialogEl?.contains(active) === true;
+      const onDialogFrame = active === dialogEl;
+      if (!movedWithin || onDialogFrame) filter.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   // Every command's name, the palette's included. Only visible commands get a row, but a hidden
   // one still holds its keys for conflict checks (design section 4).
   const names = new Map<string, string>(registry.commands.map((def) => [def.id, t(def.labelId)]));
