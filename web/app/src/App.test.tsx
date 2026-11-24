@@ -10,6 +10,7 @@ import type { RpcEvent } from './rpc/generated';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
 import { RedactionController } from './redaction/controller';
+import { RenderScheduler } from './view/renderScheduler';
 import type { MessageId } from './i18n/en';
 import { TAB_LABELS } from './commands/registry';
 import { closePanel, openPanel } from './layout/sidePanels';
@@ -1075,6 +1076,28 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
   });
 
+  it('the box and line ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    for (const [command, key] of [
+      ['text-box', 'comment.tool.textbox'],
+      ['oval', 'comment.tool.oval'],
+      ['line', 'comment.tool.line'],
+      ['arrow', 'comment.tool.arrow'],
+    ] as const) {
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('true');
+      expect(toolbarPressed(t(key))).toBe('true');
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('false');
+      expect(toolbarPressed(t(key))).toBe('false');
+    }
+  });
+
   it('Edit Text & Images is off with its reason when the engine lacks content_edit', async () => {
     await openDocument(false, false);
     selectTab(t('ribbon.tab.edit'));
@@ -1482,5 +1505,152 @@ describe('App Comments panel (W7.1b S1)', () => {
       panelButton(t('comments.export.label'))?.click();
     });
     await until(() => document.body.textContent?.includes(t('commentsExport.title')) === true);
+  });
+});
+
+describe('App: change events reach the render scheduler and the layers panel (W7.9 L2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // The drawing engine, with layers.list answered (an empty list); every other call is its own.
+  function layersEngine() {
+    const base = drawingEngine();
+    const forward = base.client.call as unknown as (
+      method: string,
+      params: Record<string, unknown>,
+    ) => Promise<unknown>;
+    const call = vi.fn((method: string, params: Record<string, unknown>) =>
+      method === 'layers.list' ? Promise.resolve({ layers: [] }) : forward(method, params),
+    );
+    return { client: { call } as unknown as EngineClient, renders: base.renders, call };
+  }
+
+  // Opens the one-page document (handle doc-1) with the Layers panel open on the left.
+  async function openWithLayers(scripted: ReturnType<typeof layersEngine>) {
+    const engine = fakeEngine(scripted.client);
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    openPanel('layers');
+    act(() => {
+      root.render(<App engine={engine} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('layers.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+    await until(() => layerListReads(scripted) > 0);
+    return engine;
+  }
+
+  function layerListReads(scripted: ReturnType<typeof layersEngine>): number {
+    return scripted.call.mock.calls.filter(([method]) => method === 'layers.list').length;
+  }
+
+  it('routes a changed event for the open document to the render scheduler', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const note = vi.spyOn(RenderScheduler.prototype, 'noteRevisions');
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-1',
+          changes: [{ kind: 'content', pages: [0] }],
+          revisions: { '0': 5 },
+        },
+      ]);
+    });
+
+    expect(note).toHaveBeenCalledWith({ '0': 5 });
+  });
+
+  it('ignores a changed event for another document', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const note = vi.spyOn(RenderScheduler.prototype, 'noteRevisions');
+    const before = layerListReads(scripted);
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-9',
+          changes: [{ kind: 'structure', pages: [] }],
+          revisions: { '0': 5 },
+        },
+      ]);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(note).not.toHaveBeenCalled();
+    expect(layerListReads(scripted)).toBe(before);
+  });
+
+  it('reads the layers list again when a structure change reaches the open document', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const before = layerListReads(scripted);
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-1',
+          changes: [{ kind: 'structure', pages: [] }],
+          revisions: {},
+        },
+      ]);
+    });
+    await until(() => layerListReads(scripted) > before);
+
+    expect(layerListReads(scripted)).toBe(before + 1);
+  });
+
+  it('does not read the layers list again for a content change', async () => {
+    const scripted = layersEngine();
+    const engine = await openWithLayers(scripted);
+    const before = layerListReads(scripted);
+
+    act(() => {
+      engine.emit([
+        {
+          kind: 'changed',
+          handle: 'doc-1',
+          changes: [{ kind: 'content', pages: [0] }],
+          revisions: { '0': 2 },
+        },
+      ]);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(layerListReads(scripted)).toBe(before);
   });
 });

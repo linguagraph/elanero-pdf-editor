@@ -168,6 +168,21 @@ def test_the_web_wire_args_convert_to_the_action_args() -> None:
     assert args == CreateAnnotation(CommentTool.HIGHLIGHT, 0, Rect(10, 20, 90, 40), "Key", "")
 
 
+def test_the_web_line_and_arrow_args_convert_with_their_ends() -> None:
+    """A line or arrow from the web sends its two ends as ``points``; ``rect`` is their box."""
+    wire = {
+        "tool": "arrow",
+        "page": 0,
+        "rect": {"x0": 72.0, "y0": 72.0, "x1": 144.0, "y1": 100.0},
+        "text": "",
+        "points": [{"x": 72.0, "y": 72.0}, {"x": 144.0, "y": 100.0}],
+        "author": "",
+    }
+    args = from_json(CreateAnnotation, wire, BufferTable([]), "args")
+    assert args.tool is CommentTool.ARROW
+    assert args.points == (Point(72, 72), Point(144, 100))
+
+
 def highlight(s: DocumentSession, pages: tuple[PageRects, ...], note: str = "") -> object:
     return layer.run(s, "annotations.highlight_text", HighlightText(pages, note, "Ann"))
 

@@ -242,6 +242,7 @@ class PlatformFlags:
     image_formats: tuple[str, ...] | None
     max_image_bytes: int | None
     max_image_pixels: int | None
+    max_attachment_bytes: int | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
