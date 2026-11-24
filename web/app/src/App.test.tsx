@@ -6,12 +6,14 @@ import { APP_VERSION } from './version';
 import { GUIDE_URL } from './help/guide';
 import { type EngineClient, setTabSession } from './engine/engineConnection';
 import { fakeEngine } from './engine/testEngine';
+import type { RpcEvent } from './rpc/generated';
 import type { JobWorkerPool } from './engine/jobPool';
 import { t } from './i18n/t';
 import { RedactionController } from './redaction/controller';
 import type { MessageId } from './i18n/en';
 import { TAB_LABELS } from './commands/registry';
 import { closePanel, openPanel } from './layout/sidePanels';
+import { toasts } from './feedback/toasts';
 
 // jsdom has no CSS.escape, and react-aria calls it when a tab takes focus.
 if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'function') {
@@ -720,6 +722,244 @@ describe('App Save (W4.8 S2)', () => {
     });
     expect(event.defaultPrevented).toBe(true);
     expect(downloads).toEqual([]);
+  });
+});
+
+// The document's state as the engine sends it after a change: Undo and Redo are enabled by it.
+function undoableState(): RpcEvent {
+  return {
+    kind: 'state',
+    handle: 'doc-1',
+    state: {
+      page_count: 1,
+      structure_version: 0,
+      dirty: true,
+      busy: '',
+      can_undo: true,
+      can_redo: true,
+      undo_label: 'Move',
+      redo_label: 'Move',
+      require_full_save: false,
+      history: 1,
+    },
+  };
+}
+
+// A document with an empty comments list that counts each read. Undo and Redo reply as a done step,
+// Save and Save As as a saved file, and every other call goes to the drawing engine. With
+// refuseSave, the engine refuses to write the file, so the save fails.
+function refreshEngine(options: { refuseSave?: boolean } = {}): {
+  client: EngineClient;
+  lists: () => number;
+} {
+  const base = drawingEngine().client;
+  const baseCall = base.call as unknown as (m: string, p: unknown) => Promise<unknown>;
+  const calls: string[] = [];
+  const call = vi.fn((method: string, params: Record<string, unknown>) => {
+    calls.push(method);
+    if (method === 'comments.list') return Promise.resolve({ threads: [], truncated: false });
+    if (method === 'actions.undo' || method === 'actions.redo') {
+      return Promise.resolve({ done: true, label: 'Move', changed: null, state: {} });
+    }
+    if (method === 'save.save_bytes' && options.refuseSave) {
+      return Promise.reject(new Error('refused'));
+    }
+    if (method === 'save.save_bytes') {
+      return Promise.resolve({
+        data: new ArrayBuffer(8),
+        size: 8,
+        incremental: false,
+        verified: true,
+        name: 'report',
+      });
+    }
+    if (method === 'save.mark_saved') return Promise.resolve({ saved: true, state: {} });
+    return baseCall(method, params);
+  });
+  return {
+    client: { call } as unknown as EngineClient,
+    lists: () => calls.filter((method) => method === 'comments.list').length,
+  };
+}
+
+describe('App comments list refresh (W7.1b S2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  let downloads: string[];
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    openPanel('comments');
+    closePanel('right');
+    downloads = [];
+    URL.createObjectURL = vi.fn(() => 'blob:refresh-test');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download);
+    });
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // Opens the one-page document with the comments panel open; the open reads the list once.
+  async function openDocument(engine: ReturnType<typeof refreshEngine>): Promise<void> {
+    const connection = fakeEngine(engine.client);
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(<App engine={connection} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('refresh.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => engine.lists() === 1);
+    act(() => {
+      connection.emit([undoableState()]);
+    });
+  }
+
+  function key(init: KeyboardEventInit): void {
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
+      );
+    });
+  }
+
+  function saveButton(): HTMLElement | null {
+    return host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+  }
+
+  // Waits for the list reads to reach the count, then checks that nothing else reads it.
+  async function expectListsTo(
+    engine: ReturnType<typeof refreshEngine>,
+    count: number,
+  ): Promise<void> {
+    await until(() => engine.lists() === count);
+    expect(engine.lists()).toBe(count);
+  }
+
+  it('reads the comments list again after Undo', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    key({ key: 'z', ctrlKey: true });
+    await expectListsTo(engine, 2);
+  });
+
+  it('reads the comments list again after Redo', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    key({ key: 'y', ctrlKey: true });
+    await expectListsTo(engine, 2);
+  });
+
+  it('reads the comments list again after Save', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    act(() => {
+      saveButton()?.click();
+    });
+    await expectListsTo(engine, 2);
+    expect(downloads).toEqual(['refresh.pdf']);
+  });
+
+  it('reads the comments list again after Save As', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    key({ key: 'S', ctrlKey: true, shiftKey: true });
+    const submit = await vi.waitFor(() => {
+      const found = document.querySelector<HTMLButtonElement>('.saveas-form button[type="submit"]');
+      if (found === null) throw new Error('no Save As form');
+      return found;
+    });
+    act(() => {
+      submit.click();
+    });
+    await expectListsTo(engine, 2);
+    expect(downloads).toEqual(['refresh.pdf']);
+  });
+
+  it('does not read the comments list again after a save the engine refused', async () => {
+    const engine = refreshEngine({ refuseSave: true });
+    await openDocument(engine);
+    const pushed = vi.spyOn(toasts, 'push');
+    act(() => {
+      saveButton()?.click();
+    });
+    // The failure is reported as a toast, which is the outcome the list refresh depends on.
+    await until(() => pushed.mock.calls.length > 0);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(engine.lists()).toBe(1);
+    expect(downloads).toEqual([]);
+  });
+
+  it('reads the comments list again after a save whose download the browser blocked', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    // The browser refuses the download: the click throws, as a blocked pop-up does.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    act(() => {
+      saveButton()?.click();
+    });
+    await until(() => engine.lists() === 2);
+    expect(engine.lists()).toBe(2);
+    expect(downloads).toEqual([]);
+  });
+
+  it('does not read the list while the panel is closed, and reads it once when the panel opens', async () => {
+    const engine = refreshEngine();
+    closePanel('left');
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(engine.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('refresh.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => saveButton()?.getAttribute('aria-disabled') === null);
+
+    act(() => {
+      saveButton()?.click();
+    });
+    await until(() => downloads.length > 0);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(engine.lists()).toBe(0);
+
+    act(() => {
+      openPanel('comments');
+    });
+    await expectListsTo(engine, 1);
   });
 });
 
