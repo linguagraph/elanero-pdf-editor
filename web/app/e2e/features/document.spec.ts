@@ -3,6 +3,7 @@
 // forced colours and touch for fully); reduced motion runs on every features browser. A document
 // needs the staged engine (STAGED), so the specs skip without it, as the other engine specs do.
 import { expect, type Page, test } from '@playwright/test';
+import { PREFS_STORAGE_KEY } from '../../src/prefs/store';
 import { checkAxe, KNOWN_TAB_ISSUES } from './axe';
 import { fixture, openApp, openPdf, STAGED, watchPage } from './support';
 
@@ -13,6 +14,34 @@ async function openDocument(page: Page): Promise<void> {
   await openApp(page);
   await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
   await expect(page.getByRole('group', { name: 'Page 1 of 5' })).toBeVisible();
+}
+
+// The reduced-motion sweep: every element of the open document, not a sample. Returns one line per
+// element that still transitions or animates (over 0.01 s), or scrolls smoothly; [] means none.
+async function motionOffenders(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const seconds = (list: string): number[] =>
+      list.split(',').map((part) => {
+        const value = parseFloat(part);
+        return part.trim().endsWith('ms') ? value / 1000 : value;
+      });
+    const label = (el: Element): string => {
+      const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : '';
+      return cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
+    };
+    const found: string[] = [];
+    for (const el of Array.from(document.querySelectorAll('*'))) {
+      const style = getComputedStyle(el);
+      const transition = Math.max(...seconds(style.transitionDuration));
+      const animation = Math.max(...seconds(style.animationDuration));
+      if (transition > 0.01) found.push(`${label(el)} transition-duration ${transition}s`);
+      if (animation > 0.01 && style.animationName !== 'none') {
+        found.push(`${label(el)} animation-duration ${animation}s`);
+      }
+      if (style.scrollBehavior === 'smooth') found.push(`${label(el)} scroll-behavior smooth`);
+    }
+    return found;
+  });
 }
 
 test.describe('engine staged', () => {
@@ -42,30 +71,47 @@ test.describe('engine staged', () => {
     );
 
     // Every element of the page, not a sample: a transition on any control fails the check.
-    const offenders = await page.evaluate(() => {
-      const seconds = (list: string): number[] =>
-        list.split(',').map((part) => {
-          const value = parseFloat(part);
-          return part.trim().endsWith('ms') ? value / 1000 : value;
-        });
-      const label = (el: Element): string => {
-        const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : '';
-        return cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
-      };
-      const found: string[] = [];
-      for (const el of Array.from(document.querySelectorAll('*'))) {
-        const style = getComputedStyle(el);
-        const transition = Math.max(...seconds(style.transitionDuration));
-        const animation = Math.max(...seconds(style.animationDuration));
-        if (transition > 0.01) found.push(`${label(el)} transition-duration ${transition}s`);
-        if (animation > 0.01 && style.animationName !== 'none') {
-          found.push(`${label(el)} animation-duration ${animation}s`);
-        }
-        if (style.scrollBehavior === 'smooth') found.push(`${label(el)} scroll-behavior smooth`);
-      }
-      return found;
-    });
+    const offenders = await motionOffenders(page);
     expect(offenders, 'reduced motion overrides').toEqual([]);
+  });
+
+  test('reduced motion from the saved preference: no media emulation, same sweep', async ({
+    page,
+  }) => {
+    // The app's own switch (Preferences) stores reduceMotion; the app applies it before the first
+    // render. The record is written before load, so no emulation is needed to turn motion off.
+    await page.addInitScript((key: string) => {
+      try {
+        window.localStorage.setItem(key, JSON.stringify({ reduceMotion: true }));
+      } catch {
+        // A blocked store leaves the defaults, and the attribute check below then fails the test.
+      }
+    }, PREFS_STORAGE_KEY);
+    await openDocument(page);
+    expect(
+      await page.evaluate(() => document.documentElement.getAttribute('data-reduce-motion')),
+      'the saved preference was not applied',
+    ).toBe('true');
+
+    const offenders = await motionOffenders(page);
+    expect(offenders, 'reduced motion overrides (saved preference)').toEqual([]);
+  });
+
+  test('motion on: the canvas pill keeps its 200 ms transition with both settings off', async ({
+    page,
+  }) => {
+    // Negative check: with the system setting and the app preference both off, the sweep's inputs
+    // are live, so the pill's 200 ms transition shows in its computed style (the sweep can fail).
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await openDocument(page);
+    expect(
+      await page.evaluate(() => document.documentElement.hasAttribute('data-reduce-motion')),
+    ).toBe(false);
+
+    const duration = await page
+      .locator('.canvas-pill')
+      .evaluate((el) => getComputedStyle(el).transitionDuration);
+    expect(duration, 'canvas pill transition with both settings off').toBe('0.2s');
   });
 
   test.describe('Chromium only', () => {

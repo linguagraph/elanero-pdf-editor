@@ -48,6 +48,27 @@ class SetMetadataCommand(Command):
         return [Change(ChangeKind.METADATA)]
 
 
+class AddAttachmentCommand(Command):
+    """Embed a file under ``name``, which is also the file name shown; undo removes it. Redo embeds
+    the same bytes under the same name, so the name the action chose stays the one the file has."""
+
+    label = "Add Attachment"
+
+    def __init__(self, name: str, data: bytes, description: str) -> None:
+        self.name = name
+        self.data = data
+        self.description = description
+
+    def do(self, doc: Document) -> None:
+        doc.add_embedded_file(self.name, self.data, self.name, self.description)
+
+    def undo(self, doc: Document) -> None:
+        doc.remove_embedded_file(self.name)
+
+    def changes(self) -> list[Change]:
+        return [Change(ChangeKind.METADATA)]
+
+
 class SetOutlineCommand(Command):
     label = "Edit Bookmarks"
 

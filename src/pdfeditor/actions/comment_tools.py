@@ -17,9 +17,15 @@ from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
 from pdfeditor.actions.edit_geometry import MIN_DRAG
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
-from pdfeditor.model.annotations import AnnotationModel, AnnotationType, AnnotRef, callout_line
+from pdfeditor.model.annotations import (
+    STANDARD_STAMPS,
+    AnnotationModel,
+    AnnotationType,
+    AnnotRef,
+    callout_line,
+)
 from pdfeditor.model.color import Color
-from pdfeditor.model.geometry import PageRects, Point, Quad, Rect, simplify
+from pdfeditor.model.geometry import MarkupArea, PageRects, Point, Quad, Rect, simplify
 
 # The size of a sticky note's icon, in points (the desktop's NoteTool uses the same).
 NOTE_SIZE = 20.0
@@ -34,6 +40,8 @@ INK_TOLERANCE = 0.6
 # Polygon or polyline vertices closer than this (Manhattan, points) are one: a double-click
 # leaves a duplicate behind (the desktop's PolyTool.finish drops it).
 REPEAT_TOLERANCE = 1.0
+# A standard stamp's box, in points, centred on the click (the desktop's StampTool).
+STAMP_SIZE = (160.0, 50.0)
 
 
 def build_note(page: int, point: Point, text: str, author: str = "") -> AnnotationModel:
@@ -90,6 +98,29 @@ def build_markup(
         author=author,
         contents=text,
         quads=quads or (Quad.from_rect(rect),),
+    )
+
+
+def standard_stamp_box(center: Point) -> Rect:
+    """The box a standard stamp takes when it is placed at ``center``."""
+    w, h = STAMP_SIZE
+    return Rect(center.x - w / 2, center.y - h / 2, center.x + w / 2, center.y + h / 2)
+
+
+def build_stamp(page: int, rect: Rect, name: str, author: str = "") -> AnnotationModel:
+    """A standard stamp named ``name`` (one of ``STANDARD_STAMPS``) in ``rect``. The caller
+    checks the name; the desktop's StampTool and the web's STAMP tool both build through here."""
+    style = DEFAULT_STYLES[AnnotationType.STAMP]
+    return AnnotationModel(
+        AnnotationType.STAMP,
+        page,
+        rect,
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        icon=name,
     )
 
 
@@ -203,6 +234,7 @@ class CommentTool(StrEnum):
     OVAL = "oval"
     POLYGON = "polygon"
     POLYLINE = "polyline"
+    STAMP = "stamp"
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +245,8 @@ class CreateAnnotation:
     A note uses the top-left corner of ``rect``. Box tools use ``rect``; a box too small to be a
     drag gets the tool's default size where the tool has one (text box, callout). A callout's
     ``rect`` is its box and its single tip is ``points[0]``. Pen, line, arrow, polygon and
-    polyline use ``points`` and ignore ``rect``."""
+    polyline use ``points`` and ignore ``rect``. A stamp is placed at the top-left corner of
+    ``rect`` (a click is a zero-size rect) and takes its name from ``stamp``."""
 
     tool: CommentTool
     page: int
@@ -221,6 +254,7 @@ class CreateAnnotation:
     text: str = ""
     author: str = ""
     points: tuple[Point, ...] = ()
+    stamp: str = ""
 
 
 _UNDO_LABELS = {
@@ -235,6 +269,7 @@ _UNDO_LABELS = {
     CommentTool.OVAL: "Add Oval",
     CommentTool.POLYGON: "Add Polygon",
     CommentTool.POLYLINE: "Add Polyline",
+    CommentTool.STAMP: "Add Stamp",
 }
 
 # Tools whose comment is a box of text: a blank one adds nothing. A sticky note may be blank (the
@@ -299,19 +334,32 @@ def _build_point_tool(args: CreateAnnotation, page: Rect) -> AnnotationModel | N
     return build_poly(kind, args.page, vertices, args.author)
 
 
+def _check_text(text: str) -> None:
+    """Refuse text the document cannot store: a lone surrogate (JSON can carry one, UTF-8 cannot)
+    or more than ``MAX_TEXT_BYTES``."""
+    try:
+        size = len(text.encode("utf-8"))
+    except UnicodeEncodeError:
+        raise Refused("a comment's text must be valid Unicode") from None
+    if size > MAX_TEXT_BYTES:
+        raise Refused(f"a comment's text takes at most {MAX_TEXT_BYTES // 1024} KiB")
+
+
 def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
     """The comment ``args`` describes, or None when the gesture adds nothing (off the page, too
     small, or a text tool with no text). Raises Refused for input the web can't legitimately send.
     """
     tool = args.tool
-    try:
-        size = len(args.text.encode("utf-8"))
-    except UnicodeEncodeError:  # JSON can carry a lone surrogate; UTF-8 cannot store it
-        raise Refused("a comment's text must be valid Unicode") from None
-    if size > MAX_TEXT_BYTES:
-        raise Refused(f"a comment's text takes at most {MAX_TEXT_BYTES // 1024} KiB")
+    _check_text(args.text)
     if tool in _TEXT_TOOLS and not args.text.strip():
         return None
+    if tool is CommentTool.STAMP:
+        if args.stamp not in STANDARD_STAMPS:
+            raise Refused("a stamp must be one of the standard stamps")
+        point = Point(args.rect.x0, args.rect.y0)
+        if not (page.x0 <= point.x <= page.x1 and page.y0 <= point.y <= page.y1):
+            return None  # the click is off the page
+        return build_stamp(args.page, standard_stamp_box(point), args.stamp, args.author)
     if tool is CommentTool.NOTE:
         point = Point(args.rect.x0, args.rect.y0)
         icon = Rect(point.x, point.y, point.x + NOTE_SIZE, point.y + NOTE_SIZE)
@@ -427,3 +475,63 @@ def highlight_text(
         return ActionResult(_HIGHLIGHT_LABEL, (), False)
     refs = tuple(AnnotRef(page, cmd.model.name) for page, cmd in zip(pages, commands, strict=True))
     return ActionResult(_HIGHLIGHT_LABEL, refs, True)
+
+
+class MarkupKind(StrEnum):
+    """The text markups a text selection can take (the desktop's ``MarkupTool``)."""
+
+    HIGHLIGHT = "highlight"
+    UNDERLINE = "underline"
+    STRIKEOUT = "strikeout"
+    SQUIGGLY = "squiggly"
+
+
+# Each markup's comment type and the desktop's undo label.
+_MARKUPS: dict[MarkupKind, tuple[AnnotationType, str]] = {
+    MarkupKind.HIGHLIGHT: (AnnotationType.HIGHLIGHT, "Highlight"),
+    MarkupKind.UNDERLINE: (AnnotationType.UNDERLINE, "Underline"),
+    MarkupKind.STRIKEOUT: (AnnotationType.STRIKEOUT, "Strikethrough"),
+    MarkupKind.SQUIGGLY: (AnnotationType.SQUIGGLY, "Squiggly Underline"),
+}
+# The most pages a text selection marks (the web reads this many text layers at most) and the
+# most lines (quads) in all of them.
+MAX_MARK_AREAS = 300
+MAX_MARK_QUADS = 5000
+
+
+@dataclass(frozen=True, slots=True)
+class MarkText:
+    """A text markup over a selection. Each area with quads is one comment; all of them are one
+    undo step, so a selection across pages undoes at once."""
+
+    kind: MarkupKind
+    areas: tuple[MarkupArea, ...]
+    author: str = ""
+
+
+@action("annotations.mark_text", MarkText, requires=WRITE)
+def mark_text(session: DocumentSession, args: MarkText) -> ActionResult[tuple[AnnotRef, ...]]:
+    ensure_idle(session)
+    kind, label = _MARKUPS[args.kind]
+    if len(args.areas) > MAX_MARK_AREAS:
+        raise Refused(f"a markup covers at most {MAX_MARK_AREAS} pages")
+    if sum(len(area.quads) for area in args.areas) > MAX_MARK_QUADS:
+        raise Refused(f"a markup takes at most {MAX_MARK_QUADS:,} lines")
+    with session.lock:
+        count = session.document.page_count
+    if any(not 0 <= area.page < count for area in args.areas):
+        raise Refused("a markup's page does not exist")
+    commands: list[AddAnnotationCommand] = []
+    for area in args.areas:
+        if not area.quads:  # nothing of the selection is on this page
+            continue
+        _check_text(area.text)
+        points = [p for q in area.quads for p in (q.ul, q.ur, q.ll, q.lr)]
+        model = build_markup(
+            kind, area.page, Rect.from_points(points), area.text, args.author, area.quads
+        )
+        commands.append(AddAnnotationCommand(model, label))
+    if not execute_all(session, commands, label):
+        return ActionResult(label, (), False)
+    refs = tuple(AnnotRef(c.model.page_index, c.model.name) for c in commands)
+    return ActionResult(label, refs, True)

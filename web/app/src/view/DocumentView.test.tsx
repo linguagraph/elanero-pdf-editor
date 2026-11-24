@@ -27,9 +27,14 @@ function fakeRpc(pageCount: number, labels: readonly string[] = []) {
         }));
         return Promise.resolve({ pages, labels: [...labels] });
       }
-      // The text layers (W5.4), the redaction list (W7.4b) and the page links (W5.3) are asked for but never answered
-      // here: they are not renders.
-      if (method === 'text.layer' || method === 'redaction.list' || method === 'session.links') {
+      // The text layers (W5.4), the redaction list (W7.4b), the page links (W5.3) and the page's
+      // comments (W7.1a) are asked for but never answered here: they are not renders.
+      if (
+        method === 'text.layer' ||
+        method === 'redaction.list' ||
+        method === 'session.links' ||
+        method === 'comments.page'
+      ) {
         return new Promise(() => undefined);
       }
       return new Promise((resolve) => {
@@ -227,9 +232,14 @@ function scriptedRpc(answer: (attempt: number) => Promise<unknown>) {
     if (method === 'session.pages') {
       return Promise.resolve({ pages: [{ width: 612, height: 792, rotation: 0 }], labels: [] });
     }
-    // The text layer and the redaction list are not renders: they are never answered here and do
-    // not use up an attempt.
-    if (method === 'text.layer' || method === 'redaction.list' || method === 'session.links') {
+    // The text layer, the redaction list and the page's comments are not renders: they are never
+    // answered here and do not use up an attempt.
+    if (
+      method === 'text.layer' ||
+      method === 'redaction.list' ||
+      method === 'session.links' ||
+      method === 'comments.page'
+    ) {
       return new Promise(() => undefined);
     }
     const attempt = attempts;

@@ -76,8 +76,14 @@ import { isShapeTool, type ViewTool } from './viewTool';
 import { CropLayer } from '../crop/CropLayer';
 import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
+import { CommentSelectLayer } from '../comments/CommentSelectLayer';
+import type { CommentRef } from '../comments/hitTest';
+import { CommentPageCache } from '../comments/pageCache';
+import { deleteRefs } from '../comments/panel/edits';
 import { CommentToolbar } from '../comments/CommentToolbar';
-import type { PageRect } from '../comments/coordinates';
+import { type StandardStamp } from '../comments/stamps';
+import { StampMenu } from '../comments/stampTool';
+import type { PagePoint, PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import type { ActionJobWorker } from '../actionJob/actionJob';
@@ -491,6 +497,11 @@ export function DocumentView({
   const scrollRef = useRef<HTMLDivElement>(null);
   // The comment tool on, if any (W7.1a): a click or drag on a page then places a comment.
   const [commentTool, setCommentTool] = useState<CommentToolId | null>(null);
+  // The comments the Select tool has selected (W7.1a slice 6), across pages, and the page lists the
+  // selection reads (one cache per document, like the object lists).
+  const [commentSelection, setCommentSelection] = useState<readonly CommentRef[]>([]);
+  // The standard stamp the stamp tool places (W7.3 S6), chosen from the stamp menu.
+  const [stampName, setStampName] = useState<StandardStamp>('Approved');
   // The redaction tools (W7.4). The mark tool and a comment tool are not on together.
   const redactionTools = useRedaction({
     rpc,
@@ -508,6 +519,13 @@ export function DocumentView({
       if (chosen !== null) onToolChange?.('select');
     },
     [redactionTools.controller, onToolChange],
+  );
+  const chooseStamp = useCallback(
+    (stamp: StandardStamp) => {
+      setStampName(stamp);
+      chooseCommentTool('stamp');
+    },
+    [chooseCommentTool],
   );
   const chooseRedacting = useCallback(
     (on: boolean) => {
@@ -529,6 +547,7 @@ export function DocumentView({
   // The Edit tool's object lists (W6.7a S4), one cache per document, and the object selection, which
   // is dropped when the tool is left (its keys mean nothing to another tool).
   const editObjects = useMemo(() => new ObjectCache(rpc, handle), [rpc, handle]);
+  const commentPages = useMemo(() => new CommentPageCache(rpc, handle), [rpc, handle]);
   const [editSelection, setEditSelection] = useState<EditSelection | null>(null);
   // The paragraph open in the text editor (W6.8a 8a-1). Leaving the Edit tool drops it; the editor
   // commits what was typed when it unmounts (ParagraphEditor), so nothing is lost.
@@ -543,6 +562,7 @@ export function DocumentView({
     setSeenTool(tool);
     if (tool !== 'select') setCommentTool(null);
     if (tool !== 'edit') setEditSelection(null);
+    if (tool !== 'select') setCommentSelection([]);
     // An existing block is typed in under the Edit tool, a new block under Add Text (W6.8a 8a-2);
     // leaving the tool that owns the open editor ends it, and the editor commits what was typed.
     const owned = textEdit?.newRect !== undefined ? 'add-text' : 'edit';
@@ -675,11 +695,24 @@ export function DocumentView({
   }, [tool, editSelection, editObjects, onEditImageChange]);
   // The view is keyed by tab, so leaving it (a tab change or a close) clears the host's answer.
   useEffect(() => () => onEditImageChange?.(false), [onEditImageChange]);
-  // Delete and Backspace delete the Edit tool's selection, unless a field or a dialog has the key.
+  // Deletes the selected comments (W7.1a slice 6) as one undo step. The selection is cleared at once;
+  // the engine refuses a stale reference, and the panel's list is read again.
+  const deleteCommentSelection = useCallback(() => {
+    const refs = commentSelection;
+    if (refs.length === 0) return;
+    setCommentSelection([]);
+    void deleteRefs({ rpc, handle, scheduler }, refs);
+  }, [commentSelection, rpc, handle, scheduler]);
+  // Delete and Backspace delete the Edit tool's selection; Delete alone deletes the selected comments
+  // under the Select tool (Backspace there is left to the field or the page, as in the comments
+  // panel's rows). A field or a dialog keeps the key.
   useEffect(() => {
-    if (tool !== 'edit') return;
+    const commentsSelected =
+      tool === 'select' && commentTool === null && commentSelection.length > 0;
+    if (tool !== 'edit' && !commentsSelected) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const deletes = event.key === 'Delete' || (event.key === 'Backspace' && tool === 'edit');
+      if (!deletes) return;
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
       if (document.querySelector('.overlay-backdrop')) return;
       const target = event.target;
@@ -689,11 +722,12 @@ export function DocumentView({
       )
         return;
       event.preventDefault();
-      deleteEditSelection();
+      if (tool === 'edit') deleteEditSelection();
+      else deleteCommentSelection();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [tool, deleteEditSelection]);
+  }, [tool, commentTool, commentSelection, deleteEditSelection, deleteCommentSelection]);
   useEffect(() => {
     if (tool === 'select') return;
     redactionTools.controller.setActive(false);
@@ -1420,8 +1454,11 @@ export function DocumentView({
   }
 
   const commentDeps = { rpc, handle, scheduler };
-  const place = (page: number, rect: PageRect, text: string) => {
-    if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
+  const place = (page: number, rect: PageRect, text: string, points: readonly PagePoint[]) => {
+    if (commentTool !== null) {
+      const stamp = commentTool === 'stamp' ? stampName : '';
+      void placeComment(commentDeps, commentTool, page, rect, text, points, stamp);
+    }
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
   // shape per choice). A failure keeps the tool on so the user can retry. While an add is in
@@ -1521,6 +1558,7 @@ export function DocumentView({
           {t('view.night')}
         </button>
         <CommentToolbar tool={commentTool} onChoose={chooseCommentTool} />
+        <StampMenu onChoose={chooseStamp} />
         <RedactionBar
           state={redactionTools.state}
           onToggle={() => chooseRedacting(!redactionTools.state.active)}
@@ -1645,13 +1683,24 @@ export function DocumentView({
                       })
                     )}
                     <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
+                    {tool === 'select' && commentTool === null ? (
+                      <CommentSelectLayer
+                        cache={commentPages}
+                        page={box.index}
+                        revision={scheduler.revisionOf(box.index)}
+                        zoom={zoom}
+                        selection={commentSelection}
+                        onSelect={setCommentSelection}
+                      />
+                    ) : null}
                     {commentTool !== null && sizes !== null ? (
                       <CommentLayer
+                        key={commentTool}
                         tool={commentTool}
                         zoom={zoom}
                         widthPt={sizes[box.index]?.width ?? 0}
                         heightPt={sizes[box.index]?.height ?? 0}
-                        onPlace={(rect, text) => place(box.index, rect, text)}
+                        onPlace={(rect, text, points) => place(box.index, rect, text, points)}
                       />
                     ) : null}
                     <SelectedMarkOutlines

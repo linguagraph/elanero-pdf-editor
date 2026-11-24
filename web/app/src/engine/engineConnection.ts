@@ -263,8 +263,10 @@ export interface PageRpc {
       | 'attachments.list'
       | 'attachments.get'
       | 'layers.list'
+      | 'layers.set_visible'
       | 'redaction.list'
       | 'comments.list'
+      | 'comments.page'
       | 'split.plan'
       | 'system.memory',
   >(

@@ -8,7 +8,9 @@ import { readPreferences } from '../prefs/store';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { RenderScheduler } from '../view/renderScheduler';
-import type { PageRect } from './coordinates';
+import type { PagePoint, PageRect } from './coordinates';
+import type { StandardStamp } from './stamps';
+import { STAMP_LABEL } from './stamps';
 import type { CommentToolId } from './tools';
 
 export interface PlacementDeps {
@@ -30,6 +32,8 @@ export async function placeComment(
   page: number,
   rect: PageRect,
   text: string,
+  points: readonly PagePoint[] = [],
+  stamp: StandardStamp | '' = '',
 ): Promise<void> {
   const store = deps.store ?? toasts;
   try {
@@ -37,11 +41,24 @@ export async function placeComment(
     const reply = await deps.rpc.call('actions.run', {
       handle: deps.handle,
       name: 'annotations.create',
-      args: { tool, page, rect, text, author: readPreferences().authorName },
+      args: {
+        tool,
+        page,
+        rect,
+        text,
+        points,
+        // Only a stamp names one (the engine refuses a stamp without a name).
+        ...(tool === 'stamp' ? { stamp } : {}),
+        author: readPreferences().authorName,
+      },
     });
     if (!reply.executed) return;
     deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});
-    offerUndo('info', t('comment.added'), {
+    const message =
+      tool === 'stamp' && stamp !== ''
+        ? t('stamp.placed', { name: t(STAMP_LABEL[stamp]), page: page + 1 })
+        : t('comment.added');
+    offerUndo('info', message, {
       rpc: deps.rpc,
       handle: deps.handle,
       history: reply.state.history,

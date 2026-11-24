@@ -13,17 +13,22 @@ import pytest
 from pdfeditor import actions as layer
 from pdfeditor.actions.base import Refused
 from pdfeditor.actions.comment_tools import (
+    MAX_MARK_AREAS,
+    MAX_MARK_QUADS,
     NOTE_SIZE,
     CommentTool,
     CreateAnnotation,
     HighlightText,
+    MarkText,
+    MarkupKind,
     build_markup,
     build_note,
     build_shape,
+    standard_stamp_box,
 )
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.annotations import AnnotationModel, AnnotationType
-from pdfeditor.model.geometry import PageRects, Point, Rect
+from pdfeditor.model.geometry import MarkupArea, PageRects, Point, Quad, Rect
 from pdfeditor.webapi.dto import BufferTable, from_json
 from tests.actions.conftest import Opener
 from tests.hostcheck import record
@@ -32,6 +37,7 @@ from tests.hostcheck import record
 BUSY_CASES: dict[str, object] = {
     "annotations.create": CreateAnnotation(CommentTool.NOTE, 0, Rect(10, 10, 10, 10)),
     "annotations.highlight_text": HighlightText((PageRects(0, (Rect(10, 10, 20, 20),)),)),
+    "annotations.mark_text": MarkText(MarkupKind.HIGHLIGHT, ()),
 }
 
 
@@ -161,6 +167,21 @@ def test_the_web_wire_args_convert_to_the_action_args() -> None:
     }
     args = from_json(CreateAnnotation, wire, BufferTable([]), "args")
     assert args == CreateAnnotation(CommentTool.HIGHLIGHT, 0, Rect(10, 20, 90, 40), "Key", "")
+
+
+def test_the_web_line_and_arrow_args_convert_with_their_ends() -> None:
+    """A line or arrow from the web sends its two ends as ``points``; ``rect`` is their box."""
+    wire = {
+        "tool": "arrow",
+        "page": 0,
+        "rect": {"x0": 72.0, "y0": 72.0, "x1": 144.0, "y1": 100.0},
+        "text": "",
+        "points": [{"x": 72.0, "y": 72.0}, {"x": 144.0, "y": 100.0}],
+        "author": "",
+    }
+    args = from_json(CreateAnnotation, wire, BufferTable([]), "args")
+    assert args.tool is CommentTool.ARROW
+    assert args.points == (Point(72, 72), Point(144, 100))
 
 
 def highlight(s: DocumentSession, pages: tuple[PageRects, ...], note: str = "") -> object:
@@ -543,3 +564,180 @@ def test_a_drag_under_three_points_is_a_click(open_copy: Opener) -> None:
     assert not line.executed  # type: ignore[attr-defined]
     box = make(s, CreateAnnotation(CommentTool.TEXTBOX, 0, Rect(300, 300, 302.9, 302.9), "Tiny"))
     assert made_on_page(s, box).rect == Rect(300, 300, 480, 340)
+
+
+# -- text markup (W7.1a slice 2): annotations.mark_text ------------------------------------------
+
+
+def line(page: int, top: float, text: str = "") -> MarkupArea:
+    """A one-line area on ``page`` whose line sits at ``top``."""
+    return MarkupArea(page, (Quad.from_rect(Rect(100, top, 220, top + 12)),), text)
+
+
+def mark(s: DocumentSession, kind: MarkupKind, *areas: MarkupArea) -> object:
+    return layer.run(s, "annotations.mark_text", MarkText(kind, areas, "Ann"))
+
+
+@pytest.mark.parametrize(
+    ("kind", "subtype", "label"),
+    [
+        (MarkupKind.HIGHLIGHT, AnnotationType.HIGHLIGHT, "Highlight"),
+        (MarkupKind.UNDERLINE, AnnotationType.UNDERLINE, "Underline"),
+        (MarkupKind.STRIKEOUT, AnnotationType.STRIKEOUT, "Strikethrough"),
+        (MarkupKind.SQUIGGLY, AnnotationType.SQUIGGLY, "Squiggly Underline"),
+    ],
+)
+def test_mark_text_makes_the_desktop_markup_with_its_label(
+    open_copy: Opener, kind: MarkupKind, subtype: AnnotationType, label: str
+) -> None:
+    s = open_copy("text_multipage")
+    before = len(on_page(s))
+    result = mark(s, kind, line(0, 100, "Key"))
+    assert result.executed and result.label == label  # type: ignore[attr-defined]
+    assert len(on_page(s)) == before + 1
+    added = on_page(s)[-1]
+    assert added.type is subtype and added.contents == "Key" and added.author == "Ann"
+    assert len(added.quads) == 1
+
+
+def test_mark_text_one_comment_per_page_and_one_undo_step(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    assert s.page_count >= 2
+    before = [len(on_page(s, i)) for i in (0, 1)]
+    result = mark(s, MarkupKind.UNDERLINE, line(0, 100, "Selected"), line(1, 300), line(1, 320))
+    assert result.executed  # type: ignore[attr-defined]
+    assert len(result.value) == 3  # type: ignore[attr-defined]
+    assert len(on_page(s, 0)) == before[0] + 1 and len(on_page(s, 1)) == before[1] + 2
+    assert all(a.quads for a in on_page(s, 1)[-2:])
+    assert s.undo()
+    assert [len(on_page(s, i)) for i in (0, 1)] == before
+
+
+def test_mark_text_skips_an_area_with_no_quads(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    before = len(on_page(s, 0))
+    result = mark(s, MarkupKind.STRIKEOUT, MarkupArea(0, ()))
+    assert not result.executed  # type: ignore[attr-defined]
+    assert len(on_page(s, 0)) == before
+
+
+def test_mark_text_refuses_a_missing_page_and_too_many_lines(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    with pytest.raises(Refused):
+        mark(s, MarkupKind.HIGHLIGHT, line(s.page_count, 100))
+    many = tuple(Quad.from_rect(Rect(100, 100, 200, 110)) for _ in range(MAX_MARK_QUADS + 1))
+    with pytest.raises(Refused):
+        mark(s, MarkupKind.HIGHLIGHT, MarkupArea(0, many))
+    areas = tuple(line(0, 100) for _ in range(MAX_MARK_AREAS + 1))
+    with pytest.raises(Refused):
+        layer.run(s, "annotations.mark_text", MarkText(MarkupKind.HIGHLIGHT, areas))
+
+
+def test_mark_text_round_trip(open_copy: Opener, tmp_path: Path) -> None:
+    s = open_copy("text_multipage")
+    mark(s, MarkupKind.HIGHLIGHT, line(0, 100, "Marked"))
+    mark(s, MarkupKind.SQUIGGLY, line(0, 140), line(1, 200))
+    expected = len(on_page(s, 0))
+
+    out = s.save(tmp_path / "web-markup.pdf")
+    reopened = reopen(out)
+    try:
+        with reopened.lock:
+            kinds = {a.type for i in (0, 1) for a in reopened.document.page(i).annotations()}
+            texts = {a.contents for a in reopened.document.page(0).annotations()}
+        assert {AnnotationType.HIGHLIGHT, AnnotationType.SQUIGGLY} <= kinds
+        assert "Marked" in texts
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    record("comment_count_pikepdf", out, count=expected)
+    record("page_count_pdfium", out, pages=s.page_count)
+    record("render_first_page_pdfium", out)
+
+
+def test_the_mark_text_wire_args_convert() -> None:
+    wire = {
+        "kind": "underline",
+        "areas": [
+            {
+                "page": 1,
+                "quads": [
+                    {
+                        "ul": {"x": 10.0, "y": 20.0},
+                        "ur": {"x": 90.0, "y": 20.0},
+                        "ll": {"x": 10.0, "y": 32.0},
+                        "lr": {"x": 90.0, "y": 32.0},
+                    }
+                ],
+                "text": "Key",
+            }
+        ],
+    }
+    args = from_json(MarkText, wire, BufferTable([]), "args")
+    assert args.kind is MarkupKind.UNDERLINE
+    assert args.areas[0].quads[0] == Quad.from_rect(Rect(10, 20, 90, 32))
+
+
+# -- standard stamps (W7.3 S6) --------------------------------------------------------------------
+
+
+def stamp(s: DocumentSession, name: str, at: Point) -> object:
+    """A click at ``at`` with the stamp tool; the click is a zero-size rect, as the web sends."""
+    return make(s, CreateAnnotation(CommentTool.STAMP, 0, Rect(at.x, at.y, at.x, at.y), stamp=name))
+
+
+def test_a_stamp_is_centred_on_the_click_with_its_name(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    made = made_on_page(s, stamp(s, "Approved", Point(300, 300)))
+    assert made.type is AnnotationType.STAMP
+    assert made.icon == "Approved"
+    # MuPDF fits the stamp's own aspect inside the box it is given, so the box shrinks about
+    # its centre: the centre stays on the click.
+    assert made.rect.center.x == pytest.approx(300, abs=0.01)
+    assert made.rect.center.y == pytest.approx(300, abs=0.01)
+    assert standard_stamp_box(Point(300, 300)) == Rect(220, 275, 380, 325)
+
+
+def test_a_stamp_off_the_page_adds_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    assert not stamp(s, "Draft", Point(5000, 5000)).executed  # type: ignore[attr-defined]
+    assert not s.undo_stack.can_undo
+
+
+@pytest.mark.parametrize("name", ["", "Custom", "image:logo.png"])
+def test_an_unknown_stamp_name_is_refused(open_copy: Opener, name: str) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    with pytest.raises(Refused):
+        stamp(s, name, Point(300, 300))
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_undo_removes_a_stamp(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    assert stamp(s, "Final", Point(300, 300)).executed  # type: ignore[attr-defined]
+    assert s.undo()
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_round_trip_of_a_stamp(open_copy: Opener, tmp_path: Path) -> None:
+    """The stamp saves, reopens with its name, and renders ink inside its box (pikepdf and
+    pypdfium2, the round-trip rule)."""
+    s = open_copy("annotations")
+    stamp(s, "Approved", Point(300, 300))
+    out = s.save(tmp_path / "stamp.pdf")
+
+    reopened = reopen(out)
+    try:
+        with reopened.lock:
+            stamps = [
+                m for m in reopened.document.page(0).annotations() if m.type is AnnotationType.STAMP
+            ]
+        assert [m.icon for m in stamps] == ["Approved"]
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    record("annot_keys_pikepdf", out, subtype="/Stamp", present=["/Name"])
+    record("ink_region_pdfium", out, page=0, clip=[220.0, 275.0, 380.0, 325.0])
+    record("render_first_page_pdfium", out)

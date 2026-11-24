@@ -414,6 +414,12 @@ def _red_pixels_pdfium(data: bytes, page: int, clip: list[float], minimum: int) 
     assert _red_count(_pdfium_rgb(data, page), clip) > minimum
 
 
+@host_check("no_red_pixels_pdfium")
+def _no_red_pixels_pdfium(data: bytes, page: int, clip: list[float]) -> None:
+    """No red ink in the clip: the layer that draws it is hidden in the file's default state."""
+    assert _red_count(_pdfium_rgb(data, page), clip) == 0
+
+
 @host_check("stamp_orientation_pdfium")
 def _stamp_orientation_pdfium(data: bytes, page: int) -> None:
     rgb = _pdfium_rgb(data, page)
@@ -445,6 +451,16 @@ def _encrypted_pages_pikepdf(data: bytes, pages: int, password: str) -> None:
 
     with pikepdf.open(io.BytesIO(data), password=password) as pdf:
         assert pdf.is_encrypted and len(pdf.pages) == pages
+
+
+@host_check("ocg_default_off_pikepdf")
+def _ocg_default_off_pikepdf(data: bytes, layer: str) -> None:
+    """The layer called ``layer`` is off in the file's default state (/OCProperties /D /OFF)."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        off = pdf.Root.OCProperties.D.get("/OFF", [])
+        assert layer in [str(group.get("/Name", "")) for group in off], layer
 
 
 @host_check("ocg_count_pikepdf")
@@ -650,6 +666,27 @@ def _embedded_file_name_pikepdf(data: bytes, attachment: str) -> None:
 
     with pikepdf.open(io.BytesIO(data)) as pdf:
         assert str(pdf.Root.Names.EmbeddedFiles.Names[0]) == attachment
+
+
+@host_check("embedded_bytes_pikepdf")
+def _embedded_bytes_pikepdf(data: bytes, marker: str, present: bool) -> None:
+    """``marker`` is in some stream of the file, after decoding. Embedded files are compressed, so
+    the raw bytes never show a marker; decoding is what makes the check mean anything."""
+    import pikepdf
+
+    needle = marker.encode()
+    found = False
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        for obj in pdf.objects:
+            if not isinstance(obj, pikepdf.Stream):
+                continue
+            try:
+                if needle in obj.read_bytes():
+                    found = True
+                    break
+            except pikepdf.PdfError:
+                continue  # a stream pikepdf cannot decode cannot hold the marker it reads
+    assert found is present
 
 
 @host_check("comments_unnamed_pikepdf")

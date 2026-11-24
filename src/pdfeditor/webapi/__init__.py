@@ -25,6 +25,7 @@ from pdfeditor.webapi import (
     fonts,
     jobs,
     layers,
+    limits,
     memory,
     render,
     save,
@@ -35,7 +36,6 @@ from pdfeditor.webapi import (
 from pdfeditor.webapi.dto import PROTOCOL_VERSION, BufferTable, from_json, to_json
 from pdfeditor.webapi.errors import INVALID_REQUEST, PROTOCOL_MISMATCH, RpcFailure, failure_for
 from pdfeditor.webapi.events import CallRecorder, call_events, event, state_of
-from pdfeditor.webapi.limits import MAX_JSON_DEPTH
 from pdfeditor.webapi.registry import REGISTRY
 
 log = logging.getLogger(__name__)
@@ -96,10 +96,12 @@ METHODS: dict[str, Method] = {
     "attachments.list": Method(dto.HandleParams, attachments.list_attachments),
     "attachments.get": Method(dto.AttachmentParams, attachments.get_attachment),
     "layers.list": Method(dto.HandleParams, layers.list_layers),
+    "layers.set_visible": Method(dto.LayerVisibleParams, layers.set_layer_visible),
     "marks.list": Method(dto.HandleParams, actions.list_marks),
     "marks.get": Method(dto.MarkGetParams, actions.get_mark),
     "redaction.list": Method(dto.HandleParams, actions.list_redactions),
     "comments.list": Method(dto.HandleParams, actions.list_comments),
+    "comments.page": Method(dto.PageParams, actions.list_comments_page),
     "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
     "save.mark_saved": Method(dto.HandleParams, save.mark_saved),
     "save.autosave_bytes": Method(dto.HandleParams, save.autosave_bytes),
@@ -232,7 +234,7 @@ def _check_depth(request_json: str) -> None:
             continue
         elif token in "[{":
             depth += 1
-            if depth > MAX_JSON_DEPTH:
+            if depth > limits.MAX_JSON_DEPTH:  # read at call time, so a test can lower it
                 raise RpcFailure(INVALID_REQUEST, "the request is nested too deeply")
         elif token in "]}":
             depth -= 1

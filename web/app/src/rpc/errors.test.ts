@@ -31,6 +31,7 @@ const DETAIL_SAMPLES: Record<RpcErrorCode, ReadonlyArray<Record<string, unknown>
     { reason: 'encrypted_mutating_job' },
     { reason: 'encrypted_reduce' },
     { reason: 'document changed' },
+    { reason: 'signed_document' },
     { reason: 'x y' },
   ],
   BUSY: [{}, { task: 'OCR' }],
@@ -142,6 +143,11 @@ describe('mapRpcError', () => {
     expect(unknown.action).toBe('dismiss');
   });
 
+  it('maps the signed-document refusal of the attachment and security actions', () => {
+    const signed = mapRpcError(new RpcError('REFUSED', 'x', { reason: 'signed_document' }));
+    expect(signed.messageId).toBe('error.REFUSED.signedDocument');
+  });
+
   it('marks a cancel as silent', () => {
     expect(mapRpcError(new RpcError('CANCELLED', 'x')).silent).toBe(true);
     expect(mapRpcError(new RpcError('BUSY', 'x')).silent).toBe(false);
@@ -186,8 +192,11 @@ describe('error coverage', () => {
       })
       .join('\n');
     for (const reason of Object.keys(REFUSED_REASON)) {
+      // A reason may also be a constant (actions/security.py: SIGNED = "signed_document").
       const sent =
-        source.includes(`"reason": "${reason}"`) || source.includes(`reason="${reason}"`);
+        source.includes(`"reason": "${reason}"`) ||
+        source.includes(`reason="${reason}"`) ||
+        source.includes(`"${reason}"`);
       expect(sent, reason).toBe(true);
     }
   });

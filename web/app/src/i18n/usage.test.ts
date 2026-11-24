@@ -60,9 +60,6 @@ interface Allowed {
 }
 const ALLOWED_LITERALS: readonly Allowed[] = [];
 
-const PENDING_MARKS =
-  'catalogue text for the marks dialogs (PLAN.md W7.3); marks.list is built, the dialogs are not';
-
 const UNUSED_ALLOWED: Readonly<Record<string, string>> = {
   'security.owner.title':
     'the owner step sits under the dialog title, so no separate title is shown (W7.5 S4)',
@@ -74,27 +71,6 @@ const UNUSED_ALLOWED: Readonly<Record<string, string>> = {
   'view.actualSize': 'catalogue text for the actual-size control, not yet built',
   'bookmarks.expand': 'catalogue text for the bookmark tree toggle, not yet built',
   'bookmarks.collapse': 'catalogue text for the bookmark tree toggle, not yet built',
-  'marks.fontSize': PENDING_MARKS,
-  'marks.hf.title': PENDING_MARKS,
-  'marks.hf.header': PENDING_MARKS,
-  'marks.hf.footer': PENDING_MARKS,
-  'marks.hf.left': PENDING_MARKS,
-  'marks.hf.center': PENDING_MARKS,
-  'marks.hf.right': PENDING_MARKS,
-  'marks.hf.tokens': PENDING_MARKS,
-  'marks.hf.marginX': PENDING_MARKS,
-  'marks.hf.marginTop': PENDING_MARKS,
-  'marks.hf.marginBottom': PENDING_MARKS,
-  'marks.bates.title': PENDING_MARKS,
-  'marks.bates.prefix': PENDING_MARKS,
-  'marks.bates.start': PENDING_MARKS,
-  'marks.bates.digits': PENDING_MARKS,
-  'marks.bates.suffix': PENDING_MARKS,
-  'marks.wm.title': PENDING_MARKS,
-  'marks.wm.text': PENDING_MARKS,
-  'marks.wm.angle': PENDING_MARKS,
-  'marks.wm.onTop': PENDING_MARKS,
-  'marks.wm.textRequired': PENDING_MARKS,
 };
 
 // The literal texts a file shows: text between tags (in .tsx only, since in .ts a `>` and a `<`

@@ -275,6 +275,16 @@ class DocumentSession:
     def _garbage_level(self) -> int:
         return 4 if self.require_full_save else 3
 
+    def set_layer_visible(self, layer_id: int, visible: bool) -> None:
+        """Show or hide a layer in the view. It is view state: no Command, no Undo entry, not
+        dirty, and never saved. Every page is announced as changed, so the views redraw and the
+        web reply carries the new page revisions. Not refused while a task runs (it writes no
+        document data)."""
+        with self.lock:
+            self.document.set_layer_visible(layer_id, visible)
+            count = self.document.page_count
+        self._announce((Change(ChangeKind.CONTENT, frozenset(range(count))),))
+
     def save_bytes(
         self, mode: Literal["in_place", "copy"] = "in_place", *, password: str | None = None
     ) -> SaveBytes:

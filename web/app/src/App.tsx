@@ -47,6 +47,8 @@ import { createJobWorkerPool, type JobWorkerPool } from './engine/jobPool';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
 import { BackgroundDialog } from './marks/BackgroundDialog';
+import { HeaderFooterDialog } from './marks/HeaderFooterDialog';
+import { WatermarkDialog } from './marks/WatermarkDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto, HistoryResult, TranslateParams } from './rpc/generated';
@@ -81,7 +83,8 @@ import { SignedWarningDialog } from './edit/signedWarning';
 import { CommentsPanel } from './comments/panel/CommentsPanel';
 import { CommentsController } from './comments/panel/controller';
 import { useCommentsCount } from './comments/panel/useComments';
-import type { CommentToolId } from './comments/tools';
+import { type CommentToolId, toggleCommentTool } from './comments/tools';
+import { MARKUP_COMMAND_KINDS, type MarkupKind, pressMarkup } from './comments/markup';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -97,7 +100,7 @@ import { RAIL_ICONS } from './layout/railIcons';
 import { closePanel, openPanel, togglePanel, useOpenPanel } from './layout/sidePanels';
 import { APP_VERSION } from './version';
 import { downloadBytes } from './files/downloads';
-import { createSaver } from './save/saver';
+import { createSaver, type SaveOutcome } from './save/saver';
 import { reportSaveOutcome } from './save/saveReport';
 import { pdfFileName } from './save/fileName';
 import { SaveAsDialog } from './save/SaveAsDialog';
@@ -237,6 +240,10 @@ export function App({
   const [flattenOpen, setFlattenOpen] = useState(false);
   // Background (W7.3): the marks dialog for a colour behind the page content.
   const [backgroundOpen, setBackgroundOpen] = useState(false);
+  // Header & Footer and Bates numbers (W7.3 S3): one dialog, in the mode its command opened.
+  const [headerFooterMode, setHeaderFooterMode] = useState<'headerFooter' | 'bates' | null>(null);
+  // Watermark (W7.3 S4): the text mode of the watermark dialog.
+  const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
@@ -323,6 +330,8 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
+    // The Comments panel (W7.1b): shows it, as the desktop's Comments List does (not a toggle).
+    'comments-list': () => openPanel('comments'),
     // Copy (Ctrl+C) copies the selection over the page text, as the desktop does (W5.4 S4): the
     // model's (a drag or Select All), or the browser's under Hand. A large selection is copied in
     // slices by the engine of the active tab (W5.4, largeCopy.ts).
@@ -392,6 +401,24 @@ export function App({
       stale = true;
     };
   }, [scheduler, jobs]);
+  // The layers panel reads its list again after a change that moves the structure (a snapshot
+  // restore). A layer toggle replies with the list only, so its change event is what redraws the
+  // pages it names. A restart reopens the document under a new handle, which the panel reads again.
+  const [layersRevision, setLayersRevision] = useState(0);
+  const sessionHandle = session?.handle;
+  useEffect(
+    () =>
+      engine.onEvents((events) => {
+        for (const event of events) {
+          if (event.kind !== 'changed' || event.handle !== sessionHandle) continue;
+          scheduler?.noteRevisions(event.revisions);
+          if (event.changes.some((change) => change.kind === 'structure')) {
+            setLayersRevision((value) => value + 1);
+          }
+        }
+      }),
+    [engine, sessionHandle, scheduler],
+  );
   const viewRef = useRef<DocumentViewHandle>(null);
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
@@ -399,6 +426,9 @@ export function App({
   // Bumped after an Undo or Redo that changed only the outline: the bookmarks reload, and the view
   // stays where the reader is (a remount would put it back on page 1).
   const [outlineRevision, setOutlineRevision] = useState(0);
+  // Bumped after an Undo or Redo: an add or a remove of an attachment changes no page, so the
+  // attachments panel reloads its list on this counter.
+  const [attachmentsRevision, setAttachmentsRevision] = useState(0);
   // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
@@ -469,6 +499,14 @@ export function App({
         togglePanel('search');
       },
     },
+    {
+      id: 'comments',
+      label: t('comments.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('comments');
+      },
+    },
   ];
   const activeTab = docs.tabs.tabs.find((tab) => tab.id === activeId);
   // The apply confirmation belongs to the tab it was opened on: a switch of tab closes it, so Apply
@@ -485,6 +523,16 @@ export function App({
     if (id === activeId) viewRef.current?.dropTextEdit();
     docs.closeTab(id);
   };
+  // A save that reached the engine names unnamed comments (a full save), so the list is read again.
+  // A blocked download still ran the save in the engine, so it counts too.
+  const afterSave = (tab: DocumentTab, outcome: SaveOutcome): void => {
+    if (
+      (outcome.status === 'saved' || outcome.status === 'download-blocked') &&
+      tab.handle === session?.handle
+    ) {
+      comments?.noteChange();
+    }
+  };
   // Save writes the document as a download under its own name, and marks it clean (W4.8).
   const saveTab = async (tab: DocumentTab): Promise<void> => {
     const outcome = await saver.save(
@@ -499,8 +547,7 @@ export function App({
     reportSaveOutcome(outcome, downloadBytes, toasts, () => {
       setSaveAsTab(tab);
     });
-    // A save renames the synthetic comment names, so the list is read again (controller note).
-    if (outcome.status === 'saved' && tab.handle === session?.handle) comments?.noteChange();
+    afterSave(tab, outcome);
   };
   // Save As (W4.9) writes a full copy under the name the dialog gave. The copy is then the file the
   // tab is named after, so the tab takes the name; a refused or blocked copy leaves the tab as it was.
@@ -511,6 +558,7 @@ export function App({
     );
     if (outcome.status === 'saved') docs.renameTab(tab.id, outcome.name);
     reportSaveOutcome(outcome, downloadBytes);
+    afterSave(tab, outcome);
   };
   // The page and zoom the document view reports, for the status bar under the document.
   const [viewState, setViewState] = useState<DocumentViewState>({
@@ -619,6 +667,7 @@ export function App({
     const refresh = historyRefresh(reply.changed);
     if (refresh.structure) setStructureRevision((value) => value + 1);
     else if (refresh.outline) setOutlineRevision((value) => value + 1);
+    if (reply.done) setAttachmentsRevision((value) => value + 1);
   };
   const runHistory = (direction: HistoryDirection) => {
     if (session !== null) {
@@ -657,6 +706,30 @@ export function App({
     if (file === null) return;
     setPendingImage(tab, file);
     if (!requestEditTool(tab, signed, 'image')) setSignedEditAsk({ tabId: tab, tool: 'image' });
+  };
+  // The text markups (W7.1a slice 5) mark the view's text selection, read as Mark Text reads it.
+  // With no selection, noSelection runs (Highlight's drag tool; the others say so).
+  const pressMarkupCommand = (kind: MarkupKind, noSelection: () => void) => {
+    const view = viewRef.current;
+    if (view === null || session === null || scheduler === null) {
+      toasts.push('info', t('redact.notReady'));
+      return;
+    }
+    void pressMarkup(
+      kind,
+      {
+        rpc: session.rpc,
+        handle: session.handle,
+        scheduler,
+        pageSpan: () => view.selectedPageSpan(),
+        model: () => view.selectedAreas(),
+        clearModel: () => view.clearTextSelection(),
+        loadPages: (pages) => view.loadTextPages(pages),
+        selection: window.getSelection(),
+        lookup: (page) => view.cachedLines(page),
+      },
+      noSelection,
+    );
   };
   const handlers: CommandHandlers = {
     ...baseHandlers,
@@ -698,9 +771,32 @@ export function App({
           'sticky-note': () =>
             viewRef.current?.setCommentTool(commentTool === 'note' ? null : 'note'),
           highlight: () =>
-            viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+            pressMarkupCommand(MARKUP_COMMAND_KINDS.highlight, () =>
+              viewRef.current?.setCommentTool(commentTool === 'highlight' ? null : 'highlight'),
+            ),
+          underline: () => pressMarkupCommand(MARKUP_COMMAND_KINDS.underline, () => undefined),
+          strikethrough: () =>
+            pressMarkupCommand(MARKUP_COMMAND_KINDS.strikethrough, () => undefined),
+          squiggly: () => pressMarkupCommand(MARKUP_COMMAND_KINDS.squiggly, () => undefined),
           rectangle: () =>
             viewRef.current?.setCommentTool(commentTool === 'rectangle' ? null : 'rectangle'),
+          'text-box': () =>
+            viewRef.current?.setCommentTool(commentTool === 'textbox' ? null : 'textbox'),
+          oval: () => viewRef.current?.setCommentTool(commentTool === 'oval' ? null : 'oval'),
+          line: () => viewRef.current?.setCommentTool(commentTool === 'line' ? null : 'line'),
+          arrow: () => viewRef.current?.setCommentTool(commentTool === 'arrow' ? null : 'arrow'),
+          callout: () =>
+            viewRef.current?.setCommentTool(commentTool === 'callout' ? null : 'callout'),
+          polygon: () =>
+            viewRef.current?.setCommentTool(commentTool === 'polygon' ? null : 'polygon'),
+          polyline: () =>
+            viewRef.current?.setCommentTool(commentTool === 'polyline' ? null : 'polyline'),
+          pen: () => viewRef.current?.setCommentTool(commentTool === 'pen' ? null : 'pen'),
+          // The ribbon's Stamp toggles the stamp tool with the stamp last chosen in the stamp menu.
+          stamp: () =>
+            toggleCommentTool(commentTool, 'stamp', (tool) =>
+              viewRef.current?.setCommentTool(tool),
+            ),
           // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
           redact: () => viewRef.current?.setRedacting(!state.redacting),
           // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.
@@ -747,6 +843,9 @@ export function App({
           'crop-pages': () => crop.openDialog(),
           // Background (W7.3) opens the marks dialog; the other marks follow in their slices.
           'add-background': () => setBackgroundOpen(true),
+          'add-header-footer': () => setHeaderFooterMode('headerFooter'),
+          'add-bates-numbers': () => setHeaderFooterMode('bates'),
+          'add-watermark': () => setWatermarkOpen(true),
           // Edit Text & Images (W6.7a S4) turns the Edit tool on; a signed document asks once per tab.
           'edit-text-images': () => {
             if (activeId === null) return;
@@ -896,6 +995,11 @@ export function App({
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
+            revision={attachmentsRevision}
+            signed={activeTab?.signed ?? false}
+            onHistoryStep={onHistoryStep}
+            startWorker={jobs.acquire}
+            onOpenFiles={docs.openFiles}
             onClose={() => closePanel('left')}
           />
         ) : documentShown && leftPanelOpen === 'layers' && activeId !== null && session !== null ? (
@@ -903,6 +1007,7 @@ export function App({
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
+            revision={layersRevision}
             onClose={() => closePanel('left')}
           />
         ) : documentShown &&
@@ -929,6 +1034,8 @@ export function App({
             scheduler={scheduler}
             onGoTo={(page) => goTo(page)}
             onClose={() => closePanel('left')}
+            onImport={() => setCommentsImportOpen(true)}
+            onExport={() => setCommentsExportOpen(true)}
           />
         ) : documentShown && leftPanelOpen === 'pages' && session !== null && scheduler !== null ? (
           <ThumbnailsPanel
@@ -1120,6 +1227,34 @@ export function App({
         <BackgroundDialog
           isOpen={backgroundOpen}
           onClose={() => setBackgroundOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={jobs.acquire}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          signed={activeTab.signed}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <HeaderFooterDialog
+          isOpen={headerFooterMode !== null}
+          bates={headerFooterMode === 'bates'}
+          onClose={() => setHeaderFooterMode(null)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={jobs.acquire}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          signed={activeTab.signed}
+          fileName={activeTab.name}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <WatermarkDialog
+          isOpen={watermarkOpen}
+          onClose={() => setWatermarkOpen(false)}
           engine={session.rpc}
           handle={session.handle}
           startWorker={jobs.acquire}

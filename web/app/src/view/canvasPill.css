@@ -51,6 +51,10 @@
   }
 }
 
+:root[data-reduce-motion='true'] .canvas-pill {
+  transition: none;
+}
+
 .canvas-pill-group {
   display: flex;
   align-items: center;

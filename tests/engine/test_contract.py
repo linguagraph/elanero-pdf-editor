@@ -14,6 +14,7 @@ from pdfeditor.engine.base import (
     ColorMode,
     Document,
     Engine,
+    EngineError,
     OpenError,
     Page,
     PasswordRequired,
@@ -265,6 +266,40 @@ def test_embedded_files(engine: Engine, fixture_pdf) -> None:
 def test_extract_embedded_file(engine: Engine, fixture_pdf) -> None:
     doc = engine.open(fixture_pdf("images"))
     assert doc.extract_embedded_file("notes") == b"attached notes\n"
+    doc.close()
+
+
+def test_add_and_remove_embedded_file(engine: Engine, fixture_pdf) -> None:
+    if not engine.capabilities.attachments_write:
+        pytest.skip("engine lacks attachments_write")
+    doc = engine.open(fixture_pdf("images"))
+    doc.add_embedded_file("extra", b"more", "extra.txt", "Extra")
+    assert [f.name for f in doc.embedded_files()] == ["notes", "extra"]
+    assert doc.extract_embedded_file("extra") == b"more"
+    with pytest.raises(EngineError):
+        doc.add_embedded_file("extra", b"again", "extra.txt")
+    doc.remove_embedded_file("notes")
+    assert [f.name for f in doc.embedded_files()] == ["extra"]
+    assert doc.extract_embedded_file("extra") == b"more"
+    with pytest.raises(EngineError):
+        doc.remove_embedded_file("notes")
+    doc.close()
+
+
+def test_remove_middle_embedded_file_keeps_its_neighbours(engine: Engine, fixture_pdf) -> None:
+    """Removing a non-first entry must delete that entry's pair, not the first one's."""
+    if not engine.capabilities.attachments_write:
+        pytest.skip("engine lacks attachments_write")
+    doc = engine.open(fixture_pdf("images"))
+    doc.add_embedded_file("b", b"bee", "b.txt", "B")
+    doc.add_embedded_file("c", b"sea", "c.txt", "C")
+    assert [f.name for f in doc.embedded_files()] == ["notes", "b", "c"]
+    doc.remove_embedded_file("b")
+    assert [f.name for f in doc.embedded_files()] == ["notes", "c"]
+    assert doc.extract_embedded_file("notes") == b"attached notes\n"
+    assert doc.extract_embedded_file("c") == b"sea"
+    doc.remove_embedded_file("c")
+    assert [f.name for f in doc.embedded_files()] == ["notes"]
     doc.close()
 
 

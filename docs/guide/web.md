@@ -187,7 +187,8 @@ message saying whether it was added.
 
 - **Thumbnails.** The **Thumbnails** button on the right rail opens a panel with a small preview of
   every page. Click a preview to go to that page. The panel opens and closes for each open
-  document separately, and it is not remembered after a reload. Layers are not available yet.
+  document separately, and it is not remembered after a reload. The previews follow the layers you
+  show or hide in the Layers panel.
 - **Bookmarks.** The **Bookmarks** button on the right rail opens the document's outline as a tree.
   Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
   With the keyboard, Up and Down move through the entries, Right and Left open and close them,
@@ -214,13 +215,21 @@ message saying whether it was added.
 - **Attachments.** The **Attachments** button on the left rail lists the files embedded in the
   document, with the size of each. Click a file to see its name, size and description, then press
   **Save** to download it to your computer. The file is saved as it is; the browser never opens or
-  runs it. If the document has no attachments, the panel says so. The panel is read-only for now:
-  you cannot add or remove attachments yet.
+  runs it. If the document has no attachments, the panel says so.
+  **Add file…** embeds a file of any type in the document under its own name (a second file with
+  the same name gets a number, as in "notes (2).txt"). Select an attachment and press **Remove** to
+  take it out; a dialog asks first. Each add or remove can be undone with the Undo button or the
+  Undo notice, until you close the document. A PDF attachment also has **Open as new tab**, which
+  opens it in its own tab. Other file types can only be saved. A signed document cannot have
+  attachments added or removed, because that would break its signatures; save a copy first.
 - **Layers.** The **Layers** button on the left rail lists the optional content layers of the
   document, in the order the file gives them. Each row shows whether the layer is visible in the
   document's default view, and a layer that the file locks is marked **Locked**. Nested layers
-  are indented. If the document has no layers, the panel says so. The panel is read-only for now:
-  you cannot show or hide a layer yet.
+  are indented. If the document has no layers, the panel says so. Tick a layer's checkbox to show
+  it, and untick it to hide it. A locked layer's checkbox is greyed out. This changes the view only:
+  it is not saved, it is not part of Undo, and the document does not count as changed. Printing
+  and exporting use the layers' defaults from the file, not the view. A hidden layer's content is
+  still in the file; use **Sanitize** to remove it.
 - **Search.** The **Search** button on the left rail opens a panel that finds text in the open
   document. Type in the box and press Enter (or **Search**). The search starts at the page you are
   on and wraps round to the first page. Each match is listed with its page and the text around it,
@@ -337,7 +346,8 @@ built in the web version yet:
 - the full set of keyboard shortcuts (the ribbon and the command palette work; see
   [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
 - editing the words of a paragraph, adding text, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
-- comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and watermarks;
+- comments other than sticky notes, rectangles, highlights, the drawing and text comments, editing and deleting comments from the Comments panel, custom image stamps and image watermarks;
+- the Security tab of document properties (the title, author, subject and keywords can be edited, and the Advanced and Fonts tabs show the file's facts and fonts; see the table below);
 - the **Install App** command.
 
 ## Browser support
@@ -435,7 +445,9 @@ full policy, with what the desktop app stores, is in the
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; Shape Style… sets the outline, fill and width of the next shapes for the session (shapes already on the page keep theirs; no opacity yet) |
 | Edit the words of a paragraph, add text | Yes | Yes, with undo, with font, size, bold, italic, colour, alignment and line spacing (see Fonts in the web version) |
 | Add, replace and export images (PNG and JPEG) | Yes | Yes, with undo; up to 50 MB and 25 megapixels per image; choose the file first, then click or drag to place it; Replace keeps the picture's box and changes every place it appears; Export Image downloads the selected picture as its own file |
-| Background colour behind the pages (Organize, Marks) | Yes | Yes, with undo; when the document already has a background, Replace, Add New or Remove; the other marks (header & footer, Bates numbers, watermarks) are coming soon |
+| Background colour behind the pages (Organize, Marks) | Yes | Yes, with undo; when the document already has a background, Replace, Add New or Remove |
+| Text or image watermark across the pages (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts, size, colour, opacity, angle and Behind page content for text, or a PNG or JPEG picture (up to 50 MB and 25 megapixels) with its width; when the document already has a watermark, Replace, Add New or Remove, and Update asks for the picture again |
+| Header & footer and Bates numbers (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts (uploaded fonts are not available here yet); when the document already has one, Replace, Add New or Remove; the Bates preview shows the first number |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
@@ -450,7 +462,7 @@ full policy, with what the desktop app stores, is in the
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
 | Web and email links | Yes | Yes: web and email links ask first, and show the full address |
-| Other comments, stamps, watermarks | Yes | Coming soon |
+| Other comments, custom image stamps | Yes | Coming soon (the 14 standard stamps are on the Comment tab) |
 | Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |

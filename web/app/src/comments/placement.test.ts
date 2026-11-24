@@ -48,7 +48,21 @@ describe('placing a comment', () => {
     expect(call).toHaveBeenCalledWith('actions.run', {
       handle: 'h1',
       name: 'annotations.create',
-      args: { tool: 'rectangle', page: 0, rect, text: '', author: '' },
+      args: { tool: 'rectangle', page: 0, rect, text: '', points: [], author: '' },
+    });
+  });
+
+  it('sends the two ends of a line or arrow as points', async () => {
+    const { call, deps } = setup();
+    const ends = [
+      { x: 72, y: 72 },
+      { x: 144, y: 100 },
+    ];
+    await placeComment(deps, 'arrow', 0, rect, '', ends);
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h1',
+      name: 'annotations.create',
+      args: { tool: 'arrow', page: 0, rect, text: '', points: ends, author: '' },
     });
   });
 
@@ -59,7 +73,7 @@ describe('placing a comment', () => {
     expect(call).toHaveBeenCalledWith('actions.run', {
       handle: 'h1',
       name: 'annotations.create',
-      args: { tool: 'note', page: 0, rect, text: 'Hi', author: 'Ada' },
+      args: { tool: 'note', page: 0, rect, text: 'Hi', points: [], author: 'Ada' },
     });
     window.localStorage.clear();
   });

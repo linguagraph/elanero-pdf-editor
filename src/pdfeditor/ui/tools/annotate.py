@@ -14,7 +14,7 @@ from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFileDialog, QGraphicsView, QInputDialog, QMessageBox
 
 from pdfeditor.actions import comments
-from pdfeditor.actions.comment_tools import default_box
+from pdfeditor.actions.comment_tools import build_stamp, default_box, standard_stamp_box
 from pdfeditor.actions.comments import DEFAULT_STYLES, AddAnnotations, CommentStyle
 from pdfeditor.model.annotations import (
     IMAGE_STAMP,
@@ -422,14 +422,7 @@ class StampTool(AnnotationTool):
             model.icon = IMAGE_STAMP
             model.contents = self.stamp[len(IMAGE_PREFIX) :].rsplit(".", 1)[0]
         else:
-            w, h = 160.0, 50.0
-            model = new_model(
-                view,
-                AnnotationType.STAMP,
-                page,
-                Rect(p.x - w / 2, p.y - h / 2, p.x + w / 2, p.y + h / 2),
-            )
-            model.icon = self.stamp
+            model = build_stamp(page, standard_stamp_box(p), self.stamp, view.author)
         commit(view, [model], "Add Stamp")
         return True
 

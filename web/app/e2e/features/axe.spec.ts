@@ -4,6 +4,7 @@
 // Print, Export, and the rest) are S5's, once the engine is staged in the workflow.
 import { expect, test, type Page } from '@playwright/test';
 import { checkAxe } from './axe';
+import { STAGED, fixture, openApp, openPdf } from './support';
 
 const SCHEMES = ['light', 'dark'] as const;
 
@@ -50,3 +51,22 @@ for (const scheme of SCHEMES) {
     });
   });
 }
+
+// The marks dialogs (W7.3 S3) need a document, so they run once the engine is staged.
+test.describe('engine staged', () => {
+  test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
+
+  for (const [button, title] of [
+    ['Header & Footer', 'Header & Footer'],
+    ['Background', 'Background'],
+  ] as const) {
+    test(`axe: ${title} dialog`, async ({ page }, testInfo) => {
+      await openApp(page);
+      await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+      await page.locator('.ribbon [role="tab"]', { hasText: 'Organize' }).click();
+      await page.getByRole('button', { name: button, exact: true }).click();
+      await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
+      await checkAxe(page, testInfo);
+    });
+  }
+});

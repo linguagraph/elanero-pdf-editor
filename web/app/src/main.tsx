@@ -16,8 +16,10 @@ import { startWithLocale } from './i18n/locale';
 import { t } from './i18n/t';
 import { readPreferences } from './prefs/store';
 import { initAccent } from './theme/accent';
+import { initReduceMotion } from './theme/motion';
 import { initTheme } from './theme/theme';
 import './theme/tokens.css';
+import './theme/motion.css';
 
 function mount(root: HTMLElement): void {
   // One engine connection per tab. App starts it after the first paint (W3.1).
@@ -62,6 +64,8 @@ if (shouldRefuse(window)) {
   initTheme();
   // The accent is applied before the first render too, so the default blue never flashes.
   initAccent();
+  // The Reduce motion choice is applied before the first render too (W8.5 S6).
+  initReduceMotion();
   // The chosen language's catalogue is loaded and applied before the first render, so English
   // never flashes first. English (and a missing or broken file) loads nothing.
   // A stalled, broken or throwing start-up still mounts the app, in English (see startWithLocale).
