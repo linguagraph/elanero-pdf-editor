@@ -74,6 +74,10 @@ The **Manage** group:
   editor) to the document as one step, so **Undo** removes them all. In the web version, the file
   can be up to 8 MB; the dialog shows how many comments it holds before you import them.
 
+In the web version, with the Select tool, click a comment to select it, Ctrl+click (or Cmd+click)
+to add or remove one, click an empty part of the page or press Escape to clear the selection, and
+press Delete or Backspace to delete the selected comments. Locked comments are not deleted.
+
 Select a comment to move or resize it, and copy and paste it (**Ctrl+C** and **Ctrl+V**). The
 **Properties** panel (**Ctrl+E**) changes the color, fill, opacity, border, text and author of the
 selected comment, and can lock it.

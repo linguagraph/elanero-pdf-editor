@@ -7,6 +7,18 @@
   touch-action: none;
 }
 
+.comment-select-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.comment-select-outline {
+  position: absolute;
+  border: 2px solid var(--color-focus-ring);
+  pointer-events: none;
+}
+
 .comment-preview {
   position: absolute;
   border: 1px dashed var(--color-focus-ring);

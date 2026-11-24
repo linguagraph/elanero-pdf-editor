@@ -266,6 +266,7 @@ export interface PageRpc {
       | 'layers.set_visible'
       | 'redaction.list'
       | 'comments.list'
+      | 'comments.page'
       | 'split.plan'
       | 'system.memory',
   >(

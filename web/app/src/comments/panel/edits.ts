@@ -6,11 +6,13 @@
 import type { PageRpc } from '../../engine/engineConnection';
 import { offerUndo } from '../../feedback/undoToast';
 import { reportRpcError, type ToastStore, toasts } from '../../feedback/toasts';
+import type { MessageId } from '../../i18n/en';
 import { t } from '../../i18n/t';
 import { readPreferences } from '../../prefs/store';
 import { RpcError } from '../../rpc/client';
 import type { CommentDto, HistoryResult } from '../../rpc/generated';
 import type { RenderScheduler } from '../../view/renderScheduler';
+import type { CommentRef } from '../hitTest';
 
 // The states the panel offers. "None" is not one of them: a status is set, not cleared (the
 // desktop's Set Status menu offers the same four).
@@ -21,8 +23,9 @@ export interface EditDeps {
   readonly rpc: PageRpc;
   readonly handle: string;
   readonly scheduler: Pick<RenderScheduler, 'noteRevisions'>;
-  // The list's controller: a change reads the list again (debounced while the panel is open).
-  readonly controller: { readonly noteChange: () => void };
+  // The list's controller: a change reads the list again (debounced while the panel is open). The
+  // Select tool's delete has no panel open to read for, so it passes none.
+  readonly controller?: { readonly noteChange: () => void };
   readonly store?: ToastStore;
 }
 
@@ -35,19 +38,22 @@ async function change(
   name: 'annotations.reply' | 'annotations.set_text' | 'annotations.delete',
   args: Record<string, unknown>,
   done: string,
+  notDone?: MessageId,
 ): Promise<boolean> {
   const store = deps.store ?? toasts;
   try {
     const result = await deps.rpc.call('actions.run', { handle: deps.handle, name, args });
     if (!result.executed) {
-      deps.controller.noteChange();
+      deps.controller?.noteChange();
+      // Nothing changed (the engine skipped every comment, such as a locked one): say why.
+      if (notDone !== undefined) store.push('info', t(notDone));
       return true;
     }
     deps.scheduler.noteRevisions(result.changed?.revisions ?? {});
-    deps.controller.noteChange();
+    deps.controller?.noteChange();
     const refresh = (undone: HistoryResult) => {
       deps.scheduler.noteRevisions(undone.changed?.revisions ?? {});
-      deps.controller.noteChange();
+      deps.controller?.noteChange();
     };
     offerUndo('info', done, {
       rpc: deps.rpc,
@@ -59,7 +65,7 @@ async function change(
     return true;
   } catch (error) {
     if (error instanceof RpcError && error.code === 'STALE_OBJECT') {
-      deps.controller.noteChange();
+      deps.controller?.noteChange();
       store.push('info', t('comments.stale'));
     } else if (error instanceof RpcError) reportRpcError(store, error);
     else store.push('error', t('comments.edit.failed'));
@@ -101,6 +107,19 @@ export function setStatus(
       state,
     },
     t('comments.status.done'),
+  );
+}
+
+// Deletes the given comments (annotations.delete, one Command, with Undo), as the Select tool's
+// Delete key does. A locked one is skipped by the engine; when that leaves nothing to delete, the
+// user is told why. A stale one is reported as the panel does.
+export function deleteRefs(deps: EditDeps, refs: readonly CommentRef[]): Promise<boolean> {
+  return change(
+    deps,
+    'annotations.delete',
+    { refs: refs.map((r) => ({ page: r.page, name: r.name })) },
+    t('comments.delete.done'),
+    'comments.locked',
   );
 }
 
