@@ -726,6 +726,28 @@ class CommentListResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class PageCommentDto(CommentDto):
+    """A thread's root comment as the page's hit testing needs it (W7.1a section 3.1)."""
+
+    bounds: RectDto  # tight bounds of the geometry (the /Rect can include a line ending)
+    hidden: bool  # a hidden comment is never hit
+    movable: bool  # the Select tool may move it (not locked, not text markup)
+    resizable: bool  # the Select tool may resize it (not locked, not an icon)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageThreadDto:
+    comment: PageCommentDto
+    replies: tuple[CommentDto, ...]  # oldest first
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommentPageResult:
+    revision: int  # the page revision the threads were read at
+    threads: tuple[PageThreadDto, ...]  # top to bottom, then left to right, as the panel orders
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class TextStyleDto:
     """A text block's dominant style (W6.7a S1). ``font_ref`` is left out until W6.8b needs it."""
 

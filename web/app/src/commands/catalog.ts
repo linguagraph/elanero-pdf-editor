@@ -33,7 +33,8 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   'whats-different',
   'install-app',
   'open-recent',
-  // The Comments panel's exports are not in the shared table yet; W7.1b adds the panel entry points.
+  // The web's export and import dialogs are not in the shared table. The Comments panel's Import and
+  // Export buttons open the same dialogs (W7.1b), so the ids stay web-only.
   'export-comments',
   'import-comments',
   'translate-selection',

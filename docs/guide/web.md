@@ -342,7 +342,7 @@ built in the web version yet:
   [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
 - editing the words of a paragraph, adding text, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
 - comments other than sticky notes, rectangles and highlights, editing and deleting comments from the Comments panel, stamps and watermarks;
-- the fonts, PDF version and security settings in document properties (the title, author, subject and keywords can be edited; see the table below);
+- the Security tab of document properties (the title, author, subject and keywords can be edited, and the Advanced and Fonts tabs show the file's facts and fonts; see the table below);
 - the **Install App** command.
 
 ## Browser support
@@ -440,6 +440,7 @@ full policy, with what the desktop app stores, is in the
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; Shape Style… sets the outline, fill and width of the next shapes for the session (shapes already on the page keep theirs; no opacity yet) |
 | Edit the words of a paragraph, add text | Yes | Yes, with undo, with font, size, bold, italic, colour, alignment and line spacing (see Fonts in the web version) |
 | Add, replace and export images (PNG and JPEG) | Yes | Yes, with undo; up to 50 MB and 25 megapixels per image; choose the file first, then click or drag to place it; Replace keeps the picture's box and changes every place it appears; Export Image downloads the selected picture as its own file |
+| Background colour behind the pages (Organize, Marks) | Yes | Yes, with undo; when the document already has a background, Replace, Add New or Remove; the other marks (header & footer, Bates numbers, watermarks) are coming soon |
 | Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
@@ -450,7 +451,7 @@ full policy, with what the desktop app stores, is in the
 | Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
-| Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change) |
+| Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change). The Advanced and Fonts tabs show the PDF version and file facts, and the fonts the pages use, read only |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
 | Web and email links | Yes | Yes: web and email links ask first, and show the full address |

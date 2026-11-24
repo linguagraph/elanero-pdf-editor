@@ -241,6 +241,7 @@ export interface PageRpc {
       | 'session.capabilities'
       | 'session.outline'
       | 'session.security'
+      | 'session.fonts'
       | 'session.links'
       | 'session.unlock_owner'
       | 'render.page'

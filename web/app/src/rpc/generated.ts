@@ -249,6 +249,13 @@ export interface CommentListResult {
   truncated: boolean;
 }
 
+export interface CommentPageResult {
+  /** the page revision the threads were read at */
+  revision: number;
+  /** top to bottom, then left to right, as the panel orders */
+  threads: PageThreadDto[];
+}
+
 export interface CommentThreadDto {
   comment: CommentDto;
   /** oldest first */
@@ -674,6 +681,29 @@ export interface OutlineResult {
   entries: OutlineEntry[];
 }
 
+/** A thread's root comment as the page's hit testing needs it (W7.1a section 3.1). */
+export interface PageCommentDto {
+  page: number;
+  name: string;
+  type: AnnotationType;
+  author: string;
+  contents: string;
+  subject: string;
+  created: string | null;
+  modified: string | null;
+  state: ReviewState;
+  locked: boolean;
+  rect: RectDto;
+  /** tight bounds of the geometry (the /Rect can include a line ending) */
+  bounds: RectDto;
+  /** a hidden comment is never hit */
+  hidden: boolean;
+  /** the Select tool may move it (not locked, not text markup) */
+  movable: boolean;
+  /** the Select tool may resize it (not locked, not an icon) */
+  resizable: boolean;
+}
+
 export interface PageImage {
   /** pixels; 0 when the revision changed */
   width: number;
@@ -719,6 +749,12 @@ export interface PageSize {
   height: number;
   /** the page's /Rotate, in degrees */
   rotation: number;
+}
+
+export interface PageThreadDto {
+  comment: PageCommentDto;
+  /** oldest first */
+  replies: CommentDto[];
 }
 
 export interface PagesResult {
@@ -1132,6 +1168,7 @@ export interface Methods {
   'combine.unlock': { params: CombineUnlockParams; result: CombineUnlockResult; deadline: 'action' };
   'comments.flattenable': { params: HandleParams; result: FlattenableResult; deadline: 'instant' };
   'comments.list': { params: HandleParams; result: CommentListResult; deadline: 'instant' };
+  'comments.page': { params: PageParams; result: CommentPageResult; deadline: 'instant' };
   'comments.xfdf_preview': { params: XfdfPreviewParams; result: XfdfPreviewResult; deadline: 'action' };
   'content.image': { params: ImageParams; result: ImageDataResult; deadline: 'io' };
   'content.objects': { params: PageParams; result: ContentObjectsResult; deadline: 'render' };
@@ -1186,6 +1223,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'combine.unlock': 'action',
   'comments.flattenable': 'instant',
   'comments.list': 'instant',
+  'comments.page': 'instant',
   'comments.xfdf_preview': 'action',
   'content.image': 'io',
   'content.objects': 'render',
@@ -1245,6 +1283,7 @@ export const RESULT_DECODERS: {
   'combine.unlock': decodeCombineUnlockResult,
   'comments.flattenable': decodeFlattenableResult,
   'comments.list': decodeCommentListResult,
+  'comments.page': decodeCommentPageResult,
   'comments.xfdf_preview': decodeXfdfPreviewResult,
   'content.image': decodeImageDataResult,
   'content.objects': decodeContentObjectsResult,
@@ -1584,6 +1623,19 @@ export function decodeCommentListResult(
   return {
     threads: expectArray(field(o, 'threads', path), `${path}.threads`).map((item1, index1) => decodeCommentThreadDto(item1, ctx, `${`${path}.threads`}[${index1}]`)),
     truncated: expectBoolean(field(o, 'truncated', path), `${path}.truncated`),
+  };
+}
+
+export function decodeCommentPageResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): CommentPageResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['revision', 'threads'], path);
+  return {
+    revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
+    threads: expectArray(field(o, 'threads', path), `${path}.threads`).map((item1, index1) => decodePageThreadDto(item1, ctx, `${`${path}.threads`}[${index1}]`)),
   };
 }
 
@@ -2261,6 +2313,32 @@ export function decodeOutlineResult(
   };
 }
 
+export function decodePageCommentDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): PageCommentDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['page', 'name', 'type', 'author', 'contents', 'subject', 'created', 'modified', 'state', 'locked', 'rect', 'bounds', 'hidden', 'movable', 'resizable'], path);
+  return {
+    page: expectInteger(field(o, 'page', path), `${path}.page`),
+    name: expectString(field(o, 'name', path), `${path}.name`),
+    type: expectOneOf(field(o, 'type', path), ['Text', 'FreeText', 'Line', 'Square', 'Circle', 'Polygon', 'PolyLine', 'Highlight', 'Underline', 'Squiggly', 'StrikeOut', 'Stamp', 'Caret', 'Ink', 'Popup', 'FileAttachment', 'Redact', 'Link', 'Widget', 'Other'] as const, `${path}.type`),
+    author: expectString(field(o, 'author', path), `${path}.author`),
+    contents: expectString(field(o, 'contents', path), `${path}.contents`),
+    subject: expectString(field(o, 'subject', path), `${path}.subject`),
+    created: orNull(field(o, 'created', path), `${path}.created`, (v1, p1) => expectString(v1, p1)),
+    modified: orNull(field(o, 'modified', path), `${path}.modified`, (v1, p1) => expectString(v1, p1)),
+    state: expectOneOf(field(o, 'state', path), ['None', 'Accepted', 'Rejected', 'Cancelled', 'Completed'] as const, `${path}.state`),
+    locked: expectBoolean(field(o, 'locked', path), `${path}.locked`),
+    rect: decodeRectDto(field(o, 'rect', path), ctx, `${path}.rect`),
+    bounds: decodeRectDto(field(o, 'bounds', path), ctx, `${path}.bounds`),
+    hidden: expectBoolean(field(o, 'hidden', path), `${path}.hidden`),
+    movable: expectBoolean(field(o, 'movable', path), `${path}.movable`),
+    resizable: expectBoolean(field(o, 'resizable', path), `${path}.resizable`),
+  };
+}
+
 export function decodePageImage(
   value: unknown,
   ctx: DecodeContext,
@@ -2322,6 +2400,19 @@ export function decodePageSize(
     width: expectNumber(field(o, 'width', path), `${path}.width`),
     height: expectNumber(field(o, 'height', path), `${path}.height`),
     rotation: expectInteger(field(o, 'rotation', path), `${path}.rotation`),
+  };
+}
+
+export function decodePageThreadDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): PageThreadDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['comment', 'replies'], path);
+  return {
+    comment: decodePageCommentDto(field(o, 'comment', path), ctx, `${path}.comment`),
+    replies: expectArray(field(o, 'replies', path), `${path}.replies`).map((item1, index1) => decodeCommentDto(item1, ctx, `${`${path}.replies`}[${index1}]`)),
   };
 }
 

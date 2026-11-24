@@ -101,6 +101,7 @@ METHODS: dict[str, Method] = {
     "marks.get": Method(dto.MarkGetParams, actions.get_mark),
     "redaction.list": Method(dto.HandleParams, actions.list_redactions),
     "comments.list": Method(dto.HandleParams, actions.list_comments),
+    "comments.page": Method(dto.PageParams, actions.list_comments_page),
     "save.save_bytes": Method(dto.SaveParams, save.save_bytes),
     "save.mark_saved": Method(dto.HandleParams, save.mark_saved),
     "save.autosave_bytes": Method(dto.HandleParams, save.autosave_bytes),

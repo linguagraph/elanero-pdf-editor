@@ -1477,6 +1477,66 @@ def comments_threaded() -> None:
         pdf.save(path)
 
 
+def comments_flags() -> None:
+    """Comments whose flags the web's comments.page reads (W7.1a slice 2): a highlight whose
+    /QuadPoints are smaller than its /Rect (the tight bounds), a hidden note (/F 2), and a locked
+    note (/F 128). The notes are on the one page, so the page read covers all three."""
+    import pikepdf
+
+    doc = pymupdf.open()
+    doc.new_page(width=A4.width, height=A4.height).insert_text((72, 300), "Flags.", fontsize=12)
+    _save(doc, "comments_flags.pdf")
+
+    def stamp() -> pikepdf.String:
+        return pikepdf.String("D:20260101100000Z")
+
+    def annot(rect: list[int], name: str, flags: int, **extra: object) -> pikepdf.Object:
+        return pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot,
+            Rect=rect,
+            F=flags,
+            NM=pikepdf.String(name),
+            T=pikepdf.String("Ada"),
+            CreationDate=stamp(),
+            M=stamp(),
+            **extra,
+        )
+
+    path = OUT / "comments_flags.pdf"
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        page = pdf.pages[0].obj
+        highlight = pdf.make_indirect(
+            annot(
+                [72, 600, 300, 640],
+                "markup-a",
+                4,
+                Subtype=pikepdf.Name.Highlight,
+                QuadPoints=[72, 630, 200, 630, 72, 610, 200, 610],
+                C=[1, 1, 0],
+            )
+        )
+        hidden = pdf.make_indirect(
+            annot(
+                [320, 700, 340, 720],
+                "hidden-a",
+                6,  # Hidden (2) and Print (4)
+                Subtype=pikepdf.Name.Text,
+                Contents=pikepdf.String("Hidden note"),
+            )
+        )
+        locked = pdf.make_indirect(
+            annot(
+                [360, 700, 380, 720],
+                "locked-a",
+                132,  # Locked (128) and Print (4)
+                Subtype=pikepdf.Name.Text,
+                Contents=pikepdf.String("Locked note"),
+            )
+        )
+        page.Annots = pikepdf.Array([highlight, hidden, locked])
+        pdf.save(path)
+
+
 def damaged_pubsec_filter() -> None:
     """A copy of report whose trailer names an /Encrypt dictionary with the Adobe.PubSec
     handler: the rewrite is pikepdf's, the trailer edit is bytes (copy of
@@ -1551,6 +1611,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "undo_signed_catalog": undo_signed_catalog,
     "comments_flattenable_mixed": comments_flattenable_mixed,
     "comments_threaded": comments_threaded,
+    "comments_flags": comments_flags,
     "annotations_form": annotations_form,
     "annotations_signed": annotations_signed,
     "damaged_pubsec_filter": damaged_pubsec_filter,
