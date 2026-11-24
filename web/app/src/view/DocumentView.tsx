@@ -77,7 +77,7 @@ import { CropLayer } from '../crop/CropLayer';
 import { marginsFromBox, type DrawnCrop } from '../crop/cropChoice';
 import { CommentLayer } from '../comments/CommentLayer';
 import { CommentToolbar } from '../comments/CommentToolbar';
-import type { PageRect } from '../comments/coordinates';
+import type { PagePoint, PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import type { ActionJobWorker } from '../actionJob/actionJob';
@@ -1420,8 +1420,10 @@ export function DocumentView({
   }
 
   const commentDeps = { rpc, handle, scheduler };
-  const place = (page: number, rect: PageRect, text: string) => {
-    if (commentTool !== null) void placeComment(commentDeps, commentTool, page, rect, text);
+  const place = (page: number, rect: PageRect, text: string, points: readonly PagePoint[]) => {
+    if (commentTool !== null) {
+      void placeComment(commentDeps, commentTool, page, rect, text, points);
+    }
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
   // shape per choice). A failure keeps the tool on so the user can retry. While an add is in
@@ -1647,11 +1649,12 @@ export function DocumentView({
                     <PageMarks rects={marksOnPage(searchMarks, box.index, zoom)} />
                     {commentTool !== null && sizes !== null ? (
                       <CommentLayer
+                        key={commentTool}
                         tool={commentTool}
                         zoom={zoom}
                         widthPt={sizes[box.index]?.width ?? 0}
                         heightPt={sizes[box.index]?.height ?? 0}
-                        onPlace={(rect, text) => place(box.index, rect, text)}
+                        onPlace={(rect, text, points) => place(box.index, rect, text, points)}
                       />
                     ) : null}
                     <SelectedMarkOutlines

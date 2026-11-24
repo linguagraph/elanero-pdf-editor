@@ -8,7 +8,7 @@ import { readPreferences } from '../prefs/store';
 import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { RenderScheduler } from '../view/renderScheduler';
-import type { PageRect } from './coordinates';
+import type { PagePoint, PageRect } from './coordinates';
 import type { CommentToolId } from './tools';
 
 export interface PlacementDeps {
@@ -30,6 +30,7 @@ export async function placeComment(
   page: number,
   rect: PageRect,
   text: string,
+  points: readonly PagePoint[] = [],
 ): Promise<void> {
   const store = deps.store ?? toasts;
   try {
@@ -37,7 +38,7 @@ export async function placeComment(
     const reply = await deps.rpc.call('actions.run', {
       handle: deps.handle,
       name: 'annotations.create',
-      args: { tool, page, rect, text, author: readPreferences().authorName },
+      args: { tool, page, rect, text, points, author: readPreferences().authorName },
     });
     if (!reply.executed) return;
     deps.scheduler.noteRevisions(reply.changed?.revisions ?? {});

@@ -293,7 +293,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('sticky-note', 'command.sticky-note.label', 'comment.comments'),
     checked: (state) => state.commentTool === 'note',
   },
-  cmd('text-box', 'command.text-box.label', 'comment.comments'),
+  {
+    ...cmd('text-box', 'command.text-box.label', 'comment.comments'),
+    checked: (state) => state.commentTool === 'textbox',
+  },
   cmd('callout', 'command.callout.label', 'comment.comments'),
   cmd('stamp', 'command.stamp.label', 'comment.comments'),
   cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
@@ -301,9 +304,18 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('rectangle', 'command.rectangle.label', 'comment.drawing'),
     checked: (state) => state.commentTool === 'rectangle',
   },
-  cmd('oval', 'command.oval.label', 'comment.drawing'),
-  cmd('line', 'command.line.label', 'comment.drawing'),
-  cmd('arrow', 'command.arrow.label', 'comment.drawing'),
+  {
+    ...cmd('oval', 'command.oval.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'oval',
+  },
+  {
+    ...cmd('line', 'command.line.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'line',
+  },
+  {
+    ...cmd('arrow', 'command.arrow.label', 'comment.drawing'),
+    checked: (state) => state.commentTool === 'arrow',
+  },
   cmd('polygon', 'command.polygon.label', 'comment.drawing'),
   cmd('polyline', 'command.polyline.label', 'comment.drawing'),
   cmd('pen', 'command.pen.label', 'comment.drawing'),

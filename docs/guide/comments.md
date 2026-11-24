@@ -38,6 +38,10 @@ The **Drawing** group:
 - **Polygon** and **Polyline**: click each corner or point, then double-click to finish.
 - **Pen**: draw freehand. Strokes are smoothed when you release the mouse.
 
+In the web version, the comment toolbar has Sticky Note, Text Box, Rectangle, Highlight, Oval,
+Line and Arrow. A text box, like a sticky note, asks for its text once you place it. A line or
+arrow is drawn by dragging from one end to the other; a click without a drag adds nothing.
+
 ## Manage comments
 
 The **Manage** group:
