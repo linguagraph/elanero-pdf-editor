@@ -596,3 +596,77 @@ describe('comment tools on a page', () => {
     expect(onPlace).not.toHaveBeenCalled();
   });
 });
+
+describe('comment tools from the keyboard', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  const layer = () => {
+    const el = container.querySelector<HTMLDivElement>('.comment-layer');
+    if (el === null) throw new Error('no layer');
+    return el;
+  };
+  const press = (k: string, extra: KeyboardEventInit = {}) =>
+    act(() => {
+      layer().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...extra }));
+    });
+
+  it('Enter places a box tool at the centre of the page, as its default box', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="rectangle" onPlace={onPlace} />));
+    press('Enter');
+    expect(onPlace).toHaveBeenCalledWith({ x0: 256, y0: 366, x1: 356, y1: 426 }, '', []);
+  });
+
+  it('Space places the same comment as Enter', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="oval" onPlace={onPlace} />));
+    press(' ');
+    expect(onPlace).toHaveBeenCalledTimes(1);
+  });
+
+  it('Enter on a note opens its text form at the centre, and places nothing yet', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="note" onPlace={onPlace} />));
+    press('Enter');
+    expect(onPlace).not.toHaveBeenCalled();
+    expect(container.querySelector('form')).not.toBeNull();
+  });
+
+  it('Enter places a line through the centre, with its two ends', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="line" onPlace={onPlace} />));
+    press('Enter');
+    expect(onPlace).toHaveBeenCalledWith({ x0: 256, y0: 396, x1: 356, y1: 396 }, '', [
+      { x: 256, y: 396 },
+      { x: 356, y: 396 },
+    ]);
+  });
+
+  it('Enter does nothing for the pen, which has no keyboard placement', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="pen" onPlace={onPlace} />));
+    press('Enter');
+    expect(onPlace).not.toHaveBeenCalled();
+  });
+
+  it('a repeat of a held Enter places nothing; the first press places once', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="rectangle" onPlace={onPlace} />));
+    press('Enter', { repeat: true });
+    expect(onPlace).not.toHaveBeenCalled();
+    press('Enter');
+    expect(onPlace).toHaveBeenCalledTimes(1);
+  });
+});

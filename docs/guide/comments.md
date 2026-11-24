@@ -111,6 +111,20 @@ the **Comment** tab (**Ctrl+Shift+C**).
 - Export comments as XFDF (for another PDF editor), as a CSV summary, or as a summary PDF. Import
   XFDF to bring in comments from another review.
 
+## Use comments from the keyboard (web)
+
+- **Place a comment**: Tab to a page's comment tool (each page has one stop), then press Enter or
+  Space to place the tool's default comment at the centre of the page. A note, text box or callout
+  then asks for its text. Pen, polygon and polyline have no keyboard placement.
+- **Select a comment**: Tab to the page's comments (one stop per page). Home and End go to the first
+  and last comment on the page, and Ctrl+Up or Ctrl+Down to the previous or next one. Enter selects
+  the focused comment, and a note also opens its popup. Delete removes the selected comments.
+- **Move a comment**: with a comment focused, press an arrow key to move it 1 pt; hold Shift for 10 pt.
+  Holding a key is one undo step; releasing it, or a pause of half a second, starts a new one.
+- **Resize a comment**: with a comment focused, press Alt with an arrow key to resize it from its
+  bottom-right corner, by the same steps.
+- Escape clears the selection. Ctrl+Z undoes each move, resize and placement.
+
 ## Limits
 
 - Flattening keeps the marks visible but no longer editable. It doesn't remove them. To remove a

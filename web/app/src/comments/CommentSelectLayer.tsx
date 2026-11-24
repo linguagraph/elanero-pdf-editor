@@ -20,7 +20,9 @@ import {
   pruneCommentSelection,
 } from './hitTest';
 import { NotePopup } from './NotePopup';
+import { PageCommentList } from './PageCommentList';
 import type { CommentPageCache } from './pageCache';
+import { movedBox, NudgeQueue, nudgeMergeKey, resizedCornerBox } from './keyboard';
 import { NOT_PAGE_SELECTOR } from './pageGuard';
 import { isMoveClick, transformComments, type TransformDeps, translation } from './transform';
 import './comments.css';
@@ -114,6 +116,8 @@ export function CommentSelectLayer({
   const [drag, setDrag] = useState<Drag | null>(null);
   // Ends the gesture in progress (it removes its window listeners); null when there is none.
   const stopDrag = useRef<(() => void) | null>(null);
+  // The arrow-key presses in progress, one annotations.transform each (keyboard.ts).
+  const [nudges] = useState(() => new NudgeQueue());
 
   // The threads are read at the revision being drawn. A list for another revision is not used, and a
   // failed read leaves the page without outlines until the next revision asks again. A reply for
@@ -151,6 +155,65 @@ export function CommentSelectLayer({
   );
 
   const threads = reply !== null && reply.revision === revision ? reply.threads : null;
+
+  // A list read at the current revision is current, so the boxes the arrow keys kept are dropped
+  // (only once no press is still waiting: a waiting press builds on the box it keeps).
+  useEffect(() => {
+    if (threads !== null && nudges.idle()) nudges.clearBoxes();
+  }, [threads, nudges]);
+
+  // An arrow press on a comment: it becomes the selection, and moves or resizes it by one step.
+  // A press the comment may not take does nothing, and a locked one says why.
+  const onNudge = (c: PageCommentDto, dx: number, dy: number, resize: boolean) => {
+    const ref = { page, name: c.name };
+    if (!selectedOn(selection, page, c.name)) onSelect([ref]);
+    if (resize ? !c.resizable : !c.movable) {
+      if (c.locked) (transformDeps.store ?? toasts).push('info', t('comments.locked'));
+      return;
+    }
+    const mergeKey = nudgeMergeKey(ref, nudges.press(c.name), resize);
+    const onStale = () => {
+      nudges.reset();
+      cache.invalidate(page);
+      onSelect([]);
+    };
+    nudges.enqueue(async () => {
+      const from = nudges.boxOf(c.name, c.bounds);
+      if (resize) {
+        const next = resizedCornerBox(from, dx, dy);
+        const ok = await transformComments(
+          transformDeps,
+          [ref],
+          fitMatrix(from, next),
+          true,
+          onStale,
+          mergeKey,
+        );
+        if (ok) nudges.setBox(c.name, next);
+        return ok;
+      }
+      const ok = await transformComments(
+        transformDeps,
+        [ref],
+        translation(dx, dy),
+        false,
+        onStale,
+        mergeKey,
+      );
+      if (ok) nudges.setBox(c.name, movedBox(from, dx, dy));
+      return ok;
+    });
+  };
+  // The arrow key on a comment is released: the next press starts a new hold (one undo step each).
+  const onNudgeEnd = (c: PageCommentDto) => nudges.release(c.name);
+  // Enter or a click on a comment selects it; a note also opens its popup, as a click does.
+  const onActivate = (ref: CommentRef, c: PageCommentDto) => {
+    onSelect([ref]);
+    if (c.type === 'Text') onOpenNote(ref);
+  };
+  // The list is read from the latest answer, not only the current revision: a refetch after a
+  // key press must not unmount the focused comment.
+  const listed = (reply?.threads ?? []).map((th) => th.comment).filter((c) => !c.hidden);
 
   // A change to the page can remove a selected comment: the selection keeps only the comments the
   // page still holds, so no stale reference is left to be sent to the engine.
@@ -404,6 +467,15 @@ export function CommentSelectLayer({
             />
           ))
         : null}
+      <PageCommentList
+        page={page}
+        comments={listed}
+        zoom={zoom}
+        pageLayer={layerRef}
+        onNudge={onNudge}
+        onNudgeEnd={onNudgeEnd}
+        onActivate={onActivate}
+      />
     </div>
   );
 }

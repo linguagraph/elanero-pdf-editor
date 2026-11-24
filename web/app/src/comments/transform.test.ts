@@ -97,3 +97,27 @@ describe('comment move and resize', () => {
     expect(store.getState().visible[0]?.text).toBe(t('comment.transform.failed'));
   });
 });
+
+describe('comment move with a merge key', () => {
+  it('sends the merge key with the transform, so a held arrow key is one undo step', async () => {
+    const { call, deps } = setup();
+    await transformComments(deps, refs, translation(1, 0), false, () => undefined, 'nudge:0:a');
+    expect(call).toHaveBeenCalledWith('actions.run', {
+      handle: 'h1',
+      name: 'annotations.transform',
+      args: {
+        refs: [{ page: 0, name: 'a' }],
+        matrix: { a: 1, b: 0, c: 0, d: 1, e: 1, f: 0 },
+        resize: false,
+        merge_key: 'nudge:0:a',
+      },
+    });
+  });
+
+  it('sends no merge key when none is given, as before', async () => {
+    const { call, deps } = setup();
+    await transformComments(deps, refs, translation(1, 0), false, () => undefined);
+    const args = (call.mock.calls[0] as unknown[])[1] as { args: Record<string, unknown> };
+    expect(args.args).not.toHaveProperty('merge_key');
+  });
+});

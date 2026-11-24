@@ -572,4 +572,69 @@ describe('CommentSelectLayer', () => {
     const update = onOpenNote.mock.calls[0]?.[0];
     expect(typeof update === 'function' && update({ page: 0, name: 'a' })).toBeNull();
   });
+  it('an arrow on a focused comment moves it by 1 pt, selects it, and holds one merge key', async () => {
+    await render([]);
+    const item = container.querySelector<HTMLButtonElement>('button.comment-list-item');
+    await act(async () => {
+      item?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(onSelect).toHaveBeenCalledWith([{ page: 0, name: 'a' }]);
+    expect(runCall).toHaveBeenCalledTimes(1);
+    const [, request] = runCall.mock.calls[0] as [
+      string,
+      { args: TransformWire & { merge_key: string } },
+    ];
+    expect(request.args.merge_key).toBe('nudge:0:a:1');
+    expect(request.args.resize).toBe(false);
+    expectMatrix(request.args.matrix, [1, 0, 0, 1, 1, 0]);
+  });
+
+  // Dispatches an arrow key (Right) on a comment's list item: a keydown presses it, a keyup releases it.
+  async function arrow(item: HTMLElement | null | undefined, type: 'keydown' | 'keyup') {
+    await act(async () => {
+      item?.dispatchEvent(new KeyboardEvent(type, { key: 'ArrowRight', bubbles: true }));
+    });
+  }
+
+  it('two arrow presses with a keyup between them are two undo steps (two merge keys)', async () => {
+    await render([]);
+    const item = container.querySelector<HTMLButtonElement>('button.comment-list-item');
+    await arrow(item, 'keydown');
+    await arrow(item, 'keyup');
+    await arrow(item, 'keydown');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(runCall).toHaveBeenCalledTimes(2);
+    const keys = runCall.mock.calls.map(
+      ([, request]) => (request as { args: { merge_key: string } }).args.merge_key,
+    );
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it('an arrow press on a locked comment sends nothing and says why', async () => {
+    await render([], {}, pageWith({ movable: false, resizable: false, locked: true }));
+    const item = container.querySelector<HTMLButtonElement>('button.comment-list-item');
+    await arrow(item, 'keydown');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(runCall).not.toHaveBeenCalled();
+    expect(toastStore.getState().visible[0]?.text).toBe(t('comments.locked'));
+  });
+
+  it('an arrow press on a comment that went stale clears the selection and says so', async () => {
+    runCall.mockRejectedValueOnce(new RpcError('STALE_OBJECT', 'gone'));
+    await render([{ page: 0, name: 'a' }]);
+    const item = container.querySelector<HTMLButtonElement>('button.comment-list-item');
+    await arrow(item, 'keydown');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(onSelect).toHaveBeenLastCalledWith([]);
+    expect(toastStore.getState().visible[0]?.text).toBe(t('comments.stale'));
+  });
 });
