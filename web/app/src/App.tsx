@@ -320,6 +320,8 @@ export function App({
     'flatten-all-comments': () => setFlattenOpen(true),
     'export-comments': () => setCommentsExportOpen(true),
     'import-comments': () => setCommentsImportOpen(true),
+    // The Comments panel (W7.1b): shows it, as the desktop's Comments List does (not a toggle).
+    'comments-list': () => openPanel('comments'),
     // Copy (Ctrl+C) copies the selection over the page text, as the desktop does (W5.4 S4): the
     // model's (a drag or Select All), or the browser's under Hand. A large selection is copied in
     // slices by the engine of the active tab (W5.4, largeCopy.ts).
@@ -464,6 +466,14 @@ export function App({
       disabled: !documentShown,
       onAction: () => {
         togglePanel('search');
+      },
+    },
+    {
+      id: 'comments',
+      label: t('comments.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('comments');
       },
     },
   ];
@@ -924,6 +934,8 @@ export function App({
             scheduler={scheduler}
             onGoTo={(page) => goTo(page)}
             onClose={() => closePanel('left')}
+            onImport={() => setCommentsImportOpen(true)}
+            onExport={() => setCommentsExportOpen(true)}
           />
         ) : documentShown && leftPanelOpen === 'pages' && session !== null && scheduler !== null ? (
           <ThumbnailsPanel

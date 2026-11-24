@@ -4,6 +4,7 @@
 // host replay): the annotations and the reply and status annotations that link to them. The
 // reopened file's panel shows the same threads, so the saved file is what the user gets.
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import {
   STAGED,
   fixture,
@@ -29,6 +30,15 @@ async function pointOn(page: Page, index: number, x: number, y: number) {
 // The Comments panel's thread rows. The panel opens from the rail; its list is labelled.
 async function openComments(page: Page): Promise<Locator> {
   await page.locator('[data-panel="comments"]').click();
+  const list = page.getByRole('list', { name: 'Comment threads' });
+  await expect(list).toBeVisible();
+  return list;
+}
+
+// The panel opens from the Comment tab's Comments List button (W7.1b S1), which shows it.
+async function openCommentsFromRibbon(page: Page): Promise<Locator> {
+  await openCommentTab(page);
+  await page.locator('.ribbon [data-command="comments-list"]').click();
   const list = page.getByRole('list', { name: 'Comment threads' });
   await expect(list).toBeVisible();
   return list;
@@ -73,7 +83,7 @@ test.describe('engine staged', () => {
     await page.mouse.up();
 
     // The Comments panel lists both threads, the note by its text and the rectangle by its type.
-    const list = await openComments(page);
+    const list = await openCommentsFromRibbon(page);
     await expect(list.locator('.comments-thread')).toHaveCount(2);
     await expect(thread(list, 'Check the margin')).toBeVisible();
     const rectangle = thread(list, 'Rectangle');
@@ -160,5 +170,69 @@ test.describe('engine staged', () => {
 
     expect(problems, 'CSP or page errors').toEqual([]);
     expect(reopenedProblems, 'CSP or page errors after reopen').toEqual([]);
+  });
+
+  test('export the comments from the panel, then import them into a fresh copy', async ({
+    page,
+    context,
+  }, testInfo) => {
+    const problems = watchPage(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+    await openCommentTab(page);
+    await page.getByRole('button', { name: 'Note', exact: true }).click();
+    const note = await pointOn(page, 0, 120, 150);
+    await page.mouse.click(note.x, note.y);
+    await page.getByRole('textbox', { name: 'Note text' }).fill('Imported note text');
+    await page.getByRole('button', { name: 'Add note', exact: true }).click();
+
+    // Export: the panel's Export opens the Export dialog, whose default format is XFDF.
+    const list = await openCommentsFromRibbon(page);
+    await expect(thread(list, 'Imported note text')).toBeVisible();
+    await page.getByRole('button', { name: 'Export comments', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      dialog.getByRole('button', { name: 'Export', exact: true }).click(),
+    ]);
+    const exported = await download.path();
+    if (!exported) throw new Error(`export failed: ${await download.failure()}`);
+    const xfdf = readFileSync(exported);
+    expect(xfdf.toString('utf8').startsWith('<?xml')).toBe(true);
+    expect(xfdf.toString('utf8')).toContain('Imported note text');
+
+    // Import: a fresh copy of the same document has no comments, so its panel shows Import only.
+    const fresh = await context.newPage();
+    const freshProblems = watchPage(fresh);
+    await openApp(fresh);
+    await openPdf(fresh, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+    await openCommentTab(fresh);
+    await fresh.locator('.ribbon [data-command="comments-list"]').click();
+    await expect(fresh.getByRole('button', { name: 'Import comments', exact: true })).toBeVisible();
+    await expect(fresh.getByRole('button', { name: 'Export comments', exact: true })).toHaveCount(
+      0,
+    );
+
+    await fresh.getByRole('button', { name: 'Import comments', exact: true }).click();
+    const importDialog = fresh.getByRole('dialog');
+    await importDialog.locator('input[type="file"]').setInputFiles({
+      name: download.suggestedFilename(),
+      mimeType: 'application/xml',
+      buffer: xfdf,
+    });
+    await expect(importDialog.getByText(/Comments: 1 \(replies: 0\)/)).toBeVisible();
+    await importDialog.getByRole('button', { name: 'Import', exact: true }).click();
+
+    const freshList = fresh.getByRole('list', { name: 'Comment threads' });
+    await expect(freshList.locator('.comments-thread')).toHaveCount(1);
+    await expect(thread(freshList, 'Imported note text')).toBeVisible();
+
+    // Host replay: the imported note is the one comment on page 1 of the saved file.
+    const saved = await saveDownload(fresh);
+    recordHostCheck(testInfo, 'comment_count_pikepdf', saved.bytes, { count: 1, page: 0 });
+    recordHostCheck(testInfo, 'opens_pdfium', saved.bytes);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+    expect(freshProblems, 'CSP or page errors after import').toEqual([]);
   });
 });

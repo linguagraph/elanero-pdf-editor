@@ -11,6 +11,7 @@ import { formatDate } from '../../i18n/format';
 import type { MessageId } from '../../i18n/en';
 import { t } from '../../i18n/t';
 import { Panel } from '../../layout/Panel';
+import { Icon } from '../../theme/Icon';
 import type { PageRpc } from '../../engine/engineConnection';
 import type { AnnotationType, CommentDto, ReviewState } from '../../rpc/generated';
 import type { RenderScheduler } from '../../view/renderScheduler';
@@ -31,6 +32,10 @@ export interface CommentsPanelProps {
   // without a change here (W7.1a).
   readonly onGoTo: (page: number, name: string) => void;
   readonly onClose: () => void;
+  // Open the app's Import Comments and Export Comments dialogs (the same ones the Comment tab's
+  // Manage group opens), so the panel does not own a second copy of either.
+  readonly onImport: () => void;
+  readonly onExport: () => void;
 }
 
 const TYPE_LABEL: Readonly<Record<AnnotationType, MessageId>> = {
@@ -114,6 +119,8 @@ export function CommentsPanel({
   scheduler,
   onGoTo,
   onClose,
+  onImport,
+  onExport,
 }: CommentsPanelProps) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const searchId = useId();
@@ -303,8 +310,26 @@ export function CommentsPanel({
     );
   }
 
+  // Export needs a thread to export, so it is hidden until the list is loaded with one (the desktop
+  // hides it too). Import stays in every state: an import can turn an empty panel into a list.
+  const toolbar = (
+    <div role="group" aria-label={t('comments.toolbar')} className="comments-toolbar">
+      <button type="button" aria-label={t('comments.import.label')} onClick={onImport}>
+        <Icon name="file-input" />
+        <span>{t('comments.import')}</span>
+      </button>
+      {loaded && threads.length > 0 ? (
+        <button type="button" aria-label={t('comments.export.label')} onClick={onExport}>
+          <Icon name="file-output" />
+          <span>{t('comments.export')}</span>
+        </button>
+      ) : null}
+    </div>
+  );
+
   return (
     <Panel title={t('comments.title')} onClose={onClose}>
+      {toolbar}
       {body}
     </Panel>
   );
