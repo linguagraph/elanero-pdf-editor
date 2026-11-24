@@ -217,6 +217,22 @@ def encrypted() -> None:
     )
 
 
+def encrypted_long_password() -> None:
+    """Like ``encrypted`` but with passwords long enough that a substring scan of a reply is
+    meaningful (a short word such as "user" can match by chance)."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=A4.width, height=A4.height)
+    page.insert_text((72, 72), "Secret content", fontsize=14)
+    _save(
+        doc,
+        "encrypted_long_password.pdf",
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        user_pw="userpw-long-9",
+        owner_pw="ownerpw-long-9",
+        permissions=pymupdf.PDF_PERM_PRINT | pymupdf.PDF_PERM_ACCESSIBILITY,
+    )
+
+
 def encrypted_owner_only() -> None:
     """Encrypted, but with an empty user password: it opens with no password, and only the owner
     password (which nobody types to read it) is set."""
@@ -1517,6 +1533,7 @@ GENERATORS: dict[str, Callable[[], None]] = {
     "outline_unsorted": outline_unsorted,
     "page_labels": page_labels,
     "encrypted": encrypted,
+    "encrypted_long_password": encrypted_long_password,
     "encrypted_owner_only": encrypted_owner_only,
     "hybrid_xref": hybrid_xref,
     "rotated_pages": rotated_pages,
