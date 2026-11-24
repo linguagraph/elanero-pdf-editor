@@ -199,6 +199,14 @@
   cursor: default;
 }
 
+/* Touch screens: the app menu's items (the document tab menu uses them too) are at least the touch
+   target in height (W8.5 S7). */
+@media (pointer: coarse) {
+  .app-menu-item {
+    min-height: var(--size-touch-target);
+  }
+}
+
 .app-menu-separator {
   height: 1px;
   margin: var(--space-1) 0;

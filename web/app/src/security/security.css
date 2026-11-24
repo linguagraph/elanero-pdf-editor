@@ -40,3 +40,14 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Touch screens: the fields are at least the touch target, and a checkbox row is one target of it
+   (W8.5 S7). */
+@media (pointer: coarse) {
+  .security-field input,
+  .security-field select,
+  .security-check {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}

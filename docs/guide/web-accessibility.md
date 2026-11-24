@@ -55,9 +55,13 @@ system's setting is on. Its change shows at once; **Cancel** puts back the saved
 
 ## Touch screens
 
-On a touch screen, the ribbon buttons and tabs and the buttons of the document view toolbar are at
-least 44 × 44 pixels, and the document tabs are at least 44 pixels high. Other controls are not
-yet held to that size.
+On a touch screen, the controls are at least 44 × 44 pixels: the ribbon buttons, tabs and menu
+items, the document tabs and their menu, the document view toolbar and page controls, the edit bar,
+the font list, the theme choices, the update banner, the dialog buttons (Cancel, Done, Apply), the
+Combine and Properties fields and buttons, the security fields and checkboxes, and the translation
+bubble. Four things are not held to that size: the text on a page (you select it by dragging, and
+its handles are already that size), the handles drawn around an object on a page, links inside
+running text, and a checkbox or radio button inside a labelled row (the row is the target).
 
 When you select text, the size of the selection (its characters, and its pages when it covers more
 than one) is announced to a screen reader, politely, after each selection is made.
