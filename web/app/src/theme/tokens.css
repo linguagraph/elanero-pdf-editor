@@ -46,6 +46,7 @@
   --layout-left-panel-width: 220px;
   --layout-right-panel-width: 260px;
   --layout-min-panel-width: 160px;
+  --size-touch-target: 44px;
 }
 
 @media (prefers-color-scheme: dark) {

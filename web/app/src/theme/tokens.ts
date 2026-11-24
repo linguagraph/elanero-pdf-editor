@@ -108,6 +108,11 @@ export const LAYOUT_PX = {
   minPanelWidth: 160,
 } as const;
 
+// The minimum size of a control under a coarse pointer (touch), W8.5 S7. 44 px is the project's bar
+// (W1.6 section 8, WCAG 2.5.5); WCAG 2.2 AA asks 24 px, so the guide keeps saying 44. Coarse-pointer
+// rules use `min-width`/`min-height` of `var(--size-touch-target)`, never a new literal.
+export const TOUCH_TARGET_PX = 44;
+
 // Accent presets (W4.5 S4), in the desktop's ACCENT_PRESETS order. Blue is the default and keeps
 // the values in COLOURS (the web's dark blue, not the desktop's, per W4.5 D1), so it has no block
 // in the generated CSS. The other seven come from the desktop's build_colors (the drift test in

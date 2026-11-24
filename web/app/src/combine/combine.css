@@ -94,6 +94,15 @@
   font: inherit;
 }
 
+/* Touch screens: the page-range fields and the buttons are at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .combine-pages input,
+  .combine-button {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 .combine-primary {
   font-weight: 600;
 }

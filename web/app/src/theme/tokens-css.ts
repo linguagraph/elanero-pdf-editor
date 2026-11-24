@@ -10,6 +10,7 @@ import {
   RADII_PX,
   SPACE_STEPS,
   SPACE_UNIT_PX,
+  TOUCH_TARGET_PX,
   type AccentPresetId,
   type AccentTokens,
   type ColourToken,
@@ -45,6 +46,7 @@ function metricDeclarations(indent: string): string[] {
     const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
     lines.push(`${indent}--layout-${kebab}: ${px}px;`);
   }
+  lines.push(`${indent}--size-touch-target: ${TOUCH_TARGET_PX}px;`);
   return lines;
 }
 
