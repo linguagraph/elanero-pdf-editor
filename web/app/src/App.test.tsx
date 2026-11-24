@@ -1324,3 +1324,163 @@ describe('App: Organize Pages and the view toggles (W4.3a S6)', () => {
     expect(ribbonButton('night-reading').getAttribute('aria-pressed')).toBe('false');
   });
 });
+
+describe('App Comments panel (W7.1b S1)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  const innerWidth = window.innerWidth;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    closePanel('right');
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: innerWidth });
+  });
+
+  // One note on page 1, so the panel has a list (and Export is shown); the drawing engine answers
+  // everything else.
+  function commentsEngine(): EngineClient {
+    const scripted = drawingEngine();
+    const inner = scripted.client as unknown as {
+      call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+    };
+    const call = (method: string, params: Record<string, unknown>) =>
+      method === 'comments.list'
+        ? Promise.resolve({
+            threads: [
+              {
+                comment: {
+                  page: 0,
+                  name: 'n1',
+                  type: 'Text',
+                  author: 'Ana',
+                  contents: 'Check the total',
+                  subject: '',
+                  created: null,
+                  modified: null,
+                  state: 'None',
+                  locked: false,
+                  rect: { x0: 0, y0: 0, x1: 10, y1: 10 },
+                },
+                replies: [],
+                status: 'None',
+              },
+            ],
+            truncated: false,
+          })
+        : inner.call(method, params);
+    return { call } as unknown as EngineClient;
+  }
+
+  // Opens a one-page document through the start page's drop zone, as the user does.
+  async function openDocument(): Promise<void> {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(commentsEngine())} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('comments.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+  }
+
+  function commentsPanelButton(): HTMLElement {
+    const el = host.querySelector<HTMLElement>('[data-panel="comments"]');
+    if (el === null) throw new Error('no Comments rail button');
+    return el;
+  }
+
+  function panelButton(label: string): HTMLButtonElement | null {
+    return (
+      [...host.querySelectorAll<HTMLButtonElement>('#app-panel-left button')].find(
+        (button) => button.getAttribute('aria-label') === label,
+      ) ?? null
+    );
+  }
+
+  it('Comments List on the Comment tab shows the panel and reads the list, and stays open when pressed again', async () => {
+    await openDocument();
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (element) => element.textContent === t('ribbon.tab.comment'),
+    );
+    if (tab === undefined) throw new Error('no Comment tab');
+    act(() => {
+      tab.click();
+    });
+    act(() => {
+      host.querySelector<HTMLElement>('[data-command="comments-list"]')?.click();
+    });
+    expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
+    await until(() => host.querySelector('.comments-thread') !== null);
+
+    act(() => {
+      host.querySelector<HTMLElement>('[data-command="comments-list"]')?.click();
+    });
+    expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('with the left rail hidden, the app menu lists Comments and opens the panel', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await openDocument();
+    act(() => {
+      host.querySelector<HTMLButtonElement>(`button[aria-label="${t('appMenu.label')}"]`)?.click();
+    });
+    const commentsItem = (): HTMLElement | undefined =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (element) => element.textContent?.trim() === t('comments.title'),
+      );
+    await until(() => commentsItem() !== undefined);
+    const item = commentsItem();
+    if (item === undefined) throw new Error('no Comments menu item');
+    act(() => {
+      item.click();
+    });
+    expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('comments.title'));
+  });
+
+  it('the panel Import button opens the Import Comments dialog', async () => {
+    await openDocument();
+    act(() => {
+      openPanel('comments');
+    });
+    await until(() => panelButton(t('comments.import.label')) !== null);
+    act(() => {
+      panelButton(t('comments.import.label'))?.click();
+    });
+    await until(() => document.body.textContent?.includes(t('commentsImport.title')) === true);
+  });
+
+  it('the panel Export button opens the Export Comments dialog once the list has a thread', async () => {
+    await openDocument();
+    act(() => {
+      openPanel('comments');
+    });
+    await until(() => panelButton(t('comments.export.label')) !== null);
+    act(() => {
+      panelButton(t('comments.export.label'))?.click();
+    });
+    await until(() => document.body.textContent?.includes(t('commentsExport.title')) === true);
+  });
+});
