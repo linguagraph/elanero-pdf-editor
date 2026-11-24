@@ -252,7 +252,7 @@ export interface CommentListResult {
 export interface CommentPageResult {
   /** the page revision the threads were read at */
   revision: number;
-  /** top to bottom, then left to right, as the panel orders */
+  /** topmost first: the last drawn, as annotation_at hits */
   threads: PageThreadDto[];
 }
 

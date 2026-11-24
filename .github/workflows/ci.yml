@@ -152,6 +152,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       QT_QPA_PLATFORM: offscreen
+      # Print a Python stack on a native abort (exit 134 in tests/benchmarks/test_ui_budgets.py).
+      PYTHONFAULTHANDLER: "1"
       # Hosted Ubuntu runners draw the window about 3x slower than the dev baseline and
       # vary run to run (239-347 ms against the 300 ms first-paint budget): give them headroom
       # without hiding a real regression (tests/benchmarks/test_ui_budgets.py).

@@ -35,10 +35,11 @@ function rect(a: number[]): RectDto {
 describe('commentAt', () => {
   it('agrees with the desktop on every shared vector', () => {
     for (const vector of vectors.comment_at) {
-      const threads = vector.boxes.map(([box, hidden], index) => ({
-        index,
-        comment: { bounds: rect(box), hidden },
-      }));
+      // The vectors list boxes in drawing order (the last is topmost); commentAt takes them topmost
+      // first, as comments.page does, so the list is reversed with each index kept.
+      const threads = vector.boxes
+        .map(([box, hidden], index) => ({ index, comment: { bounds: rect(box), hidden } }))
+        .reverse();
       const hit = commentAt(
         threads,
         { x: vector.point[0] ?? 0, y: vector.point[1] ?? 0 },
@@ -48,14 +49,16 @@ describe('commentAt', () => {
     }
   });
 
-  it('takes the last visible thread under the point and skips hidden ones', () => {
+  it('takes the topmost visible thread under the point', () => {
     const under = { x: 5, y: 5 };
-    const threads = [
-      { id: 'a', comment: { bounds: { x0: 0, y0: 0, x1: 10, y1: 10 }, hidden: false } },
-      { id: 'b', comment: { bounds: { x0: 0, y0: 0, x1: 10, y1: 10 }, hidden: true } },
-    ];
-    expect(commentAt(threads, under, 0)?.id).toBe('a');
-    expect(commentAt(threads, { x: 50, y: 50 }, 0)).toBeNull();
+    const box = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    // Topmost first, as comments.page lists them: the top is drawn last, so it wins the overlap.
+    const top = { id: 'top', comment: { bounds: box, hidden: false } };
+    const hidden = { id: 'hidden', comment: { bounds: box, hidden: true } };
+    const below = { id: 'below', comment: { bounds: box, hidden: false } };
+    expect(commentAt([top, below], under, 0)?.id).toBe('top');
+    expect(commentAt([hidden, below], under, 0)?.id).toBe('below');
+    expect(commentAt([top, below], { x: 50, y: 50 }, 0)).toBeNull();
   });
 });
 

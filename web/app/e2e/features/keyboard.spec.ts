@@ -35,7 +35,7 @@ async function tabTo(page: Page, control: Locator, limit = 30): Promise<void> {
   throw new Error(`Tab did not reach the control within ${limit} presses`);
 }
 
-test('Tab order: the skip link comes first, then the ribbon, then the page; every stop has a ring', async ({
+test('Tab order: the skip link comes first, then the ribbon, then the page; every stop has a ring @a11y', async ({
   page,
 }) => {
   await openStartPage(page);
@@ -63,7 +63,7 @@ test('Tab order: the skip link comes first, then the ribbon, then the page; ever
   }
 });
 
-test('the skip link moves the focus to the document', async ({ page }) => {
+test('the skip link moves the focus to the document @a11y', async ({ page }) => {
   test.skip(!linksTabbableHere(), WEBKIT_LINKS);
   await openStartPage(page);
   await page.keyboard.press('Tab');
@@ -73,7 +73,9 @@ test('the skip link moves the focus to the document', async ({ page }) => {
   await expectVisibleFocus(page, 'after the skip link');
 });
 
-test('F6 cycles the regions on the start page and never drops the focus', async ({ page }) => {
+test('F6 cycles the regions on the start page and never drops the focus @a11y', async ({
+  page,
+}) => {
   await openStartPage(page);
   await tabTo(page, page.getByRole('button', { name: 'Main menu' }));
   await expectVisibleFocus(page, 'Main menu');
@@ -92,7 +94,7 @@ test('F6 cycles the regions on the start page and never drops the focus', async 
   expect((await focusInfo(page)).region).toBe('page');
 });
 
-test('the ribbon tabs move with the arrow keys, and Tab leaves them for the search box', async ({
+test('the ribbon tabs move with the arrow keys, and Tab leaves them for the search box @a11y', async ({
   page,
 }) => {
   await openStartPage(page);
@@ -104,7 +106,7 @@ test('the ribbon tabs move with the arrow keys, and Tab leaves them for the sear
   await expect(page.getByRole('searchbox', { name: 'Search tools' })).toBeFocused();
 });
 
-test('the main menu opens with the focus on its first item, and Esc returns it to the button', async ({
+test('the main menu opens with the focus on its first item, and Esc returns it to the button @a11y', async ({
   page,
 }) => {
   await openStartPage(page);
@@ -120,7 +122,7 @@ test('the main menu opens with the focus on its first item, and Esc returns it t
   await expect(menu).toBeFocused();
 });
 
-test('Preferences: Tab stays inside the dialog, F6 does nothing, Esc returns the focus', async ({
+test('Preferences: Tab stays inside the dialog, F6 does nothing, Esc returns the focus @a11y', async ({
   page,
 }) => {
   await openStartPage(page);
@@ -144,7 +146,7 @@ test('Preferences: Tab stays inside the dialog, F6 does nothing, Esc returns the
   await expect(opener).toBeFocused();
 });
 
-test('nested dialog: Esc closes Keyboard Shortcuts first, then Preferences; focus follows the opener', async ({
+test('nested dialog: Esc closes Keyboard Shortcuts first, then Preferences; focus follows the opener @a11y', async ({
   page,
 }) => {
   await openStartPage(page);
@@ -168,7 +170,9 @@ test('nested dialog: Esc closes Keyboard Shortcuts first, then Preferences; focu
   await expect(prefs).toBeHidden();
 });
 
-test('the command palette: Esc returns the focus to the ribbon search box', async ({ page }) => {
+test('the command palette: Esc returns the focus to the ribbon search box @a11y', async ({
+  page,
+}) => {
   await openStartPage(page);
   const search = page.getByRole('searchbox', { name: 'Search tools' });
   await search.click();

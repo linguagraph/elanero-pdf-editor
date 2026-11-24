@@ -25,7 +25,7 @@ from pdfeditor.model.color import Color
 from pdfeditor.model.fonts import FontRef, FontRefKind
 from pdfeditor.model.pages import FONTS, MarkKind
 from pdfeditor.services import stamping
-from pdfeditor.services.comments import comment_threads, page_threads
+from pdfeditor.services.comments import comment_threads, topmost_threads
 from pdfeditor.services.comments import flattenable as flattenable_comments
 from pdfeditor.services.pages import format_page_ranges
 from pdfeditor.services.redaction import redaction_marks
@@ -354,7 +354,7 @@ def list_comments_page(params: dto.PageParams) -> dto.CommentPageResult:
         revision = session.document.page(params.page).revision
         if not session.engine.capabilities.annotations_read:
             return dto.CommentPageResult(revision=revision, threads=())
-        threads = page_threads(session.document, params.page)
+        threads = topmost_threads(session.document, params.page)
     return dto.CommentPageResult(
         revision=revision,
         threads=tuple(

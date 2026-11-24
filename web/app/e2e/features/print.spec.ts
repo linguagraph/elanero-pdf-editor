@@ -24,7 +24,7 @@ test.describe('engine staged', () => {
   }) => {
     test.fixme(
       browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; needs an issue',
+      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
     );
     const problems = watchPage(page);
     // Stubbed before any page script runs, in the app's frame and in the print iframe alike.
@@ -72,7 +72,7 @@ test.describe('engine staged', () => {
   }) => {
     test.fixme(
       browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; needs an issue',
+      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
     );
     const problems = watchPage(page);
     // Stubbed before any page script runs, in the app's frame and in the print iframe alike.

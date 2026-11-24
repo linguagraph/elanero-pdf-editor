@@ -437,6 +437,17 @@
     min-width: 44px;
     min-height: 44px;
   }
+
+  /* The tab row's other controls: the app menu, Help, the search box and its icon, and "More
+     commands" (W8.5 S7). */
+  .app-menu-button,
+  .ribbon-help,
+  .ribbon-search,
+  .ribbon-search-button,
+  .ribbon-more {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
 }
 
 .app-menu-heading {

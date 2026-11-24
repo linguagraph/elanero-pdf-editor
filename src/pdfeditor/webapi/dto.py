@@ -745,7 +745,7 @@ class PageThreadDto:
 @dataclasses.dataclass(frozen=True, slots=True)
 class CommentPageResult:
     revision: int  # the page revision the threads were read at
-    threads: tuple[PageThreadDto, ...]  # top to bottom, then left to right, as the panel orders
+    threads: tuple[PageThreadDto, ...]  # topmost first: the last drawn, as annotation_at hits
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

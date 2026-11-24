@@ -51,7 +51,7 @@ test.describe('engine staged', () => {
     test.describe(`${scheme} scheme`, () => {
       test.use({ colorScheme: scheme });
 
-      test(`axe: document view (${scheme})`, async ({ page }, testInfo) => {
+      test(`axe: document view (${scheme}) @a11y`, async ({ page }, testInfo) => {
         const problems = watchPage(page);
         await openDocument(page);
         await checkAxe(page, testInfo);
@@ -60,7 +60,7 @@ test.describe('engine staged', () => {
     });
   }
 
-  test('reduced motion: no transition or animation over 0.01 s, and no smooth scrolling', async ({
+  test('reduced motion: no transition or animation over 0.01 s, and no smooth scrolling @a11y', async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -75,7 +75,7 @@ test.describe('engine staged', () => {
     expect(offenders, 'reduced motion overrides').toEqual([]);
   });
 
-  test('reduced motion from the saved preference: no media emulation, same sweep', async ({
+  test('reduced motion from the saved preference: no media emulation, same sweep @a11y', async ({
     page,
   }) => {
     // The app's own switch (Preferences) stores reduceMotion; the app applies it before the first
@@ -97,7 +97,7 @@ test.describe('engine staged', () => {
     expect(offenders, 'reduced motion overrides (saved preference)').toEqual([]);
   });
 
-  test('motion on: the canvas pill keeps its 200 ms transition with both settings off', async ({
+  test('motion on: the canvas pill keeps its 200 ms transition with both settings off @a11y', async ({
     page,
   }) => {
     // Negative check: with the system setting and the app preference both off, the sweep's inputs
@@ -120,7 +120,7 @@ test.describe('engine staged', () => {
       'forced colours and touch emulation are checked on Chromium (Playwright implements them fully there)',
     );
 
-    test('forced colours: the selected tab and the pressed page control keep a visible border', async ({
+    test('forced colours: the selected tab and the pressed page control keep a visible border @a11y', async ({
       page,
     }) => {
       await page.emulateMedia({ forcedColors: 'active' });
@@ -140,7 +140,7 @@ test.describe('engine staged', () => {
       ).toBe(true);
     });
 
-    test('touch: the document view controls are at least 44 px under a coarse pointer', async ({
+    test('touch: the document view controls are at least 44 px under a coarse pointer @a11y', async ({
       browser,
     }, testInfo) => {
       // A touch context: hasTouch makes the coarse pointer match, as on a phone or tablet.

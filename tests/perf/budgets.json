@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "baseline_ref": "v0.4.1",
+  "runner_factors": {
+    "env": "PDFEDITOR_PERF_FACTOR",
+    "default": 1.0,
+    "note": "Multiplies every desktop limit for a known-slow machine. CI runners use the default."
+  },
+  "metrics": [
+    {
+      "id": "D1",
+      "name": "Window to first paint (desktop)",
+      "unit": "ms",
+      "kind": "absolute",
+      "stat": "median of 5",
+      "fixture": null,
+      "limit_ms": 300,
+      "enforce": true,
+      "baseline_ms": 105,
+      "baseline_date": null,
+      "baseline_machine": "Windows 11 dev machine, offscreen (date not recorded in the table; see PLAN.md U11)",
+      "note": "MainWindow() + show() to first paint. Limit about 2.5x the baseline (U11)."
+    },
+    {
+      "id": "D2",
+      "name": "Open 1000 pages to a painted page (desktop)",
+      "unit": "ms",
+      "kind": "absolute",
+      "stat": "median of 5",
+      "fixture": "large_1000",
+      "limit_ms": 250,
+      "enforce": true,
+      "baseline_ms": 88,
+      "baseline_date": null,
+      "baseline_machine": "Windows 11 dev machine, offscreen (date not recorded in the table; see PLAN.md U11)",
+      "note": "Open the 1000-page document to a painted page. Limit about 2.5x the baseline (U11)."
+    },
+    {
+      "id": "D3",
+      "name": "Scroll frame at 1000 pages (desktop)",
+      "unit": "ms",
+      "kind": "absolute",
+      "stat": "median of medians (3 passes)",
+      "fixture": "large_1000",
+      "limit_ms": 16,
+      "enforce": true,
+      "baseline_ms": 5,
+      "baseline_date": null,
+      "baseline_machine": "Windows 11 dev machine, offscreen (date not recorded in the table; see PLAN.md U11)",
+      "note": "One 60 fps frame per scroll step and repaint."
+    },
+    {
+      "id": "D4",
+      "name": "Theme switch (desktop)",
+      "unit": "ms",
+      "kind": "absolute",
+      "stat": "median of 10 switches",
+      "fixture": "text_multipage",
+      "limit_ms": 350,
+      "enforce": true,
+      "baseline_ms": 120,
+      "baseline_date": null,
+      "baseline_machine": "Windows 11 dev machine, offscreen (date not recorded in the table; see PLAN.md U11)",
+      "note": "Light and dark with a document open. Limit about 2.5x the baseline (U11)."
+    },
+    {
+      "id": "D5",
+      "name": "Save of 1000 pages after one edit (desktop)",
+      "unit": "ms",
+      "kind": "absolute",
+      "stat": "median of 3 (after one warm-up save)",
+      "fixture": "perf_mixed_1000",
+      "limit_ms": 8000,
+      "enforce": false,
+      "baseline_ms": null,
+      "baseline_date": null,
+      "baseline_machine": null,
+      "note": "PROVISIONAL, trend only (enforce false): the 8000 ms limit is a placeholder, not measured, so the test records samples but does not assert. Record a Windows dev baseline, set the limit to about 2.5x it, then set enforce to true."
+    }
+  ]
+}
