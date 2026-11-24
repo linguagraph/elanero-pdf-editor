@@ -15,6 +15,7 @@ import {
 } from './registry';
 import { commandDisabledReason, menuSections, ribbonLayout, runCommand } from './run';
 import { addTab, applyDocState, EMPTY_TABS } from '../tabs/tabState';
+import { type CommentToolId, toggleCommentTool } from '../comments/tools';
 
 const SHARED: Record<string, { keys: string[] }> = shortcutTable.commands;
 
@@ -581,3 +582,22 @@ function commandDisabledReasonOf(id: string, current: CommandState): string | nu
   const def = REGISTRY.get(id);
   return def === undefined ? 'missing' : def.enabled(current);
 }
+
+describe('the stamp command', () => {
+  it('is checked while the stamp tool is on', () => {
+    expect(REGISTRY.get('stamp')?.checked?.(state({ commentTool: 'stamp' }))).toBe(true);
+    expect(REGISTRY.get('stamp')?.checked?.(state({ commentTool: 'note' }))).toBe(false);
+  });
+
+  it('turns the stamp tool on, or off when it is already on', () => {
+    const set = vi.fn();
+    const run = (current: CommentToolId | null) =>
+      runCommand(REGISTRY, 'stamp', state({ hasDocument: true, commentTool: current }), {
+        stamp: () => toggleCommentTool(current, 'stamp', set),
+      });
+    expect(run(null)).toBe(true);
+    expect(set).toHaveBeenLastCalledWith('stamp');
+    expect(run('stamp')).toBe(true);
+    expect(set).toHaveBeenLastCalledWith(null);
+  });
+});

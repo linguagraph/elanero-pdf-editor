@@ -302,7 +302,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('callout', 'command.callout.label', 'comment.comments'),
     checked: (state) => state.commentTool === 'callout',
   },
-  cmd('stamp', 'command.stamp.label', 'comment.comments'),
+  {
+    ...cmd('stamp', 'command.stamp.label', 'comment.comments'),
+    checked: (state) => state.commentTool === 'stamp',
+  },
   cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
   {
     ...cmd('rectangle', 'command.rectangle.label', 'comment.drawing'),
