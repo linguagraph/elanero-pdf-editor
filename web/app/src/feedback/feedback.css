@@ -157,3 +157,9 @@
     animation: none !important;
   }
 }
+
+:root[data-reduce-motion='true'] .toast,
+:root[data-reduce-motion='true'] .loading-bar {
+  transition: none !important;
+  animation: none !important;
+}

@@ -40,6 +40,7 @@ afterEach(() => {
   window.localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-accent');
+  document.documentElement.removeAttribute('data-reduce-motion');
 });
 
 function dialog(): HTMLElement | null {
@@ -164,6 +165,35 @@ describe('PreferencesDialog', () => {
     });
     expect(document.documentElement.hasAttribute('data-accent')).toBe(false);
     expect(readPreferences().accent).toBe('blue');
+  });
+
+  it('previews Reduce motion at once, puts the saved choice back on Cancel, keeps it on Apply', () => {
+    const reduce = () =>
+      [...openFromCommand().querySelectorAll('label')]
+        .find((l) => l.textContent === t('prefs.reduceMotion.label'))
+        ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    let scope = openFromCommand();
+    act(() => {
+      reduce()?.click();
+    });
+    expect(document.documentElement.getAttribute('data-reduce-motion')).toBe('true');
+    act(() => {
+      buttonIn(scope, t('prefs.cancel')).click();
+    });
+    expect(document.documentElement.hasAttribute('data-reduce-motion')).toBe(false);
+    expect(readPreferences().reduceMotion).toBe(false);
+
+    scope = openFromCommand();
+    act(() => {
+      reduce()?.click();
+    });
+    act(() => {
+      scope
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(document.documentElement.getAttribute('data-reduce-motion')).toBe('true');
+    expect(readPreferences().reduceMotion).toBe(true);
   });
 
   it('saves the chosen accent on Apply', () => {

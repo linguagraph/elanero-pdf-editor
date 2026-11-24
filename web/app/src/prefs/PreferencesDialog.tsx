@@ -22,6 +22,7 @@ import {
   type TranslationInfoLoader,
 } from '../translate/consent';
 import { ACCENT_CHOICES, applyAccent, isAccentChoice } from '../theme/accent';
+import { applyReduceMotion } from '../theme/motion';
 import type { AccentId } from '../theme/tokens';
 import {
   applyTheme,
@@ -120,6 +121,7 @@ export function PreferencesDialog({
   const cancel = () => {
     applyTheme(readStoredTheme());
     applyAccent(readPreferences().accent);
+    applyReduceMotion(readPreferences().reduceMotion);
     onClose();
   };
   return (
@@ -220,6 +222,12 @@ function PreferencesForm({
   const chooseAccent = (accent: AccentId) => {
     applyAccent(accent);
     update('accent', accent);
+  };
+
+  // Reduce motion previews at once, like the accent; Cancel puts back the saved choice (W8.5 S6).
+  const chooseReduceMotion = (on: boolean) => {
+    applyReduceMotion(on);
+    update('reduceMotion', on);
   };
 
   // The reload is the reset: the theme, accent, recent list and every in-memory copy start from the
@@ -347,7 +355,7 @@ function PreferencesForm({
         <Checkbox
           className="prefs-option"
           isSelected={draft.reduceMotion}
-          onChange={(selected) => update('reduceMotion', selected)}
+          onChange={chooseReduceMotion}
         >
           {t('prefs.reduceMotion.label')}
         </Checkbox>

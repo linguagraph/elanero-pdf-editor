@@ -397,6 +397,11 @@
   }
 }
 
+:root[data-reduce-motion='true'] .app-frame * {
+  transition: none !important;
+  animation: none !important;
+}
+
 /* The phone-width notice under the top bar (W4.2a S7b). It wraps, so it never widens the page. */
 .narrow-notice {
   display: flex;

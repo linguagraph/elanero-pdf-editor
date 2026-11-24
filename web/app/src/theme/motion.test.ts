@@ -1,7 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { PREFS_STORAGE_KEY } from '../prefs/store';
+import { applyReduceMotion, initReduceMotion, REDUCE_MOTION_ATTRIBUTE } from './motion';
 
 // Reduced motion at the source (W8.5 S2). Every stylesheet that starts a transition, an
 // animation or a smooth scroll must turn it off under prefers-reduced-motion, rule by rule:
@@ -113,6 +115,28 @@ function overridesFor(reduceRules: Rule[], selector: string): Map<string, string
   return merged;
 }
 
+// The Reduce motion switch's copy of a rule: the same declarations under
+// `:root[data-reduce-motion='true']`, written beside the media query (W8.5 S6). Returned with the
+// attribute stripped, so it overrides the base selector it names; the rest of the rules are plain.
+const ATTRIBUTE_PREFIX = ":root[data-reduce-motion='true'] ";
+
+function splitAttributeRules(rules: Rule[]): { attr: Rule[]; plain: Rule[] } {
+  const attr: Rule[] = [];
+  const plain: Rule[] = [];
+  for (const rule of rules) {
+    const selectors = rule.selector.split(',').map((s) => s.trim());
+    if (selectors.every((s) => s.startsWith(ATTRIBUTE_PREFIX))) {
+      attr.push({
+        selector: selectors.map((s) => s.slice(ATTRIBUTE_PREFIX.length)).join(', '),
+        decls: rule.decls,
+      });
+    } else {
+      plain.push(rule);
+    }
+  }
+  return { attr, plain };
+}
+
 const files = cssFiles(srcRoot).map((path) => ({
   name: relative(srcRoot, path).replaceAll(String.fromCharCode(92), '/'),
   css: stripComments(readFileSync(path, 'utf8')),
@@ -131,13 +155,53 @@ describe('reduced motion in the stylesheets', () => {
     }
   });
 
+  it('keeps the Reduce motion switch rules in motion.css with the four declarations', () => {
+    const file = files.find((f) => f.name === 'theme/motion.css');
+    expect(file).toBeDefined();
+    const { reduce, rest } = splitReduceBlocks(file?.css ?? '');
+    const system = parseRules(reduce);
+    const switchRules = splitAttributeRules(parseRules(rest)).attr;
+    const four = new Map([
+      ['transition-duration', '0s !important'],
+      ['animation-duration', '0s !important'],
+      ['animation-iteration-count', '1 !important'],
+      ['scroll-behavior', 'auto !important'],
+    ]);
+    for (const [name, value] of four) {
+      expect(
+        system.some((r) => r.decls.get(name) === value),
+        `system ${name}`,
+      ).toBe(true);
+      expect(
+        switchRules.some((r) => r.decls.get(name) === value),
+        `switch ${name}`,
+      ).toBe(true);
+    }
+  });
+
+  for (const file of files) {
+    it(`${file.name}: every reduced-motion selector also has the data-reduce-motion copy`, () => {
+      const { reduce, rest } = splitReduceBlocks(file.css);
+      const copied = new Set(
+        splitAttributeRules(parseRules(rest)).attr.flatMap((r) =>
+          r.selector.split(',').map((s) => s.trim()),
+        ),
+      );
+      const missing = parseRules(reduce)
+        .flatMap((r) => r.selector.split(',').map((s) => s.trim()))
+        .filter((s) => !copied.has(s));
+      expect(missing).toEqual([]);
+    });
+  }
+
   for (const file of files) {
     it(`${file.name}: every moving rule has a reduced-motion override`, () => {
       const { reduce, rest } = splitReduceBlocks(file.css);
-      const reduceRules = parseRules(reduce);
+      const { attr, plain } = splitAttributeRules(parseRules(rest));
+      const reduceRules = [...parseRules(reduce), ...attr];
       const problems: string[] = [];
 
-      for (const rule of parseRules(rest)) {
+      for (const rule of plain) {
         for (const { name, prop, off } of motionDecls(rule)) {
           const value = rule.decls.get(prop) ?? '';
           // A value already off (for example `animation: none`) needs no override.
@@ -158,4 +222,29 @@ describe('reduced motion in the stylesheets', () => {
       expect(problems).toEqual([]);
     });
   }
+});
+
+describe('the Reduce motion switch (W8.5 S6)', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+    document.documentElement.removeAttribute(REDUCE_MOTION_ATTRIBUTE);
+  });
+
+  it('sets data-reduce-motion="true" when on, and removes it when off', () => {
+    applyReduceMotion(true);
+    expect(document.documentElement.getAttribute(REDUCE_MOTION_ATTRIBUTE)).toBe('true');
+    applyReduceMotion(false);
+    expect(document.documentElement.hasAttribute(REDUCE_MOTION_ATTRIBUTE)).toBe(false);
+  });
+
+  it('applies the saved choice on start-up and returns it', () => {
+    window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ reduceMotion: true }));
+    expect(initReduceMotion()).toBe(true);
+    expect(document.documentElement.getAttribute(REDUCE_MOTION_ATTRIBUTE)).toBe('true');
+  });
+
+  it('leaves the attribute off when nothing is saved', () => {
+    expect(initReduceMotion()).toBe(false);
+    expect(document.documentElement.hasAttribute(REDUCE_MOTION_ATTRIBUTE)).toBe(false);
+  });
 });
