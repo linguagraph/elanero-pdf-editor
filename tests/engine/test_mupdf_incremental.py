@@ -159,6 +159,22 @@ def test_signed_flag_document_with_empty_embedded_files_repeats_from_cache(
     assert doc.incremental_bytes(INCREMENTAL) == first
 
 
+def test_layer_toggle_does_not_block_a_later_in_place_save(
+    tmp_path: Path, fixture_pdf: Callable[[str], Path]
+) -> None:
+    """A view toggle writes nothing, so it must not spend the cached in-place update: the second
+    call still returns the first update's bytes (the _edits bump used to make it raise)."""
+    path = tmp_path / "flagged_layers.pdf"
+    shutil.copy2(fixture_pdf("incremental_sigflags_layers"), path)
+    doc = _open_signed(path)
+    first = doc.incremental_bytes(INCREMENTAL)
+    assert first is not None
+    hidden = next(layer for layer in doc.layers() if layer.name == "Hidden layer")
+    doc.set_layer_visible(hidden.id, True)
+    assert doc.incremental_bytes(INCREMENTAL) == first
+    doc.close()
+
+
 def test_writer_failure_raises_with_the_cause_and_keeps_the_lineage_spent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

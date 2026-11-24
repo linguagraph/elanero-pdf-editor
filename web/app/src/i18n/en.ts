@@ -1284,6 +1284,8 @@ export const EN = {
     "This picture is stored inside the page content, so it can't be replaced or exported.",
   'error.REFUSED.shapeNoPaint': 'A shape needs an outline or a fill.',
   'error.REFUSED.shapeWidth': "A shape's line width must be above 0 and at most 72 points.",
+  'error.REFUSED.layersUnsupported': "This document's layers can't be shown or hidden here.",
+  'error.REFUSED.layerLocked': "This layer is locked and can't be shown or hidden.",
   'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',

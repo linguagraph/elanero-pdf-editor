@@ -56,8 +56,5 @@ class LayersPanel(ViewPanel):
         if self._updating or self.view is None:
             return
         visible = item.checkState() == Qt.CheckState.Checked
-        with self.view.session.lock:
-            self.view.session.document.set_layer_visible(
-                item.data(Qt.ItemDataRole.UserRole), visible
-            )
+        self.view.session.set_layer_visible(item.data(Qt.ItemDataRole.UserRole), visible)
         self.view.refresh()
