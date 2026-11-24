@@ -547,6 +547,23 @@ def _redact_rects_pikepdf(data: bytes, page: int, count: int, rect: list[float])
             _approx([float(v) for v in mark.Rect], rect)
 
 
+@host_check("annot_rect_pikepdf")
+def _annot_rect_pikepdf(
+    data: bytes, page: int, subtype: str, rect: list[float], tol: float
+) -> None:
+    """The page has one annotation of ``subtype`` whose /Rect is ``rect`` (PDF points, each edge
+    within ``tol``). A moved or resized comment keeps its subtype and gets its new box."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        found = [a for a in pdf.pages[page].Annots if str(a.get("/Subtype")) == subtype]
+        assert len(found) == 1
+        actual = [float(v) for v in found[0].Rect]
+        assert len(actual) == len(rect)
+        for a, b in zip(actual, rect, strict=True):
+            assert abs(a - b) <= tol, (actual, rect)
+
+
 def _field_attr(node: Any, key: str, default: Any = None) -> Any:
     """A field attribute as a reader sees it: on the widget, or inherited from its parent field
     (PyMuPDF 2.1 writes a text field as a parent with a kid widget, and /T and /V sit there)."""
