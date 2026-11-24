@@ -11,19 +11,21 @@ engine object leaves this module.
 
 from __future__ import annotations
 
+import dataclasses
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import PureWindowsPath
 
 from pdfeditor import actions as layer
+from pdfeditor.actions.edit_geometry import annotation_bounds, is_movable, is_resizable
 from pdfeditor.core.commands.base import Change
 from pdfeditor.core.session import EventKind, SessionEvent
-from pdfeditor.model.annotations import AnnotationModel
+from pdfeditor.model.annotations import FLAG_HIDDEN, AnnotationModel
 from pdfeditor.model.color import Color
 from pdfeditor.model.fonts import FontRef, FontRefKind
 from pdfeditor.model.pages import FONTS, MarkKind
 from pdfeditor.services import stamping
-from pdfeditor.services.comments import comment_threads
+from pdfeditor.services.comments import comment_threads, page_threads
 from pdfeditor.services.comments import flattenable as flattenable_comments
 from pdfeditor.services.pages import format_page_ranges
 from pdfeditor.services.redaction import redaction_marks
@@ -323,6 +325,46 @@ def list_comments(params: dto.HandleParams) -> dto.CommentListResult:
             )
         )
     return dto.CommentListResult(threads=tuple(kept), truncated=len(kept) < len(threads))
+
+
+def _page_comment_dto(a: AnnotationModel) -> dto.PageCommentDto:
+    base = _comment_dto(a)
+    box = annotation_bounds(a)
+    return dto.PageCommentDto(
+        **{f.name: getattr(base, f.name) for f in dataclasses.fields(base)},
+        bounds=dto.RectDto(box.x0, box.y0, box.x1, box.y1),
+        hidden=bool(a.flags & FLAG_HIDDEN),
+        movable=is_movable(a),
+        resizable=is_resizable(a),
+    )
+
+
+def list_comments_page(params: dto.PageParams) -> dto.CommentPageResult:
+    """One page's comment threads, read-only: the web's comment hit testing and Select tool
+    (W7.1a section 3.1). Empty without ``annotations_read``, as ``comments.list``."""
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        count = session.document.page_count
+        if not 0 <= params.page < count:
+            raise RpcFailure(
+                INVALID_ARGS,
+                "params.page: the page is out of range",
+                {"path": "params.page", "pages": count},
+            )
+        revision = session.document.page(params.page).revision
+        if not session.engine.capabilities.annotations_read:
+            return dto.CommentPageResult(revision=revision, threads=())
+        threads = page_threads(session.document, params.page)
+    return dto.CommentPageResult(
+        revision=revision,
+        threads=tuple(
+            dto.PageThreadDto(
+                comment=_page_comment_dto(t.comment),
+                replies=tuple(_comment_dto(r) for r in t.replies),
+            )
+            for t in threads
+        ),
+    )
 
 
 def undo(params: dto.UndoParams) -> dto.HistoryResult:
