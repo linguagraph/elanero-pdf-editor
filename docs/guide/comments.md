@@ -126,7 +126,9 @@ the **Comment** tab (**Ctrl+Shift+C**).
   Holding a key is one undo step; releasing it, or a pause of half a second, starts a new one.
 - **Resize a comment**: with a comment focused, press Alt with an arrow key to resize it from its
   bottom-right corner, by the same steps.
-- Escape clears the selection. Ctrl+Z undoes each move, resize and placement.
+- Escape clears the selection; when the focus is in the comment list, it stays on the page so you keep
+  your place. Ctrl+Z undoes each move, resize and placement.
+- After you add a comment, the web returns to Select and selects the new comment.
 
 ## Limits
 
