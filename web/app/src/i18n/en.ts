@@ -1113,8 +1113,8 @@ export const EN = {
   'attachments.size.mb': '{value} MB',
   'attachments.size.gb': '{value} GB',
 
-  // Layers side panel (W5.2, W7.9 S3): read-only list of the optional content layers. Toggling
-  // them is not built yet (W7.9 S4).
+  // Layers side panel (W5.2, W7.9 S3 and L2): the optional content layers, shown or hidden with a
+  // checkbox. The change is for this view only; it is not saved.
   'layers.title': 'Layers',
   'layers.list': 'Optional content layers',
   'layers.empty': 'This document has no layers.',
@@ -1124,6 +1124,8 @@ export const EN = {
   'layers.visible': 'Visible',
   'layers.hidden': 'Hidden',
   'layers.locked': 'Locked',
+  'layers.viewOnly': 'Showing or hiding a layer changes this view only. It is not saved.',
+  'layers.toggleFailed': 'The layer could not be shown or hidden. Try again.',
 
   // Bookmarks side panel (W5.2): read-only, from the document outline. Editing is pending.
   'bookmarks.title': 'Bookmarks',
