@@ -68,7 +68,20 @@ def comment_threads(doc: Document) -> list[Thread]:
 
 
 def page_threads(doc: Document, index: int) -> list[Thread]:
-    """One page's comments, top to bottom, each with its replies (the web's per-page read)."""
+    """One page's comments, top to bottom, each with its replies (the panel's order)."""
+    return sorted(
+        _annotation_threads(doc, index), key=lambda t: (t.comment.rect.y0, t.comment.rect.x0)
+    )
+
+
+def topmost_threads(doc: Document, index: int) -> list[Thread]:
+    """One page's comments topmost first (the last drawn, as the desktop's annotation_at hits
+    it), each with its replies. The web's per-page read: its hit test takes the first hit."""
+    return list(reversed(_annotation_threads(doc, index)))
+
+
+def _annotation_threads(doc: Document, index: int) -> list[Thread]:
+    """One page's comments in annotation (drawing) order, oldest drawn first."""
     models = [a for a in doc.page(index).annotations() if a.type.is_comment]
     by_id = {a.id: a for a in models}
 
@@ -84,7 +97,7 @@ def page_threads(doc: Document, index: int) -> list[Thread]:
                 thread.replies.append(a)
     for thread in threads.values():
         thread.replies.sort(key=lambda r: (r.created or r.modified or _EPOCH).replace(tzinfo=None))
-    return sorted(threads.values(), key=lambda t: (t.comment.rect.y0, t.comment.rect.x0))
+    return list(threads.values())
 
 
 def flattenable(doc: Document) -> tuple[int, int]:

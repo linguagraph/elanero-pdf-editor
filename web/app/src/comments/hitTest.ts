@@ -13,17 +13,16 @@ export interface HitComment {
   readonly hidden: boolean;
 }
 
-// The thread under a point: the last visible one whose bounds, grown by tol, contain it. The list is
-// read in its own order, so the last thread is the one drawn on top, as the desktop's annotation
-// order has it. Hidden comments are never hit.
+// The thread under a point: the first visible one, in the list's order, whose bounds grown by tol
+// contain it. comments.page lists threads topmost first (the last drawn), as the desktop's
+// annotation_at hits them. Hidden comments are never hit.
 export function commentAt<T extends { readonly comment: HitComment }>(
   threads: readonly T[],
   point: Point,
   tol: number,
 ): T | null {
-  for (let i = threads.length - 1; i >= 0; i--) {
-    const thread = threads[i];
-    if (thread === undefined || thread.comment.hidden) continue;
+  for (const thread of threads) {
+    if (thread.comment.hidden) continue;
     const b = thread.comment.bounds;
     if (
       point.x >= b.x0 - tol &&
