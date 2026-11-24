@@ -187,7 +187,8 @@ message saying whether it was added.
 
 - **Thumbnails.** The **Thumbnails** button on the right rail opens a panel with a small preview of
   every page. Click a preview to go to that page. The panel opens and closes for each open
-  document separately, and it is not remembered after a reload. Layers are not available yet.
+  document separately, and it is not remembered after a reload. The previews follow the layers you
+  show or hide in the Layers panel.
 - **Bookmarks.** The **Bookmarks** button on the right rail opens the document's outline as a tree.
   Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
   With the keyboard, Up and Down move through the entries, Right and Left open and close them,
@@ -219,8 +220,11 @@ message saying whether it was added.
 - **Layers.** The **Layers** button on the left rail lists the optional content layers of the
   document, in the order the file gives them. Each row shows whether the layer is visible in the
   document's default view, and a layer that the file locks is marked **Locked**. Nested layers
-  are indented. If the document has no layers, the panel says so. The panel is read-only for now:
-  you cannot show or hide a layer yet.
+  are indented. If the document has no layers, the panel says so. Tick a layer's checkbox to show
+  it, and untick it to hide it. A locked layer's checkbox is greyed out. This changes the view only:
+  it is not saved, it is not part of Undo, and the document does not count as changed. Printing
+  and exporting use the layers' defaults from the file, not the view. A hidden layer's content is
+  still in the file; use **Sanitize** to remove it.
 - **Search.** The **Search** button on the left rail opens a panel that finds text in the open
   document. Type in the box and press Enter (or **Search**). The search starts at the page you are
   on and wraps round to the first page. Each match is listed with its page and the text around it,

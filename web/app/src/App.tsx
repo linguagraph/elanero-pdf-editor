@@ -397,6 +397,24 @@ export function App({
       stale = true;
     };
   }, [scheduler, jobs]);
+  // The layers panel reads its list again after a change that moves the structure (a snapshot
+  // restore). A layer toggle replies with the list only, so its change event is what redraws the
+  // pages it names. A restart reopens the document under a new handle, which the panel reads again.
+  const [layersRevision, setLayersRevision] = useState(0);
+  const sessionHandle = session?.handle;
+  useEffect(
+    () =>
+      engine.onEvents((events) => {
+        for (const event of events) {
+          if (event.kind !== 'changed' || event.handle !== sessionHandle) continue;
+          scheduler?.noteRevisions(event.revisions);
+          if (event.changes.some((change) => change.kind === 'structure')) {
+            setLayersRevision((value) => value + 1);
+          }
+        }
+      }),
+    [engine, sessionHandle, scheduler],
+  );
   const viewRef = useRef<DocumentViewHandle>(null);
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
@@ -928,6 +946,7 @@ export function App({
             key={activeId}
             rpc={session.rpc}
             handle={session.handle}
+            revision={layersRevision}
             onClose={() => closePanel('left')}
           />
         ) : documentShown &&
