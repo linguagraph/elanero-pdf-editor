@@ -82,7 +82,7 @@ test.describe('engine staged', () => {
     );
     test.use({ hasTouch: true, isMobile: false, viewport: { width: 1366, height: 768 } });
 
-    test('touch: the document view, side panels, app menu, Preferences and a dialog are 44 px', async ({
+    test('touch: the document view, side panels, app menu, Preferences and a dialog are 44 px @a11y', async ({
       page,
     }) => {
       await openDocument(page);

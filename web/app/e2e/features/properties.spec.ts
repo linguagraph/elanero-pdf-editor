@@ -119,7 +119,7 @@ test.describe('engine staged', () => {
     test.describe(`${scheme} scheme`, () => {
       test.use({ colorScheme: scheme });
 
-      test(`axe: Description tab (${scheme})`, async ({ page }, testInfo) => {
+      test(`axe: Description tab (${scheme}) @a11y`, async ({ page }, testInfo) => {
         await openApp(page);
         await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
         const dialog = await openProperties(page);
@@ -127,7 +127,7 @@ test.describe('engine staged', () => {
         await checkAxe(page, testInfo);
       });
 
-      test(`axe: Advanced tab (${scheme})`, async ({ page }, testInfo) => {
+      test(`axe: Advanced tab (${scheme}) @a11y`, async ({ page }, testInfo) => {
         await openApp(page);
         await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
         const dialog = await openProperties(page);
@@ -136,7 +136,7 @@ test.describe('engine staged', () => {
         await checkAxe(page, testInfo);
       });
 
-      test(`axe: Fonts tab (${scheme})`, async ({ page }, testInfo) => {
+      test(`axe: Fonts tab (${scheme}) @a11y`, async ({ page }, testInfo) => {
         await openApp(page);
         await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
         const dialog = await openProperties(page);
@@ -145,7 +145,7 @@ test.describe('engine staged', () => {
         await checkAxe(page, testInfo);
       });
 
-      test(`axe: Security tab (${scheme})`, async ({ page }, testInfo) => {
+      test(`axe: Security tab (${scheme}) @a11y`, async ({ page }, testInfo) => {
         await openApp(page);
         await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
         const dialog = await openProperties(page);

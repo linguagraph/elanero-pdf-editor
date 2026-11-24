@@ -131,7 +131,7 @@ test.describe('engine staged', () => {
 
   // The accessibility line (#554): axe on the document with its link layer, then with the confirm
   // dialog open.
-  test('axe: the link layer and the confirm dialog', async ({ page }, testInfo) => {
+  test('axe: the link layer and the confirm dialog @a11y', async ({ page }, testInfo) => {
     const problems = watchPage(page);
     await stubWindowOpen(page);
     await openApp(page);
