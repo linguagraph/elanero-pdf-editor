@@ -162,9 +162,8 @@ def test_unenforced_row_has_no_unguarded_assert(row: dict) -> None:
     emitter = BENCH_DIR / _emitted_ids()[metric_id][0]
     tree = ast.parse(emitter.read_text(encoding="utf-8"), filename=str(emitter))
     total, unguarded = _guarded_asserts(metric_id, tree)
-    assert (
-        not unguarded
-    ), f"{metric_id} is trend only but asserts unguarded (line {unguarded[0].lineno})"
+    message = f"{metric_id} is trend only but asserts unguarded (line {unguarded[0].lineno})"
+    assert not unguarded, message
     assert total <= 1, f"{metric_id}: the guard is expected in one assert, found {total}"
 
 
