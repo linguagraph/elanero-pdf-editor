@@ -46,6 +46,11 @@ default size), then type its text. A pen draws a stroke while you drag. A polygo
 a click for each corner and finishes on a double-click or Enter; a polygon also closes when you
 click its first corner. Pen, polygon and polyline have no keyboard placement.
 
+The Text Markup group (Highlight, Underline, Strikeout and Squiggly) marks the text you have
+selected, one comment per page, as the desktop does. Press the button after selecting text, and the
+markup is added at once; Undo removes it. With no text selected, Highlight turns on its drag tool
+for a box (for a page with no text), and the other three ask you to select text first.
+
 ## Manage comments
 
 The **Manage** group:
