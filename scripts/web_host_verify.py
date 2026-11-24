@@ -73,11 +73,16 @@ def _parse(path: Path) -> list[Entry]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 1:
-        print("usage: python scripts/web_host_verify.py <host-checks.json>", file=sys.stderr)
+    if not argv:
+        print(
+            "usage: python scripts/web_host_verify.py <host-checks.json> [more.json ...]",
+            file=sys.stderr,
+        )
         return EXIT_BAD
+    entries: list[Entry] = []
     try:
-        entries = _parse(Path(argv[0]))
+        for path in argv:
+            entries.extend(_parse(Path(path)))
     except BadManifest as exc:
         print(f"FAIL {exc}")
         return EXIT_BAD
