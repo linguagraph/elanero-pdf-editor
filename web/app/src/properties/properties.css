@@ -89,3 +89,42 @@
   padding-top: 12px;
   outline: none;
 }
+
+/* The Fonts tab (W7.6 slice B): a wide read-only table that scrolls inside its own region. */
+.properties-fonts {
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.properties-fonts table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.properties-fonts caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+
+.properties-fonts th,
+.properties-fonts td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid currentColor;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.properties-fonts[data-focus-visible] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.properties-fonts-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}

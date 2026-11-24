@@ -188,6 +188,23 @@ def test_fonts_is_refused_while_a_task_runs_and_reads_still_work(
 # -- the read changes nothing -------------------------------------------------------------------
 
 
+def test_fonts_of_a_subset_file_mark_the_subset_and_its_embedding(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle, _ = open_bytes(fixture_pdf("subset_fonts").read_bytes())
+    rows = fonts(handle)["fonts"]
+    assert any(row["embedded"] and row["subset"] for row in rows)
+
+
+def test_fonts_of_a_file_with_embedded_fonts_list_them_as_embedded(
+    web: None, fixture_pdf: Any
+) -> None:
+    handle, _ = open_bytes(fixture_pdf("licensed_fonts").read_bytes())
+    rows = fonts(handle)["fonts"]
+    assert any(row["embedded"] for row in rows)
+    assert all(row["pages"] for row in rows)
+
+
 def test_reads_leave_the_document_state_unchanged(web: None, fixture_pdf: Any) -> None:
     handle, _ = open_bytes(fixture_pdf("text_multipage").read_bytes())
     session = REGISTRY.get(handle)

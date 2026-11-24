@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
-import type { DocInfo } from '../rpc/generated';
+import { RpcError } from '../rpc/client';
+import type { DocInfo, FontRow } from '../rpc/generated';
 import { PropertiesDialog } from './PropertiesDialog';
 import { MAX_FIELD_LENGTH } from './metadata';
 
@@ -63,6 +64,7 @@ async function flush(): Promise<void> {
 function fakeRpc() {
   const call = vi.fn(async (method: string) => {
     if (method === 'session.info') return info;
+    if (method === 'session.fonts') return { fonts: [] };
     if (method === 'actions.run') {
       return {
         label: 'Edit Document Properties',
@@ -231,8 +233,10 @@ describe('the properties tabs (W7.6 slice A)', () => {
     pressKey(advanced, 'ArrowLeft');
     expect(description.getAttribute('aria-selected')).toBe('true');
     pressKey(description, 'End');
-    expect(advanced.getAttribute('aria-selected')).toBe('true');
-    pressKey(advanced, 'Home');
+    await flush();
+    const fonts = document.querySelectorAll('[role="tab"]')[2] as HTMLElement;
+    expect(fonts.getAttribute('aria-selected')).toBe('true');
+    pressKey(fonts, 'Home');
     expect(description.getAttribute('aria-selected')).toBe('true');
   });
 
@@ -279,5 +283,125 @@ describe('the PDF version on the Advanced tab', () => {
     await flush();
     pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
     expect(factValue(t('properties.version'))).toBe(t('properties.empty'));
+  });
+});
+
+function fontRows(): FontRow[] {
+  return [
+    {
+      name: 'Helvetica',
+      type: 'Type1',
+      encoding: 'WinAnsiEncoding',
+      embedded: false,
+      subset: false,
+      pages: [0, 1, 2, 6],
+    },
+    {
+      name: 'Arial',
+      type: 'TrueType',
+      encoding: 'Identity-H',
+      embedded: true,
+      subset: true,
+      pages: [1],
+    },
+  ];
+}
+
+// A fake engine whose session.fonts answers with each of `replies` in turn, then the last one.
+function fontsRpc(...replies: Array<FontRow[] | Error>) {
+  let next = 0;
+  const call = vi.fn(async (method: string) => {
+    if (method === 'session.info') return info;
+    if (method !== 'session.fonts') return {};
+    const reply = replies[Math.min(next, replies.length - 1)] ?? [];
+    next += 1;
+    if (reply instanceof Error) throw reply;
+    return { fonts: reply };
+  });
+  return { call, rpc: { call } as unknown as PageRpc };
+}
+
+function fontsCalls(call: ReturnType<typeof fontsRpc>['call']): number {
+  return call.mock.calls.filter(([method]) => method === 'session.fonts').length;
+}
+
+function fontsTableRows(): string[][] {
+  return [...document.querySelectorAll('.properties-fonts tbody tr')].map((row) =>
+    [...row.querySelectorAll('td')].map((cell) => cell.textContent ?? ''),
+  );
+}
+
+describe('the Fonts tab (W7.6 slice B)', () => {
+  it('reads session.fonts once, when the tab is first shown', async () => {
+    const { call, rpc } = fontsRpc(fontRows());
+    openDialog(rpc);
+    await flush();
+    expect(fontsCalls(call)).toBe(0);
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    pressKey(tabNamed(t('properties.tab.advanced')), 'ArrowRight');
+    await flush();
+    expect(call).toHaveBeenCalledWith('session.fonts', { handle: 'h1' });
+    expect(fontsCalls(call)).toBe(1);
+    pressKey(tabNamed(t('properties.tab.fontsCount', { count: 2 })), 'ArrowLeft');
+    pressKey(tabNamed(t('properties.tab.advanced')), 'ArrowRight');
+    await flush();
+    expect(fontsCalls(call)).toBe(1);
+  });
+
+  it('labels the tab with the count and lists each font with its embedding and pages', async () => {
+    const { rpc } = fontsRpc(fontRows());
+    openDialog(rpc);
+    await flush();
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    pressKey(tabNamed(t('properties.tab.advanced')), 'ArrowRight');
+    await flush();
+    expect(tabNamed(t('properties.tab.fontsCount', { count: 2 }))).toBeTruthy();
+    expect(fontsTableRows()).toEqual([
+      ['Helvetica', 'Type1', 'WinAnsiEncoding', t('properties.fonts.notEmbedded'), '1-3, 7'],
+      ['Arial', 'TrueType', 'Identity-H', t('properties.fonts.subset'), '2'],
+    ]);
+  });
+
+  it('a busy engine shows the busy line, and Retry reads the fonts again', async () => {
+    const busy = new RpcError('BUSY', 'another job is running');
+    const { call, rpc } = fontsRpc(busy, fontRows());
+    openDialog(rpc);
+    await flush();
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    pressKey(tabNamed(t('properties.tab.advanced')), 'ArrowRight');
+    await flush();
+    expect(document.body.textContent).toContain(t('properties.fonts.busy'));
+    const retry = [...document.body.querySelectorAll('button')].find(
+      (el) => el.textContent === t('properties.fonts.retry'),
+    );
+    expect(retry).toBeDefined();
+    act(() => retry?.click());
+    await flush();
+    expect(fontsCalls(call)).toBe(2);
+    expect(fontsTableRows()).toHaveLength(2);
+  });
+
+  it('a failed read shows the failure line and an error toast', async () => {
+    const store = createToastStore();
+    const { rpc } = fontsRpc(new Error('boom'));
+    openDialog(rpc, store);
+    await flush();
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    pressKey(tabNamed(t('properties.tab.advanced')), 'ArrowRight');
+    await flush();
+    const alert = document.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe(t('properties.fonts.failed'));
+    expect(store.getState().visible.some((toast) => toast.kind === 'error')).toBe(true);
+  });
+
+  it('a document with no fonts says so', async () => {
+    const { rpc } = fontsRpc([]);
+    openDialog(rpc);
+    await flush();
+    pressKey(tabNamed(t('properties.tab.description')), 'ArrowRight');
+    pressKey(tabNamed(t('properties.tab.advanced')), 'ArrowRight');
+    await flush();
+    expect(document.body.textContent).toContain(t('properties.fonts.none'));
+    expect(document.querySelector('.properties-fonts')).toBeNull();
   });
 });
