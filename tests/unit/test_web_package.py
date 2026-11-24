@@ -250,3 +250,18 @@ def test_private_copy_refuses_when_fonttools_is_absent(monkeypatch: pytest.Monke
     monkeypatch.setitem(sys.modules, "fontTools", None)
     monkeypatch.setitem(sys.modules, "fontTools.ttLib", None)
     assert private_copy(b"not a font", "PDF Font test") == b""
+
+
+def test_signing_and_ui_stay_in_the_excluded_list() -> None:
+    # Pinned by literal, not only through is_excluded: a regrouped or renamed entry would still
+    # pass the zip check below while the signing code quietly starts shipping (W8.6 F11).
+    assert "services/signing/" in wp.EXCLUDED
+    assert "ui/" in wp.EXCLUDED
+
+
+def test_built_zip_holds_no_signing_or_ui_path(tmp_path: Path) -> None:
+    zip_path = wp.build_zip(tmp_path / "web.zip")
+    with zipfile.ZipFile(zip_path) as zf:
+        names = zf.namelist()
+    assert not [n for n in names if n.startswith("pdfeditor/services/signing/")]
+    assert not [n for n in names if n.startswith("pdfeditor/ui/")]

@@ -147,3 +147,18 @@ describe('no document bytes are stored', () => {
     ]);
   });
 });
+
+describe('a recent entry holds only the name and the time (W8.6 S3 shape pin)', () => {
+  it('stores the name and the time and no other field', () => {
+    // This pins the stored shape only. The encrypted open path itself is not exercised here:
+    // addRecentFile takes the file name alone, so a password cannot reach it from this test.
+    addRecentFile('locked.pdf', 5000);
+    const raw = window.localStorage.getItem(RECENT_STORAGE_KEY) ?? '';
+    expect(raw).toContain('locked.pdf');
+    const stored: unknown = JSON.parse(raw);
+    expect(stored).toEqual([{ name: 'locked.pdf', openedAt: 5000 }]);
+    for (const entry of stored as Record<string, unknown>[]) {
+      expect(Object.keys(entry).sort()).toEqual(['name', 'openedAt']);
+    }
+  });
+});
