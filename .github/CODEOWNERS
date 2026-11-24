@@ -1,2 +1,5 @@
 # Every change to main needs approval from the repository owner.
 * @linguagraph
+
+# The performance budget table: a limit or baseline change needs the run that justifies it.
+tests/perf/budgets.json @linguagraph

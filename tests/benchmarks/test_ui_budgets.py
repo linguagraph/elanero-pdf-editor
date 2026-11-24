@@ -9,6 +9,7 @@ Run them with:  QT_QPA_PLATFORM=offscreen pytest tests/benchmarks/test_ui_budget
 from __future__ import annotations
 
 import os
+import shutil
 import statistics
 import time
 from collections.abc import Callable, Iterator
@@ -17,21 +18,25 @@ import pytest
 from PySide6.QtCore import QEvent, QObject
 from PySide6.QtWidgets import QApplication, QWidget
 
+from pdfeditor.core.commands.document_cmds import SetMetadataCommand
+from pdfeditor.core.session import DocumentSession
+from pdfeditor.model.metadata import Metadata
 from pdfeditor.ui.main_window import MainWindow
 from pdfeditor.ui.theme import Theme, apply_theme
+from tests.perf.table import enforced, limit_ms, metric
 from tests.ui.conftest import isolated_settings, no_animations  # noqa: F401 - autouse here too
 
 pytestmark = [pytest.mark.slow, pytest.mark.gui, pytest.mark.desktop_only]
 
-# Budgets in ms, about 2.5x the baseline (median of 3 sessions on a Windows 11 dev machine,
-# offscreen, Python 3.11, recorded in PLAN.md U11) for slower CI runners.
-# PDFEDITOR_PERF_FACTOR scales them all for a known-slow machine.
+# The limits (ms, about 2.5x the baseline) live in tests/perf/budgets.json, the one table that
+# the web budgets share. PDFEDITOR_PERF_FACTOR scales them all for a known-slow machine.
 FACTOR = float(os.environ.get("PDFEDITOR_PERF_FACTOR", "1"))
-WINDOW_FIRST_PAINT_MS = 300 * FACTOR  # baseline 105 ms: MainWindow() + show() to first paint
-DOCUMENT_FIRST_PAINT_MS = 250 * FACTOR  # baseline 88 ms: open 1000 pages to a painted page
-SCROLL_FRAME_MS = 16 * FACTOR  # one 60 fps frame; baseline 5 ms per scroll step and repaint
-THEME_SWITCH_MS = 350 * FACTOR  # baseline 120 ms: light <-> dark with a document open
 RUNS = 5
+SAVE_RUNS = 3  # D5: median of 3 timed saves, after one warm-up
+
+
+def _budget_ms(metric_id: str) -> float:
+    return limit_ms(metric_id) * FACTOR
 
 
 class _PaintWatch(QObject):
@@ -56,13 +61,23 @@ def _pump_until(done: Callable[[], bool], timeout_s: float = 10.0) -> None:
     QApplication.processEvents()  # the rest of this paint pass
 
 
-def _median_ms(samples: list[float]) -> float:
-    return statistics.median(samples) * 1000
-
-
-def _report(name: str, samples: list[float], budget_ms: float) -> float:
-    median = _median_ms(samples)
-    print(f"\n{name}: median {median:.1f} ms (min {min(samples) * 1000:.1f}), budget {budget_ms}")
+def _check(
+    perf: Callable[[str, list[float]], float], metric_id: str, name: str, samples: list[float]
+) -> float:
+    """Record the samples under ``metric_id`` (seconds) and return the median in ms."""
+    budget = _budget_ms(metric_id)
+    median = perf(metric_id, samples)
+    row = metric(metric_id)
+    if not row["enforce"]:
+        note = " (trend only, not asserted)"
+    elif row["baseline_ms"] is None:
+        # Someone flipped enforce on before a baseline was recorded: say so in the run log.
+        note = " PROVISIONAL limit, no baseline"
+    else:
+        note = ""
+    print(
+        f"\n{name}: median {median:.1f} ms (min {min(samples) * 1000:.1f}), budget {budget}{note}"
+    )
     return median
 
 
@@ -92,7 +107,7 @@ def _new_window(windows: list[MainWindow]) -> MainWindow:
     return w
 
 
-def test_window_first_paint(qtbot, windows: list[MainWindow]) -> None:
+def test_window_first_paint(qtbot, windows: list[MainWindow], perf) -> None:
     _new_window(windows).close()  # first window pays one-off imports, icon and font caches
     samples = []
     for _ in range(RUNS):
@@ -103,10 +118,11 @@ def test_window_first_paint(qtbot, windows: list[MainWindow]) -> None:
         _pump_until(lambda watch=watch: watch.painted)
         samples.append(time.perf_counter() - start)
         w.close()
-    assert _report("window first paint", samples, WINDOW_FIRST_PAINT_MS) < WINDOW_FIRST_PAINT_MS
+    median = _check(perf, "D1", "window first paint", samples)
+    assert median < _budget_ms("D1")
 
 
-def test_large_document_first_paint(qtbot, windows: list[MainWindow], fixture_pdf) -> None:
+def test_large_document_first_paint(qtbot, windows: list[MainWindow], fixture_pdf, perf) -> None:
     w = _new_window(windows)
     w.show()
     qtbot.waitExposed(w)
@@ -123,12 +139,12 @@ def test_large_document_first_paint(qtbot, windows: list[MainWindow], fixture_pd
         view.session.undo_stack.set_clean()
         w.close_current()
         QApplication.processEvents()
-    budget = DOCUMENT_FIRST_PAINT_MS
-    assert _report("1000-page document first paint", samples, budget) < budget
+    median = _check(perf, "D2", "1000-page document first paint", samples)
+    assert median < _budget_ms("D2")
 
 
 def test_scrolling_1000_pages_stays_above_60_fps(
-    qtbot, windows: list[MainWindow], fixture_pdf
+    qtbot, windows: list[MainWindow], fixture_pdf, perf
 ) -> None:
     w = _new_window(windows)
     w.show()
@@ -153,10 +169,11 @@ def test_scrolling_1000_pages_stays_above_60_fps(
         w.renderer.wait_idle(5000)
         QApplication.processEvents()
     w.renderer.wait_idle(5000)
-    assert _report("scroll frame", medians, SCROLL_FRAME_MS) < SCROLL_FRAME_MS
+    median = _check(perf, "D3", "scroll frame", medians)
+    assert median < _budget_ms("D3")
 
 
-def test_theme_switch(qtbot, windows: list[MainWindow], fixture_pdf) -> None:
+def test_theme_switch(qtbot, windows: list[MainWindow], fixture_pdf, perf) -> None:
     w = _new_window(windows)
     w.show()
     qtbot.waitExposed(w)
@@ -174,4 +191,33 @@ def test_theme_switch(qtbot, windows: list[MainWindow], fixture_pdf) -> None:
             samples.append(time.perf_counter() - start)
     finally:
         apply_theme(app, Theme.SYSTEM)
-    assert _report("theme switch", samples, THEME_SWITCH_MS) < THEME_SWITCH_MS
+    median = _check(perf, "D4", "theme switch", samples)
+    assert median < _budget_ms("D4")
+
+
+def test_save_1000_pages_after_one_edit(tmp_path, fixture_pdf, perf) -> None:
+    """D5: a full save (the non-signed path) of the 1000-page fixture after one undoable edit.
+
+    The first save is a warm-up and is not timed. Each timed run works on its own copy, so every
+    save writes the same document. Meant to show a save regression, not a slow runner.
+    """
+    source = fixture_pdf("perf_mixed_1000")
+    samples: list[float] = []
+    for i in range(SAVE_RUNS + 1):
+        target = tmp_path / f"save_{i}.pdf"
+        shutil.copyfile(source, target)
+        session = DocumentSession.open(target)
+        try:
+            assert session.execute(SetMetadataCommand(Metadata(title=f"Save run {i}")))
+            start = time.perf_counter()
+            session.save()
+            elapsed = time.perf_counter() - start
+        finally:
+            session.close()
+        if i > 0:  # run 0 is the warm-up
+            samples.append(elapsed)
+    median = _check(perf, "D5", "save 1000 pages after one edit", samples)
+    # Trend only until a Windows baseline is recorded (budgets.json, enforce): the samples above
+    # still reach the nightly perf-results.json.
+    if enforced("D5"):
+        assert median < _budget_ms("D5")
