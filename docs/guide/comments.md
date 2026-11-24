@@ -77,6 +77,9 @@ The **Manage** group:
 In the web version, with the Select tool, click a comment to select it, Ctrl+click (or Cmd+click)
 to add or remove one, click an empty part of the page or press Escape to clear the selection, and
 press Delete or Backspace to delete the selected comments. Locked comments are not deleted.
+Drag a selected comment to move it. With one selected comment, drag one of its eight handles to
+resize it (a callout keeps its pointer). Each move or resize is one step for Undo; a move of less
+than half a point does nothing. Locked comments do not move or resize.
 
 Select a comment to move or resize it, and copy and paste it (**Ctrl+C** and **Ctrl+V**). The
 **Properties** panel (**Ctrl+E**) changes the color, fill, opacity, border, text and author of the

@@ -548,6 +548,8 @@ export function DocumentView({
   // is dropped when the tool is left (its keys mean nothing to another tool).
   const editObjects = useMemo(() => new ObjectCache(rpc, handle), [rpc, handle]);
   const commentPages = useMemo(() => new CommentPageCache(rpc, handle), [rpc, handle]);
+  // Stable across renders, so the select layer's window listener is not re-registered each render.
+  const commentDeps = useMemo(() => ({ rpc, handle, scheduler }), [rpc, handle, scheduler]);
   const [editSelection, setEditSelection] = useState<EditSelection | null>(null);
   // The paragraph open in the text editor (W6.8a 8a-1). Leaving the Edit tool drops it; the editor
   // commits what was typed when it unmounts (ParagraphEditor), so nothing is lost.
@@ -1453,7 +1455,6 @@ export function DocumentView({
     );
   }
 
-  const commentDeps = { rpc, handle, scheduler };
   const place = (page: number, rect: PageRect, text: string, points: readonly PagePoint[]) => {
     if (commentTool !== null) {
       const stamp = commentTool === 'stamp' ? stampName : '';
@@ -1691,6 +1692,7 @@ export function DocumentView({
                         zoom={zoom}
                         selection={commentSelection}
                         onSelect={setCommentSelection}
+                        transformDeps={commentDeps}
                       />
                     ) : null}
                     {commentTool !== null && sizes !== null ? (
