@@ -8,6 +8,7 @@ from pdfeditor.core.commands.annotation_cmds import (
 )
 from pdfeditor.core.commands.base import Change, ChangeKind, Command, MacroCommand, UndoStack
 from pdfeditor.core.commands.document_cmds import (
+    AddAttachmentCommand,
     ReorderStructCommand,
     SetAccessibilityCommand,
     SetMetadataCommand,
@@ -20,6 +21,7 @@ from pdfeditor.core.commands.snapshot import SnapshotCommand, SnapshotStore
 
 __all__ = [
     "AddAnnotationCommand",
+    "AddAttachmentCommand",
     "Change",
     "ChangeKind",
     "Command",

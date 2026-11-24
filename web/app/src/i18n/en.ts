@@ -1316,6 +1316,9 @@ export const EN = {
   'error.REFUSED.layersUnsupported': "This document's layers can't be shown or hidden here.",
   'error.REFUSED.layerLocked': "This layer is locked and can't be shown or hidden.",
   'error.REFUSED.imageTooLarge': 'This image is too large to add here (at most 50 MB).',
+  'error.REFUSED.attachmentEmpty': "This file is empty, so it can't be attached.",
+  'error.REFUSED.attachmentTooLarge': 'This file is too large to attach here (at most 100 MB).',
+  'error.REFUSED.attachmentName': "This file has no usable name, so it can't be attached.",
   'error.REFUSED.imageTooManyPixels':
     'This image has more pixels than the editor can add (at most 25 million).',
   'error.BUSY': 'Wait for the current task to finish, then try again.',

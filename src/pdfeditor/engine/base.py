@@ -68,6 +68,7 @@ class Capabilities:
     metadata_write: bool = False
     xmp: bool = False
     layers: bool = False
+    attachments_write: bool = False  # add and remove embedded files (W7.9 A1)
     page_ops: bool = False  # insert/delete/reorder/rotate/crop/labels/stamps
     page_marks: bool = False  # find, update and remove headers/watermarks/... added as marks
     content_edit: bool = False
@@ -461,6 +462,19 @@ class Document(Protocol):
     def embedded_files(self) -> list[EmbeddedFile]: ...
 
     def extract_embedded_file(self, name: str) -> bytes: ...
+
+    # Optional (``capabilities.attachments_write``).
+    def add_embedded_file(
+        self, name: str, data: bytes, filename: str, description: str = ""
+    ) -> None:
+        """Embed ``data`` under the key ``name``. Raises EngineError when ``name`` is taken."""
+        ...
+
+    def remove_embedded_file(self, name: str) -> None:
+        """Drop the embedded file ``name`` and its name-tree entry. Raises EngineError when it
+        is not there. The bytes leave the saved file only through a full (garbage-collecting)
+        save."""
+        ...
 
     def layers(self) -> list[LayerInfo]:
         """Optional-content groups in UI order (empty if the document has none)."""
