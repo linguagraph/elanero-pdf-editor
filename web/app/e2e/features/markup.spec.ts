@@ -40,7 +40,7 @@ test.describe('engine staged', () => {
     ({ browserName }) => browserName !== 'chromium',
     'Chromium only: the other engines are tracked in #420',
   );
-  test.use({ viewport: { width: 1280, height: 1000 } });
+  test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('a highlight from a selected word: the panel lists it, undo and redo follow, the saved file keeps it', async ({
     page,
