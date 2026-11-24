@@ -96,7 +96,7 @@ import { RAIL_ICONS } from './layout/railIcons';
 import { closePanel, openPanel, togglePanel, useOpenPanel } from './layout/sidePanels';
 import { APP_VERSION } from './version';
 import { downloadBytes } from './files/downloads';
-import { createSaver } from './save/saver';
+import { createSaver, type SaveOutcome } from './save/saver';
 import { reportSaveOutcome } from './save/saveReport';
 import { pdfFileName } from './save/fileName';
 import { SaveAsDialog } from './save/SaveAsDialog';
@@ -482,6 +482,16 @@ export function App({
     if (id === activeId) viewRef.current?.dropTextEdit();
     docs.closeTab(id);
   };
+  // A save that reached the engine names unnamed comments (a full save), so the list is read again.
+  // A blocked download still ran the save in the engine, so it counts too.
+  const afterSave = (tab: DocumentTab, outcome: SaveOutcome): void => {
+    if (
+      (outcome.status === 'saved' || outcome.status === 'download-blocked') &&
+      tab.handle === session?.handle
+    ) {
+      comments?.noteChange();
+    }
+  };
   // Save writes the document as a download under its own name, and marks it clean (W4.8).
   const saveTab = async (tab: DocumentTab): Promise<void> => {
     const outcome = await saver.save(
@@ -496,8 +506,7 @@ export function App({
     reportSaveOutcome(outcome, downloadBytes, toasts, () => {
       setSaveAsTab(tab);
     });
-    // A save renames the synthetic comment names, so the list is read again (controller note).
-    if (outcome.status === 'saved' && tab.handle === session?.handle) comments?.noteChange();
+    afterSave(tab, outcome);
   };
   // Save As (W4.9) writes a full copy under the name the dialog gave. The copy is then the file the
   // tab is named after, so the tab takes the name; a refused or blocked copy leaves the tab as it was.
@@ -508,6 +517,7 @@ export function App({
     );
     if (outcome.status === 'saved') docs.renameTab(tab.id, outcome.name);
     reportSaveOutcome(outcome, downloadBytes);
+    afterSave(tab, outcome);
   };
   // The page and zoom the document view reports, for the status bar under the document.
   const [viewState, setViewState] = useState<DocumentViewState>({
