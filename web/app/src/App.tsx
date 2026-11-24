@@ -46,6 +46,7 @@ import { startJobWorker } from './engine/start';
 import { createJobWorkerPool, type JobWorkerPool } from './engine/jobPool';
 import { SanitizeDialog } from './sanitize/SanitizeDialog';
 import { FlattenDialog } from './flatten/FlattenDialog';
+import { BackgroundDialog } from './marks/BackgroundDialog';
 import { CropDialog } from './crop/CropDialog';
 import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto, HistoryResult, TranslateParams } from './rpc/generated';
@@ -234,6 +235,8 @@ export function App({
   const [applyOpen, setApplyOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
+  // Background (W7.3): the marks dialog for a colour behind the page content.
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [commentsExportOpen, setCommentsExportOpen] = useState(false);
   const [commentsImportOpen, setCommentsImportOpen] = useState(false);
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
@@ -742,6 +745,8 @@ export function App({
           redo: () => runHistory('redo'),
           // Crop (W4.11) opens the crop dialog for the open document.
           'crop-pages': () => crop.openDialog(),
+          // Background (W7.3) opens the marks dialog; the other marks follow in their slices.
+          'add-background': () => setBackgroundOpen(true),
           // Edit Text & Images (W6.7a S4) turns the Edit tool on; a signed document asks once per tab.
           'edit-text-images': () => {
             if (activeId === null) return;
@@ -1108,6 +1113,19 @@ export function App({
           engine={session.rpc}
           handle={session.handle}
           startWorker={jobs.acquire}
+          onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <BackgroundDialog
+          isOpen={backgroundOpen}
+          onClose={() => setBackgroundOpen(false)}
+          engine={session.rpc}
+          handle={session.handle}
+          startWorker={jobs.acquire}
+          pageCount={activeTab.pages}
+          currentPage={viewState.page}
+          signed={activeTab.signed}
           onChanged={(changed) => scheduler?.noteRevisions(changed?.revisions ?? {})}
         />
       ) : null}

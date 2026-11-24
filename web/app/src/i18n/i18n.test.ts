@@ -115,7 +115,9 @@ describe('tp() plural forms', () => {
   it('uses the singular form of the migrated W4.7 keys at a count of 1', () => {
     expect(tp('organizer.deleted', 1)).toBe('Deleted 1 page');
     expect(tp('search.countTotal', 1)).toBe('1 match');
-    expect(tp('marks.done.removed', 1)).toBe('Removed 1 mark.');
+    expect(tp('marks.done.removed', 1, { kind: 'header and footer' })).toBe(
+      'Removed header and footer from 1 page.',
+    );
   });
 
   it('formats the count with grouping for the locale', () => {
