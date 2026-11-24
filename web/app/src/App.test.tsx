@@ -1098,6 +1098,28 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     }
   });
 
+  it('the callout, pen and polygon and polyline ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    for (const [command, key] of [
+      ['callout', 'comment.tool.callout'],
+      ['pen', 'comment.tool.pen'],
+      ['polygon', 'comment.tool.polygon'],
+      ['polyline', 'comment.tool.polyline'],
+    ] as const) {
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('true');
+      expect(toolbarPressed(t(key))).toBe('true');
+      act(() => {
+        ribbonButton(command).click();
+      });
+      expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('false');
+      expect(toolbarPressed(t(key))).toBe('false');
+    }
+  });
+
   it('Edit Text & Images is off with its reason when the engine lacks content_edit', async () => {
     await openDocument(false, false);
     selectTab(t('ribbon.tab.edit'));

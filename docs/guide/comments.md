@@ -39,8 +39,12 @@ The **Drawing** group:
 - **Pen**: draw freehand. Strokes are smoothed when you release the mouse.
 
 In the web version, the comment toolbar has Sticky Note, Text Box, Rectangle, Highlight, Oval,
-Line and Arrow. A text box, like a sticky note, asks for its text once you place it. A line or
-arrow is drawn by dragging from one end to the other; a click without a drag adds nothing.
+Line, Arrow, Callout, Pen, Polygon and Polyline. A text box, like a sticky note, asks for its text
+once you place it. A line or arrow is drawn by dragging from one end to the other; a click without
+a drag adds nothing. A callout takes two steps: click its tip, then drag its box (or click for the
+default size), then type its text. A pen draws a stroke while you drag. A polygon or polyline takes
+a click for each corner and finishes on a double-click or Enter; a polygon also closes when you
+click its first corner. Pen, polygon and polyline have no keyboard placement.
 
 ## Manage comments
 
