@@ -67,4 +67,12 @@ export class CommentPageCache {
     }
     return request;
   }
+
+  // Drops every list of a page, so the next ask reads it again (after the engine said a comment on
+  // it is gone, the list may still name it).
+  invalidate(page: number): void {
+    for (const [key, entry] of this.entries) {
+      if (entry.page === page) this.entries.delete(key);
+    }
+  }
 }

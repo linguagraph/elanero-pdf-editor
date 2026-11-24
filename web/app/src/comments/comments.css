@@ -19,6 +19,18 @@
   pointer-events: none;
 }
 
+/* The eight resize handles of the one selected comment, 6 px square (HANDLE_PX). */
+.comment-select-handle {
+  position: absolute;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border: 1px solid var(--color-focus-ring);
+  background: var(--color-surface);
+  pointer-events: none;
+}
+
 .comment-preview {
   position: absolute;
   border: 1px dashed var(--color-focus-ring);
@@ -81,4 +93,77 @@
 .comment-note-actions {
   display: flex;
   gap: var(--space-2);
+}
+
+/* The note popup (NotePopup.tsx): a popover beside its note. It takes pointer events itself, since
+   the layer under it takes none. */
+.comment-note-popup {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: min(280px, 90%);
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  pointer-events: auto;
+}
+
+.comment-note-popup-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 0.875em;
+}
+
+.comment-note-popup-date {
+  opacity: 0.75;
+}
+
+.comment-note-popup textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.comment-note-popup-replies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875em;
+}
+
+.comment-note-popup-replies li {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+}
+
+.comment-note-popup-reply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.comment-note-popup-reply input {
+  flex: 1 1 120px;
+  min-width: 0;
+  font: inherit;
+}
+
+.comment-note-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.comment-note-popup button {
+  min-height: 44px;
+  font: inherit;
 }
