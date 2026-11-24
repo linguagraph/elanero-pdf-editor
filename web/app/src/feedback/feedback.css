@@ -80,6 +80,14 @@
   outline-offset: 2px;
 }
 
+/* Touch screens: the dialogs' primary buttons are at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .feedback-primary {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 .job-progress {
   display: flex;
   flex-wrap: wrap;

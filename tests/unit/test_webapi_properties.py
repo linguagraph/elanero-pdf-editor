@@ -9,6 +9,7 @@ checks go through ``tests.hostcheck.record`` so the Pyodide replay runs them too
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Iterator
 from typing import Any
@@ -34,6 +35,9 @@ INFO_KEYS = (
 )
 OWNER_PW = "owner"
 USER_PW = "user"
+# For the ``encrypted_long_password`` fixture: long enough that a substring scan means something.
+LONG_OWNER_PW = "ownerpw-long-9"
+LONG_USER_PW = "userpw-long-9"
 
 
 @pytest.fixture
@@ -297,3 +301,70 @@ def test_an_empty_info_block_adds_no_xmp_packet(web: None, fixture_pdf: Any) -> 
     assert ok(reply)["executed"] is True
     _, saved = save(handle, "copy")
     record("no_xmp_pikepdf", saved)
+
+
+# -- session.security: the owner password and the permissions (W7.6 slice C) --------------------
+
+
+def security(handle: str) -> dict[str, Any]:
+    result: dict[str, Any] = ok(call_raw("session.security", {"handle": handle})[0])
+    return result
+
+
+def unlock_owner(handle: str, password: str) -> bool:
+    unlocked: bool = ok(
+        call_raw("session.unlock_owner", {"handle": handle, "password": password})[0]
+    )["unlocked"]
+    return unlocked
+
+
+def test_owner_password_lifts_the_permission_bits(web: None, fixture_pdf: Any) -> None:
+    # The Security tab shows the bits as the engine reports them. Opened with the user password,
+    # the file's own bits show; after the owner password the engine reports every bit allowed,
+    # which is why the panel adds a note when owner_access is set.
+    handle, _ = open_bytes(fixture_pdf("encrypted").read_bytes(), USER_PW)
+    before = security(handle)
+    assert before["encryption"] == "aes-256"
+    assert before["owner_access"] is False
+    assert before["permissions"]["print"] is True
+    assert before["permissions"]["accessibility"] is True
+    assert before["permissions"]["copy"] is False
+    assert unlock_owner(handle, OWNER_PW) is True
+    after = security(handle)
+    assert after["owner_access"] is True
+    assert all(after["permissions"].values())
+
+
+def test_a_wrong_owner_password_leaves_owner_access_off(web: None, fixture_pdf: Any) -> None:
+    handle, _ = open_bytes(fixture_pdf("encrypted").read_bytes(), USER_PW)
+    assert unlock_owner(handle, "not-the-owner") is False
+    assert security(handle)["owner_access"] is False
+
+
+def test_security_of_a_file_opened_without_a_password(web: None, fixture_pdf: Any) -> None:
+    # The user password is empty, so the file opens with none; only the owner password is set.
+    handle, _ = open_bytes(fixture_pdf("encrypted_owner_only").read_bytes())
+    result = security(handle)
+    assert result["encryption"] == "aes-256"
+    assert result["owner_access"] is False
+
+
+def test_security_replies_never_carry_a_password(
+    web: None, fixture_pdf: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Long, distinct passwords, so a substring scan of the JSON text is meaningful.
+    caplog.set_level(logging.DEBUG)
+    handle, opened = open_bytes(fixture_pdf("encrypted_long_password").read_bytes(), LONG_USER_PW)
+    replies: list[Any] = [opened, security(handle)]
+    wrong = call_raw("session.unlock_owner", {"handle": handle, "password": "ownerpw-wrong-9"})
+    replies.append(wrong[0])
+    right = call_raw("session.unlock_owner", {"handle": handle, "password": LONG_OWNER_PW})
+    replies.append(right[0])
+    assert ok(right[0])["unlocked"] is True
+    replies.append(security(handle))
+    secrets = (LONG_USER_PW, LONG_OWNER_PW)
+    for reply in replies:
+        text = json.dumps(reply)
+        for secret in secrets:
+            assert secret not in text
+    assert all(secret not in record.getMessage() for record in caplog.records for secret in secrets)

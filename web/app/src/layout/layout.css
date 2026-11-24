@@ -390,6 +390,14 @@
   outline-offset: 2px;
 }
 
+/* Touch screens: the dialog's Cancel, Done and Apply buttons are at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .overlay-close {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-frame * {
     transition: none !important;

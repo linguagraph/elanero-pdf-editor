@@ -964,6 +964,99 @@ describe('App comments list refresh (W7.1b S2)', () => {
   });
 });
 
+// Undo and Redo through the ribbon and the header reach the same history step as the keys (the
+// keys are covered above), so the panel must read the list again on each of them.
+describe('App Comments panel (W7.1b)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    closePanel('left');
+    openPanel('comments');
+    closePanel('right');
+    URL.createObjectURL = vi.fn(() => 'blob:undo-test');
+    URL.revokeObjectURL = vi.fn();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    document.body.innerHTML = '';
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // Opens the one-page document with the comments panel open; the open reads the list once.
+  async function openDocument(engine: ReturnType<typeof refreshEngine>): Promise<void> {
+    const connection = fakeEngine(engine.client);
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(<App engine={connection} jobs={jobs as unknown as JobWorkerPool} />);
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('undo.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => engine.lists() === 1);
+    act(() => {
+      connection.emit([undoableState()]);
+    });
+  }
+
+  it('reads the comments list again after Undo from the ribbon', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    act(() => {
+      host.querySelector<HTMLElement>('.ribbon [data-command="undo"]')?.click();
+    });
+    await until(() => engine.lists() === 2);
+    expect(engine.lists()).toBe(2);
+  });
+
+  it('reads the comments list again after Redo from the ribbon', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    act(() => {
+      host.querySelector<HTMLElement>('.ribbon [data-command="redo"]')?.click();
+    });
+    await until(() => engine.lists() === 2);
+    expect(engine.lists()).toBe(2);
+  });
+
+  // The app menu has no Undo or Redo (catalog.ts MENU), so the header's quick-access buttons, which
+  // every width shows, are the second place to press them.
+  it('reads the comments list again after Undo from the header', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    act(() => {
+      host.querySelector<HTMLElement>('.app-header-start [data-command="undo"]')?.click();
+    });
+    await until(() => engine.lists() === 2);
+    expect(engine.lists()).toBe(2);
+  });
+
+  it('reads the comments list again after Redo from the header', async () => {
+    const engine = refreshEngine();
+    await openDocument(engine);
+    act(() => {
+      host.querySelector<HTMLElement>('.app-header-start [data-command="redo"]')?.click();
+    });
+    await until(() => engine.lists() === 2);
+    expect(engine.lists()).toBe(2);
+  });
+});
+
 describe('App comment and redaction tools (W4.3a S7)', () => {
   let host: HTMLDivElement;
   let root: Root;

@@ -104,6 +104,8 @@ security information of the file.
 
 The web version has the same two dialogs, **Encrypt with Password** and **Remove Security**, from the command palette. The change is applied when you save the document, and an Undo is offered after each change. The owner password is asked for only when the file needs it. The passwords you type are not written to the browser's storage.
 
+The **Security** tab of **Document Properties** shows the security of the open file: the method, each permission as Allowed or Not allowed, whether the permissions password has been entered in this session, and any change waiting for the next save. The tab only reads the file. It has no password field; use the two dialogs above to change the security.
+
 ## Limits
 
 - Redaction and sanitizing work on the content Elanero can read. Scanned pages need OCR first.

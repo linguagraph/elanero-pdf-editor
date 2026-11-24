@@ -71,6 +71,15 @@
   outline-offset: 2px;
 }
 
+/* Touch screens: the bubble's buttons and language select are at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .translate-bubble button,
+  .translate-bubble select {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 @media (max-width: 600px) {
   .translate-bubble {
     top: auto !important;
