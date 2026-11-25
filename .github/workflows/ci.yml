@@ -15,6 +15,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # Worker counts, set per repository in Settings > Variables (vars.PYTEST_WORKERS).
+  PYTEST_WORKERS: ${{ vars.PYTEST_WORKERS || '2' }}
 permissions:
   contents: read
 
@@ -140,10 +143,13 @@ jobs:
       # run everything.
       - name: pytest (pull request)
         if: github.event_name == 'pull_request'
-        run: uv run pytest --ignore=tests/benchmarks -m "not slow"
+        run: uv run pytest -n "${{ env.PYTEST_WORKERS }}" --ignore=tests/benchmarks -m "not slow"
       - name: pytest (nightly and release)
         if: github.event_name != 'pull_request'
-        run: uv run pytest
+        run: |
+          uv run pytest -n "${{ env.PYTEST_WORKERS }}" --ignore=tests/benchmarks
+          # The budgets run serially: the xdist workers skip them.
+          uv run pytest tests/benchmarks
 
   test-linux:
     # Offscreen Qt differs enough here to find real bugs, but nothing ships for Linux.
@@ -152,6 +158,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       QT_QPA_PLATFORM: offscreen
+      # Print a Python stack on a native abort (exit 134 in tests/benchmarks/test_ui_budgets.py).
+      PYTHONFAULTHANDLER: "1"
       # Hosted Ubuntu runners draw the window about 3x slower than the dev baseline and
       # vary run to run (239-347 ms against the 300 ms first-paint budget): give them headroom
       # without hiding a real regression (tests/benchmarks/test_ui_budgets.py).
@@ -170,7 +178,8 @@ jobs:
       - run: uv venv && uv pip install -e ".[dev]"
       - run: uv run python scripts/make_fixtures.py
       - run: uv run python scripts/fetch_tessdata.py
-      - run: uv run pytest
+      - run: uv run pytest -n "${{ env.PYTEST_WORKERS }}" --ignore=tests/benchmarks
+      - run: uv run pytest tests/benchmarks
 
   build:
     # One PyInstaller run writes the portable exe and the app folder, and every package is made

@@ -41,8 +41,11 @@ The **Drawing** group:
 In the web version, the comment toolbar has Sticky Note, Text Box, Rectangle, Highlight, Oval,
 Line, Arrow, Callout, Pen, Polygon and Polyline. Beside them, the **Stamp** menu lists the 14
 standard stamps (Approved, Draft, Confidential and the rest); choose one, then click a page to
-place it centred on the click, or press Enter to place it at the centre of the page. Your own image
-stamps are not in the web version yet. A text box, like a sticky note, asks for its text
+place it centred on the click, or press Enter to place it at the centre of the page. Below the
+standard stamps are your own stamps. **Add Custom Stamp…** keeps a PNG or JPEG image (up to 20 MB)
+in this browser; it is then listed with a thumbnail, and placed at its own size (at most 200 points
+on its longer side). **Remove Custom Stamp** deletes one; stamps already placed do not change. A
+stamp added twice is kept once. A text box, like a sticky note, asks for its text
 once you place it. A line or arrow is drawn by dragging from one end to the other; a click without
 a drag adds nothing. A callout takes two steps: click its tip, then drag its box (or click for the
 default size), then type its text. A pen draws a stroke while you drag. A polygon or polyline takes
@@ -123,7 +126,9 @@ the **Comment** tab (**Ctrl+Shift+C**).
   Holding a key is one undo step; releasing it, or a pause of half a second, starts a new one.
 - **Resize a comment**: with a comment focused, press Alt with an arrow key to resize it from its
   bottom-right corner, by the same steps.
-- Escape clears the selection. Ctrl+Z undoes each move, resize and placement.
+- Escape clears the selection; when the focus is in the comment list, it stays on the page so you keep
+  your place. Ctrl+Z undoes each move, resize and placement.
+- After you add a comment, the web returns to Select and selects the new comment.
 
 ## Limits
 

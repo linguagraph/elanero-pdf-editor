@@ -414,6 +414,20 @@ def _red_pixels_pdfium(data: bytes, page: int, clip: list[float], minimum: int) 
     assert _red_count(_pdfium_rgb(data, page), clip) > minimum
 
 
+@host_check("yellow_pixels_pdfium")
+def _yellow_pixels_pdfium(data: bytes, page: int, clip: list[float], minimum: int) -> None:
+    """More than ``minimum`` yellow pixels in the clip: a highlight (1, 0.92, 0) is drawn there."""
+    x0, y0, x1, y1 = clip
+    part = _pdfium_rgb(data, page).crop((int(x0), int(y0), int(x1), int(y1)))
+    raw = part.tobytes()  # RGB bytes, three per pixel
+    yellow = sum(
+        1
+        for r, g, b in zip(raw[0::3], raw[1::3], raw[2::3], strict=True)
+        if r > 200 and g > 200 and b < 120
+    )
+    assert yellow > minimum, f"{yellow} yellow pixels in {clip}"
+
+
 @host_check("no_red_pixels_pdfium")
 def _no_red_pixels_pdfium(data: bytes, page: int, clip: list[float]) -> None:
     """No red ink in the clip: the layer that draws it is hidden in the file's default state."""
@@ -531,6 +545,23 @@ def _redact_rects_pikepdf(data: bytes, page: int, count: int, rect: list[float])
         assert len(marks) == count
         for mark in marks:
             _approx([float(v) for v in mark.Rect], rect)
+
+
+@host_check("annot_rect_pikepdf")
+def _annot_rect_pikepdf(
+    data: bytes, page: int, subtype: str, rect: list[float], tol: float
+) -> None:
+    """The page has one annotation of ``subtype`` whose /Rect is ``rect`` (PDF points, each edge
+    within ``tol``). A moved or resized comment keeps its subtype and gets its new box."""
+    import pikepdf
+
+    with pikepdf.open(io.BytesIO(data)) as pdf:
+        found = [a for a in pdf.pages[page].Annots if str(a.get("/Subtype")) == subtype]
+        assert len(found) == 1
+        actual = [float(v) for v in found[0].Rect]
+        assert len(actual) == len(rect)
+        for a, b in zip(actual, rect, strict=True):
+            assert abs(a - b) <= tol, (actual, rect)
 
 
 def _field_attr(node: Any, key: str, default: Any = None) -> Any:

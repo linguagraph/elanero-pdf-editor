@@ -42,7 +42,8 @@ async function runCommand(page: Page, query: string, option: RegExp): Promise<vo
 // labels and keywords, not ids), then the option is clicked by its data-command attribute.
 async function runCommandById(page: Page, query: string, id: string): Promise<void> {
   await page.getByRole('searchbox', { name: 'Search tools' }).fill(query);
-  await page.locator(`[data-command="${id}"]`).click();
+  // The palette row, not the ribbon button with the same command id.
+  await page.locator(`.palette-row[data-command="${id}"]`).click();
 }
 
 // One dialog opener per engine dialog the jsdom checks cover (W8.5 section 2.3). Each returns once
@@ -112,19 +113,20 @@ test.describe('engine staged', () => {
       test.use({ colorScheme: scheme });
 
       for (const panel of PANELS) {
-        test(`axe: ${panel.name} panel (${scheme})`, async ({ page }, testInfo) => {
+        test(`axe: ${panel.name} panel (${scheme}) @a11y`, async ({ page }, testInfo) => {
           await openDocument(page, panel.file);
-          await page.getByRole('button', { name: panel.name, exact: true }).click();
-          await expect(page.getByRole('button', { name: panel.name, exact: true })).toHaveAttribute(
-            'aria-expanded',
-            'true',
-          );
+          // The rail button, not the panel's own header toggle with the same name. The Thumbnails
+          // panel is open when a document opens, and the rail button closes an open panel, so it
+          // is clicked only when closed.
+          const rail = page.locator(`button.rail-button[title="${panel.name}"]`);
+          if ((await rail.getAttribute('aria-expanded')) !== 'true') await rail.click();
+          await expect(rail).toHaveAttribute('aria-expanded', 'true');
           await checkAxe(page, testInfo);
         });
       }
 
       for (const tab of TABS) {
-        test(`axe: ${tab} ribbon tab (${scheme})`, async ({ page }, testInfo) => {
+        test(`axe: ${tab} ribbon tab (${scheme}) @a11y`, async ({ page }, testInfo) => {
           await openDocument(page);
           await page.locator('.ribbon [role="tab"]', { hasText: tab }).click();
           await expect(page.locator('.ribbon [role="tab"][aria-selected="true"]')).toContainText(
@@ -135,7 +137,7 @@ test.describe('engine staged', () => {
       }
 
       for (const dialog of DIALOGS) {
-        test(`axe: ${dialog.title} dialog (${scheme})`, async ({ page }, testInfo) => {
+        test(`axe: ${dialog.title} dialog (${scheme}) @a11y`, async ({ page }, testInfo) => {
           await openDocument(page);
           await dialog.open(page);
           await expect(page.getByRole('dialog', { name: dialog.title, exact: true })).toBeVisible();

@@ -76,7 +76,7 @@ test.describe('engine staged', () => {
     expect(readFileSync(savedPath)).toEqual(Buffer.from('memo\n'));
 
     // 3. Undo the add: the toast's Undo removes the entry from the list again.
-    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.locator('.toast-action', { hasText: 'Undo' }).click();
     await expect(entry(page, /^memo\.txt/)).toHaveCount(0);
 
     // 4. Open the PDF attachment: it becomes a new tab named after the file.
@@ -92,10 +92,14 @@ test.describe('engine staged', () => {
       .locator('.redact-confirm')
       .getByRole('button', { name: 'Remove', exact: true })
       .click();
-    await expect(page.getByText('Removed notes.txt.', { exact: true })).toBeVisible();
+    // The toast comes after the remove job finishes (a job worker run), so it gets the same long wait
+    // as the other job-backed steps; the default 5 s is too short for it here.
+    await expect(page.getByText('Removed notes.txt.', { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
     await expect(entry(page, /^notes\.txt/)).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.locator('.toast-action', { hasText: 'Undo' }).click();
     await expect(entry(page, /^notes\.txt/)).toBeVisible();
 
     // 6. Remove notes.txt again, then Save As and reopen the copy: the entry is gone from it.

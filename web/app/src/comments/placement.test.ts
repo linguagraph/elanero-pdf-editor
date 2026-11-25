@@ -4,7 +4,7 @@ import { createToastStore } from '../feedback/toasts';
 import { t } from '../i18n/t';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { RpcError } from '../rpc/client';
-import { type PlacementDeps, placeComment } from './placement';
+import { createdComment, type PlacementDeps, placeComment } from './placement';
 
 const rect = { x0: 72, y0: 72, x1: 144, y1: 144 };
 
@@ -32,6 +32,7 @@ function setup(executed = true) {
     rpc: { call } as unknown as PageRpc,
     handle: 'h1',
     scheduler: { noteRevisions },
+    stamps: { read: async () => undefined },
     store,
   };
   return { call, noteRevisions, store, deps };
@@ -40,6 +41,35 @@ function setup(executed = true) {
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+describe('placing a custom stamp', () => {
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e]);
+  const picture = { size: 3, arrayBuffer: async () => bytes.buffer, text: async () => '' };
+  const id = 'a'.repeat(64);
+
+  it('sends the picture as a buffer and the label as the text, with no stamp name', async () => {
+    const { call, deps } = setup();
+    const read = vi.fn(async () => picture);
+    await placeComment({ ...deps, stamps: { read } }, 'stamp', 0, rect, '', [], {
+      id,
+      label: 'Logo',
+    });
+    expect(read).toHaveBeenCalledWith(id);
+    const params = call.mock.calls[0] as unknown as [string, { args: Record<string, unknown> }];
+    const { args } = params[1];
+    expect(args['image']).toBeInstanceOf(ArrayBuffer);
+    expect(args['text']).toBe('Logo');
+    expect(args['stamp']).toBe('');
+  });
+
+  it('a stamp the library no longer has is reported and nothing is sent', async () => {
+    const { call, store, deps } = setup();
+    const stamps = { read: async () => undefined };
+    await placeComment({ ...deps, stamps }, 'stamp', 0, rect, '', [], { id, label: 'Gone' });
+    expect(call).not.toHaveBeenCalled();
+    expect(store.getState().visible[0]?.text).toBe(t('stamp.custom.unreadable'));
+  });
+});
 
 describe('placing a comment', () => {
   it('runs annotations.create with the tool, the page and the box', async () => {
@@ -114,5 +144,42 @@ describe('placing a comment', () => {
     await settle();
     expect(noteRevisions).not.toHaveBeenCalled();
     expect(store.getState().visible.at(-1)?.text).toBe(t('toast.undo.stale'));
+  });
+});
+
+describe('the comment a placement adds (W7.1a)', () => {
+  it('resolves to the page and name the engine returned for the new comment', async () => {
+    const { call, deps } = setup();
+    call.mockImplementationOnce(
+      async () =>
+        ({
+          label: 'Add Rectangle',
+          executed: true,
+          value: [{ page: 0, name: 'abc123' }],
+          changed: { changes: [], revisions: { '0': 3 } },
+          state: { history: 7 },
+        }) as never,
+    );
+    await expect(placeComment(deps, 'rectangle', 0, rect, '')).resolves.toEqual({
+      page: 0,
+      name: 'abc123',
+    });
+  });
+
+  it('resolves to null when nothing was added, so the tool stays on', async () => {
+    const { deps } = setup(false);
+    await expect(placeComment(deps, 'rectangle', 0, rect, '')).resolves.toBeNull();
+  });
+
+  it('reads only one well-formed reference from the value', () => {
+    expect(createdComment([{ page: 2, name: 'n' }])).toEqual({ page: 2, name: 'n' });
+    expect(createdComment(null)).toBeNull();
+    expect(createdComment([{ page: 2 }])).toBeNull();
+    expect(
+      createdComment([
+        { page: 0, name: 'a' },
+        { page: 0, name: 'b' },
+      ]),
+    ).toBeNull();
   });
 });

@@ -29,6 +29,29 @@ function selectionMarks(page: Page, index: number): Locator {
   return page.locator(`[data-page="${index}"] .page-selection-mark`);
 }
 
+// A point on a page 1 text line that the finger would really land on: the element there is the
+// line itself, not an overlay (the canvas pill is centred over the page, so a line's middle can be
+// covered while its ends are clear). The line is tried at a few points across its width. Returns
+// null if no line has one.
+async function firstUncoveredPoint(page: Page): Promise<Point | null> {
+  const lines = pageLines(page, 0);
+  const count = await lines.count();
+  for (let i = 1; i < count; i++) {
+    const box = await lines.nth(i).boundingBox();
+    if (box === null) continue;
+    for (const fraction of [0.5, 0.2, 0.8]) {
+      const point = { x: box.x + box.width * fraction, y: box.y + box.height / 2 };
+      const onText = await page.evaluate(
+        ({ x, y }) =>
+          (document.elementFromPoint(x, y)?.closest('.page-text-line') ?? null) !== null,
+        point,
+      );
+      if (onText) return point;
+    }
+  }
+  return null;
+}
+
 function centre(box: { x: number; y: number; width: number; height: number }): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
@@ -69,7 +92,10 @@ test.describe('engine staged', () => {
     ({ browserName }) => browserName !== 'chromium',
     'touch input goes through CDP, which only Chromium offers',
   );
-  test.use({ hasTouch: true });
+  // A window tall enough that the document view's scroller is not a few hundred pixels high: at
+  // 1280 x 720 it is 248 px, so a handle dragged to the next line sits past its edge and autoscrolls
+  // the selection several lines down.
+  test.use({ hasTouch: true, viewport: { width: 1920, height: 1080 } });
 
   test('a long-press selects the word, the finger extends it, and Copy writes both lines', async ({
     page,
@@ -117,12 +143,15 @@ test.describe('engine staged', () => {
 
     const scroller = page.locator('.doc-view-scroll');
     const before = await scroller.evaluate((element) => element.scrollTop);
-    const line = await pageLines(page, 0).nth(1).boundingBox();
-    if (line === null) throw new Error('page 1 has no text lines to swipe over');
+    // The lines must be drawn before they are hit-tested (boundingBox does not wait). Then start on a
+    // point of a text line that no overlay covers: the canvas pill sits over the page's bottom centre,
+    // and a touch on it is a button press, not a pan of the text.
+    await expect(pageLines(page, 0).nth(2)).toBeVisible();
+    const start = await firstUncoveredPoint(page);
+    if (start === null) throw new Error('page 1 has no text line free of overlays');
 
     // The finger leaves the slop long before LONG_PRESS_MS, so the gesture is a scroll (section 2).
     const cdp = await page.context().newCDPSession(page);
-    const start = centre(line);
     await touchEvent(cdp, 'touchStart', start);
     await dragFinger(cdp, start, { x: start.x, y: start.y - 200 }, 8);
     await touchEvent(cdp, 'touchEnd');

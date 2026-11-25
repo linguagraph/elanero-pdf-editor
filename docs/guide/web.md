@@ -421,6 +421,10 @@ pages: all pages, the current page, or a range such as `1-3, 5`. Then choose the
 - **Uploaded fonts** are kept in the browser's private storage (not in a folder you can see) until
   you remove them, so they are there after you reload. Clear all local data removes them. In a
   browser or private window that clears its storage when the tab closes, they last until then.
+- **Custom stamps** you add (Stamp menu, Add Custom Stamp) are kept in the browser's private
+  storage, like uploaded fonts: they stay until you remove them, and Clear all local data removes
+  them. Placed stamps keep their picture in the document. Where the browser cannot keep them, they
+  last only until the tab closes.
 - **The app's files** are kept by the browser so the editor works offline.
 
 The web version sends nothing to any server while you edit, and has no accounts, analytics or

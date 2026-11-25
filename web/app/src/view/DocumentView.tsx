@@ -81,7 +81,8 @@ import type { CommentRef } from '../comments/hitTest';
 import { CommentPageCache } from '../comments/pageCache';
 import { deleteRefs } from '../comments/panel/edits';
 import { CommentToolbar } from '../comments/CommentToolbar';
-import { type StandardStamp } from '../comments/stamps';
+import { type ChosenStamp, DEFAULT_STAMP, afterStampRemoved } from '../comments/stamps';
+import { createStampLibrary } from '../comments/stampLibrary';
 import { StampMenu } from '../comments/stampTool';
 import type { PagePoint, PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
@@ -502,8 +503,10 @@ export function DocumentView({
   const [commentSelection, setCommentSelection] = useState<readonly CommentRef[]>([]);
   // The note whose popup is open (W7.1a slice 8): one at a time, across pages.
   const [openNote, setOpenNote] = useState<CommentRef | null>(null);
-  // The standard stamp the stamp tool places (W7.3 S6), chosen from the stamp menu.
-  const [stampName, setStampName] = useState<StandardStamp>('Approved');
+  // The stamp the stamp tool places (W7.3 S6, W7.3b S2), chosen from the stamp menu, and the custom
+  // stamp library the menu reads (one per document view).
+  const [stamp, setStamp] = useState<ChosenStamp>(DEFAULT_STAMP);
+  const [stampLibrary] = useState(() => createStampLibrary());
   // The redaction tools (W7.4). The mark tool and a comment tool are not on together.
   const redactionTools = useRedaction({
     rpc,
@@ -523,11 +526,20 @@ export function DocumentView({
     [redactionTools.controller, onToolChange],
   );
   const chooseStamp = useCallback(
-    (stamp: StandardStamp) => {
-      setStampName(stamp);
+    (chosen: ChosenStamp) => {
+      setStamp(chosen);
       chooseCommentTool('stamp');
     },
     [chooseCommentTool],
+  );
+  // A removed custom stamp that was the current one falls back to Approved, and the tool turns off.
+  const stampRemoved = useCallback(
+    (id: string) => {
+      const next = afterStampRemoved(stamp, commentTool, id);
+      setStamp(next.stamp);
+      if (next.tool !== commentTool) chooseCommentTool(next.tool);
+    },
+    [stamp, commentTool, chooseCommentTool],
   );
   const chooseRedacting = useCallback(
     (on: boolean) => {
@@ -551,7 +563,10 @@ export function DocumentView({
   const editObjects = useMemo(() => new ObjectCache(rpc, handle), [rpc, handle]);
   const commentPages = useMemo(() => new CommentPageCache(rpc, handle), [rpc, handle]);
   // Stable across renders, so the select layer's window listener is not re-registered each render.
-  const commentDeps = useMemo(() => ({ rpc, handle, scheduler }), [rpc, handle, scheduler]);
+  const commentDeps = useMemo(
+    () => ({ rpc, handle, scheduler, stamps: stampLibrary }),
+    [rpc, handle, scheduler, stampLibrary],
+  );
   const [editSelection, setEditSelection] = useState<EditSelection | null>(null);
   // The paragraph open in the text editor (W6.8a 8a-1). Leaving the Edit tool drops it; the editor
   // commits what was typed when it unmounts (ParagraphEditor), so nothing is lost.
@@ -1461,8 +1476,24 @@ export function DocumentView({
 
   const place = (page: number, rect: PageRect, text: string, points: readonly PagePoint[]) => {
     if (commentTool !== null) {
-      const stamp = commentTool === 'stamp' ? stampName : '';
-      void placeComment(commentDeps, commentTool, page, rect, text, points, stamp);
+      // A standard stamp goes by its name; a custom one by its library entry (W7.3b S2).
+      const placed =
+        commentTool !== 'stamp'
+          ? ''
+          : stamp.kind === 'standard'
+            ? stamp.name
+            : { id: stamp.id, label: stamp.label };
+      // A comment that is added returns the tool to Select with the new comment selected, as the
+      // desktop does by default (W7.1a Question 3). A failure keeps the tool on to retry.
+      const drawnOn = tabId;
+      void placeComment(commentDeps, commentTool, page, rect, text, points, placed).then(
+        (added) => {
+          if (added === null) return;
+          setCommentTool(null);
+          setCommentSelection([added]);
+          onToolChange?.('select', drawnOn);
+        },
+      );
     }
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one
@@ -1563,7 +1594,7 @@ export function DocumentView({
           {t('view.night')}
         </button>
         <CommentToolbar tool={commentTool} onChoose={chooseCommentTool} />
-        <StampMenu onChoose={chooseStamp} />
+        <StampMenu library={stampLibrary} onChoose={chooseStamp} onRemoved={stampRemoved} />
         <RedactionBar
           state={redactionTools.state}
           onToggle={() => chooseRedacting(!redactionTools.state.active)}

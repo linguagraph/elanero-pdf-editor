@@ -15,9 +15,11 @@ from pdfeditor.actions import action
 from pdfeditor.actions.base import ActionResult, Refused, ensure_idle, execute_all
 from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
 from pdfeditor.actions.edit_geometry import MIN_DRAG
+from pdfeditor.actions.images import check_image
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
 from pdfeditor.model.annotations import (
+    IMAGE_STAMP,
     STANDARD_STAMPS,
     AnnotationModel,
     AnnotationType,
@@ -26,6 +28,7 @@ from pdfeditor.model.annotations import (
 )
 from pdfeditor.model.color import Color
 from pdfeditor.model.geometry import MarkupArea, PageRects, Point, Quad, Rect, simplify
+from pdfeditor.services.custom_stamps import image_size, stamp_rect
 
 # The size of a sticky note's icon, in points (the desktop's NoteTool uses the same).
 NOTE_SIZE = 20.0
@@ -121,6 +124,27 @@ def build_stamp(page: int, rect: Rect, name: str, author: str = "") -> Annotatio
         opacity=style.opacity,
         author=author,
         icon=name,
+    )
+
+
+def build_image_stamp(
+    page: int, rect: Rect, data: bytes, label: str, author: str = ""
+) -> AnnotationModel:
+    """A custom image stamp: the PNG or JPEG ``data`` drawn in ``rect``, named ``label``. The
+    desktop's StampTool and the web's STAMP tool both build through here."""
+    style = DEFAULT_STYLES[AnnotationType.STAMP]
+    return AnnotationModel(
+        AnnotationType.STAMP,
+        page,
+        rect,
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        contents=label,
+        icon=IMAGE_STAMP,
+        image=data,
     )
 
 
@@ -246,7 +270,8 @@ class CreateAnnotation:
     drag gets the tool's default size where the tool has one (text box, callout). A callout's
     ``rect`` is its box and its single tip is ``points[0]``. Pen, line, arrow, polygon and
     polyline use ``points`` and ignore ``rect``. A stamp is placed at the top-left corner of
-    ``rect`` (a click is a zero-size rect) and takes its name from ``stamp``."""
+    ``rect`` (a click is a zero-size rect) and takes its name from ``stamp``, or, when ``image``
+    holds PNG or JPEG bytes, is that custom image stamp, labelled ``text``."""
 
     tool: CommentTool
     page: int
@@ -255,6 +280,7 @@ class CreateAnnotation:
     author: str = ""
     points: tuple[Point, ...] = ()
     stamp: str = ""
+    image: bytes | None = None
 
 
 _UNDO_LABELS = {
@@ -345,18 +371,37 @@ def _check_text(text: str) -> None:
         raise Refused(f"a comment's text takes at most {MAX_TEXT_BYTES // 1024} KiB")
 
 
+def _build_image_stamp(args: CreateAnnotation, page: Rect, point: Point) -> AnnotationModel | None:
+    """A custom image stamp centred on the click, at its own size (desktop parity)."""
+    if args.stamp:
+        raise Refused("a custom stamp takes no standard stamp name")
+    data = args.image or b""
+    check_image(data)
+    size = image_size(data)
+    if size is None:
+        raise Refused("Only PNG and JPEG images can be added here.", reason="image_format")
+    if not (page.x0 <= point.x <= page.x1 and page.y0 <= point.y <= page.y1):
+        return None  # the click is off the page
+    rect = stamp_rect(point, size)
+    return build_image_stamp(args.page, rect, data, args.text, args.author)
+
+
 def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
     """The comment ``args`` describes, or None when the gesture adds nothing (off the page, too
     small, or a text tool with no text). Raises Refused for input the web can't legitimately send.
     """
     tool = args.tool
     _check_text(args.text)
+    if args.image is not None and tool is not CommentTool.STAMP:
+        raise Refused("only a stamp takes an image")
     if tool in _TEXT_TOOLS and not args.text.strip():
         return None
     if tool is CommentTool.STAMP:
+        point = Point(args.rect.x0, args.rect.y0)
+        if args.image is not None:
+            return _build_image_stamp(args, page, point)
         if args.stamp not in STANDARD_STAMPS:
             raise Refused("a stamp must be one of the standard stamps")
-        point = Point(args.rect.x0, args.rect.y0)
         if not (page.x0 <= point.x <= page.x1 and page.y0 <= point.y <= page.y1):
             return None  # the click is off the page
         return build_stamp(args.page, standard_stamp_box(point), args.stamp, args.author)

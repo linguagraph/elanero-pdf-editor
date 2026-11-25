@@ -35,7 +35,7 @@ test.describe('engine staged', () => {
   }, testInfo) => {
     test.fixme(
       browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; needs an issue',
+      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
     );
     const problems = watchPage(page);
     await openApp(page);
@@ -69,7 +69,7 @@ test.describe('engine staged', () => {
   test('save as writes a new name and renames the tab', async ({ browserName, page }, testInfo) => {
     test.fixme(
       browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; needs an issue',
+      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
     );
     const problems = watchPage(page);
     await openApp(page);

@@ -51,8 +51,9 @@ function thread(list: Locator, text: string): Locator {
 
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
-  // A taller viewport than the default 720 px, so the page points used below stay on screen.
-  test.use({ viewport: { width: 1280, height: 1000 } });
+  // A taller viewport than the default 720 px, so the page points used below stay on screen. At
+  // 1280 px the Comment tab's Manage group overflows and the Comments List button is not clickable.
+  test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('a sticky note, a rectangle, a reply, a status and an edit: the saved file keeps them', async ({
     page,
@@ -69,6 +70,12 @@ test.describe('engine staged', () => {
     await page.mouse.click(note.x, note.y);
     await page.getByRole('textbox', { name: 'Note text' }).fill('Check the margin');
     await page.getByRole('button', { name: 'Add note', exact: true }).click();
+    // The note is added when the tool returns to Select (W7.1a): wait for that, so the Rectangle
+    // click below is not reset by the note's reply arriving after it.
+    await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
 
     // Rectangle: a drag draws the box (a click alone would not).
     await page

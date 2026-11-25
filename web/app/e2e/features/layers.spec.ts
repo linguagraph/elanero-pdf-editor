@@ -26,7 +26,8 @@ test.describe('engine staged', () => {
     // Hide the shown layer: its checkbox unticks, its row says Hidden, and the page loses ink (the
     // layer's text is no longer drawn).
     const before = await inkPixels(page, 0);
-    await shown.uncheck();
+    // A controlled checkbox: a click asks the app to hide the layer, and the checkbox follows.
+    await shown.click();
     await expect(shown).not.toBeChecked();
     await expect(list.getByRole('listitem').filter({ hasText: 'Shown layer' })).toContainText(
       'Hidden',
@@ -34,7 +35,8 @@ test.describe('engine staged', () => {
     await expect.poll(() => inkPixels(page, 0)).toBeLessThan(before);
 
     // Show the hidden layer again: the page gains ink back, the panel lists it as Visible.
-    await hidden.check();
+    // Controlled like the other checkbox: the click asks the app, and the checkbox follows the reply.
+    await hidden.click();
     await expect(hidden).toBeChecked();
     await expect(list.getByRole('listitem').filter({ hasText: 'Hidden layer' })).toContainText(
       'Visible',

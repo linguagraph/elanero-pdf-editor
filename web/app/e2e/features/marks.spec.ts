@@ -26,6 +26,7 @@ async function openMarkDialog(page: Page, button: string, title: string) {
 }
 
 test.describe('engine staged', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   test('add a background and a header with <<page>>, save, reopen, then remove and undo', async ({
@@ -35,7 +36,7 @@ test.describe('engine staged', () => {
   }, testInfo) => {
     test.fixme(
       browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; needs an issue',
+      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
     );
     const problems = watchPage(page);
     await openApp(page);
@@ -46,14 +47,23 @@ test.describe('engine staged', () => {
     const background = await openMarkDialog(page, 'Background', 'Background');
     await background.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(background).toBeHidden();
-    await expect(page.getByText('Marks added.', { exact: true })).not.toHaveCount(0);
+    // The toast comes only when the apply job ends, which can take longer than the default 5 s.
+    await expect(page.getByText('Marks added.', { exact: true })).not.toHaveCount(0, {
+      timeout: 60_000,
+    });
+    // The background's toast stays on screen for 8 s, so the header's check below would pass before
+    // the header's job ends, and Save would race it. Dismiss it, so that check waits for the header.
+    await page.locator('.toast', { hasText: 'Marks added.' }).locator('.toast-dismiss').click();
+    await expect(page.getByText('Marks added.', { exact: true })).toHaveCount(0);
 
     // Header & footer: a centre header that numbers the pages.
     const header = await openMarkDialog(page, 'Header & Footer', 'Header & Footer');
     await header.getByRole('textbox', { name: 'Header Center', exact: true }).fill('Page <<page>>');
     await header.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(header).toBeHidden();
-    await expect(page.getByText('Marks added.', { exact: true })).not.toHaveCount(0);
+    await expect(page.getByText('Marks added.', { exact: true })).not.toHaveCount(0, {
+      timeout: 60_000,
+    });
 
     // Save, then reopen the saved bytes in a fresh page: the dialog reads the header back.
     const saved = await saveDownload(page);

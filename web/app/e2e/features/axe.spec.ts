@@ -22,18 +22,18 @@ for (const scheme of SCHEMES) {
   test.describe(`${scheme} scheme`, () => {
     test.use({ colorScheme: scheme });
 
-    test(`axe: start page (${scheme})`, async ({ page }, testInfo) => {
+    test(`axe: start page (${scheme}) @a11y`, async ({ page }, testInfo) => {
       await openStartPage(page);
       await checkAxe(page, testInfo);
     });
 
-    test(`axe: Preferences dialog (${scheme})`, async ({ page }, testInfo) => {
+    test(`axe: Preferences dialog (${scheme}) @a11y`, async ({ page }, testInfo) => {
       await openStartPage(page);
       await openPreferences(page);
       await checkAxe(page, testInfo);
     });
 
-    test(`axe: Keyboard Shortcuts dialog (${scheme})`, async ({ page }, testInfo) => {
+    test(`axe: Keyboard Shortcuts dialog (${scheme}) @a11y`, async ({ page }, testInfo) => {
       await openStartPage(page);
       await openPreferences(page);
       await page.getByRole('button', { name: 'Keyboard Shortcuts…', exact: true }).click();
@@ -41,7 +41,7 @@ for (const scheme of SCHEMES) {
       await checkAxe(page, testInfo);
     });
 
-    test(`axe: command palette (${scheme})`, async ({ page }, testInfo) => {
+    test(`axe: command palette (${scheme}) @a11y`, async ({ page }, testInfo) => {
       await openStartPage(page);
       // Typing in the ribbon's search box opens the palette with that text as its query.
       await page.getByRole('searchbox', { name: 'Search tools' }).click();
@@ -54,13 +54,14 @@ for (const scheme of SCHEMES) {
 
 // The marks dialogs (W7.3 S3) need a document, so they run once the engine is staged.
 test.describe('engine staged', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   for (const [button, title] of [
     ['Header & Footer', 'Header & Footer'],
     ['Background', 'Background'],
   ] as const) {
-    test(`axe: ${title} dialog`, async ({ page }, testInfo) => {
+    test(`axe: ${title} dialog @a11y`, async ({ page }, testInfo) => {
       await openApp(page);
       await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
       await page.locator('.ribbon [role="tab"]', { hasText: 'Organize' }).click();
