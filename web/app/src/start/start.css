@@ -1,34 +1,90 @@
-/* The start page (W4.2b): one column at phone width, the drop zone is a dashed box. */
+/* The start page (W4.2b, #626): one centred column, 45rem at most. Sizes are CSS px tokens, so
+   browser zoom scales the page evenly; the only width-dependent rules are the two media queries. */
 .start-page {
   display: grid;
   gap: var(--space-4);
-  max-width: 40rem;
+  max-width: 45rem;
+  margin-inline: auto;
 }
 
-.start-heading {
+.start-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.start-logo {
+  flex: none;
+  width: 64px;
+  height: 64px;
+}
+
+.start-title {
   margin: 0;
-  font-size: var(--font-size-title);
+  color: var(--color-text);
+  font-size: calc(var(--font-size-title) * 1.4);
   font-weight: 600;
+}
+
+.start-tagline {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+}
+
+.start-heading,
+.start-recent-heading {
+  margin: 0;
+  color: var(--color-text);
+  font-size: calc(var(--font-size-body) + 2px);
+  font-weight: 600;
+}
+
+.start-recent-heading {
+  margin-bottom: var(--space-2);
 }
 
 .start-drop {
   display: grid;
-  justify-items: start;
-  gap: var(--space-3);
-  padding: var(--space-5);
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
   border: 2px dashed var(--color-border-strong);
   border-radius: var(--radius-large);
   background: var(--color-surface);
+  text-align: center;
+}
+
+/* A PDF dragged over the page (set by StartPage): the focus ring colour, not the accent, because
+   the accent is below 3:1 on some dark presets (the design's section 4). */
+.start-drop[data-dragging='true'] {
+  border: 2px solid var(--color-focus-ring);
+  background: var(--color-surface-alt);
+}
+
+.start-drop-icon {
+  display: flex;
+  color: var(--color-text-muted);
 }
 
 .start-drop-text {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.start-drop-or {
   margin: 0;
   color: var(--color-text-muted);
 }
 
 .start-open {
-  min-height: 2.25rem;
-  padding: 0 var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--space-5);
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-base);
   background: var(--color-accent);
@@ -38,7 +94,10 @@
 }
 
 .start-open:focus-visible,
-.start-recent-name:focus-visible {
+.start-recent-name:focus-visible,
+.start-pending-cancel:focus-visible,
+.start-footer-button:focus-visible,
+.start-footer a:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -46,12 +105,6 @@
 .start-hint {
   margin: 0;
   color: var(--color-text-muted);
-}
-
-.start-recent-heading {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-body);
-  font-weight: 600;
 }
 
 .start-recent-list {
@@ -95,7 +148,68 @@
   cursor: pointer;
 }
 
-.start-pending-cancel:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+.start-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.start-footer-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Narrow windows (200 % zoom on a 1366 px screen is 683 CSS px): the logo stacks over the text,
+   the card and button take the full width, and the page starts closer to the top. */
+@media (max-width: 767px) {
+  .start-page {
+    padding-top: var(--space-4);
+  }
+
+  .start-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .start-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .start-drop {
+    padding: var(--space-4);
+  }
+
+  .start-open {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 768px) {
+  .start-page {
+    padding-top: calc(var(--space-6) * 2);
+  }
+}
+
+/* Touch targets: at least 44 CSS px (W1.6 section 12, the W8.5 rule). */
+@media (pointer: coarse) {
+  .start-open,
+  .start-recent-name,
+  .start-pending-cancel,
+  .start-footer-button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

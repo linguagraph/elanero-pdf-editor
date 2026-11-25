@@ -98,7 +98,6 @@ import type { SearchMarks } from './search/search';
 import { RailButton } from './layout/RailButton';
 import { RAIL_ICONS } from './layout/railIcons';
 import { closePanel, openPanel, togglePanel, useOpenPanel } from './layout/sidePanels';
-import { APP_VERSION } from './version';
 import { downloadBytes } from './files/downloads';
 import { createSaver, type SaveOutcome } from './save/saver';
 import { reportSaveOutcome } from './save/saveReport';
@@ -1391,6 +1390,7 @@ export function App({
             onOpen={() => docs.openPicker()}
             onRecent={(name) => docs.openPicker(name)}
             onFiles={docs.openFiles}
+            onAbout={() => setAboutOpen(true)}
           />
         ) : null}
         {documentShown && session !== null && scheduler !== null ? (
@@ -1431,13 +1431,6 @@ export function App({
             scheduler={scheduler}
           />
         ) : null}
-        {documentShown ? null : (
-          <>
-            <h1>{t('app.name')}</h1>
-            <p>{t('app.version', { version: APP_VERSION })}</p>
-            <About />
-          </>
-        )}
       </div>
     </AppFrame>
   );

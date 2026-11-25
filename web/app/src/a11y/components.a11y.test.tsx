@@ -104,6 +104,7 @@ describe('component axe checks (W8.5 S1)', () => {
         onOpen={() => undefined}
         onRecent={() => undefined}
         onFiles={() => undefined}
+        onAbout={() => undefined}
       />,
     );
     await expectAccessible(host);

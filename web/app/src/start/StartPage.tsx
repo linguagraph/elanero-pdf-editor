@@ -1,8 +1,11 @@
-import { type ReactNode, useId } from 'react';
+import { type ReactNode, useId, useState } from 'react';
+import { SOURCE_URL } from '../about';
 import type { PendingOpen } from '../documents/useDocuments';
 import { formatDate } from '../i18n/format';
 import { t } from '../i18n/t';
 import type { RecentFile } from '../recent/recentFiles';
+import { Icon } from '../theme/Icon';
+import { APP_VERSION } from '../version';
 import './start.css';
 
 export interface StartPageProps {
@@ -17,11 +20,14 @@ export interface StartPageProps {
   onOpen(): void;
   onRecent(name: string): void;
   onFiles(files: readonly File[]): void;
+  // Opens the About overlay from the footer (the same overlay as the app menu).
+  onAbout(): void;
 }
 
 // Shown when no document tab is open (W1.6 section 3). The Open button is the keyboard path to the
-// file picker; the drop zone is the pointer path, and its text says the same thing for screen
-// readers. Nothing here reads the file: the parent decides what a chosen file does.
+// file picker; a PDF dropped anywhere on the page opens too (the card lights up while one is over
+// the page), and the card's text says the same thing for screen readers. Nothing here reads the
+// file: the parent decides what a chosen file does.
 export function StartPage({
   recent,
   pickHint,
@@ -31,40 +37,73 @@ export function StartPage({
   onOpen,
   onRecent,
   onFiles,
+  onAbout,
 }: StartPageProps) {
   const headingId = useId();
   const dropId = useId();
   const pendingId = useId();
   const recentId = useId();
+  const [dragging, setDragging] = useState(false);
   return (
-    <section className="start-page" aria-labelledby={headingId}>
+    <section
+      className="start-page"
+      aria-labelledby={headingId}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDragLeave={(event) => {
+        // Leaving one child for another keeps the state; only leaving the page clears it.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        onFiles(Array.from(event.dataTransfer.files));
+      }}
+    >
+      <div className="start-hero">
+        <img
+          className="start-logo"
+          src={`${import.meta.env.BASE_URL}icons/elanero-256.png`}
+          alt={''}
+          width={64}
+          height={64}
+        />
+        <div>
+          <h1 className="start-title">{t('app.name')}</h1>
+          <p className="start-tagline">{t('start.tagline')}</p>
+        </div>
+      </div>
       <h2 id={headingId} className="start-heading">
         {t('start.heading')}
       </h2>
       <div
         className="start-drop"
         aria-describedby={dropId}
-        onDragOver={(event) => {
-          event.preventDefault();
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          onFiles(Array.from(event.dataTransfer.files));
-        }}
+        data-dragging={dragging ? 'true' : undefined}
       >
+        <span className="start-drop-icon" aria-hidden="true">
+          <Icon name="upload" size={32} />
+        </span>
         <p id={dropId} className="start-drop-text">
           {t('start.drop')}
         </p>
+        <p className="start-drop-or">{t('start.drop.or')}</p>
         <button type="button" className="start-open" onClick={onOpen}>
+          <Icon name="folder-open" />
           {t('start.open')}
         </button>
       </div>
       {loading ?? null}
       {pending.length === 0 ? null : (
         <section className="start-pending" aria-labelledby={pendingId}>
-          <h3 id={pendingId} className="start-recent-heading">
+          <h2 id={pendingId} className="start-recent-heading">
             {t('start.pending.heading')}
-          </h3>
+          </h2>
           <ul className="start-pending-list">
             {pending.map((entry) => (
               <li key={entry.id}>
@@ -90,9 +129,9 @@ export function StartPage({
         </p>
       )}
       <section className="start-recent" aria-labelledby={recentId}>
-        <h3 id={recentId} className="start-recent-heading">
+        <h2 id={recentId} className="start-recent-heading">
           {t('start.recent.heading')}
-        </h3>
+        </h2>
         {recent.length === 0 ? (
           <p>{t('start.recent.empty')}</p>
         ) : (
@@ -116,6 +155,16 @@ export function StartPage({
           </ul>
         )}
       </section>
+      <footer className="start-footer">
+        <span>{t('start.footer.version', { version: APP_VERSION })}</span>
+        <span>{t('about.licence')}</span>
+        <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
+          {t('about.source')}
+        </a>
+        <button type="button" className="start-footer-button" onClick={onAbout}>
+          {t('about.title')}
+        </button>
+      </footer>
     </section>
   );
 }

@@ -37,6 +37,15 @@ You don't have to wait for the engine. You can open or drop a PDF while Elanero 
 under "Waiting to open" and opens as soon as the engine is ready. To drop a waiting file, press
 **Don't open** beside its name.
 
+## The start page
+
+With no document open, the start page shows the Elanero name and a short description, then the
+**Open a PDF** card. Press **Open file** to pick a PDF, or drop PDF files anywhere on the page: the
+card lights up while a file is over the page, and a dropped PDF opens in a new tab.
+
+The footer at the bottom shows the version and the licence, links to the source code of this
+version, and has an **About Elanero** button that opens the same About panel as the app menu.
+
 ## Install the app
 
 Use your browser's own install option. In Chrome and Edge, use the install icon in the address bar
@@ -139,7 +148,7 @@ message saying whether it was added.
   icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
 - **Quick access and help.** Above the ribbon, next to the menu button, the quick-access buttons
   are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
-  button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu shows the version, the licence and
+  button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu, or at the bottom of the start page, shows the version, the licence and
   a link to the source code. Close in the app menu closes the open document. Select and Hand switch
   the tool of the open tab (see Hand tool below). Save works (see Saving below).
 - **Undo and Redo.** Undo (Ctrl+Z) and Redo (Ctrl+Y) step back and forward through the changes to
