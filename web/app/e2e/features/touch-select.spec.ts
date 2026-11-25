@@ -123,9 +123,30 @@ test.describe('engine staged', () => {
     // The finger leaves the slop long before LONG_PRESS_MS, so the gesture is a scroll (section 2).
     const cdp = await page.context().newCDPSession(page);
     const start = centre(line);
+    const probe = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const sc = document.querySelector('.doc-view-scroll') as HTMLElement | null;
+      const cs = sc ? getComputedStyle(sc) : null;
+      return {
+        hit: el ? `${el.tagName}.${el.className}` : 'none',
+        hitTouchAction: el ? getComputedStyle(el).touchAction : 'none',
+        scrollerOverflow: cs ? `${cs.overflowY}` : 'none',
+        scrollerTouchAction: cs ? cs.touchAction : 'none',
+        scrollH: sc ? sc.scrollHeight : -1,
+        clientH: sc ? sc.clientHeight : -1,
+        scrollTop: sc ? sc.scrollTop : -1,
+      };
+    }, start);
+    console.log('DIAG swipe probe ' + JSON.stringify(probe) + ' start ' + JSON.stringify(start));
     await touchEvent(cdp, 'touchStart', start);
     await dragFinger(cdp, start, { x: start.x, y: start.y - 200 }, 8);
     await touchEvent(cdp, 'touchEnd');
+    console.log(
+      'DIAG swipe after ' +
+        (await scroller.evaluate((element) => element.scrollTop)) +
+        ' before ' +
+        before,
+    );
 
     await expect
       .poll(() => scroller.evaluate((element) => element.scrollTop))
@@ -193,6 +214,16 @@ test.describe('engine staged', () => {
     await page.keyboard.press('Control+C');
     await expect(page.getByText('Copied to clipboard.', { exact: true })).toBeVisible();
     const written = await copiedTexts(page);
+    console.log('DIAG handle lines ' + JSON.stringify(all.slice(0, 5)));
+    console.log(
+      'DIAG handle target ' +
+        JSON.stringify(target) +
+        ' last ' +
+        JSON.stringify(last) +
+        ' endHandle ' +
+        JSON.stringify(endHandle),
+    );
+    console.log('DIAG handle written ' + JSON.stringify(written));
     expect(written).toHaveLength(1);
     expect(written[0]).toBe(`${all[1]}\n${all[2]}\n${all[3]}`);
 
