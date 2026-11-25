@@ -56,6 +56,8 @@ export async function openPdf(page: Page, name: string, buffer: Buffer): Promise
 
 // Counts the dark pixels of one rendered page canvas. A blank canvas gives 0; a page with text
 // gives more. The sample is every 17th pixel, which is enough to tell a painted page from a blank.
+// Only opaque pixels count: the engine renders RGBA, so the unpainted background is transparent
+// (red 0), and counting it would hide a change to the page's ink.
 export async function inkPixels(page: Page, pageIndex: number): Promise<number> {
   return page.evaluate((index) => {
     const canvas = document.querySelector<HTMLCanvasElement>(
@@ -66,7 +68,7 @@ export async function inkPixels(page: Page, pageIndex: number): Promise<number> 
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
     let ink = 0;
     for (let offset = 0; offset < pixels.length; offset += 4 * 17) {
-      if (pixels[offset]! < 128) ink += 1;
+      if (pixels[offset]! < 128 && pixels[offset + 3]! >= 128) ink += 1;
     }
     return ink;
   }, pageIndex);
