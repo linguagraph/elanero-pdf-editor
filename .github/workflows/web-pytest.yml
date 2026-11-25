@@ -75,7 +75,7 @@ jobs:
       - name: Install the npm packages (exact, from the lockfile)
         if: ${{ inputs.run_web != 'false' }}
         working-directory: web/spike
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Restore the PyMuPDF wheel from the cache
         if: ${{ inputs.run_web != 'false' }}

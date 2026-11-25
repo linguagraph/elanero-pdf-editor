@@ -76,7 +76,7 @@ jobs:
       - name: Install the npm packages (exact, from the lockfile)
         if: needs.changes.outputs.web == 'true'
         working-directory: web/app
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Licence notice is up to date (stdlib Python, no uv sync)
         if: needs.changes.outputs.web == 'true'
         run: python3 scripts/make_web_licences.py --check
