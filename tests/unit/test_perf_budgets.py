@@ -30,6 +30,10 @@ BENCH_DIR = ROOT / "tests" / "benchmarks"
 ID_PATTERN = re.compile(r"^[DW]\d+$")
 # Calls that record a metric: name -> index of the positional argument holding the id.
 EMITTERS = {"_check": 1, "perf": 0}
+# Metrics measured by a script, not a Python budget test: W1 is the web build's gzip size, checked
+# by web/app/scripts/check-size.ts (design 2.3). Its tests below check the script and its workflow.
+EXTERNAL_EMITTERS = {"W1": "web/app/scripts/check-size.ts"}
+W1_BUDGET_TS = ROOT / "web" / "app" / "src" / "deploy" / "budget.ts"
 COMMON_FIELDS = (
     "id",
     "unit",
@@ -109,7 +113,10 @@ def test_every_row_has_an_emitter_and_every_emitter_has_a_row() -> None:
     emitted = _emitted_ids()
     assert rows, "the budget table has no metrics"
     assert set(emitted) - rows == set(), "budget tests record ids missing from budgets.json"
-    assert rows - set(emitted) == set(), "budgets.json rows have no budget test"
+    assert (
+        rows - set(emitted) - set(EXTERNAL_EMITTERS) == set()
+    ), "budgets.json rows have no budget test"
+    assert set(EXTERNAL_EMITTERS) - rows == set(), "external emitters with no budgets.json row"
 
 
 def test_each_metric_has_one_emitting_call_site() -> None:
@@ -154,7 +161,9 @@ def test_enforce_is_a_bool_and_needs_a_baseline(row: dict) -> None:
 
 
 @pytest.mark.parametrize(
-    "row", [r for r in load()["metrics"] if not r["enforce"]], ids=lambda r: r["id"]
+    "row",
+    [r for r in load()["metrics"] if not r["enforce"] and r["id"] not in EXTERNAL_EMITTERS],
+    ids=lambda r: r["id"],
 )
 def test_unenforced_row_has_no_unguarded_assert(row: dict) -> None:
     # The emitter must not assert against the limit unless enforced("<id>") gates it.
@@ -171,6 +180,21 @@ def test_unenforced_row_has_no_unguarded_assert(row: dict) -> None:
 def test_unknown_metric_id_names_the_path_and_known_ids() -> None:
     with pytest.raises(BudgetTableError, match=r"no metric D9 in .*budgets\.json; known: D1, D2"):
         metric("D9")
+
+
+def test_w1_budget_matches_the_table() -> None:
+    # Read as text: budget.ts is TypeScript, and this test does not import it.
+    text = W1_BUDGET_TS.read_text(encoding="utf-8")
+    match = re.search(r"export const GZIP_BUDGET_BYTES = ([\d_]+);", text)
+    assert match, f"no GZIP_BUDGET_BYTES constant in {W1_BUDGET_TS}"
+    assert int(match.group(1).replace("_", "")) == metric("W1")["limit"]
+
+
+def test_w1_size_check_runs_in_web_pytest() -> None:
+    script = ROOT / EXTERNAL_EMITTERS["W1"]
+    assert script.is_file(), f"{script} is missing"
+    workflow = (ROOT / ".github" / "workflows" / "web-pytest.yml").read_text(encoding="utf-8")
+    assert "scripts/check-size.ts" in workflow, "web-pytest.yml does not run the W1 size check"
 
 
 def test_table_is_codeowned() -> None:

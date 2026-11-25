@@ -76,6 +76,20 @@
       "baseline_date": null,
       "baseline_machine": null,
       "note": "PROVISIONAL, trend only (enforce false): the 8000 ms limit is a placeholder, not measured, so the test records samples but does not assert. Record a Windows dev baseline, set the limit to about 2.5x it, then set enforce to true."
+    },
+    {
+      "id": "W1",
+      "name": "First-load gzip bytes (web build)",
+      "unit": "bytes",
+      "kind": "hard",
+      "stat": "deterministic, one build",
+      "fixture": null,
+      "limit": 40000000,
+      "enforce": false,
+      "baseline_ms": null,
+      "baseline_date": null,
+      "baseline_machine": null,
+      "note": "PROVISIONAL label (no timing baseline; W1 counts bytes). The 40 MB decimal hard limit is enforced by the exit code of web/app/scripts/check-size.ts, run by web-pytest.yml on every web PR, not by this table's enforce flag. web/app/src/deploy/budget.ts must carry the same limit."
     }
   ]
 }
