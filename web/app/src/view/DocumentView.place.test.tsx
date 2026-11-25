@@ -164,9 +164,10 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
     );
   });
 
-  it('keeps the page in view when the toolbar switches to two pages', async () => {
+  it('keeps the page in view when the layout switches to two pages', async () => {
+    const viewRef = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView rpc={fakeRpc(10)} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={fakeRpc(10)} handle="doc-1" />);
     });
     await flush();
     const before = computeColumn(sizes(10), 1).boxes;
@@ -174,7 +175,7 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
     scrollTo(top);
     const anchor = viewAnchor(before, top);
     act(() => {
-      button('Two pages')?.click();
+      viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: false });
     });
     const spreads = computeSpreads(sizes(10), 1, false).boxes;
     expect(scroller().scrollTop).toBeCloseTo(

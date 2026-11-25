@@ -38,6 +38,8 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
   'export-comments',
   'import-comments',
   'translate-selection',
+  // Clear marks has no desktop id of its own: the desktop's mark tool has no clear-all command.
+  'clear-redaction-marks',
 ]);
 
 // Desktop commands the web does not offer (W4.3b): New Window and Exit have no meaning in a browser
@@ -120,6 +122,7 @@ const ICON_OVERRIDES: Readonly<Record<string, IconName>> = {
   'save-as': 'save',
   'extract-image': 'image-down',
   'mark-text': 'text-search',
+  'clear-redaction-marks': 'eraser',
   'translate-selection': 'languages',
   'whats-different': 'info',
   'install-app': 'upload',
@@ -253,6 +256,13 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('mark-whole-pages', 'command.mark-whole-pages.label', 'protect.redact'),
   cmd('redaction-properties', 'command.redaction-properties.label', 'protect.redact', ALWAYS),
   cmd('apply-redactions', 'command.apply-redactions.label', 'protect.redact', CAN_APPLY_REDACTIONS),
+  // Clears every mark on the document, as the Comment strip's Clear button did (no confirmation).
+  cmd(
+    'clear-redaction-marks',
+    'command.clear-redaction-marks.label',
+    'protect.redact',
+    CAN_APPLY_REDACTIONS,
+  ),
   aliased(
     cmd('sanitize-document', 'command.sanitize-document.label', 'protect.cleanup'),
     'command.sanitize-document.keywords',
@@ -347,7 +357,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('fit-width', 'command.fit-width.label', 'view.zoom'),
   cmd('fit-page', 'command.fit-page.label', 'view.zoom'),
   cmd('actual-size', 'command.actual-size.label', 'view.zoom'),
-  cmd('single-page', 'command.single-page.label', 'view.display'),
+  {
+    ...cmd('single-page', 'command.single-page.label', 'view.display'),
+    checked: (state) => state.view?.layout === 'single',
+  },
   // The page layouts are toggles (W1.6 section 9): the one the view is in shows as pressed.
   {
     ...cmd('single-page-continuous', 'command.single-page-continuous.label', 'view.display'),

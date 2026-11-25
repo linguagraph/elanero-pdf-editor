@@ -19,9 +19,9 @@ async function openProtect(page: Page): Promise<void> {
   await page.locator('.ribbon [role="tab"]', { hasText: 'Protect' }).click();
 }
 
-// The document toolbar's redaction group: its marks count and its Clear and Apply buttons.
+// The ribbon's Redact group (the Protect tab): its marks count, and the Clear marks and Apply commands.
 function redactBar(page: Page) {
-  return page.getByRole('group', { name: 'Redaction', exact: true });
+  return page.getByRole('group', { name: 'Redact', exact: true });
 }
 
 // The Redactions panel's rail button; its name gains the item count when there are marks.
@@ -59,7 +59,7 @@ test.describe('engine staged', () => {
     await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
 
     // Apply asks first; the confirmation removes the content under the mark.
-    await redactBar(page).getByRole('button', { name: 'Apply redactions', exact: true }).click();
+    await redactBar(page).getByRole('button', { name: 'Apply', exact: true }).click();
     const confirm = page.getByRole('dialog').filter({ hasText: 'Apply redactions?' });
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Apply now', exact: true }).click();
@@ -161,7 +161,7 @@ test.describe('engine staged', () => {
     }
     await expect(redactBar(page).getByText('2 marked', { exact: true })).toBeVisible();
 
-    await redactBar(page).getByRole('button', { name: 'Apply redactions', exact: true }).click();
+    await redactBar(page).getByRole('button', { name: 'Apply', exact: true }).click();
     await page
       .getByRole('dialog')
       .filter({ hasText: 'Apply redactions?' })

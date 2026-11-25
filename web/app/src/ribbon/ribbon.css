@@ -69,6 +69,14 @@
   justify-content: center;
 }
 
+/* The mark count drawn in the Protect group, beside its commands. */
+.ribbon-count {
+  align-self: center;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
 .ribbon-group-label {
   font-size: var(--font-size-small);
   color: var(--color-text-muted);

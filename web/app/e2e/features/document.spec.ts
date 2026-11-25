@@ -153,14 +153,13 @@ test.describe('engine staged', () => {
         await openDocument(page);
         expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
 
-        // The controls the brief lists: the canvas pill, the document tabs and the view toolbar.
+        // The controls the brief lists: the canvas pill and the document tabs (the ribbon has its own tests).
         const selectors = [
           '.canvas-pill button',
           '.canvas-pill input',
           '.doc-tab',
           '.doc-tab-close',
           '.doc-tabs-menu-button',
-          '.doc-view-toolbar button',
         ];
         const small: string[] = [];
         for (const selector of selectors) {

@@ -1,9 +1,8 @@
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
-import { t } from '../i18n/t';
-import { DocumentView } from './DocumentView';
+import { DocumentView, type DocumentViewHandle } from './DocumentView';
 import type { ViewTool } from './viewTool';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,7 +40,16 @@ afterEach(() => {
 async function mount(tool: ViewTool, onToolChange?: (next: ViewTool) => void): Promise<void> {
   act(() => {
     root.render(
-      <DocumentView rpc={fakeRpc()} handle="h" tool={tool} onToolChange={onToolChange} />,
+      <DocumentView
+        ref={viewRef}
+        rpc={fakeRpc()}
+        handle="h"
+        tool={tool}
+        onToolChange={onToolChange}
+        onCommentToolChange={(next) => {
+          commentTool = next;
+        }}
+      />,
     );
   });
   await act(async () => {
@@ -52,7 +60,16 @@ async function mount(tool: ViewTool, onToolChange?: (next: ViewTool) => void): P
 function rerender(tool: ViewTool, onToolChange?: (next: ViewTool) => void): void {
   act(() => {
     root.render(
-      <DocumentView rpc={fakeRpc()} handle="h" tool={tool} onToolChange={onToolChange} />,
+      <DocumentView
+        ref={viewRef}
+        rpc={fakeRpc()}
+        handle="h"
+        tool={tool}
+        onToolChange={onToolChange}
+        onCommentToolChange={(next) => {
+          commentTool = next;
+        }}
+      />,
     );
   });
 }
@@ -109,11 +126,15 @@ function drag(element: HTMLElement, init: Partial<PointerInit> = {}): void {
   pointer(element, 'pointerup', { ...start, x: start.x - 50, y: start.y - 100 });
 }
 
-function commentButton(): HTMLButtonElement {
-  const group = host.querySelector(`[role="group"][aria-label="${t('comment.toolbarLabel')}"]`);
-  const button = group?.querySelector<HTMLButtonElement>('button');
-  if (!button) throw new Error('no comment tool button');
-  return button;
+// The comment tools are in the ribbon, not the view, so the test reads the tool through
+// onCommentToolChange and turns one on through the view's handle.
+let commentTool: string | null = null;
+const viewRef = createRef<DocumentViewHandle>();
+
+function chooseComment(): void {
+  act(() => {
+    viewRef.current?.setCommentTool('note');
+  });
 }
 
 describe('DocumentView with the Hand tool (W4.10)', () => {
@@ -182,19 +203,15 @@ describe('DocumentView with the Hand tool (W4.10)', () => {
   it('hands the view to Select when a comment tool is chosen', async () => {
     const onToolChange = vi.fn();
     await mount('select', onToolChange);
-    act(() => {
-      commentButton().click();
-    });
+    chooseComment();
     expect(onToolChange).toHaveBeenCalledWith('select');
   });
 
   it('turns a comment tool off when the Hand tool is chosen', async () => {
     await mount('select');
-    act(() => {
-      commentButton().click();
-    });
-    expect(commentButton().getAttribute('aria-pressed')).toBe('true');
+    chooseComment();
+    expect(commentTool).toBe('note');
     rerender('hand');
-    expect(commentButton().getAttribute('aria-pressed')).toBe('false');
+    expect(commentTool).toBeNull();
   });
 });

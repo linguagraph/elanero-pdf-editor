@@ -38,7 +38,7 @@ The **Drawing** group:
 - **Polygon** and **Polyline**: click each corner or point, then double-click to finish.
 - **Pen**: draw freehand. Strokes are smoothed when you release the mouse.
 
-In the web version, the comment toolbar has Sticky Note, Text Box, Rectangle, Highlight, Oval,
+In the web version, the Comment tab has Sticky Note, Text Box, Rectangle, Highlight, Oval,
 Line, Arrow, Callout, Pen, Polygon and Polyline. Beside them, the **Stamp** menu lists the 14
 standard stamps (Approved, Draft, Confidential and the rest); choose one, then click a page to
 place it centred on the click, or press Enter to place it at the centre of the page. Below the

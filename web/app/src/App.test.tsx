@@ -37,19 +37,17 @@ function drawingEngine(options: { marks?: boolean; contentEdit?: boolean } = {})
     if (method === 'session.close') return Promise.resolve({});
     if (method === 'redaction.list') {
       const marks = options.marks
-        ? [
-            {
-              page: 0,
-              name: 'm1',
-              rect: { x0: 10, y0: 10, x1: 80, y1: 40 },
-              fill: null,
-              overlay_text: '',
-              text_color: null,
-              contents: '',
-              author: '',
-              locked: false,
-            },
-          ]
+        ? [1, 2].map((n) => ({
+            page: 0,
+            name: `m${n}`,
+            rect: { x0: 10, y0: 10, x1: 80, y1: 40 },
+            fill: null,
+            overlay_text: '',
+            text_color: null,
+            contents: '',
+            author: '',
+            locked: false,
+          }))
         : [];
       return Promise.resolve({ marks, truncated: false });
     }
@@ -1096,7 +1094,7 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     act(() => {
       zone.dispatchEvent(drop);
     });
-    await until(() => host.querySelector('.doc-view-toolbar') !== null);
+    await until(() => host.querySelector('.doc-view') !== null);
   }
 
   function ribbonButton(command: string): HTMLElement {
@@ -1115,35 +1113,49 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     });
   }
 
-  function toolbarPressed(label: string): string | null | undefined {
-    const found = [...host.querySelectorAll<HTMLButtonElement>('.doc-view-toolbar button')].find(
-      (el) => el.textContent?.trim() === label,
-    );
-    return found?.getAttribute('aria-pressed');
-  }
-
-  it('has every toolbar button do its job in the open document', async () => {
+  it('the document has no tool strip above it: the ribbon holds the commands', async () => {
     await openDocument();
-    const click = (label: string) => {
-      const found = [...host.querySelectorAll<HTMLButtonElement>('.doc-view-toolbar button')].find(
-        (el) => el.textContent?.trim() === label,
-      );
-      if (found === undefined) throw new Error(`no toolbar button ${label}`);
-      act(() => found.click());
-    };
-    click(t('view.layoutTwoPage'));
-    expect(toolbarPressed(t('view.layoutTwoPage'))).toBe('true');
-    click(t('view.night'));
-    expect(toolbarPressed(t('view.night'))).toBe('true');
-    for (const key of ['comment.tool.note', 'comment.tool.rectangle', 'comment.tool.highlight']) {
-      click(t(key as Parameters<typeof t>[0]));
-      expect(toolbarPressed(t(key as Parameters<typeof t>[0]))).toBe('true');
-    }
-    click(t('redact.mark'));
-    expect(toolbarPressed(t('redact.mark'))).toBe('true');
-    expect(toolbarPressed(t('comment.tool.highlight'))).toBe('false');
+    expect(host.querySelector('.doc-view-toolbar')).toBeNull();
   });
 
+  it('Single page runs the single-page layout, and the ribbon shows it pressed', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.view'));
+    expect(ribbonButton('single-page').getAttribute('aria-pressed')).toBe('false');
+    act(() => {
+      ribbonButton('single-page').click();
+    });
+    expect(ribbonButton('single-page').getAttribute('aria-pressed')).toBe('true');
+    expect(ribbonButton('two-up-continuous').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('Clear marks empties the marks, with no confirmation', async () => {
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    const clear = vi.spyOn(RedactionController.prototype, 'clear').mockResolvedValue(undefined);
+    act(() => {
+      ribbonButton('clear-redaction-marks').click();
+    });
+    expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('Clear marks is disabled with no marks', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.protect'));
+    expect(ribbonButton('clear-redaction-marks').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('the Protect tab counts the marks', async () => {
+    await openDocument(true);
+    selectTab(t('ribbon.tab.protect'));
+    await until(() => host.textContent?.includes(t('redact.count', { count: 2 })) === true);
+  });
+
+  it('the Comment tab has the Stamp menu', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    expect(host.querySelector('.stamp-menu-button')).not.toBeNull();
+  });
   it('drops the main region padding while a document is shown, so the view has no thick frame', async () => {
     await openDocument();
     expect(host.querySelector('.app-main')?.classList.contains('app-main--document')).toBe(true);
@@ -1156,56 +1168,40 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
       ribbonButton('sticky-note').click();
     });
     expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('true');
-    expect(toolbarPressed(t('comment.tool.note'))).toBe('true');
 
     act(() => {
       ribbonButton('sticky-note').click();
     });
     expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('false');
-    expect(toolbarPressed(t('comment.tool.note'))).toBe('false');
   });
 
   it('the box and line ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
     await openDocument();
     selectTab(t('ribbon.tab.comment'));
-    for (const [command, key] of [
-      ['text-box', 'comment.tool.textbox'],
-      ['oval', 'comment.tool.oval'],
-      ['line', 'comment.tool.line'],
-      ['arrow', 'comment.tool.arrow'],
-    ] as const) {
+    for (const command of ['text-box', 'oval', 'line', 'arrow'] as const) {
       act(() => {
         ribbonButton(command).click();
       });
       expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('true');
-      expect(toolbarPressed(t(key))).toBe('true');
       act(() => {
         ribbonButton(command).click();
       });
       expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('false');
-      expect(toolbarPressed(t(key))).toBe('false');
     }
   });
 
   it('the callout, pen and polygon and polyline ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
     await openDocument();
     selectTab(t('ribbon.tab.comment'));
-    for (const [command, key] of [
-      ['callout', 'comment.tool.callout'],
-      ['pen', 'comment.tool.pen'],
-      ['polygon', 'comment.tool.polygon'],
-      ['polyline', 'comment.tool.polyline'],
-    ] as const) {
+    for (const command of ['callout', 'pen', 'polygon', 'polyline'] as const) {
       act(() => {
         ribbonButton(command).click();
       });
       expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('true');
-      expect(toolbarPressed(t(key))).toBe('true');
       act(() => {
         ribbonButton(command).click();
       });
       expect(ribbonButton(command).getAttribute('aria-pressed')).toBe('false');
-      expect(toolbarPressed(t(key))).toBe('false');
     }
   });
 
@@ -1242,7 +1238,6 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
       ribbonButton('redact').click();
     });
     expect(ribbonButton('redact').getAttribute('aria-pressed')).toBe('true');
-    expect(toolbarPressed(t('redact.mark'))).toBe('true');
   });
 
   it('Apply Redactions is disabled with no marks, with its reason, and opens no confirmation', async () => {

@@ -11,53 +11,6 @@
   color: var(--color-text);
 }
 
-.doc-view-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
-}
-
-.doc-view-toolbar button {
-  min-height: 32px;
-  min-width: 32px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-small);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-/* The groups keep their buttons together when the bar wraps, as the canvas pill does. */
-.doc-view-toolbar [role='group'] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-/* Touch targets are at least 44 px under a coarse pointer (W1.6, touch; W8.5 S5). */
-@media (pointer: coarse) {
-  .doc-view-toolbar button,
-  .doc-status button {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-.doc-view-toolbar button[aria-pressed='true'] {
-  border-color: var(--color-focus-ring);
-  font-weight: 600;
-}
-
-.doc-view-toolbar button:disabled {
-  color: var(--color-text-disabled);
-}
-
-.doc-view-toolbar button:focus-visible,
 .doc-view-scroll:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;

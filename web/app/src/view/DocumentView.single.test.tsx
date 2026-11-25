@@ -200,9 +200,5 @@ describe('DocumentView single-page layout (W5.1a S3)', () => {
     await mount([PORTRAIT, LANDSCAPE, PORTRAIT]);
     expect(reported?.layout).toBe('single');
     expect(mountedPages()).toEqual([0]);
-    const toggle = [...host.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Single page',
-    );
-    expect(toggle?.getAttribute('aria-pressed')).toBe('true');
   });
 });

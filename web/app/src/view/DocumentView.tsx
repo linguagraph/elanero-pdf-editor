@@ -80,17 +80,14 @@ import { CommentSelectLayer } from '../comments/CommentSelectLayer';
 import type { CommentRef } from '../comments/hitTest';
 import { CommentPageCache } from '../comments/pageCache';
 import { deleteRefs } from '../comments/panel/edits';
-import { CommentToolbar } from '../comments/CommentToolbar';
 import { type ChosenStamp, DEFAULT_STAMP, afterStampRemoved } from '../comments/stamps';
-import { createStampLibrary } from '../comments/stampLibrary';
-import { StampMenu } from '../comments/stampTool';
+import { type StampLibrary, createStampLibrary } from '../comments/stampLibrary';
 import type { PagePoint, PageRect } from '../comments/coordinates';
 import { placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import type { ActionJobWorker } from '../actionJob/actionJob';
 import type { RedactionController } from '../redaction/controller';
 import { RedactLayer, SelectedMarkOutlines } from '../redaction/RedactLayer';
-import { RedactionBar } from '../redaction/RedactionBar';
 import { selectedRectsOn } from '../redaction/controller';
 import { useRedaction } from '../redaction/useRedaction';
 import type { TextLine } from '../text/textLayer';
@@ -227,6 +224,10 @@ export interface DocumentViewHandle {
   setCommentTool(tool: CommentToolId | null): void;
   // Turns the redaction mark tool on or off, as the toolbar's Mark button does (W4.3a S7).
   setRedacting(on: boolean): void;
+  // Chooses a stamp and turns the stamp tool on, as the Comment tab's Stamp menu does (W7.3 S6).
+  chooseStamp(stamp: ChosenStamp): void;
+  // A custom stamp was removed from the library: the current stamp falls back when it was that one.
+  stampRemoved(id: string): void;
   // Selects the text of the whole document, for Select All (W5.4 section 2): the model's selection
   // from the first caret to the last page's end, once the last page's length has arrived; it says
   // so with a toast. Under Hand, a DOM range over the page at the top, which the browser holds.
@@ -290,6 +291,9 @@ export interface DocumentViewProps {
   // The document's redaction controller, made by the app per session (W7.4b) so the toolbar and the
   // redactions panel share it. The view makes its own when absent.
   readonly redaction?: RedactionController;
+  // The custom stamp library the Stamp menu reads, made by the app per document (W7.3b). The view
+  // makes its own when absent.
+  readonly stampLibrary?: StampLibrary;
   // The view tool (W4.10): Hand pans with a drag. The app keeps it per tab; Select when absent.
   readonly tool?: ViewTool;
   // The tab this view shows (W6.7b). A shape add that settles later hands it back with the reset
@@ -434,6 +438,7 @@ export function DocumentView({
   searchMarks,
   startWorker,
   redaction,
+  stampLibrary: sharedStamps,
   tool = 'select',
   tabId = null,
   onToolChange,
@@ -506,7 +511,8 @@ export function DocumentView({
   // The stamp the stamp tool places (W7.3 S6, W7.3b S2), chosen from the stamp menu, and the custom
   // stamp library the menu reads (one per document view).
   const [stamp, setStamp] = useState<ChosenStamp>(DEFAULT_STAMP);
-  const [stampLibrary] = useState(() => createStampLibrary());
+  const [ownStampLibrary] = useState(() => createStampLibrary());
+  const stampLibrary = sharedStamps ?? ownStampLibrary;
   // The redaction tools (W7.4). The mark tool and a comment tool are not on together.
   const redactionTools = useRedaction({
     rpc,
@@ -1348,6 +1354,8 @@ export function DocumentView({
       cachedLines: (page) => textLayers.ready(page, scheduler.revisionOf(page)),
       setCommentTool: chooseCommentTool,
       setRedacting: chooseRedacting,
+      chooseStamp,
+      stampRemoved,
       selectAll: () => {
         const last = pageCount - 1;
         if (last < 0) return;
@@ -1458,6 +1466,8 @@ export function DocumentView({
       exportEditImage,
       chooseCommentTool,
       chooseRedacting,
+      chooseStamp,
+      stampRemoved,
       changeLayout,
       chooseNight,
       selectModel,
@@ -1558,50 +1568,6 @@ export function DocumentView({
       aria-label={t('view.label')}
     >
       {tool === 'cropBox' ? <p className="crop-draw-hint">{t('crop.drawHint')}</p> : null}
-      <div className="doc-view-toolbar" role="toolbar" aria-label={t('view.label')}>
-        <div role="group" aria-label={t('view.layoutLabel')}>
-          <button
-            type="button"
-            aria-pressed={viewLayout === 'continuous'}
-            onClick={() => changeLayout({ layout: 'continuous', firstAlone })}
-          >
-            {t('view.layoutSingle')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={viewLayout === 'single'}
-            onClick={() => changeLayout({ layout: 'single', firstAlone })}
-          >
-            {t('view.layoutPage')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={viewLayout === 'twoPage'}
-            onClick={() => changeLayout({ layout: 'twoPage', firstAlone })}
-          >
-            {t('view.layoutTwoPage')}
-          </button>
-        </div>
-        <button
-          type="button"
-          aria-pressed={firstAlone}
-          disabled={viewLayout !== 'twoPage'}
-          onClick={() => changeLayout({ layout: viewLayout, firstAlone: !firstAlone })}
-        >
-          {t('view.coverAlone')}
-        </button>
-        <button type="button" aria-pressed={night} onClick={() => chooseNight(!night)}>
-          {t('view.night')}
-        </button>
-        <CommentToolbar tool={commentTool} onChoose={chooseCommentTool} />
-        <StampMenu library={stampLibrary} onChoose={chooseStamp} onRemoved={stampRemoved} />
-        <RedactionBar
-          state={redactionTools.state}
-          onToggle={() => chooseRedacting(!redactionTools.state.active)}
-          onClear={() => void redactionTools.controller.clear()}
-          onApply={() => void redactionTools.controller.apply(null)}
-        />
-      </div>
       {linkNotice === null ? null : (
         <p role="status" className="doc-link-notice">
           {linkNoticeText(linkNotice)}

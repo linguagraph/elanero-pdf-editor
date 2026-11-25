@@ -720,6 +720,18 @@ describe('Ribbon group overflow (W4.3a S3)', () => {
     expect(menuLabels()).toEqual(homeGroupIds().map((id) => labelOf(id)));
   });
 
+  it('draws a group extra in its group, in the row and in the overflow menu', () => {
+    rowWidth = 120;
+    const extras = { 'home.file': <span className="extra-test">extra</span> };
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} groupExtras={extras} />);
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.ribbon-more')?.click();
+    });
+    // Nothing fits in the row at this width, so the extra is in the menu's copy of the group.
+    const inMenu = document.querySelector('[role="dialog"] [data-group="home.file"] .extra-test');
+    expect(inMenu?.textContent).toBe('extra');
+  });
+
   it('recomputes the row when the observed row changes width', () => {
     rowWidth = 10_000;
     render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
