@@ -127,6 +127,37 @@ yet: do it by hand as described, and don't invent one. The detailed Store steps 
     their own procedure in [Rollback (manual)](#rollback-manual) below. Never force-push, and never
     move or delete a pushed tag: tags are the public source for the AGPL.
 
+## Screen-reader pass (W8.5)
+
+Owner checklist. NVDA and VoiceOver cannot be driven from CI, so this is done by hand on a build
+that includes the W8.5 slices, before the W8.5 tick in PLAN.md. Record the results in the release
+PR: tester, date, browser and screen-reader versions, pass or fail per line, and a bug link for
+each failure.
+
+- Accessibility run: `web-a11y green run: <URL>` (the owner fills in the URL of the first
+  dispatched `web-a11y` run on `main`: `gh workflow run web-a11y.yml --ref main`, then
+  `gh run watch`).
+
+### NVDA with Firefox (Windows)
+
+- [ ] Tab strip: move to a document tab and press Delete. NVDA announces the close, and focus
+  goes to another open tab.
+- [ ] Open a document. NVDA reads its name and the "Document" canvas, and the first page is
+  announced as "Page 1 of M".
+- [ ] Open the comments panel. The list reads each comment's name.
+- [ ] Open the Stamp menu. Each item is read by its name.
+
+### VoiceOver with Safari (Mac or iPad)
+
+- [ ] Tab strip: move to a document tab and press Delete. VoiceOver announces the close, and
+  focus goes to another open tab.
+- [ ] Open a document. VoiceOver reads its name and the "Document" canvas, and the first page is
+  announced as "Page 1 of M".
+- [ ] Open the comments panel. The list reads each comment's name.
+- [ ] Open the Stamp menu. Each item is read by its name.
+- [ ] Touch target (iPad): on the touch screen, the ribbon buttons, the ribbon tabs and the Stamp
+  menu items are at least 44 by 44 px. A control that is hard to hit reliably is a failure.
+
 ## One-time setup
 
 - **Windows SDK:** provides `makeappx`, `makepri`, `signtool` and the App Certification Kit
