@@ -14,7 +14,7 @@ export default defineConfig({
   timeout: 5 * 60_000,
   // E2E_WORKERS in CI (a repository variable, default 4), one locally. Each parallel slot writes
   // its own host-checks-<n>.json (see e2e/features/support.ts), so workers do not lose entries.
-  workers: process.env.CI ? (process.env.E2E_WORKERS ?? '4') : 1,
+  workers: process.env.CI ? Number(process.env.E2E_WORKERS ?? 4) : 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: {
