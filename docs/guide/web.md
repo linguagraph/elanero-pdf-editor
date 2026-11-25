@@ -250,8 +250,10 @@ message saying whether it was added.
   save. A very long list is cut short, and the panel says so.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
   thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
-  Shift-click to select a range. Then rotate the selected pages left or right, move them up or
-  down, delete them (after a confirmation; a document always keeps one page), or duplicate them.
+  Shift-click to select a range. The actions are icon buttons: each one's name shows as a tooltip
+  when you rest the pointer on it, and screen readers read the same name. Then rotate the selected
+  pages left or right, move them up or down, delete them (after a confirmation; a document always
+  keeps one page), or duplicate them.
   Insert blank page adds an empty page after the last selected page (or at the end when nothing is
   selected), the same size as the page before it. Duplicate puts a copy of each selected page right
   after the last one. Insert from file adds the pages of a PDF, or one image, after the last selected

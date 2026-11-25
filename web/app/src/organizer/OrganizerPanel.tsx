@@ -3,7 +3,7 @@
 // Each change is undoable: an info toast offers Undo, which calls actions.undo. The engine is the
 // only source of the page order, so the list is read again from session.pages after every change.
 import { useEffect, useRef, useState } from 'react';
-import { Button } from 'react-aria-components';
+import { Button, Tooltip, TooltipTrigger } from 'react-aria-components';
 import type { PageRpc } from '../engine/engineConnection';
 import type { JobWorker } from '../files/fileJob';
 import { FileJobCancelled } from '../files/fileJob';
@@ -16,6 +16,8 @@ import { t, tp } from '../i18n/t';
 import { Overlay } from '../layout/Overlay';
 import { Panel } from '../layout/Panel';
 import { ACCEPT } from '../combine/sources';
+import { Icon } from '../theme/Icon';
+import type { IconName } from '../theme/icons.generated';
 import { CachedCanvas } from '../view/pixels';
 import { type PlannedRender, RenderScheduler } from '../view/renderScheduler';
 import { thumbnailScaleMilli, type ThumbnailSize } from '../view/thumbnails';
@@ -38,6 +40,33 @@ import './organizer.css';
 
 // The first pages get the engine's attention before the rest, as the thumbnails panel does.
 const VISIBLE_HEAD = 24;
+// How long the pointer rests on a toolbar button before its tooltip shows (as the ribbon's).
+const TOOLTIP_DELAY_MS = 400;
+
+interface OrganizerActionProps {
+  readonly icon: IconName;
+  // The button's name for screen readers, and its tooltip.
+  readonly label: string;
+  readonly isDisabled: boolean;
+  readonly onPress: () => void;
+}
+
+// One icon button of the toolbar. The label is its accessible name (aria-label) and its tooltip.
+function OrganizerAction({ icon, label, isDisabled, onPress }: OrganizerActionProps) {
+  return (
+    <TooltipTrigger delay={TOOLTIP_DELAY_MS}>
+      <Button
+        className="organizer-action"
+        aria-label={label}
+        isDisabled={isDisabled}
+        onPress={onPress}
+      >
+        <Icon name={icon} size={20} />
+      </Button>
+      <Tooltip className="ribbon-tooltip">{label}</Tooltip>
+    </TooltipTrigger>
+  );
+}
 
 export interface OrganizerPanelProps {
   readonly rpc: PageRpc;
@@ -313,37 +342,60 @@ export function OrganizerPanel({
               : tp('organizer.selected', total, { selected: picked.length, total })}
           </p>
           <div role="toolbar" aria-label={t('organizer.actions')} className="organizer-actions">
-            <button type="button" disabled={!hasSelection || busy} onClick={() => rotate(270)}>
-              {t('command.rotate-pages-left.label')}
-            </button>
-            <button type="button" disabled={!hasSelection || busy} onClick={() => rotate(90)}>
-              {t('command.rotate-pages-right.label')}
-            </button>
-            <button type="button" disabled={busy} onClick={insertBlank}>
-              {t('organizer.insertBlank')}
-            </button>
-            <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
-              {t('organizer.insertFile')}
-            </button>
-            <button type="button" disabled={!hasSelection || busy} onClick={duplicateSelected}>
-              {t('command.duplicate-pages.label')}
-            </button>
-            <button type="button" disabled={!hasSelection || busy} onClick={() => void extract()}>
-              {t('command.extract-pages.label')}
-            </button>
-            <button type="button" disabled={!canUp} onClick={() => moveSelected('up')}>
-              {t('organizer.moveUp')}
-            </button>
-            <button type="button" disabled={!canDown} onClick={() => moveSelected('down')}>
-              {t('organizer.moveDown')}
-            </button>
-            <button
-              type="button"
-              disabled={!canDelete(picked, total) || busy}
-              onClick={() => setConfirming(true)}
-            >
-              {t('command.delete-pages.label')}
-            </button>
+            <OrganizerAction
+              icon="rotate-ccw"
+              label={t('command.rotate-pages-left.label')}
+              isDisabled={!hasSelection || busy}
+              onPress={() => rotate(270)}
+            />
+            <OrganizerAction
+              icon="rotate-cw"
+              label={t('command.rotate-pages-right.label')}
+              isDisabled={!hasSelection || busy}
+              onPress={() => rotate(90)}
+            />
+            <OrganizerAction
+              icon="file"
+              label={t('organizer.insertBlank')}
+              isDisabled={busy}
+              onPress={insertBlank}
+            />
+            <OrganizerAction
+              icon="file-plus"
+              label={t('organizer.insertFile')}
+              isDisabled={busy}
+              onPress={() => fileInput.current?.click()}
+            />
+            <OrganizerAction
+              icon="copy"
+              label={t('command.duplicate-pages.label')}
+              isDisabled={!hasSelection || busy}
+              onPress={duplicateSelected}
+            />
+            <OrganizerAction
+              icon="file-output"
+              label={t('command.extract-pages.label')}
+              isDisabled={!hasSelection || busy}
+              onPress={() => void extract()}
+            />
+            <OrganizerAction
+              icon="chevron-up"
+              label={t('organizer.moveUp')}
+              isDisabled={!canUp}
+              onPress={() => moveSelected('up')}
+            />
+            <OrganizerAction
+              icon="chevron-down"
+              label={t('organizer.moveDown')}
+              isDisabled={!canDown}
+              onPress={() => moveSelected('down')}
+            />
+            <OrganizerAction
+              icon="file-x"
+              label={t('command.delete-pages.label')}
+              isDisabled={!canDelete(picked, total) || busy}
+              onPress={() => setConfirming(true)}
+            />
           </div>
           <input
             ref={fileInput}
