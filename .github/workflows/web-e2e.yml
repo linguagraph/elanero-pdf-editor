@@ -23,6 +23,9 @@ on:
           - chromium
           - all
 
+env:
+  # Worker count for the feature suite (a repository variable, default 4).
+  E2E_WORKERS: ${{ vars.E2E_WORKERS || '4' }}
 permissions:
   contents: read
 
@@ -140,8 +143,8 @@ jobs:
       # The host halves of the round trips (W1.7 section 4.2): pikepdf and pypdfium2 replay the bytes
       # each flow saved. Runs even when the browser run failed, since the manifest is written then too.
       - name: Replay the recorded host checks (host CPython)
-        if: ${{ always() && hashFiles('web/app/test-results/host-checks.json') != '' }}
-        run: python scripts/web_host_verify.py web/app/test-results/host-checks.json
+        if: ${{ always() && hashFiles('web/app/test-results/host-checks-*.json') != '' }}
+        run: python scripts/web_host_verify.py web/app/test-results/host-checks-*.json
 
       - name: Upload the HTML report, traces and manifest
         if: ${{ always() }}
