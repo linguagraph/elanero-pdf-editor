@@ -198,6 +198,32 @@ jobs:
         if: ${{ inputs.run_web != 'false' }}
         run: python scripts/build_web_wheel.py
 
+      # W1 (docs/web/design/W8.3-performance.md 2.3): the first-load gzip size, on every web PR. The
+      # engine assets are staged as web-deploy.yml does, so the built app is the one that deploys.
+      - name: Stage the engine assets (W1)
+        if: ${{ inputs.run_web != 'false' }}
+        run: |
+          set -euo pipefail
+          n=$(ls web/spike/dist/wheel-build/*.whl | wc -l)
+          test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
+          node scripts/stage_engine_assets.mjs --wheel "$(ls web/spike/dist/wheel-build/*.whl)" --zip dist/web/pdfeditor-web.zip
+          test -f web/app/public/engine-assets/pyodide.mjs
+
+      - name: Install the app's npm packages (W1)
+        if: ${{ inputs.run_web != 'false' }}
+        working-directory: web/app
+        run: npm ci
+
+      - name: Build the app (W1)
+        if: ${{ inputs.run_web != 'false' }}
+        working-directory: web/app
+        run: npm run build
+
+      - name: Check the first-load gzip budget (W1, 40 MB)
+        if: ${{ inputs.run_web != 'false' }}
+        working-directory: web/app
+        run: node --experimental-strip-types scripts/check-size.ts dist
+
       - name: Upload the web package
         if: ${{ inputs.run_web != 'false' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
