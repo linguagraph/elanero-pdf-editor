@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "e2e:features": "playwright test -c playwright.features.config.ts",
+    "e2e:perf": "playwright test -c playwright.perf.config.ts",
     "e2e:features:chromium": "playwright test -c playwright.features.config.ts --project=chromium",
     "tokens": "node --experimental-strip-types scripts/generate-tokens.ts",
     "tokens:check": "node --experimental-strip-types scripts/generate-tokens.ts --check",

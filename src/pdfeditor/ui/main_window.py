@@ -281,6 +281,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self.search_panel = SearchPanel()
+        self.attachments_panel = AttachmentsPanel()
+        self.attachments_panel.open_requested.connect(self.open_attachment)
         self.signatures_panel = SignaturesPanel()
         self.comments_panel = CommentsPanel()
         self.inspector = InspectorPanel()
@@ -289,7 +291,7 @@ class MainWindow(QMainWindow):
             BookmarksPanel(),
             self.comments_panel,
             self.search_panel,
-            AttachmentsPanel(),
+            self.attachments_panel,
             LayersPanel(),
             self.signatures_panel,
         ]
@@ -909,12 +911,31 @@ class MainWindow(QMainWindow):
             self._forget_recent(path)
             return None
         self._add_recent(path)
+        return self._present_session(session, path.name)
+
+    def open_attachment(self, name: str, data: bytes) -> DocumentView | None:
+        """Open a PDF attachment as an unsaved document, from its bytes.
+
+        No file is written and the document is not added to File > Recent: an attachment has
+        no path of its own, so Save asks for a new file name (Save As).
+        """
+        try:
+            session = DocumentSession.open(data, password_prompt(self, name))
+        except PasswordRequired:
+            return None  # user cancelled the password prompt
+        except OpenError as exc:
+            QMessageBox.warning(self, "Open attachment", f"Couldn't open “{name}”:\n\n{exc}")
+            return None
+        session.name_hint = name
+        return self._present_session(session, name)
+
+    def _present_session(self, session: DocumentSession, name: str) -> DocumentView:
         view = self._add_session(session)
         with session.lock:
             repaired = session.document.info().is_repaired
         if repaired:
             self.notify(
-                f"“{path.name}” was damaged and has been repaired. "
+                f"“{name}” was damaged and has been repaired. "
                 "Save it to keep the repaired version.",
                 timeout_ms=15000,
             )

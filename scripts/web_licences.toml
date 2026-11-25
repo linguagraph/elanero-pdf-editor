@@ -26,7 +26,7 @@ version = "314.0.8"
 license = "MPL-2.0"
 url = "https://pyodide.org"
 copyright = ["Copyright (c) Pyodide contributors"]
-note = "To confirm: the copyright line against the Pyodide 314.0.8 sources."
+note = "To confirm: the copyright line. The Pyodide 314.0.8 npm package has no licence file and no copyright line (checked); it needs the upstream LICENSE."
 
 [[component]]
 name = "CPython (Python 3.14 and its standard library)"
@@ -251,4 +251,4 @@ copyright = "Copyright 2024 SWC contributors."
 
 [npm."client-only"]
 version = "0.0.1"
-copyright = "To confirm: no copyright line in the installed package (its licence file is absent)."
+copyright = "To confirm: no copyright line in client-only 0.0.1 (no licence file, index.js is empty; package.json and the lock say MIT only)."

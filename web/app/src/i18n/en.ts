@@ -951,7 +951,10 @@ export const EN = {
   // Start page, document tabs and opening files (W1.6 section 3, W4.2b).
   'start.heading': 'Open a PDF',
   'start.open': 'Open file',
-  'start.drop': 'Drop PDF files here, or use Open file.',
+  'start.tagline': 'Read, edit and combine PDFs in your browser. Your files are not uploaded.',
+  'start.drop': 'Drop PDF files here',
+  'start.drop.or': 'or',
+  'start.footer.version': 'Elanero {version}',
   'start.recent.heading': 'Recent files',
   'start.recent.empty': 'No recent files yet.',
   'start.recent.opened': 'Opened {time}',

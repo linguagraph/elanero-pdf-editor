@@ -625,7 +625,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W8 Quality, #141**
 
 - [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow and feature specs done; pending: a passing web-e2e run: the engine does not load in CI, so the feature specs fail (see #567); specs merged before a passing run: bookmarks, links, touch, split, compress, print)_
-- [ ] **W8.2** Visual golden tests for rendering
+- [ ] **W8.2** Visual golden tests for rendering _(partial: S3 browser worker render added to web-e2e, Chromium only; pending: S4 web UI screenshots, and a green web-e2e run before ticking)_
 - [ ] **W8.3** Performance tests in CI
 - [x] **W8.4** Fuzz and robustness tests
 - [ ] **W8.5** Accessibility checks _(partial: axe, contrast and keyboard checks done; pending: passing web-a11y run, document view axe, reduced motion, touch targets, NVDA and VoiceOver pass)_
@@ -637,7 +637,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W9.2** Deploy to GitHub Pages under `/app/` _(done: app deployed to GitHub Pages; gzip sizes within the 40 MB budget)_
 - [ ] **W9.3** User guide: "Web version" page _(partial: the page is written (#231) and its claims are checked against main (#432); pending: the desktop guide pages are not yet updated for the web, and the parity table lists features that are not built yet)_
 - [x] **W9.4** `PRIVACY.md` and landing page
-- [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: web section and licence notice generator done; Pyodide 314.0.8 and its MPL-2.0 licence checked against node_modules/pyodide, its copyright line not in the package; npm entries checked with --verify-installed except client-only; pending: "To confirm" copyright lines for Pyodide and client-only)_
+- [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: web section and licence notice generator done; npm entries checked with --verify-installed except client-only; pending: "To confirm" copyright lines for Pyodide and client-only. Both were checked against the installed packages: Pyodide 314.0.8 is under web/spike/node_modules/pyodide (not web/app), its package.json says MPL-2.0 and has no licence file or copyright line; client-only 0.0.1 has no licence file and no copyright line. Both need the upstream sources, which need network access)_
 - [x] **W9.6** Release checklist in `RELEASING.md`
 
 ### Later / not in current scope

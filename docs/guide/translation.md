@@ -74,8 +74,8 @@ off at any time in Preferences. See [Privacy](privacy.md).
 
 ## In the web version
 
-The web version translates with MyMemory (Translated.net) only, and it has no translation settings:
-no keys, no accounts and no email address.
+The web version translates with MyMemory (Translated.net) only. Its settings (an on/off switch and a
+default language) are under Preferences, Translation; it has no keys, accounts or email address.
 
 - Select the text, then click **Translate** in the mini toolbar beside it, or run **Translate
   selection** from the command palette (**Ctrl+K**). Copy is in the same toolbar.

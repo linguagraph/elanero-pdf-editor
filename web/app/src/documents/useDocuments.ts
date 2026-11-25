@@ -14,6 +14,7 @@ import { notResponding } from '../feedback/notResponding';
 import { reportRpcError, toasts } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
+import { markLoadStage } from '../perf/marks';
 import { addRecentFile, readRecentFiles, type RecentFile } from '../recent/recentFiles';
 import { type AutosaveWarning, createAutosaver, watchPageShow } from '../storage/autosaver';
 import { createAutosaveStore } from '../storage/autosaveStore';
@@ -223,6 +224,7 @@ export function useDocuments(engine: EngineConnection): Documents {
         return;
       }
       const { handle, pages, warning } = outcome.result;
+      markLoadStage('open');
       if (warning !== null) toasts.push('info', t('open.largeFile', { name: file.name }));
       // The tab id is the one addTab gives the new tab. Its session lets the document view mount.
       const id = tabsRef.current.nextId;

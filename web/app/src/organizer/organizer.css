@@ -15,7 +15,32 @@
   gap: var(--space-1);
 }
 
-.organizer-actions button,
+/* The toolbar buttons are square icon buttons; their names are tooltips and screen reader names. */
+.organizer-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.organizer-action:disabled {
+  color: var(--color-text-disabled);
+}
+
+/* Touch screens: each icon button is at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .organizer-action {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
+
 .organizer-confirm button {
   min-height: 44px;
   padding: 0 var(--space-2);
@@ -23,10 +48,6 @@
   border-radius: var(--radius-small);
   background: var(--color-surface);
   color: var(--color-text);
-}
-
-.organizer-actions button:disabled {
-  color: var(--color-text-disabled);
 }
 
 .organizer > * {
@@ -117,7 +138,7 @@
 }
 
 .organizer-item:focus-visible,
-.organizer-actions button:focus-visible,
+.organizer-action:focus-visible,
 .organizer-confirm button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;

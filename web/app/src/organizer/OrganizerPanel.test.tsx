@@ -224,11 +224,18 @@ function press(element: Element) {
   });
 }
 
-// A button by its exact text, in the panel or in a dialog the panel opened.
+// A toolbar icon button by its label (aria-label), else a button by its exact text. The toolbar is
+// searched first, so a dialog's button with the same text (Delete) is found only when the toolbar
+// has none with that label.
 function buttonNamed(text: string): HTMLButtonElement {
-  const found = Array.from(document.querySelectorAll('button')).find(
-    (button) => button.textContent === text,
-  );
+  const inToolbar = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[role="toolbar"] button'),
+  ).find((button) => button.getAttribute('aria-label') === text);
+  const found =
+    inToolbar ??
+    Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent === text,
+    );
   if (found === undefined) throw new Error(`no button "${text}"`);
   return found;
 }
@@ -281,7 +288,7 @@ describe('page organizer actions', () => {
     await flush();
     click(options()[0]!);
     click(options()[2]!, { ctrlKey: true });
-    click(buttonNamed(t('command.rotate-pages-right.label')));
+    press(buttonNamed(t('command.rotate-pages-right.label')));
     await flush();
 
     expect(calls).toContainEqual({
@@ -306,7 +313,7 @@ describe('page organizer actions', () => {
     mount(rpc, createToastStore());
     await flush();
     click(options()[0]!);
-    click(buttonNamed(t('organizer.moveDown')));
+    press(buttonNamed(t('organizer.moveDown')));
     await flush();
     expect(calls).toContainEqual({
       method: 'actions.run',
@@ -320,7 +327,7 @@ describe('page organizer actions', () => {
     mount(rpc, createToastStore());
     await flush();
     click(options()[1]!);
-    click(buttonNamed(t('command.delete-pages.label')));
+    press(buttonNamed(t('command.delete-pages.label')));
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     press(buttonNamed(t('organizer.cancel')));
     await flush();
@@ -333,7 +340,7 @@ describe('page organizer actions', () => {
     mount(rpc, createToastStore());
     await flush();
     click(options()[1]!);
-    click(buttonNamed(t('command.delete-pages.label')));
+    press(buttonNamed(t('command.delete-pages.label')));
     // The toolbar's Delete and the dialog's Delete share a label, so the dialog's is looked up apart.
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
@@ -361,13 +368,47 @@ describe('page organizer actions', () => {
   });
 });
 
+describe('page organizer toolbar', () => {
+  it('every toolbar icon button has its label as its name and an icon, and rotate and move need a selection', async () => {
+    const { rpc } = fakeRpc(3);
+    mount(rpc, createToastStore());
+    await flush();
+
+    const labels = [
+      t('command.rotate-pages-left.label'),
+      t('command.rotate-pages-right.label'),
+      t('organizer.insertBlank'),
+      t('organizer.insertFile'),
+      t('command.duplicate-pages.label'),
+      t('command.extract-pages.label'),
+      t('organizer.moveUp'),
+      t('organizer.moveDown'),
+      t('command.delete-pages.label'),
+    ];
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[role="toolbar"] button'),
+    );
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual(labels);
+    for (const button of buttons) {
+      expect(button.textContent).toBe('');
+      expect(button.querySelector('svg')).not.toBeNull();
+    }
+
+    expect(buttonNamed(t('command.rotate-pages-left.label')).disabled).toBe(true);
+    expect(buttonNamed(t('command.rotate-pages-right.label')).disabled).toBe(true);
+    expect(buttonNamed(t('organizer.moveUp')).disabled).toBe(true);
+    expect(buttonNamed(t('organizer.moveDown')).disabled).toBe(true);
+    expect(buttonNamed(t('organizer.insertBlank')).disabled).toBe(false);
+  });
+});
+
 describe('page organizer insert and duplicate', () => {
   it('insert blank with no selection adds the page at the end and selects it', async () => {
     const { rpc, calls } = fakeRpc(4);
     const store = createToastStore();
     mount(rpc, store);
     await flush();
-    click(buttonNamed(t('organizer.insertBlank')));
+    press(buttonNamed(t('organizer.insertBlank')));
     await flush();
     expect(calls).toContainEqual({
       method: 'actions.run',
@@ -384,7 +425,7 @@ describe('page organizer insert and duplicate', () => {
     await flush();
     click(options()[1]!);
     click(options()[3]!, { ctrlKey: true });
-    click(buttonNamed(t('organizer.insertBlank')));
+    press(buttonNamed(t('organizer.insertBlank')));
     await flush();
     expect(calls).toContainEqual({
       method: 'actions.run',
@@ -400,7 +441,7 @@ describe('page organizer insert and duplicate', () => {
     await flush();
     click(options()[0]!);
     click(options()[1]!, { shiftKey: true });
-    click(buttonNamed(t('command.duplicate-pages.label')));
+    press(buttonNamed(t('command.duplicate-pages.label')));
     await flush();
     expect(calls).toContainEqual({
       method: 'actions.run',
@@ -425,7 +466,7 @@ describe('page organizer insert and duplicate', () => {
     mount(rpc, store, onChanged);
     await flush();
     click(options()[0]!);
-    click(buttonNamed(t('command.duplicate-pages.label')));
+    press(buttonNamed(t('command.duplicate-pages.label')));
     await flush();
     expect(onChanged).toHaveBeenLastCalledWith(5);
 
@@ -516,7 +557,7 @@ describe('page organizer extract', () => {
     await flush();
     click(options()[1]!);
     click(options()[3]!, { ctrlKey: true });
-    click(buttonNamed(t('command.extract-pages.label')));
+    press(buttonNamed(t('command.extract-pages.label')));
     await flush();
     expect(calls).toContainEqual({
       method: 'jobs.prepare',
@@ -553,7 +594,7 @@ describe('page organizer extract', () => {
     mount(rpc, store, undefined, { download, worker });
     await flush();
     click(options()[0]!);
-    click(buttonNamed(t('command.extract-pages.label')));
+    press(buttonNamed(t('command.extract-pages.label')));
     await flush();
     await act(async () => {
       await jobProgress.cancel();

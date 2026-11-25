@@ -86,7 +86,7 @@ Pyodide
   Licence: MPL-2.0
   URL: https://pyodide.org
   Copyright: Copyright (c) Pyodide contributors
-  Note: To confirm: the copyright line against the Pyodide 314.0.8 sources.
+  Note: To confirm: the copyright line. The Pyodide 314.0.8 npm package has no licence file and no copyright line (checked); it needs the upstream LICENSE.
 
 Tesseract OCR and Leptonica (in MuPDF, if the wasm build has OCR)
   Version: To confirm
@@ -193,7 +193,7 @@ aria-hidden
 client-only
   Version: 0.0.1
   Licence: MIT
-  Copyright: To confirm: no copyright line in the installed package (its licence file is absent).
+  Copyright: To confirm: no copyright line in client-only 0.0.1 (no licence file, index.js is empty; package.json and the lock say MIT only).
 
 clsx
   Version: 2.1.1
