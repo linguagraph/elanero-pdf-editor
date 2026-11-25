@@ -1,0 +1,29 @@
+import { defineConfig, devices } from '@playwright/test';
+
+// The W8.3 browser performance harness (e2e/perf). It runs the app as it ships: a production build
+// served by `vite preview` on its own port (APP_PORT). Chromium only, since the recorded
+// metrics are Chromium's (design 2.2, item 5). Tests run one at a time, because each run is a timing.
+// It has its own port and build folder (dist/perf), so it never shares them with the e2e suite.
+const APP_PORT = 4176;
+
+export default defineConfig({
+  testDir: 'e2e/perf',
+  testMatch: '**/*.spec.ts',
+  outputDir: 'test-results/perf-run',
+  timeout: 4 * 60 * 60_000,
+  workers: 1,
+  fullyParallel: false,
+  reporter: [['list']],
+  use: {
+    baseURL: process.env.E2E_APP_URL ?? `http://localhost:${APP_PORT}`,
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  webServer: process.env.E2E_APP_URL
+    ? undefined
+    : {
+        command: `npx vite build --base=/ --outDir dist/perf && npx vite preview --outDir dist/perf --port ${APP_PORT} --strictPort`,
+        url: `http://localhost:${APP_PORT}/`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
+});
