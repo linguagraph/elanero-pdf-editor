@@ -82,7 +82,7 @@ jobs:
       # dist. The wheel is the one web-pytest.yml uses (the same cache key, so both share it).
       - name: Install the npm packages of the Pyodide pin (web/spike, for the staging)
         working-directory: web/spike
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Restore the PyMuPDF wheel from the cache
         id: wheel-cache
@@ -209,7 +209,7 @@ jobs:
 
       - name: Install the npm packages (exact, from the lockfile)
         working-directory: web/app
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build the app (production base path /elanero-pdf-editor/app/)
         working-directory: web/app

@@ -62,7 +62,7 @@ jobs:
 
       - name: Install the npm packages of the Pyodide pin (web/spike, for the staging)
         working-directory: web/spike
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # The key is web-pytest.yml's key, built from the same two files, so this restores the
       # wheel that the nightly run (or a web-pytest run) saved.
@@ -112,7 +112,7 @@ jobs:
 
       - name: Install the npm packages (exact, from the lockfile)
         working-directory: web/app
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install the browser (${{ matrix.browser }}) and its system libraries
         working-directory: web/app
