@@ -85,6 +85,12 @@ test.describe('engine staged', () => {
     page.on('framenavigated', (frame) => navigations.push(frame.url()));
 
     // A4 is 595 x 842 pt. The link centre is (136, 140) pt, scaled to the page box in CSS pixels.
+    // The link layer is filled when the engine's link list arrives, after the page is drawn, so the
+    // click waits for the link to render on page 0 (scoped to its link layer) before it fires.
+    const link = page
+      .locator('[data-page="0"] .page-link-layer')
+      .getByRole('link', { name: 'Link to example.org', exact: true });
+    await expect(link).toBeVisible();
     const size = await pageSize(page, 0);
     await page
       .locator('[data-page="0"]')
