@@ -1,5 +1,6 @@
 // W8.2 S3 browser render (docs/web/design/W8.2-visual-golden.md, D1 layer L3): each golden fixture
-// opens in the real engine worker, page 1 of each case renders at scale 1.0 through render.page, and
+// opens in the real engine worker, the page at each case's 0-based index renders at scale 1.0 through
+// render.page, and
 // the RGBA is written as a PNG into test-results/visual/. tests/golden/compare_dir.py then compares
 // each PNG with its reference in tests/golden/data (after compositing over white), in web-e2e.yml.
 // Chromium only. It needs the staged engine (scripts/stage_engine_assets.mjs) and skips without it.

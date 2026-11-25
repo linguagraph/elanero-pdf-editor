@@ -97,7 +97,7 @@ jobs:
       - name: Install the host packages and generate the fixtures
         run: |
           set -euo pipefail
-          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json) "numpy>=1.26"
+          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
           python scripts/make_fixtures.py
 
       # Writes dist/web/pdfeditor-web.zip; the staging step below copies it into the app.
@@ -150,6 +150,12 @@ jobs:
         env:
           PLAYWRIGHT_HTML_OPEN: never
         run: npx playwright test visual-render.spec.ts --output=test-results/visual-run
+
+      # numpy is needed only by the compare below (the other host packages are in versions.json hostPins),
+      # so it is installed here, pinned to the version the golden tests run with, and not for every browser.
+      - name: Install numpy for the golden compare (chromium only)
+        if: ${{ always() && matrix.browser == 'chromium' && steps.visual.conclusion != 'skipped' }}
+        run: python -m pip install --quiet "numpy==2.4.6"
 
       # Compares those renders with the references in tests/golden/data (after compositing over white,
       # with the engine tolerance). Diff images go to test-results/visual-diff, which the upload step keeps.

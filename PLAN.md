@@ -625,7 +625,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W8 Quality, #141**
 
 - [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow and feature specs done; pending: a passing web-e2e run: the engine does not load in CI, so the feature specs fail (see #567); specs merged before a passing run: bookmarks, links, touch, split, compress, print)_
-- [ ] **W8.2** Visual golden tests for rendering _(partial: S3 browser worker render added to web-e2e, Chromium only; no green run yet because of #567; pending: S4 web UI screenshots, and a green web-e2e run before ticking)_
+- [ ] **W8.2** Visual golden tests for rendering _(partial: S3 browser worker render added to web-e2e, Chromium only; pending: S4 web UI screenshots, and a green web-e2e run before ticking)_
 - [ ] **W8.3** Performance tests in CI
 - [x] **W8.4** Fuzz and robustness tests
 - [ ] **W8.5** Accessibility checks _(partial: axe, contrast and keyboard checks done; pending: passing web-a11y run, document view axe, reduced motion, touch targets, NVDA and VoiceOver pass)_

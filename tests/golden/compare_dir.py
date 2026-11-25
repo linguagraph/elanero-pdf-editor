@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     sys.stdout.write(
-        f"all browser renders match the references ({len(DATA.glob('*.png'))} data files)\n"
+        f"all browser renders match the references ({len(list(DATA.glob('*.png')))} data files)\n"
     )
     return 0
 
