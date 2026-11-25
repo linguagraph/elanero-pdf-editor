@@ -2,7 +2,7 @@
 
 Elanero also runs in your web browser, with no installer. It is the same editor as the desktop
 app, rebuilt for the browser: the same commands, names and icons, so what you learn here carries
-over to the desktop. Most of the web version is still being built. This page describes what works
+over to the desktop. Most desktop features work; the table at the end lists the exceptions. This page describes what works
 today and marks what is coming soon.
 
 ## How it differs from the desktop app
@@ -58,9 +58,11 @@ is reloaded until you press it.
 - **Theme.** The switch in the top bar chooses **System** (the default: follows your computer's
   light or dark setting, and changes with it), **Light** or **Dark**. The choice is remembered in
   this browser.
-- **Preferences.** Click **Preferences** in the top bar. The dialog has three sections:
+- **Preferences.** Click **Preferences** in the top bar. The dialog has eight sections. These are the ones that matter here:
   - **General**: the language (English is the only one for now) and the **Author name**, which is
     saved with each comment and redaction mark you add.
+  - **Translation**: an on/off switch and a default language for the translation feature (see
+    [Translation in the web version](preferences.md#in-the-web-version)).
   - **Appearance**: the theme, the **Accent colour** (Blue, Teal, Green, Purple, Pink, Red, Orange
     or Graphite: it colours buttons and highlights; Blue is the default), and **Reduce motion**,
     which turns off animations. The accent keeps the system's high-contrast colours when Windows
@@ -171,14 +173,8 @@ message saying whether it was added.
   scanned page has no text to copy. Copy can also say that the text of a selected page is still
   loading: try again in a moment. With **Hand** chosen, Copy and Select All use the browser's own
   selection instead, and Select All selects only the page at the top.
-- **Keyboard shortcuts.** A few web keys work so far: **Ctrl+C** (Copy) and **Ctrl+A** (Select All), **Alt+Left** and **Alt+Right** go back and
-  forward through the pages you have visited, **Alt+G** (Go to Page) moves the cursor to the page
-  box in the status bar, and **Alt+PgDn** and **Alt+PgUp** switch to the next and previous open
-  document, wrapping at the ends. Go to Page and the two document keys are also in the command
-  palette. In the text editor, **Ctrl+B** and **Ctrl+I** toggle bold and italic, and **Alt+F10**
-  moves to the style bar. The web version will use the desktop's keys wherever the browser allows, and will list
-  them in [Keyboard shortcuts](keyboard-shortcuts.md) once every shortcut works in the web version (coming
-  soon).
+- **Keyboard shortcuts.** Each command that works in the web version uses the desktop key, except keys the browser keeps
+  (see Shortcuts above). The keys are listed in [Keyboard shortcuts](keyboard-shortcuts.md).
   **Keyboard Shortcuts…** in the app menu, in Preferences and in the command palette opens the
   editor, where you can change the keys (see Preferences above). The palette's own list of keys
   only reads them; its **Change shortcuts…** button opens the editor.
@@ -244,8 +240,8 @@ message saying whether it was added.
   per thread, with the replies under their comment. Each entry shows its page, type, author, date,
   status and text. Search the text and authors, or choose a type, author or status to narrow the
   list; a thread stays whole when only one of its replies matches. Click an entry (or press Enter
-  on it) to go to its page. The list is in page order, top to bottom. Each thread takes a reply and a new status, and Undo
-  reverses either; editing and deleting a comment from the panel are coming soon. The panel opens
+  on it) to go to its page. The list is in page order, top to bottom. Each thread takes a reply and a new status. Edit changes a
+  comment's text; Delete (or the Delete key) removes the thread with its replies; Undo reverses either. A locked comment can't be changed. The panel opens
   and closes for each open document, and the list is read again after each change, undo, redo and
   save. A very long list is cut short, and the panel says so.
 - **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
@@ -340,15 +336,13 @@ family when it has one.
 
 ## What is not available yet
 
-These features are on the desktop today and are planned for the web version. Most of them are not
-built in the web version yet:
+These features are on the desktop but not in the web version yet:
 
-- the full set of keyboard shortcuts (the ribbon and the command palette work; see
-  [Ribbon and keyboard shortcuts](#ribbon-and-keyboard-shortcuts));
-- editing the words of a paragraph, adding text, and the ribbon's insert, duplicate and extract page commands (moving, resizing and deleting text and images, and the Organize pages panel, are available; see the table below);
-- comments other than sticky notes, rectangles, highlights, the drawing and text comments, editing and deleting comments from the Comments panel, custom image stamps and image watermarks;
-- the Security tab of document properties (the title, author, subject and keywords can be edited, and the Advanced and Fonts tabs show the file's facts and fonts; see the table below);
-- the **Install App** command.
+- the ribbon's Insert, Delete, Duplicate and Rotate page commands (the Organize pages panel has insert, duplicate, extract and delete; see the table below);
+- **Rotate View** (the view rotation);
+- the **Install App** command in the app menu;
+- saving back to the original file in place (Save downloads the document; see the table below);
+- uploaded fonts in headers, footers and watermarks.
 
 ## Browser support
 
@@ -438,14 +432,14 @@ full policy, with what the desktop app stores, is in the
 | Feature | Desktop | Web version |
 |---|---|---|
 | Light, dark and system theme | Yes | Yes |
-| Preferences: language, author name, reduce motion, default zoom, default page layout, redaction box style | Yes | Saved; default zoom and page layout apply now; the author name and redaction style apply to the comments and marks you add next |
-| Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and uploaded fonts; disabled while a document is open |
+| Preferences: language, author name, accent colour, translation, reduce motion, default zoom, default page layout, redaction box style | Yes | Saved; default zoom and page layout apply now; the author name and redaction style apply to the comments and marks you add next |
+| Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names, uploaded fonts and custom stamps; disabled while a document is open |
 | Upload fonts for text editing | Uses the fonts installed on your PC | Yes (Preferences, Fonts) |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
-| Works offline | Yes | Yes once loaded, for the app and the PDF engine's files; the engine's files come with the web version from its first deployment with them (coming soon) |
-| Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving), and writing back to the original file in place is coming soon |
-| Ribbon, command palette and keyboard shortcuts | Yes | Partly: the ribbon and the command palette (Ctrl+Shift+P) work, with some keys; the full shortcut list is coming soon |
-| Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo; editing the words of a paragraph is coming soon |
+| Works offline | Yes | Yes once loaded, for the app and the PDF engine's files |
+| Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving); writing back to the original file in place is not available |
+| Ribbon, command palette and keyboard shortcuts | Yes | Yes, with the desktop keys; keys the browser reserves are listed in Preferences, Shortcuts |
+| Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo |
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; Shape Style… sets the outline, fill and width of the next shapes for the session (shapes already on the page keep theirs; no opacity yet) |
 | Edit the words of a paragraph, add text | Yes | Yes, with undo, with font, size, bold, italic, colour, alignment and line spacing (see Fonts in the web version) |
 | Add, replace and export images (PNG and JPEG) | Yes | Yes, with undo; up to 50 MB and 25 megapixels per image; choose the file first, then click or drag to place it; Replace keeps the picture's box and changes every place it appears; Export Image downloads the selected picture as its own file |
@@ -456,17 +450,17 @@ full policy, with what the desktop app stores, is in the
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
 | Bookmarks: add, rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; drag and drop with a mouse or pen) |
-| Comments panel: list, reply and set status | Yes | Yes (Comments button on the left rail; a reply and a status change can be undone; editing and deleting comments from the panel are coming soon) |
+| Comments panel: list, reply, edit, delete and set status | Yes | Yes (Comments button on the left rail; a reply, an edit, a delete and a status change can be undone) |
 | Crop pages (margins in points, millimetres or inches; all, current or chosen pages) | Yes | Yes (Organize tab, Page Setup group, Crop; one Undo after each crop; a signed file keeps its signature, with a note) |
 | Crop box drawn on a page | Yes | Yes (Crop dialog, Draw on page: drag a box on a page, Esc cancels; the dialog reopens with its margins on that page) |
-| Comments: sticky notes, rectangles and highlights | Yes | Yes (Comment tools in the toolbar; Undo after each) |
+| Comments: notes, text box, shapes, lines, pen, highlight and text markups, stamps | Yes | Yes (Comment tools in the toolbar; Undo after each) |
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change). The Advanced and Fonts tabs show the PDF version and file facts, and the fonts the pages use, read only. The Security tab shows the encryption method, the eight permissions and any change waiting for the next save, read only; Encrypt with Password and Remove Security change them |
 | Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
 | Web and email links | Yes | Yes: web and email links ask first, and show the full address |
-| Other comments, custom image stamps | Yes | Coming soon (the 14 standard stamps are on the Comment tab) |
+| Custom image stamps | Yes | Yes (Stamp menu, Add Custom Stamp) |
 | Password protection and permissions (Encrypt with Password, Remove Security) | Yes | Yes (command palette; applied when you save; Undo after each change; passwords are not stored) |
 | Compare two files (text and appearance) | Yes | Yes (the report saves as a text file, not a PDF) |
 | Export pages as text, Markdown, HTML, Word, or images | Yes | Yes (Export, from the Tools group or the command palette) |
@@ -498,8 +492,19 @@ Evidence for the claims on this page (repository paths, checked on main):
 - Theme (system, light, dark; key elanero.theme): web/app/src/theme/theme.ts,
   web/app/src/theme/ThemeSwitch.tsx.
 - Preferences dialog and sections (General, Appearance, Viewing; Apply and Cancel; Reduce motion;
-  Default zoom): web/app/src/prefs/PreferencesDialog.tsx, web/app/src/i18n/en.ts (prefs.*).
+  Default zoom): web/app/src/prefs/PreferencesDialog.tsx (eight sections, lines 286-519; Translation at
+  403-455), web/app/src/i18n/en.ts (prefs.*).
 - Preferences store (key elanero.prefs, refuses secret keys, try/catch): web/app/src/prefs/store.ts.
+- Comments panel edit, delete and lock: web/app/src/comments/panel/CommentsPanel.tsx,
+  web/app/src/comments/panel/edits.ts.
+- Keyboard shortcuts in the command palette: web/app/src/commands/shortcuts.ts,
+  web/app/src/palette/CommandPalette.tsx (lines 111-121).
+- Drawing and text comments, markups, stamps: web/app/src/App.tsx (lines 774-797),
+  web/app/src/comments/stampLibrary.ts (custom stamps).
+- Clear all local data (also removes custom stamps): web/app/src/storage/clearLocalData.ts.
+- Uploaded fonts in the font picker: web/app/src/edit/FontPicker.tsx, web/app/src/edit/uploadedPreview.ts;
+  not in marks: web/app/src/marks/marks.ts.
+- Engine files precached by the service worker: web/app/src/pwa/build.ts (lines 105-125), web/app/public/sw.js.
 - Preferences opened from the top bar: web/app/src/App.tsx, web/app/src/commands/catalog.ts.
 - Autosave copies in the browser's private storage (OPFS): web/app/src/storage/ (opfs.ts,
   autosaveStore.ts, autosaver.ts, tabId.ts); the copy is read from the engine by save.autosave_bytes
