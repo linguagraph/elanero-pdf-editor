@@ -280,12 +280,20 @@ async function renderPng(pdfBase64: string, name: string, page: number): Promise
     canvas.height = image.height;
     const context = canvas.getContext('2d');
     if (context === null) throw new Error('no 2D context for the render');
-    // putImageData keeps the alpha channel as it is, so the PNG holds the engine's RGBA.
-    context.putImageData(
-      new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height),
-      0,
-      0,
-    );
+    // A render reply comes as an ImageBitmap when the worker can make one (format 'bitmap',
+    // see bitmapReply in engine/worker-server.ts). Its pixels are then empty, so the bitmap is drawn.
+    // Otherwise the RGBA is put as it is: putImageData keeps the alpha channel, so the PNG holds
+    // the engine's RGBA.
+    if (image.bitmap !== undefined) {
+      context.drawImage(image.bitmap, 0, 0);
+      image.bitmap.close();
+    } else {
+      context.putImageData(
+        new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height),
+        0,
+        0,
+      );
+    }
     return {
       width: image.width,
       height: image.height,
