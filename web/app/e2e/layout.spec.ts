@@ -20,6 +20,16 @@ async function horizontalOverflow(page: import('@playwright/test').Page): Promis
   );
 }
 
+// The page area (#app-page-area) is the scroller in the app frame (overflow: auto), so content that
+// is too wide scrolls inside it and leaves the document's own scroll width at 0.
+async function pageAreaOverflow(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => {
+    const area = document.querySelector('.app-page-area');
+    if (area === null) throw new Error('no page area');
+    return area.scrollWidth - area.clientWidth;
+  });
+}
+
 // The start page replaces the rails too (W1.6 section 1), so both rails are hidden there. No document
 // can be opened in these checks, so the rails are shown by setting the frame's data-rails, the way
 // the app sets it once a document is open.
@@ -45,18 +55,22 @@ for (const [width, height] of [
     await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeHidden();
     await expect(page.getByRole('toolbar', { name: 'Right panels' })).toBeHidden();
     expect(await horizontalOverflow(page)).toBe(0);
+    expect(await pageAreaOverflow(page)).toBe(0);
   });
 }
 
 // Design section 6: at 768 px and wider the start column is centred in the window (its left and
-// right gaps differ by less than a pixel).
+// right gaps differ by less than a pixel), and it is the 45rem column (720 px at 16 px root size).
+// Checking the width too means a collapsed column that happens to be centred does not pass.
 for (const [width, height] of [
   [1366, 768],
   [1093, 614],
   [911, 512],
   [800, 1024],
 ] as const) {
-  test(`start page at ${width} px: the column is centred in the window`, async ({ page }) => {
+  test(`start page at ${width} px: the column is centred in the window and 720 px wide`, async ({
+    page,
+  }) => {
     await openAtWidth(page, width, height);
     const column = await page.locator('.start-page').boundingBox();
     const windowWidth = await page.evaluate(() => document.documentElement.clientWidth);
@@ -64,6 +78,7 @@ for (const [width, height] of [
     const leftGap = column.x;
     const rightGap = windowWidth - (column.x + column.width);
     expect(Math.abs(leftGap - rightGap)).toBeLessThan(1);
+    expect(Math.abs(column.width - 720)).toBeLessThan(3);
   });
 }
 
@@ -89,17 +104,28 @@ for (const [width, height] of [
 test.describe('start page logo at 2x', () => {
   test.use({ deviceScaleFactor: 2 });
 
-  test('the hero logo has at least 128 px of image at 1366 px', async ({ page }) => {
-    await openAtWidth(page, 1366, 768);
-    const logo = page.locator('.start-logo');
-    await expect(logo).toBeVisible();
-    const naturalWidth = await logo.evaluate(async (el) => {
-      const image = el as HTMLImageElement;
-      await image.decode();
-      return image.naturalWidth;
+  // naturalWidth alone does not depend on the device pixel ratio, so the rendered width is checked too:
+  // 64 CSS px from 768 px, 48 CSS px below (the narrow rule in start.css).
+  for (const [width, height, cssWidth] of [
+    [1366, 768, 64],
+    [390, 844, 48],
+  ] as const) {
+    test(`the hero logo has at least 128 px of image and renders ${cssWidth} CSS px at ${width} px`, async ({
+      page,
+    }) => {
+      await openAtWidth(page, width, height);
+      const logo = page.locator('.start-logo');
+      await expect(logo).toBeVisible();
+      const naturalWidth = await logo.evaluate(async (el) => {
+        const image = el as HTMLImageElement;
+        await image.decode();
+        return image.naturalWidth;
+      });
+      expect(naturalWidth).toBeGreaterThanOrEqual(128);
+      const box = await logo.boundingBox();
+      expect(Math.abs((box?.width ?? 0) - cssWidth)).toBeLessThan(1);
     });
-    expect(naturalWidth).toBeGreaterThanOrEqual(128);
-  });
+  }
 });
 
 test('phone width (390 px): no horizontal scroll, left panels rail hidden by the tier', async ({
