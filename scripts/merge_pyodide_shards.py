@@ -30,7 +30,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DIR = ROOT / "web" / "test" / "pyodide"
-MAX_SHARDS = 4
+MAX_SHARDS = 8
 
 # Keys of the summary that hold counts (nested dicts of ints) and keys that hold lists.
 SUMMED_KEYS = ("tests", "ranEngineCode", "criterion3", "skipReasons", "hostSkipsByModule")
