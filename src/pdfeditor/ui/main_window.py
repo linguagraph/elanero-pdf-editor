@@ -281,6 +281,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self.search_panel = SearchPanel()
+        self.attachments_panel = AttachmentsPanel()
+        self.attachments_panel.open_requested.connect(self.open_path)
         self.signatures_panel = SignaturesPanel()
         self.comments_panel = CommentsPanel()
         self.inspector = InspectorPanel()
@@ -289,7 +291,7 @@ class MainWindow(QMainWindow):
             BookmarksPanel(),
             self.comments_panel,
             self.search_panel,
-            AttachmentsPanel(),
+            self.attachments_panel,
             LayersPanel(),
             self.signatures_panel,
         ]

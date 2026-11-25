@@ -79,6 +79,14 @@ selected text for **Copy** and **Translate…** (see [Translation](translation.m
 ## Attachments and layers
 
 - The **Attachments** panel lists files embedded in the PDF, and lets you save them.
+  - **Add…** embeds a file of any type in the PDF. It keeps its own name; if the name is taken,
+    it becomes "notes (2).txt", "notes (3).txt" and so on. Undo removes it.
+  - Select an attachment and press **Remove** to delete it from the PDF, after a confirmation.
+    Undo restores it until you close the document.
+  - **Open** is offered for a PDF attachment. It opens as a new document tab, from a temporary
+    copy; saving that tab does not change the attachment in this PDF.
+  - On a signed document, **Add…** and **Remove** are unavailable: adding or removing a file would
+    break the signatures. Save a copy first and make the change there.
 - The **Layers** panel lists the optional content (layers) in the document, such as a layer for
   notes or for a language. Turn a layer on or off to change what is displayed.
 
