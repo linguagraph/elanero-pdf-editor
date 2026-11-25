@@ -145,3 +145,12 @@
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+
+/* Back and Forward are touch targets under a coarse pointer (W1.6, touch; W8.5 S5). This block
+   was lost with the duplicate tool strip's removal; restored here with the token. */
+@media (pointer: coarse) {
+  .doc-status button {
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+  }
+}
