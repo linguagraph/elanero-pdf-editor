@@ -14,7 +14,9 @@ export const STAGED = existsSync(
 );
 
 const GENERATED = fileURLToPath(new URL('../../../../tests/fixtures/generated', import.meta.url));
-const MANIFEST = fileURLToPath(new URL('../../test-results/host-checks.json', import.meta.url));
+// One manifest per parallel slot: workers run in parallel, so each writes its own file, and the
+// verify step replays all of them (host-checks-*.json).
+const MANIFEST_DIR = fileURLToPath(new URL('../../test-results/', import.meta.url));
 
 // A generated fixture (scripts/make_fixtures.py). A missing one fails the test: a skip would hide a
 // broken setup, so the message names the script.
@@ -99,8 +101,9 @@ export function recordHostCheck(
   data: Buffer,
   args: Record<string, unknown> = {},
 ): void {
-  const manifest: { version: number; checks: ManifestEntry[] } = existsSync(MANIFEST)
-    ? JSON.parse(readFileSync(MANIFEST, 'utf8'))
+  const manifestPath = join(MANIFEST_DIR, `host-checks-${testInfo.parallelIndex}.json`);
+  const manifest: { version: number; checks: ManifestEntry[] } = existsSync(manifestPath)
+    ? JSON.parse(readFileSync(manifestPath, 'utf8'))
     : { version: 1, checks: [] };
   manifest.checks.push({
     name,
@@ -108,8 +111,8 @@ export function recordHostCheck(
     data_b64: data.toString('base64'),
     test: `${testInfo.project.name}: ${testInfo.title}`,
   });
-  mkdirSync(dirname(MANIFEST), { recursive: true });
-  writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2));
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
 // The visible width and height of a page, in CSS pixels, from the box the view sizes for it. A crop

@@ -210,11 +210,30 @@ jobs:
         if: ${{ inputs.run_web != 'false' }}
         env:
           WEB_ZIP: dist/web/pdfeditor-web.zip
+          PYODIDE_SHARDS: ${{ vars.PYODIDE_SHARDS || '2' }}
         run: |
           set -euo pipefail
+          [[ "$PYODIDE_SHARDS" =~ ^[1-9][0-9]*$ ]] || { echo "::error::bad PYODIDE_SHARDS"; exit 2; }
+          (( PYODIDE_SHARDS <= 4 )) || { echo "::error::PYODIDE_SHARDS is at most 4"; exit 2; }
           n=$(ls web/spike/dist/wheel-build/*.whl | wc -l)
           test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
-          PYMUPDF_WHEEL="$(ls web/spike/dist/wheel-build/*.whl)" node web/test/pyodide/run_tests.mjs
+          export PYMUPDF_WHEEL="$(ls web/spike/dist/wheel-build/*.whl)"
+          node web/test/pyodide/run_tests.mjs --stage
+          rm -rf web/test/pyodide/out web/test/pyodide/out-*
+          pids=()
+          for k in $(seq 0 $((PYODIDE_SHARDS-1))); do
+            mkdir -p "web/test/pyodide/out-$k"
+            node web/test/pyodide/run_tests.mjs --shard "$k/$PYODIDE_SHARDS" >"web/test/pyodide/out-$k/node.log" 2>&1 &
+            pids+=("$!")
+          done
+          status=0
+          for k in "${!pids[@]}"; do
+            if wait "${pids[$k]}"; then code=0; else code=$?; fi
+            echo "::group::shard $k (exit $code)"; cat "web/test/pyodide/out-$k/node.log"; echo "::endgroup::"
+            (( code > status )) && status=$code
+          done
+          python scripts/merge_pyodide_shards.py --shards "$PYODIDE_SHARDS" || { c=$?; (( c > status )) && status=$c; }
+          exit "$status"
 
       # The host halves of the migrated checks (W2.7b): pikepdf and pypdfium2 replay what the
       # Pyodide run recorded. Runs even when the Pyodide tests failed, since the manifest is
@@ -237,4 +256,5 @@ jobs:
           if-no-files-found: warn
           path: |
             web/test/pyodide/out/
+            web/test/pyodide/out-*/
             web/spike/out/build-info.json
