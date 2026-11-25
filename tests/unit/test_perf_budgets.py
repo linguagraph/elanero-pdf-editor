@@ -113,9 +113,8 @@ def test_every_row_has_an_emitter_and_every_emitter_has_a_row() -> None:
     emitted = _emitted_ids()
     assert rows, "the budget table has no metrics"
     assert set(emitted) - rows == set(), "budget tests record ids missing from budgets.json"
-    assert (
-        rows - set(emitted) - set(EXTERNAL_EMITTERS) == set()
-    ), "budgets.json rows have no budget test"
+    unemitted = rows - set(emitted) - set(EXTERNAL_EMITTERS)
+    assert unemitted == set(), "budgets.json rows have no budget test"
     assert set(EXTERNAL_EMITTERS) - rows == set(), "external emitters with no budgets.json row"
 
 
