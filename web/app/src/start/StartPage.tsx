@@ -50,7 +50,8 @@ export function StartPage({
       aria-labelledby={headingId}
       onDragEnter={(event) => {
         event.preventDefault();
-        setDragging(true);
+        // Only a drag that carries files lights the card; dragged text does not (it is not a PDF).
+        if (isFileDrag(event)) setDragging(true);
       }}
       onDragOver={(event) => {
         event.preventDefault();
@@ -78,25 +79,27 @@ export function StartPage({
           <p className="start-tagline">{t('start.tagline')}</p>
         </div>
       </div>
-      <h2 id={headingId} className="start-heading">
-        {t('start.heading')}
-      </h2>
-      <div
-        className="start-drop"
-        aria-describedby={dropId}
-        data-dragging={dragging ? 'true' : undefined}
-      >
-        <span className="start-drop-icon" aria-hidden="true">
-          <Icon name="upload" size={32} />
-        </span>
-        <p id={dropId} className="start-drop-text">
-          {t('start.drop')}
-        </p>
-        <p className="start-drop-or">{t('start.drop.or')}</p>
-        <button type="button" className="start-open" onClick={onOpen}>
-          <Icon name="folder-open" />
-          {t('start.open')}
-        </button>
+      <div className="start-open-block">
+        <h2 id={headingId} className="start-heading">
+          {t('start.heading')}
+        </h2>
+        <div
+          className="start-drop"
+          aria-describedby={dropId}
+          data-dragging={dragging ? 'true' : undefined}
+        >
+          <span className="start-drop-icon" aria-hidden="true">
+            <Icon name="upload" size={32} />
+          </span>
+          <p id={dropId} className="start-drop-text">
+            {t('start.drop')}
+          </p>
+          <p className="start-drop-or">{t('start.drop.or')}</p>
+          <button type="button" className="start-open" onClick={onOpen}>
+            <Icon name="folder-open" />
+            {t('start.open')}
+          </button>
+        </div>
       </div>
       {loading ?? null}
       {pending.length === 0 ? null : (
@@ -167,6 +170,11 @@ export function StartPage({
       </footer>
     </section>
   );
+}
+
+// True when the drag carries files (the browser lists them as "Files" in dataTransfer.types).
+function isFileDrag(event: { readonly dataTransfer?: DataTransfer | null }): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files');
 }
 
 // The local date and time of an opening, in the browser's own format.

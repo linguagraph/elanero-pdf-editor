@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -97,16 +100,61 @@ describe('StartPage while the engine loads', () => {
 });
 
 describe('StartPage layout (#626 S1)', () => {
-  it('has one h1, first in the outline, and no skipped heading level', () => {
-    renderPage();
-    const headings = Array.from(host.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-    expect(headings.filter((heading) => heading.tagName === 'H1')).toHaveLength(1);
-    expect(headings[0]?.tagName).toBe('H1');
-    expect(headings[0]?.textContent).toBe(t('app.name'));
-    const levels = headings.map((heading) => Number(heading.tagName.slice(1)));
-    for (let index = 1; index < levels.length; index += 1) {
-      expect((levels[index] ?? 0) - (levels[index - 1] ?? 0)).toBeLessThanOrEqual(1);
+  // Design section 6: one h1, first in the outline, and no skipped level, in every state the page shows.
+  const outlineStates: readonly [string, Partial<StartPageProps>][] = [
+    ['the default state', {}],
+    [
+      'the engine loading state',
+      {
+        loading: (
+          <LoadingScreen state={{ status: 'loading', stage: 'packages' }} onRetry={() => {}} />
+        ),
+      },
+    ],
+    [
+      'the pending-files state',
+      {
+        pending: [
+          { id: 1, name: 'a.pdf' },
+          { id: 2, name: 'b.pdf' },
+        ],
+      },
+    ],
+    [
+      'the recent-files state',
+      {
+        recent: [{ name: 'first.pdf', openedAt: 1_700_000_000_000 }],
+      },
+    ],
+  ];
+  for (const [name, props] of outlineStates) {
+    it(`has one h1, first in the outline, and no skipped heading level in ${name}`, () => {
+      renderPage(props);
+      const headings = Array.from(host.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+      expect(headings.filter((heading) => heading.tagName === 'H1')).toHaveLength(1);
+      expect(headings[0]?.tagName).toBe('H1');
+      expect(headings[0]?.textContent).toBe(t('app.name'));
+      const levels = headings.map((heading) => Number(heading.tagName.slice(1)));
+      for (let index = 1; index < levels.length; index += 1) {
+        expect((levels[index] ?? 0) - (levels[index - 1] ?? 0)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+
+  // The drag-over colours are tokens only (design section 4): the focus ring for the border, and
+  // the surface-alt background the design allows. Read from the stylesheet itself, so a literal
+  // colour or another token fails here.
+  it('draws the drag-over state with the focus-ring token only (surface-alt background allowed)', () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'start.css'), 'utf8');
+    const rule = /\.start-drop\[data-dragging='true'\]\s*\{([^}]*)\}/.exec(css);
+    expect(rule).not.toBeNull();
+    const body = rule?.[1] ?? '';
+    expect(body).toContain('var(--color-focus-ring)');
+    const tokens = [...body.matchAll(/var\(--color-([a-z-]+)\)/g)].map((match) => match[1]);
+    for (const token of tokens) {
+      expect(['focus-ring', 'surface-alt']).toContain(token);
     }
+    expect(body).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   });
 
   it('shows the version, licence and About button in the footer', () => {
@@ -137,14 +185,95 @@ describe('StartPage layout (#626 S1)', () => {
       return event;
     };
     act(() => {
-      section.dispatchEvent(dropEvent('dragenter'));
+      section.dispatchEvent(dropEvent('dragenter', { dataTransfer: { types: ['Files'] } }));
     });
     expect(card?.dataset.dragging).toBe('true');
     const file = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' });
     act(() => {
-      section.dispatchEvent(dropEvent('drop', { dataTransfer: { files: [file] } }));
+      section.dispatchEvent(
+        dropEvent('drop', { dataTransfer: { files: [file], types: ['Files'] } }),
+      );
     });
     expect(onFiles).toHaveBeenCalledTimes(1);
+    expect(card?.dataset.dragging).toBeUndefined();
+  });
+
+  it('does not light the card for a drag that carries no files', () => {
+    renderPage();
+    const section = host.querySelector('.start-page') as HTMLElement;
+    const card = host.querySelector<HTMLElement>('.start-drop');
+    const textDrag = new Event('dragenter', { bubbles: true, cancelable: true });
+    Object.assign(textDrag, { dataTransfer: { types: ['text/plain'] } });
+    act(() => {
+      section.dispatchEvent(textDrag);
+    });
+    expect(card?.dataset.dragging).toBeUndefined();
+  });
+
+  it('keeps the drag state when the drag moves onto a child of the page', () => {
+    renderPage();
+    const section = host.querySelector('.start-page') as HTMLElement;
+    const card = host.querySelector<HTMLElement>('.start-drop');
+    const enter = new Event('dragenter', { bubbles: true, cancelable: true });
+    Object.assign(enter, { dataTransfer: { types: ['Files'] } });
+    act(() => {
+      section.dispatchEvent(enter);
+    });
+    const leave = new Event('dragleave', { bubbles: true, cancelable: true });
+    Object.assign(leave, { relatedTarget: card });
+    act(() => {
+      section.dispatchEvent(leave);
+    });
+    expect(card?.dataset.dragging).toBe('true');
+  });
+
+  it('clears the drag state when the drag leaves the page', () => {
+    renderPage();
+    const section = host.querySelector('.start-page') as HTMLElement;
+    const card = host.querySelector<HTMLElement>('.start-drop');
+    const enter = new Event('dragenter', { bubbles: true, cancelable: true });
+    Object.assign(enter, { dataTransfer: { types: ['Files'] } });
+    act(() => {
+      section.dispatchEvent(enter);
+    });
+    expect(card?.dataset.dragging).toBe('true');
+    // Leaving to nothing (relatedTarget null) and leaving to an element outside the page both clear it.
+    const leaveToNothing = new Event('dragleave', { bubbles: true, cancelable: true });
+    Object.assign(leaveToNothing, { relatedTarget: null });
+    act(() => {
+      section.dispatchEvent(leaveToNothing);
+    });
+    expect(card?.dataset.dragging).toBeUndefined();
+    act(() => {
+      section.dispatchEvent(enter);
+    });
+    const leaveOutside = new Event('dragleave', { bubbles: true, cancelable: true });
+    Object.assign(leaveOutside, { relatedTarget: document.body });
+    act(() => {
+      section.dispatchEvent(leaveOutside);
+    });
+    expect(card?.dataset.dragging).toBeUndefined();
+  });
+
+  it('accepts a PDF dropped on a child element, and clears the drag state', () => {
+    const onFiles = vi.fn();
+    renderPage({ onFiles });
+    const card = host.querySelector<HTMLElement>('.start-drop');
+    const title = host.querySelector<HTMLElement>('.start-title');
+    const enter = new Event('dragenter', { bubbles: true, cancelable: true });
+    Object.assign(enter, { dataTransfer: { types: ['Files'] } });
+    act(() => {
+      title?.dispatchEvent(enter);
+    });
+    expect(card?.dataset.dragging).toBe('true');
+    const file = new File(['%PDF'], 'b.pdf', { type: 'application/pdf' });
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.assign(drop, { dataTransfer: { files: [file], types: ['Files'] } });
+    act(() => {
+      card?.dispatchEvent(drop);
+    });
+    expect(onFiles).toHaveBeenCalledTimes(1);
+    expect(onFiles.mock.calls[0]?.[0]).toEqual([file]);
     expect(card?.dataset.dragging).toBeUndefined();
   });
 });

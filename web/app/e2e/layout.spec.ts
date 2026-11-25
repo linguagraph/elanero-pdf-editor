@@ -27,11 +27,17 @@ async function showRails(page: import('@playwright/test').Page) {
   await page.locator('.app-frame').evaluate((el) => el.setAttribute('data-rails', 'shown'));
 }
 
+// The start page widths of the #626 design (section 6): 1366, 1100, 800 and 390 px, the 200 %, 150 %
+// and 125 % zoom widths of a 1366 px screen (683, 911, 1093), and the WCAG reflow width (320 px).
 for (const [width, height] of [
   [1366, 768],
   [1100, 700],
+  [1093, 614],
+  [911, 512],
   [800, 1024],
+  [683, 384],
   [390, 844],
+  [320, 640],
 ] as const) {
   test(`start page at ${width} px: both rails hidden, no horizontal scroll`, async ({ page }) => {
     await openAtWidth(page, width, height);
@@ -41,6 +47,60 @@ for (const [width, height] of [
     expect(await horizontalOverflow(page)).toBe(0);
   });
 }
+
+// Design section 6: at 768 px and wider the start column is centred in the window (its left and
+// right gaps differ by less than a pixel).
+for (const [width, height] of [
+  [1366, 768],
+  [1093, 614],
+  [911, 512],
+  [800, 1024],
+] as const) {
+  test(`start page at ${width} px: the column is centred in the window`, async ({ page }) => {
+    await openAtWidth(page, width, height);
+    const column = await page.locator('.start-page').boundingBox();
+    const windowWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    if (column === null) throw new Error('no start column');
+    const leftGap = column.x;
+    const rightGap = windowWidth - (column.x + column.width);
+    expect(Math.abs(leftGap - rightGap)).toBeLessThan(1);
+  });
+}
+
+// Design section 6: below 768 px the Open file button fills the card's content width.
+for (const [width, height] of [
+  [683, 384],
+  [390, 844],
+  [320, 640],
+] as const) {
+  test(`start page at ${width} px: the Open file button is full width`, async ({ page }) => {
+    await openAtWidth(page, width, height);
+    const fill = await page.locator('.start-drop').evaluate((el) => {
+      const style = getComputedStyle(el);
+      return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    });
+    const button = await page.locator('.start-open').boundingBox();
+    expect(Math.abs((button?.width ?? 0) - fill)).toBeLessThan(1);
+  });
+}
+
+// Design section 6: the hero logo is drawn from the 256 px image, so it stays sharp at 2x. The
+// natural width must cover the 64 CSS px logo at device pixel ratio 2 (128 device px).
+test.describe('start page logo at 2x', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('the hero logo has at least 128 px of image at 1366 px', async ({ page }) => {
+    await openAtWidth(page, 1366, 768);
+    const logo = page.locator('.start-logo');
+    await expect(logo).toBeVisible();
+    const naturalWidth = await logo.evaluate(async (el) => {
+      const image = el as HTMLImageElement;
+      await image.decode();
+      return image.naturalWidth;
+    });
+    expect(naturalWidth).toBeGreaterThanOrEqual(128);
+  });
+});
 
 test('phone width (390 px): no horizontal scroll, left panels rail hidden by the tier', async ({
   page,

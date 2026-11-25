@@ -2,7 +2,7 @@
    browser zoom scales the page evenly; the only width-dependent rules are the two media queries. */
 .start-page {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-6);
   max-width: 45rem;
   margin-inline: auto;
 }
@@ -11,7 +11,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  margin-bottom: var(--space-2);
+}
+
+/* The "Open a PDF" heading and the card below it: the heading-to-content space is --space-2. */
+.start-open-block {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .start-logo {
@@ -206,7 +211,8 @@
   .start-open,
   .start-recent-name,
   .start-pending-cancel,
-  .start-footer-button {
+  .start-footer-button,
+  .start-footer a {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
