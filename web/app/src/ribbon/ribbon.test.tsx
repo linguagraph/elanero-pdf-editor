@@ -720,7 +720,7 @@ describe('Ribbon group overflow (W4.3a S3)', () => {
     expect(menuLabels()).toEqual(homeGroupIds().map((id) => labelOf(id)));
   });
 
-  it('draws a group extra in its group, in the row and in the overflow menu', () => {
+  it('draws a group extra in the overflow menu copy of a group moved there', () => {
     rowWidth = 120;
     const extras = { 'home.file': <span className="extra-test">extra</span> };
     render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} groupExtras={extras} />);

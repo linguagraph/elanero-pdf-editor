@@ -235,7 +235,7 @@ export function App({
   // Mark Pages (W4.13): the dialog that marks whole pages. Opens only with a document.
   const [markPagesOpen, setMarkPagesOpen] = useState(false);
   // The comment tool on in the open document (W7.1a), as the view reports it for the ribbon's
-  // pressed state (W4.3a S7). Apply Redactions asks first, as the toolbar's Apply does.
+  // pressed state (W4.3a S7). Apply Redactions asks first, as the ribbon's Apply does.
   const [commentTool, setCommentToolState] = useState<CommentToolId | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
@@ -374,7 +374,7 @@ export function App({
     () => (session === null ? null : new RenderScheduler(session.rpc, session.handle)),
     [session],
   );
-  // One redaction controller per open session too (W7.4b): the toolbar and the redactions panel
+  // One redaction controller per open session too (W7.4b): the ribbon and the redactions panel
   // read the same list of the document's marks.
   const redaction = useMemo(
     () =>
@@ -388,7 +388,7 @@ export function App({
           }),
     [session, scheduler, jobs],
   );
-  // The rail count of the redactions panel reads the same document marks as the toolbar (W7.4b S4).
+  // The rail count of the redactions panel reads the same document marks as the ribbon (W7.4b S4).
   const redactionState = useRedactionState(redaction);
   // The custom stamp library the Comment tab's Stamp menu reads: one per open session, as the view
   // kept it before the menu moved to the ribbon (a session's held stamps stay with its document).
@@ -802,9 +802,9 @@ export function App({
             toggleCommentTool(commentTool, 'stamp', (tool) =>
               viewRef.current?.setCommentTool(tool),
             ),
-          // Redact (W7.4) turns the mark tool on or off, as the toolbar's Mark button does.
+          // Redact (W7.4) turns the mark tool on or off, as the ribbon's Mark button does.
           redact: () => viewRef.current?.setRedacting(!state.redacting),
-          // Apply Redactions (W7.4) asks for the same confirmation as the toolbar's Apply.
+          // Apply Redactions (W7.4) asks for the same confirmation as the ribbon's Apply.
           'apply-redactions': () => setApplyOpen(true),
           // Clear marks drops every mark at once, with no confirmation (as the strip's Clear did).
           'clear-redaction-marks': () => {
@@ -897,11 +897,11 @@ export function App({
           onRemoved={(id) => viewRef.current?.stampRemoved(id)}
         />
       ) : null,
-    'protect.redact': (
+    'protect.redact': documentShown ? (
       <span role="status" className="ribbon-count">
         {t('redact.count', { count: redactionState?.marks.length ?? 0 })}
       </span>
-    ),
+    ) : null,
   };
   return (
     <AppFrame

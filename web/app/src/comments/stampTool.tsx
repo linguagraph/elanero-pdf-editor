@@ -135,7 +135,10 @@ export function StampMenu({ library, onChoose, onRemoved, store = toasts }: Stam
         } else close();
       }}
     >
-      <Button className="stamp-menu-button">{t('stamp.menu')}</Button>
+      {/* A distinct name, so it is not mistaken for the Stamp toggle beside it in the ribbon. */}
+      <Button aria-label={t('stamp.menuButton')} className="stamp-menu-button">
+        {t('stamp.menu')}
+      </Button>
       <Popover className="app-menu-popover">
         {shown.sessionOnly ? (
           <p className="app-menu-note">{t('stamp.custom.sessionOnly')}</p>
