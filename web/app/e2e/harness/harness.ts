@@ -237,6 +237,65 @@ function poolStop(): void {
   pool = undefined;
 }
 
+// One page of a PDF rendered by the engine worker at scale 1.0, rotation 0 (W8.2 S3), as a PNG
+// (base64). The pixels stay RGBA: the host composites them over white (tests/golden/compare_dir.py).
+export interface VisualRender {
+  width: number;
+  height: number;
+  png: string;
+}
+
+// The engine for the visual renders: one worker for the run, one open document per call.
+let visualRpc: RpcClient | undefined;
+
+async function renderPng(pdfBase64: string, name: string, page: number): Promise<VisualRender> {
+  if (visualRpc === undefined) {
+    visualRpc = new RpcClient(
+      startEngine({ workerUrl: '/src/engine/engine.worker.ts', assetBaseUrl: ASSET_BASE }),
+    );
+  }
+  const rpc = visualRpc;
+  const pdf = Uint8Array.from(atob(pdfBase64), (char) => char.charCodeAt(0)).buffer;
+  const opened = await rpc.call('session.open', { name, data: pdf, password: null });
+  try {
+    // A revision that cannot match: the reply has no pixels and names the current revision.
+    const probe = await rpc.call('render.page', {
+      handle: opened.handle,
+      page,
+      revision: -1,
+      scale_milli: 1000,
+      rotation: 0,
+      annotations: true,
+    });
+    const image = await rpc.call('render.page', {
+      handle: opened.handle,
+      page,
+      revision: probe.revision,
+      scale_milli: 1000,
+      rotation: 0,
+      annotations: true,
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('no 2D context for the render');
+    // putImageData keeps the alpha channel as it is, so the PNG holds the engine's RGBA.
+    context.putImageData(
+      new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height),
+      0,
+      0,
+    );
+    return {
+      width: image.width,
+      height: image.height,
+      png: canvas.toDataURL('image/png').split(',')[1] ?? '',
+    };
+  } finally {
+    await rpc.call('session.close', { handle: opened.handle });
+  }
+}
+
 declare global {
   interface Window {
     __harness: {
@@ -248,6 +307,7 @@ declare global {
       poolReuse: (pdfBase64: string, name: string) => Promise<PoolReuseReport>;
       poolCancel: () => Promise<PoolCancelReport>;
       poolStop: () => void;
+      renderPng: (pdfBase64: string, name: string, page: number) => Promise<VisualRender>;
     };
   }
 }
@@ -261,4 +321,5 @@ window.__harness = {
   poolReuse,
   poolCancel,
   poolStop,
+  renderPng,
 };
