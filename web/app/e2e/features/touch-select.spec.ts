@@ -29,6 +29,24 @@ function selectionMarks(page: Page, index: number): Locator {
   return page.locator(`[data-page="${index}"] .page-selection-mark`);
 }
 
+// The first line of page 1 whose centre is a text element, not an overlay button. Returns its box.
+async function firstUncoveredLine(
+  page: Page,
+): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  const lines = pageLines(page, 0);
+  const count = await lines.count();
+  for (let i = 1; i < count; i++) {
+    const box = await lines.nth(i).boundingBox();
+    if (box === null) continue;
+    const hit = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.tagName ?? 'none',
+      centre(box),
+    );
+    if (hit !== 'BUTTON') return box;
+  }
+  return null;
+}
+
 function centre(box: { x: number; y: number; width: number; height: number }): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
@@ -69,7 +87,10 @@ test.describe('engine staged', () => {
     ({ browserName }) => browserName !== 'chromium',
     'touch input goes through CDP, which only Chromium offers',
   );
-  test.use({ hasTouch: true });
+  // A window tall enough that the document view's scroller is not a few hundred pixels high: at
+  // 1280 x 720 it is 248 px, so a handle dragged to the next line sits past its edge and autoscrolls
+  // the selection several lines down.
+  test.use({ hasTouch: true, viewport: { width: 1920, height: 1080 } });
 
   test('a long-press selects the word, the finger extends it, and Copy writes both lines', async ({
     page,
@@ -117,8 +138,10 @@ test.describe('engine staged', () => {
 
     const scroller = page.locator('.doc-view-scroll');
     const before = await scroller.evaluate((element) => element.scrollTop);
-    const line = await pageLines(page, 0).nth(1).boundingBox();
-    if (line === null) throw new Error('page 1 has no text lines to swipe over');
+    // Start on a text line that is not covered by an overlay (the canvas pill sits over some lines,
+    // and a touch on it is a button press, not a pan of the text).
+    const line = await firstUncoveredLine(page);
+    if (line === null) throw new Error('page 1 has no text line free of overlays');
 
     // The finger leaves the slop long before LONG_PRESS_MS, so the gesture is a scroll (section 2).
     const cdp = await page.context().newCDPSession(page);
