@@ -2,8 +2,8 @@
 
 Elanero also runs in your web browser, with no installer. It is the same editor as the desktop
 app, rebuilt for the browser: the same commands, names and icons, so what you learn here carries
-over to the desktop. Most desktop features work; the table at the end lists the exceptions. This page describes what works
-today and marks what is coming soon.
+over to the desktop. Most desktop features work; the table at the end lists the exceptions. This
+page describes what works today and marks what is coming soon.
 
 ## How it differs from the desktop app
 
@@ -82,8 +82,8 @@ is reloaded until you press it.
     edits text (Tab, the arrow keys, Enter, Delete, F6), and a key that another command already uses,
     which you must remove there first. Ctrl+O, Ctrl+S and Ctrl+P always stay with Elanero, so the
     browser's own dialogs do not open over it.
-  - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and
-    uploaded fonts from this browser, then reloads the page. It is turned off while a document is
+  - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names,
+    uploaded fonts and custom stamps from this browser, then reloads the page. It is turned off while a document is
     open; close the documents first. Your files are not touched, and the recovery copies of other
     open Elanero tabs are kept.
 
@@ -173,8 +173,12 @@ message saying whether it was added.
   scanned page has no text to copy. Copy can also say that the text of a selected page is still
   loading: try again in a moment. With **Hand** chosen, Copy and Select All use the browser's own
   selection instead, and Select All selects only the page at the top.
-- **Keyboard shortcuts.** Each command that works in the web version uses the desktop key, except keys the browser keeps
-  (see Shortcuts above). The keys are listed in [Keyboard shortcuts](keyboard-shortcuts.md).
+- **Keyboard shortcuts.** Most commands use the desktop key. The web version differs for Go to Page
+  (Alt+G), Next Document (Alt+PgDn), Previous Document (Alt+PgUp) and Close (Alt+W), and Crop Pages,
+  Insert Pages and the Comments list have no key. The keys the web version uses are in Preferences,
+  Shortcuts (see Shortcuts under Theme and preferences, above); the desktop list is in
+  [Keyboard shortcuts](keyboard-shortcuts.md). In the text editor, Ctrl+B and Ctrl+I toggle bold and
+  italic, and Alt+F10 moves to the style bar.
   **Keyboard Shortcuts…** in the app menu, in Preferences and in the command palette opens the
   editor, where you can change the keys (see Preferences above). The palette's own list of keys
   only reads them; its **Change shortcuts…** button opens the editor.
@@ -410,7 +414,7 @@ pages: all pages, the current page, or a range such as `1-3, 5`. Then choose the
 - **Your theme** is kept in the browser's local storage under the name `elanero.theme`.
 - **Your preferences** (language, author name, reduce motion and default zoom) are kept in the same
   browser's local storage under the name `elanero.prefs`. **Clear all local data** in the Preferences
-  dialog removes every key that starts with `elanero.`, and the uploaded fonts, but keeps other
+  dialog removes every key that starts with `elanero.`, and the uploaded fonts and custom stamps, but keeps other
   sites' data on the same address and the recovery copies of other open tabs.
 - **Uploaded fonts** are kept in the browser's private storage (not in a folder you can see) until
   you remove them, so they are there after you reload. Clear all local data removes them. In a
@@ -438,7 +442,7 @@ full policy, with what the desktop app stores, is in the
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files |
 | Open, view, search and save PDFs | Yes | Open, view and search work; Save downloads the document under its own name (see Saving); writing back to the original file in place is not available |
-| Ribbon, command palette and keyboard shortcuts | Yes | Yes, with the desktop keys; keys the browser reserves are listed in Preferences, Shortcuts |
+| Ribbon, command palette and keyboard shortcuts | Yes | Yes, with the desktop keys except Go to Page (Alt+G), Next and Previous Document (Alt+PgDn, Alt+PgUp) and Close (Alt+W); Crop Pages, Insert Pages and the Comments list have no key; Preferences, Shortcuts lists the keys used |
 | Select, move, resize and delete text and images (Edit Text & Images) | Yes | Yes, with undo |
 | Add shapes (rectangle, ellipse, line) | Yes | Yes, with undo; Shape Style… sets the outline, fill and width of the next shapes for the session (shapes already on the page keep theirs; no opacity yet) |
 | Edit the words of a paragraph, add text | Yes | Yes, with undo, with font, size, bold, italic, colour, alignment and line spacing (see Fonts in the web version) |
