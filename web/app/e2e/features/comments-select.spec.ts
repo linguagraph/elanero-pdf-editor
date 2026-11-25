@@ -59,6 +59,14 @@ async function addRectangle(page: Page): Promise<void> {
     'aria-pressed',
     'true',
   );
+  // The page's list is read again after the add. A press before that read finds no comment and
+  // clears the selection (CommentSelectLayer), so the test waits until the list shows the box.
+  await expect(
+    page.getByRole('group', { name: 'Comments on page 1' }).getByRole('button', {
+      name: 'Rectangle',
+      exact: true,
+    }),
+  ).toBeVisible();
 }
 
 test.describe('engine staged', () => {
@@ -136,7 +144,10 @@ test.describe('engine staged', () => {
     await expect.poll(async () => Math.abs((await boxOf(outline)).x - moved.x)).toBeLessThan(0.5);
 
     // Resize: the bottom-right handle (index 7 of the eight) moves by 40 and 30 CSS pixels.
-    const handle = await boxOf(page.locator('.comment-select-handle').nth(7));
+    // The handles are drawn after the undo's page read, so the test waits for the one it grabs.
+    const grip = page.locator('.comment-select-handle').nth(7);
+    await expect(grip).toBeVisible();
+    const handle = await boxOf(grip);
     const hx = handle.x + handle.width / 2;
     const hy = handle.y + handle.height / 2;
     await page.mouse.move(hx, hy);
