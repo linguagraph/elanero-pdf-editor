@@ -59,10 +59,16 @@ test('a rebound key runs its command, survives a reload, and Reset all restores 
   await expect(dialog.getByText(/^Open… now uses /)).toBeVisible();
 
   // Close both dialogs (Escape closes the nested one first), then the new key opens the file chooser.
+  // Each Escape waits until react-aria has handed focus back to the control that opened the dialog.
+  // Until then focus can sit on <body>, where the next Escape and the Open key reach no dialog.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: 'Keyboard Shortcuts…', exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Preferences…', exact: true })).toBeFocused();
 
   const chooser = page.waitForEvent('filechooser');
   await page.keyboard.press(ctrl('Alt+O'));
@@ -83,7 +89,12 @@ test('a rebound key runs its command, survives a reload, and Reset all restores 
     rowFor(page, restored, /^Open…$/).getByText('Default', { exact: true }),
   ).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('button', { name: 'Keyboard Shortcuts…', exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Preferences…', exact: true })).toBeFocused();
   const defaultChooser = page.waitForEvent('filechooser');
   await page.keyboard.press(ctrl('O'));
   await defaultChooser;

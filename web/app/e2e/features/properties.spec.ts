@@ -56,8 +56,9 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     let dialog = await openProperties(page);
+    // _save in scripts/make_fixtures.py sets the Title to the file's stem.
     const title = dialog.getByLabel('Title', { exact: true });
-    await expect(title).toHaveValue('');
+    await expect(title).toHaveValue('text_multipage');
     await title.fill('Properties check');
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -65,7 +66,7 @@ test.describe('engine staged', () => {
 
     await page.locator('.toast-action', { hasText: 'Undo' }).click();
     dialog = await openProperties(page);
-    await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('');
+    await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('text_multipage');
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 

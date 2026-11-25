@@ -92,7 +92,11 @@ test.describe('engine staged', () => {
       .locator('.redact-confirm')
       .getByRole('button', { name: 'Remove', exact: true })
       .click();
-    await expect(page.getByText('Removed notes.txt.', { exact: true })).toBeVisible();
+    // The toast comes after the remove job finishes (a job worker run), so it gets the same long wait
+    // as the other job-backed steps; the default 5 s is too short for it here.
+    await expect(page.getByText('Removed notes.txt.', { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
     await expect(entry(page, /^notes\.txt/)).toHaveCount(0);
 
     await page.locator('.toast-action', { hasText: 'Undo' }).click();

@@ -35,7 +35,8 @@ test.describe('engine staged', () => {
     await expect.poll(() => inkPixels(page, 0)).toBeLessThan(before);
 
     // Show the hidden layer again: the page gains ink back, the panel lists it as Visible.
-    await hidden.check();
+    // Controlled like the other checkbox: the click asks the app, and the checkbox follows the reply.
+    await hidden.click();
     await expect(hidden).toBeChecked();
     await expect(list.getByRole('listitem').filter({ hasText: 'Hidden layer' })).toContainText(
       'Visible',

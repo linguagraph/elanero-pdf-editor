@@ -82,6 +82,11 @@
 
 /* Touch screens: the dialogs' primary buttons are at least the touch target (W8.5 S7). */
 @media (pointer: coarse) {
+  /* The Save As file name: a text field is as tall as its touch target. */
+  .saveas-form input[type='text'] {
+    min-height: var(--size-touch-target);
+  }
+
   .feedback-primary {
     min-width: var(--size-touch-target);
     min-height: var(--size-touch-target);

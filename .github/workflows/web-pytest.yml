@@ -214,7 +214,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$PYODIDE_SHARDS" =~ ^[1-9][0-9]*$ ]] || { echo "::error::bad PYODIDE_SHARDS"; exit 2; }
-          (( PYODIDE_SHARDS <= 4 )) || { echo "::error::PYODIDE_SHARDS is at most 4"; exit 2; }
+          (( PYODIDE_SHARDS <= 8 )) || { echo "::error::PYODIDE_SHARDS is at most 8"; exit 2; }
           n=$(ls web/spike/dist/wheel-build/*.whl | wc -l)
           test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
           export PYMUPDF_WHEEL="$(ls web/spike/dist/wheel-build/*.whl)"

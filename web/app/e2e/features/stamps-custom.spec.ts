@@ -27,11 +27,13 @@ const ADD_LABEL = 'Add Custom Stamp…';
 // A4 in points (text_multipage.pdf is A4): the page box's CSS width maps to this many points.
 const A4_WIDTH = 595.28;
 
-// The Stamp menu sits in the view bar; its button and menu are confirmed in stampTool.tsx.
+// The Stamp menu sits in the view bar; its button and menu are confirmed in stampTool.tsx. The
+// menu's aria-label is "Stamps", but react-aria also labels it by its trigger ("Stamp"), so the
+// accessible name is "Stamp" (or "Stamps Stamp"); matching "Stamp" finds it either way.
 async function openStampMenu(page: Page): Promise<void> {
   await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
   await page.locator('.stamp-menu-button').click();
-  await expect(page.getByRole('menu', { name: 'Stamps' })).toBeVisible();
+  await expect(page.getByRole('menu', { name: 'Stamp' })).toBeVisible();
 }
 
 // Adds the PNG through Add Custom Stamp: the menu item opens the browser's picker (a file chooser).
@@ -48,6 +50,9 @@ async function addCustomStamp(page: Page): Promise<void> {
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
   test.skip(({ browserName }) => browserName !== 'chromium', 'Firefox and WebKit: tracked in #420');
+  // At 1280 px the Comment tab's Manage group overflows into "More commands", so the Comments List
+  // button (used after the reopen) is not on the ribbon. The comment specs use the same viewport.
+  test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('a custom stamp: added, placed, undone, redone, saved; kept after a reload', async ({
     page,

@@ -21,10 +21,17 @@ async function openCommentTab(page: Page): Promise<void> {
   await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
 }
 
+// The box of an element that is drawn. The comment layer redraws its outline and handles whenever
+// the page's revision changes (an undo, a move), so an element can be off the DOM for a moment
+// between a visibility check and this read; the read retries until the element is laid out again.
 async function boxOf(locator: Locator) {
-  const box = await locator.boundingBox();
-  if (box === null) throw new Error('the element is not laid out');
-  return box;
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    const box = await locator.boundingBox();
+    if (box !== null) return box;
+    if (Date.now() > deadline) throw new Error('the element is not laid out');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 // A point at (x, y) CSS pixels from the top left of page 1's box, in the viewport.
@@ -59,6 +66,14 @@ async function addRectangle(page: Page): Promise<void> {
     'aria-pressed',
     'true',
   );
+  // The page's list is read again after the add. A press before that read finds no comment and
+  // clears the selection (CommentSelectLayer), so the test waits until the list shows the box.
+  await expect(
+    page.getByRole('group', { name: 'Comments on page 1' }).getByRole('button', {
+      name: 'Rectangle',
+      exact: true,
+    }),
+  ).toBeVisible();
 }
 
 test.describe('engine staged', () => {
@@ -136,7 +151,10 @@ test.describe('engine staged', () => {
     await expect.poll(async () => Math.abs((await boxOf(outline)).x - moved.x)).toBeLessThan(0.5);
 
     // Resize: the bottom-right handle (index 7 of the eight) moves by 40 and 30 CSS pixels.
-    const handle = await boxOf(page.locator('.comment-select-handle').nth(7));
+    // The handles are drawn after the undo's page read, so the test waits for the one it grabs.
+    const grip = page.locator('.comment-select-handle').nth(7);
+    await expect(grip).toBeVisible();
+    const handle = await boxOf(grip);
     const hx = handle.x + handle.width / 2;
     const hy = handle.y + handle.height / 2;
     await page.mouse.move(hx, hy);
