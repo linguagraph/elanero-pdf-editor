@@ -13,6 +13,7 @@ import {
   type RpcEventListener,
 } from '../rpc/client';
 import { CallError, EngineLoadError } from './errors';
+import { markLoadStage } from '../perf/marks';
 import type { FailedStage, Stage } from './protocol';
 import { startEngine, type StartOptions, type WorkerClient } from './start';
 import type { MethodName, Methods } from '../rpc/generated';
@@ -120,9 +121,11 @@ export function createEngineConnection(options: EngineConnectionOptions): Engine
     worker = next;
 
     let last: Stage | undefined;
+    markLoadStage('start');
     next.onStage((stage) => {
       if (!isCurrent()) return;
       last = stage;
+      markLoadStage(stage);
       store.stage(stage);
     });
 
