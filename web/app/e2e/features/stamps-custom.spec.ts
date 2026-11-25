@@ -50,6 +50,9 @@ async function addCustomStamp(page: Page): Promise<void> {
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
   test.skip(({ browserName }) => browserName !== 'chromium', 'Firefox and WebKit: tracked in #420');
+  // At 1280 px the Comment tab's Manage group overflows into "More commands", so the Comments List
+  // button (used after the reopen) is not on the ribbon. The comment specs use the same viewport.
+  test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('a custom stamp: added, placed, undone, redone, saved; kept after a reload', async ({
     page,
