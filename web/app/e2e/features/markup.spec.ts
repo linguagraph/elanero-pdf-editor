@@ -19,15 +19,6 @@ async function openCommentTab(page: Page): Promise<void> {
   await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
 }
 
-// The Comments panel's thread rows, opened from the Comment tab's Comments List button.
-async function openCommentsFromRibbon(page: Page): Promise<Locator> {
-  await openCommentTab(page);
-  await page.locator('.ribbon [data-command="comments-list"]').click();
-  const list = page.getByRole('list', { name: 'Comment threads' });
-  await expect(list).toBeVisible();
-  return list;
-}
-
 // The thread row that holds the text (or the type label) given.
 function thread(list: Locator, text: string): Locator {
   return list.locator('.comments-thread', { hasText: text });
@@ -72,12 +63,18 @@ test.describe('engine staged', () => {
     // lives only a few seconds.
     await page.locator('.toast-action', { hasText: 'Undo' }).click();
 
-    // The Comments panel is empty after the undo.
-    const list = await openCommentsFromRibbon(page);
-    await expect(list.locator('.comments-thread')).toHaveCount(0);
+    // The Comments panel is empty after the undo. With no thread the panel shows its empty status
+    // line instead of the thread list, so the list is only expected again after the redo.
+    await openCommentTab(page);
+    await page.locator('.ribbon [data-command="comments-list"]').click();
+    await expect(
+      page.locator('.comments-status-line', { hasText: 'This document has no comments' }),
+    ).toBeVisible();
+    await expect(page.locator('.comments-thread')).toHaveCount(0);
 
     // Redo: the quick-access Redo brings the highlight back, with its type.
     await page.locator('.quick-access [data-command="redo"]').click();
+    const list = page.getByRole('list', { name: 'Comment threads' });
     await expect(thread(list, 'Highlight')).toBeVisible();
     await expect(list.locator('.comments-thread')).toHaveCount(1);
 
