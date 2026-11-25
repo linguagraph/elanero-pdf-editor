@@ -97,7 +97,7 @@ jobs:
       - name: Install the host packages and generate the fixtures
         run: |
           set -euo pipefail
-          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
+          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json) "numpy>=1.26"
           python scripts/make_fixtures.py
 
       # Writes dist/web/pdfeditor-web.zip; the staging step below copies it into the app.
@@ -139,6 +139,23 @@ jobs:
         env:
           PLAYWRIGHT_HTML_OPEN: never
         run: npx playwright test long-document.spec.ts --output=test-results/long-document
+
+      # W8.2 S3 (docs/web/design/W8.2-visual-golden.md, D1 L3): each golden fixture renders in the engine
+      # worker and is written as a PNG into test-results/visual/. Its own --output folder, for the same
+      # reason as the long-document check: Playwright clears that folder at the start of a run.
+      - name: Render the golden fixtures in the browser worker (chromium only)
+        id: visual
+        if: ${{ always() && matrix.browser == 'chromium' && steps.features.conclusion != 'skipped' }}
+        working-directory: web/app
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright test visual-render.spec.ts --output=test-results/visual-run
+
+      # Compares those renders with the references in tests/golden/data (after compositing over white,
+      # with the engine tolerance). Diff images go to test-results/visual-diff, which the upload step keeps.
+      - name: Compare the browser renders with the golden references (chromium only)
+        if: ${{ always() && matrix.browser == 'chromium' && steps.visual.conclusion != 'skipped' }}
+        run: python -m tests.golden.compare_dir web/app/test-results/visual --out web/app/test-results/visual-diff
 
       # The host halves of the round trips (W1.7 section 4.2): pikepdf and pypdfium2 replay the bytes
       # each flow saved. Runs even when the browser run failed, since the manifest is written then too.
