@@ -473,7 +473,10 @@ class MuDocument:
         return out
 
     def extract_embedded_file(self, name: str) -> bytes:
-        return bytes(self._fz.embfile_get(name))
+        try:
+            return bytes(self._fz.embfile_get(name))
+        except Exception as exc:  # a damaged stream raises a MuPDF error; callers see EngineError
+            raise EngineError(f"couldn't read the attachment {name!r}") from exc
 
     def add_embedded_file(
         self, name: str, data: bytes, filename: str, description: str = ""

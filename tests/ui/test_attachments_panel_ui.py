@@ -128,11 +128,15 @@ def test_remove_asks_first_then_removes_and_undo_restores(
     assert "notes.txt" not in _names(opened)
 
     session = window.current_view().session
+    saved = session.save_bytes("copy").data
+    record("embedded_bytes_pikepdf", saved, marker="attached notes", present=False)
+    record("opens_pdfium", saved)
+
     assert session.undo()
     assert "notes.txt" in _names(opened)
 
 
-def test_open_opens_a_pdf_attachment_as_a_new_document(
+def test_open_opens_a_pdf_attachment_as_a_new_unsaved_document(
     window: MainWindow, opened: AttachmentsPanel
 ) -> None:
     before = len(window.views())
@@ -140,12 +144,66 @@ def test_open_opens_a_pdf_attachment_as_a_new_document(
     assert opened.open_button.isEnabled()
     opened.open_selected()
     assert len(window.views()) == before + 1
-    assert window.views()[-1].session.path.name == "brief.pdf"
+    # Built from its bytes: no file behind the tab, so Save asks for a name (Save As).
+    session = window.views()[-1].session
+    assert session.path is None
+    assert session.save_target() is None
+    assert session.display_name == "brief.pdf"
 
 
-def test_open_is_not_offered_for_other_files(opened: AttachmentsPanel) -> None:
+def test_open_leaves_file_recent_unchanged(window: MainWindow, opened: AttachmentsPanel) -> None:
+    recent_before = list(window.recent.files())
+    _select(opened, "brief.pdf")
+    opened.open_selected()
+    assert window.recent.files() == recent_before
+
+
+def test_open_writes_no_temp_file_under_the_parent_snapshots(
+    window: MainWindow, opened: AttachmentsPanel
+) -> None:
+    parent = window.current_view().session
+    _select(opened, "brief.pdf")
+    opened.open_selected()
+    # The attachment is opened from memory; nothing is left in the parent's snapshot folder.
+    assert not list(parent.snapshots.dir.glob("attachment-*"))
+
+
+def test_save_on_an_opened_attachment_asks_for_a_new_path(
+    window: MainWindow,
+    opened: AttachmentsPanel,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _select(opened, "brief.pdf")
+    opened.open_selected()
+    view = window.views()[-1]
+    asked: list[str] = []
+    monkeypatch.setattr(window, "choose_save_path", lambda start: asked.append(start) or None)
+    assert window.save(view) is False  # Save asks; the attachment's parent is not touched
+    assert len(asked) == 1
+
+    target = tmp_path / "brief-copy.pdf"
+    monkeypatch.setattr(window, "choose_save_path", lambda _start: target)
+    assert window.save(view) is True
+    record("opens_pdfium", target.read_bytes())
+
+
+def test_open_of_a_non_pdf_attachment_warns_and_opens_nothing(
+    window: MainWindow, opened: AttachmentsPanel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    warnings: list[str] = []
+
+    def warn(*args: object, **_kwargs: object) -> QMessageBox.StandardButton:
+        warnings.append(str(args[2]))
+        return QMessageBox.StandardButton.Ok
+
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(warn))
+    before = len(window.views())
     _select(opened, "notes.txt")
-    assert not opened.open_button.isEnabled()
+    assert opened.open_button.isEnabled()  # enabled for any file; the header decides on click
+    opened.open_selected()
+    assert warnings and "not a PDF" in warnings[0]
+    assert len(window.views()) == before
 
 
 def test_signed_document_disables_add_and_remove(

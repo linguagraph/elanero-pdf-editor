@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -23,9 +22,9 @@ from pdfeditor.actions.attachments import (
     REMOVE_SIGNED_REFUSED,
     AddAttachment,
     RemoveAttachment,
-    clean_filename,
 )
 from pdfeditor.core.commands import ChangeKind
+from pdfeditor.engine.base import EngineError
 from pdfeditor.ui.action_errors import run_action
 from pdfeditor.ui.panels.base import EmptyState, ViewPanel
 
@@ -47,8 +46,8 @@ class AttachmentsPanel(ViewPanel):
     title = "Attachments"
     # Add and Remove are undoable edits, so the list follows Undo and Redo as well.
     rebuild_on = frozenset({ChangeKind.STRUCTURE, ChangeKind.METADATA})
-    # The main window opens this file (a temporary copy of a PDF attachment) as a new document.
-    open_requested = Signal(object)
+    # The main window opens a PDF attachment as a new, unsaved document from its (name, bytes).
+    open_requested = Signal(str, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -120,10 +119,24 @@ class AttachmentsPanel(ViewPanel):
         self.empty.button.setEnabled(self.view is not None and not signed)
         self.remove_button.setEnabled(node is not None and not signed)
         self.remove_button.setToolTip(REMOVE_SIGNED_REFUSED if signed else "")
-        self.open_button.setEnabled(node is not None and node.text(0).lower().endswith(".pdf"))
+        # Any selected file may be opened; open_selected warns about a non-PDF when clicked.
+        self.open_button.setEnabled(node is not None)
 
     def _refused(self, message: str) -> None:
         QMessageBox.warning(self, "Attachments", message)
+
+    def _read_embedded(self, name: str, title: str) -> bytes | None:
+        """The attachment's bytes, or None after a warning. A damaged stream is a warning, not a
+        crash in the Qt slot; the message never names a path."""
+        assert self.view is not None
+        try:
+            with self.view.session.lock:
+                return self.view.session.document.extract_embedded_file(name)
+        except EngineError:
+            QMessageBox.warning(
+                self, title, "Couldn't read this attachment. Its embedded data may be damaged."
+            )
+            return None
 
     def add_file(self) -> None:
         view = self.view
@@ -167,22 +180,13 @@ class AttachmentsPanel(ViewPanel):
         node = self._selected_node()
         if view is None or node is None:
             return
-        with view.session.lock:
-            data = view.session.document.extract_embedded_file(
-                node.data(0, Qt.ItemDataRole.UserRole)
-            )
+        data = self._read_embedded(node.data(0, Qt.ItemDataRole.UserRole), "Open attachment")
+        if data is None:
+            return
         if PDF_HEADER not in data[:1024]:
             QMessageBox.warning(self, "Open attachment", f"{node.text(0)} is not a PDF file.")
             return
-        # Session temp storage: removed when the document closes, as the undo snapshots are.
-        folder = Path(tempfile.mkdtemp(prefix="attachment-", dir=view.session.snapshots.dir))
-        target = folder / (clean_filename(node.text(0)) or "attachment.pdf")
-        try:
-            target.write_bytes(data)
-        except OSError as exc:
-            QMessageBox.warning(self, "Open attachment", f"Couldn't open the attachment:\n{exc}")
-            return
-        self.open_requested.emit(target)
+        self.open_requested.emit(node.text(0), data)
 
     def save_selected(self, target: Path | None = None) -> Path | None:
         node = self.tree.currentItem() or self.tree.topLevelItem(0)
@@ -194,9 +198,10 @@ class AttachmentsPanel(ViewPanel):
             if not chosen:
                 return None
             target = Path(chosen)
+        data = self._read_embedded(name, "Save attachment")
+        if data is None:
+            return None
         try:
-            with self.view.session.lock:
-                data = self.view.session.document.extract_embedded_file(name)
             target.write_bytes(data)
         except OSError as exc:
             QMessageBox.warning(self, "Save attachment", f"Couldn't save the attachment:\n{exc}")
