@@ -5,6 +5,7 @@
 // the viewport) after them. Each kind has its own queue, since a plan replaces only the entries of
 // its own kind.
 import type { PageRpc } from '../engine/engineConnection';
+import { markLoadStage } from '../perf/marks';
 import type { RenderReply } from '../rpc/client';
 import { PageCache, pageCacheKey, readDeviceMemory, thumbnailCacheKey } from './pageCache';
 import { type QueueEntry, type RenderRequest, RenderQueue, requestKey } from './renderQueue';
@@ -64,6 +65,7 @@ export class RenderScheduler {
   // warm-up waits for it (W3.1 slice 2). It never rejects.
   readonly firstPage: Promise<void>;
   private resolveFirstPage: () => void = () => undefined;
+  private paintMarked = false;
 
   constructor(
     private readonly rpc: PageRpc,
@@ -212,7 +214,14 @@ export class RenderScheduler {
             pixels: reply.pixels,
             ...(bitmap === undefined ? {} : { bitmap }),
           });
-          if (kind === 'page') this.resolveFirstPage();
+          if (kind === 'page') {
+            this.resolveFirstPage();
+            // The first page image drawn, marked once per scheduler (the W8.3 harness reads it).
+            if (!this.paintMarked) {
+              this.paintMarked = true;
+              markLoadStage('paint');
+            }
+          }
         } else {
           // The page changed since the caller last saw it. The reply carries no pixels, so the
           // page is asked for again at the revision the worker reported. Its bitmap is unused.

@@ -10,7 +10,8 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-test.use({ baseURL: process.env.E2E_APP_URL ?? 'http://localhost:4174' });
+// The perf config serves the production build on its own port (playwright.perf.config.ts).
+test.use({ baseURL: process.env.E2E_APP_URL ?? 'http://localhost:4176' });
 
 const ENGINE_STAGED = existsSync(
   fileURLToPath(new URL('../../public/engine-assets/pyodide.mjs', import.meta.url)),
@@ -27,7 +28,7 @@ const LARGE_PAGES = 1000;
 
 // Runs per metric (design 2.2, item 1). Run 0 is the process warm-up: it is dropped from the repeat
 // and scroll samples, and kept for the cold samples, where cold is the point.
-const RUNS = Number(process.env.PERF_RUNS ?? 5);
+const RUNS = parseRuns(process.env.PERF_RUNS ?? '5');
 const LOAD_TIMEOUT_MS = 180_000;
 const SCROLL_STEPS = 50;
 const STEP_PAUSE_MS = 100;
@@ -48,6 +49,16 @@ interface PerfRecord {
 }
 
 const records: PerfRecord[] = [];
+
+// PERF_RUNS is the number of measured runs. A value that is not a positive integer would give an
+// empty sample set and a NaN median, so it fails here, with the value named.
+function parseRuns(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`PERF_RUNS must be a positive integer, got "${raw}"`);
+  }
+  return value;
+}
 
 test.afterAll(() => {
   if (records.length === 0) return;
@@ -121,6 +132,36 @@ async function expectInk(page: Page, pageNumber: number): Promise<void> {
     .toBe(true);
 }
 
+// "Sharp": the page has ink, and every canvas of its host is at the device size of its box (the
+// backing width and height match the CSS box times devicePixelRatio, within 3%, one scale step of
+// quantizeScale). A page drawn at another scale, or not yet drawn, is not sharp.
+function isSharp(page: Page, pageNumber: number): Promise<boolean> {
+  return page.evaluate((n) => {
+    const host = document.querySelector(`.doc-page[data-page="${n - 1}"]`);
+    if (host === null) return false;
+    const canvases = [...host.querySelectorAll('canvas')];
+    if (canvases.length === 0) return false;
+    const dpr = window.devicePixelRatio;
+    const close = (actual: number, css: number): boolean => {
+      const expected = css * dpr;
+      return actual > 0 && Math.abs(actual - expected) <= Math.max(2, expected * 0.03);
+    };
+    return canvases.every((canvas) => {
+      const box = canvas.getBoundingClientRect();
+      return close(canvas.width, box.width) && close(canvas.height, box.height);
+    });
+  }, pageNumber);
+}
+
+async function expectSharp(page: Page, pageNumber: number): Promise<void> {
+  await expect
+    .poll(async () => (await isSharp(page, pageNumber)) && (await hasInk(page, pageNumber)), {
+      timeout: LOAD_TIMEOUT_MS,
+      intervals: [200],
+    })
+    .toBe(true);
+}
+
 // Scrolls the pages to a fraction of their extent (1 is the last page).
 async function scrollTo(page: Page, fraction: number): Promise<void> {
   await page.locator('.doc-view-scroll').evaluate((el, f) => {
@@ -153,7 +194,6 @@ test.describe('engine staged', () => {
     !ENGINE_STAGED,
     'engine assets are not staged (scripts/stage_engine_assets.mjs); perf not run',
   );
-  test.describe.configure({ mode: 'serial' });
 
   test('a 10-page document: cold and repeat visits (W2, W3)', async ({
     browser,
@@ -225,7 +265,7 @@ test.describe('engine staged', () => {
         await page.waitForTimeout(STEP_PAUSE_MS);
       }
       const stopped = Date.now();
-      await expectInk(page, LARGE_PAGES);
+      await expectSharp(page, LARGE_PAGES);
       const worst = await page.evaluate(() => {
         const tasks = (window as unknown as { __longTasks: number[] }).__longTasks;
         return tasks.reduce((max, duration) => Math.max(max, duration), 0);
