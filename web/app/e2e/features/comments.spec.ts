@@ -70,6 +70,12 @@ test.describe('engine staged', () => {
     await page.mouse.click(note.x, note.y);
     await page.getByRole('textbox', { name: 'Note text' }).fill('Check the margin');
     await page.getByRole('button', { name: 'Add note', exact: true }).click();
+    // The note is added when the tool returns to Select (W7.1a): wait for that, so the Rectangle
+    // click below is not reset by the note's reply arriving after it.
+    await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
 
     // Rectangle: a drag draws the box (a click alone would not).
     await page
