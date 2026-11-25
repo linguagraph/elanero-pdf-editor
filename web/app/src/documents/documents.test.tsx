@@ -530,12 +530,13 @@ describe('document tabs', () => {
     ]);
   });
 
-  it('shows only the document view when a document is open, with no About text', async () => {
-    expect(host.textContent).toContain(t('about.title'));
+  it('shows only the document view when a document is open, with no footer or About text', async () => {
+    expect(host.querySelector('.start-footer')?.textContent).toContain(t('about.title'));
     dropFiles([pdf('a.pdf')]);
     await until(() => host.querySelector('.doc-page') !== null);
     expect(host.querySelector('.doc-view')).not.toBeNull();
     expect(host.querySelector('h1')).toBeNull();
+    expect(host.querySelector('.start-footer')).toBeNull();
     expect(host.textContent).not.toContain(t('about.title'));
     expect(host.textContent).not.toContain(t('app.version', { version: APP_VERSION }));
   });
@@ -567,9 +568,11 @@ describe('document tabs', () => {
     expect(host.querySelector<HTMLInputElement>('.canvas-pill-jump input')?.value).toBe('2');
   });
 
-  it('keeps About and no status bar on the start page', () => {
+  it('keeps the About button in the start page footer and no status bar there', () => {
     expect(host.querySelector('h1')?.textContent).toBe(t('app.name'));
-    expect(host.textContent).toContain(t('about.title'));
+    const footer = host.querySelector('.start-footer');
+    expect(footer?.textContent).toContain(t('about.title'));
+    expect(footer?.textContent).toContain(t('start.footer.version', { version: APP_VERSION }));
     expect(host.querySelector('.doc-status')).toBeNull();
   });
 
