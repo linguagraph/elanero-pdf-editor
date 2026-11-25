@@ -15,7 +15,7 @@ const SCHEMES = ['light', 'dark'] as const;
 // specs do; the option's name also holds its shortcut, so it is matched by its start.
 async function openProperties(page: Page): Promise<Locator> {
   await page.getByRole('searchbox', { name: 'Search tools' }).fill('Properties');
-  await page.getByRole('option', { name: /^Properties/ }).click();
+  await page.locator('.palette-row[data-command="document-properties"]').click();
   const dialog = page.getByRole('dialog', { name: 'Document properties' });
   await expect(dialog).toBeVisible();
   return dialog;

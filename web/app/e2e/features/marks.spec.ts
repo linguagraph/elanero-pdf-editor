@@ -26,6 +26,7 @@ async function openMarkDialog(page: Page, button: string, title: string) {
 }
 
 test.describe('engine staged', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   test('add a background and a header with <<page>>, save, reopen, then remove and undo', async ({

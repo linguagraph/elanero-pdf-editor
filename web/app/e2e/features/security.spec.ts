@@ -173,7 +173,7 @@ test.describe('engine staged', () => {
     // Document properties reads the same file (W7.6 slice D): its Security tab must show the file's
     // facts and keep the password out of storage and the console too. Cancel closes it again.
     await page.getByRole('searchbox', { name: 'Search tools' }).fill('Properties');
-    await page.getByRole('option', { name: /^Properties/ }).click();
+    await page.locator('.palette-row[data-command="document-properties"]').click();
     const properties = page.getByRole('dialog', { name: 'Document properties' });
     await expect(properties).toBeVisible();
     await properties.getByRole('tab', { name: 'Security', exact: true }).click();

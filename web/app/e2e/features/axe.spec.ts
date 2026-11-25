@@ -54,6 +54,7 @@ for (const scheme of SCHEMES) {
 
 // The marks dialogs (W7.3 S3) need a document, so they run once the engine is staged.
 test.describe('engine staged', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   for (const [button, title] of [

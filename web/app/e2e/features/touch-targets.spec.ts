@@ -99,8 +99,14 @@ test.describe('engine staged', () => {
         });
         const count = await rail.getByRole('button').count();
         for (let i = 0; i < count; i++) {
-          await rail.getByRole('button').nth(i).click();
-          await sweep(page.locator(`.app-panel-${side}`), `${side} side panel ${i + 1}`);
+          const button = rail.getByRole('button').nth(i);
+          // A disabled button has no panel, and an expanded one (Thumbnails opens by default)
+          // would close on a click: only a collapsed button is clicked to open its panel.
+          if (await button.isDisabled()) continue;
+          if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+          const panel = page.locator(`.app-panel-${side}`);
+          await expect(panel, `${side} side panel ${i + 1} is open`).toBeVisible();
+          await sweep(panel, `${side} side panel ${i + 1}`);
         }
       }
 

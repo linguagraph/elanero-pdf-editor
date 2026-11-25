@@ -76,7 +76,7 @@ test.describe('engine staged', () => {
     expect(readFileSync(savedPath)).toEqual(Buffer.from('memo\n'));
 
     // 3. Undo the add: the toast's Undo removes the entry from the list again.
-    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.locator('.toast-action', { hasText: 'Undo' }).click();
     await expect(entry(page, /^memo\.txt/)).toHaveCount(0);
 
     // 4. Open the PDF attachment: it becomes a new tab named after the file.
@@ -95,7 +95,7 @@ test.describe('engine staged', () => {
     await expect(page.getByText('Removed notes.txt.', { exact: true })).toBeVisible();
     await expect(entry(page, /^notes\.txt/)).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.locator('.toast-action', { hasText: 'Undo' }).click();
     await expect(entry(page, /^notes\.txt/)).toBeVisible();
 
     // 6. Remove notes.txt again, then Save As and reopen the copy: the entry is gone from it.
