@@ -216,7 +216,8 @@ export class RenderScheduler {
           });
           if (kind === 'page') {
             this.resolveFirstPage();
-            // The first page image drawn, marked once per scheduler (the W8.3 harness reads it).
+            // The first page image cached (the canvas is drawn on the next render pass, a tick
+            // later), marked once per scheduler. The W8.3 harness reads it.
             if (!this.paintMarked) {
               this.paintMarked = true;
               markLoadStage('paint');

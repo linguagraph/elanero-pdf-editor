@@ -146,9 +146,14 @@ function isSharp(page: Page, pageNumber: number): Promise<boolean> {
       const expected = css * dpr;
       return actual > 0 && Math.abs(actual - expected) <= Math.max(2, expected * 0.03);
     };
+    // drawn is set by drawPixels (view/pixels.tsx) after each draw, so an undrawn canvas fails here.
     return canvases.every((canvas) => {
       const box = canvas.getBoundingClientRect();
-      return close(canvas.width, box.width) && close(canvas.height, box.height);
+      return (
+        canvas.dataset.drawn === 'true' &&
+        close(canvas.width, box.width) &&
+        close(canvas.height, box.height)
+      );
     });
   }, pageNumber);
 }
@@ -265,11 +270,12 @@ test.describe('engine staged', () => {
         await page.waitForTimeout(STEP_PAUSE_MS);
       }
       const stopped = Date.now();
-      await expectSharp(page, LARGE_PAGES);
+      // Read before the sharpness check: its pixel scan runs in the page and must not count as W7.
       const worst = await page.evaluate(() => {
         const tasks = (window as unknown as { __longTasks: number[] }).__longTasks;
         return tasks.reduce((max, duration) => Math.max(max, duration), 0);
       });
+      await expectSharp(page, LARGE_PAGES);
       if (run > 0) {
         worstTasks.push(worst);
         sharp.push(Date.now() - stopped);

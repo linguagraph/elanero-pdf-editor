@@ -181,6 +181,23 @@ describe('RenderScheduler', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it('marks the first page image once, not on every page render (W8.3)', async () => {
+    const { rpc, renders } = fakeRpc();
+    const scheduler = new RenderScheduler(rpc, 'h');
+    const mark = vi.spyOn(performance, 'mark').mockImplementation(() => ({}) as PerformanceMark);
+    const paints = () => mark.mock.calls.filter(([name]) => name === 'elanero:load:paint');
+    scheduler.plan('page', plan([0]));
+    renders[0]?.resolve(reply());
+    await scheduler.firstPage;
+    expect(paints()).toHaveLength(1);
+    scheduler.plan('page', plan([1]));
+    renders[1]?.resolve(reply());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(paints()).toHaveLength(1);
+    mark.mockRestore();
+  });
+
   it('drops the queued thumbnails when the panel plans an empty list', () => {
     const { rpc, renders } = fakeRpc();
     const scheduler = new RenderScheduler(rpc, 'h');

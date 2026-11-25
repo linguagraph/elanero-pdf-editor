@@ -497,6 +497,14 @@ describe('document tabs', () => {
     expect(session?.rpc).toBeDefined();
   });
 
+  it('marks the open of a document once it is opened (W8.3)', async () => {
+    const mark = vi.spyOn(performance, 'mark').mockImplementation(() => ({}) as PerformanceMark);
+    dropFiles([pdf('marked.pdf')]);
+    await until(() => tabNames().length === 1);
+    expect(mark).toHaveBeenCalledWith('elanero:load:open');
+    mark.mockRestore();
+  });
+
   it('gives no session to a tab whose open failed', async () => {
     dropFiles([pdf('refused.pdf')]);
     await until(() => errorToasts().length === 1);
