@@ -21,10 +21,17 @@ async function openCommentTab(page: Page): Promise<void> {
   await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
 }
 
+// The box of an element that is drawn. The comment layer redraws its outline and handles whenever
+// the page's revision changes (an undo, a move), so an element can be off the DOM for a moment
+// between a visibility check and this read; the read retries until the element is laid out again.
 async function boxOf(locator: Locator) {
-  const box = await locator.boundingBox();
-  if (box === null) throw new Error('the element is not laid out');
-  return box;
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    const box = await locator.boundingBox();
+    if (box !== null) return box;
+    if (Date.now() > deadline) throw new Error('the element is not laid out');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 // A point at (x, y) CSS pixels from the top left of page 1's box, in the viewport.
