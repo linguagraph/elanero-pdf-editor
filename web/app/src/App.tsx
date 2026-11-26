@@ -1476,6 +1476,7 @@ export function App({
           <StartPage
             recent={docs.recent}
             pickHint={docs.pickHint}
+            thumbs={docs.previews}
             loading={<EngineLoadingScreen store={engine.store} />}
             pending={docs.pending}
             onCancelPending={docs.cancelPending}

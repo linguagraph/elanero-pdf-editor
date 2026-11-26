@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoadingScreen } from '../feedback/LoadingScreen';
 import { t } from '../i18n/t';
 import { APP_VERSION } from '../version';
-import { StartPage, type StartPageProps } from './StartPage';
+import { formatOpened, StartPage, type StartPageProps } from './StartPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -275,5 +275,54 @@ describe('StartPage layout (#626 S1)', () => {
     expect(onFiles).toHaveBeenCalledTimes(1);
     expect(onFiles.mock.calls[0]?.[0]).toEqual([file]);
     expect(card?.dataset.dragging).toBeUndefined();
+  });
+});
+
+describe('StartPage recent previews', () => {
+  const recent = [{ name: 'a.pdf', openedAt: 1 }];
+
+  it('shows the first-page preview image in the recent row when one exists', () => {
+    renderPage({ recent, thumbs: new Map([['a.pdf', 'blob:preview-a']]) });
+    const image = host.querySelector<HTMLImageElement>('.start-recent-list img');
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute('src')).toBe('blob:preview-a');
+    expect(image?.getAttribute('alt')).toBe('');
+  });
+
+  it('shows the file icon in the same box when there is no preview', () => {
+    renderPage({ recent });
+    expect(host.querySelector('.start-recent-list img')).toBeNull();
+    const thumb = host.querySelector('.start-recent-list .start-recent-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('draws each recent file as a card whose button is named by the file name', () => {
+    renderPage({ recent: [...recent, { name: 'b.pdf', openedAt: 2 }] });
+    const cards = host.querySelectorAll('.start-recent-list > li.start-recent-card');
+    expect(cards).toHaveLength(2);
+    const button = cards[0]?.querySelector<HTMLButtonElement>('button.start-recent-name');
+    expect(button?.textContent).toBe('a.pdf');
+    expect(button?.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('keeps the opened time outside the card button, so the button name is the file name', () => {
+    renderPage({ recent });
+    const card = host.querySelector('.start-recent-card');
+    const time = card?.querySelector('.start-recent-time');
+    expect(time?.textContent).toBe(t('start.recent.opened', { time: formatOpened(1) }));
+    expect(card?.querySelector('button.start-recent-name')?.textContent).not.toContain(
+      t('start.recent.opened', { time: formatOpened(1) }),
+    );
+  });
+
+  it('opens the recent file by its name when the card button is clicked', () => {
+    const onRecent = vi.fn();
+    renderPage({ recent, onRecent });
+    const button = host.querySelector<HTMLButtonElement>('.start-recent-card button');
+    act(() => {
+      button?.click();
+    });
+    expect(onRecent).toHaveBeenCalledWith('a.pdf');
   });
 });

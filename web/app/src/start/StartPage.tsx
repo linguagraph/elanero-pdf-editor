@@ -12,6 +12,9 @@ export interface StartPageProps {
   readonly recent: readonly RecentFile[];
   // The recent file the user picked last, if any: the page asks them to pick it again.
   readonly pickHint: string | null;
+  // The first-page previews by recent name, as object URLs (issue 757). A name without one shows
+  // the file icon in the same box.
+  readonly thumbs?: ReadonlyMap<string, string>;
   // The engine's load stages, shown in place of the quick actions while it loads (W3.1).
   readonly loading?: ReactNode;
   // The files waiting for the engine, and the call that drops one of them.
@@ -33,6 +36,7 @@ export interface StartPageProps {
 export function StartPage({
   recent,
   pickHint,
+  thumbs,
   loading,
   pending = [],
   onCancelPending,
@@ -144,7 +148,9 @@ export function StartPage({
         ) : (
           <ul className="start-recent-list">
             {recent.map((entry) => (
-              <li key={`${entry.name}-${entry.openedAt}`}>
+              <li key={`${entry.name}-${entry.openedAt}`} className="start-recent-card">
+                {/* The button's accessible name is the file name alone: the preview is decorative
+                    and the opened time sits outside the button. */}
                 <button
                   type="button"
                   className="start-recent-name"
@@ -152,8 +158,15 @@ export function StartPage({
                     onRecent(entry.name);
                   }}
                 >
-                  {entry.name}
-                </button>{' '}
+                  <span className="start-recent-thumb" aria-hidden="true">
+                    {thumbs?.has(entry.name) ? (
+                      <img src={thumbs.get(entry.name)} alt={''} />
+                    ) : (
+                      <Icon name="file" size={24} />
+                    )}
+                  </span>
+                  <span className="start-recent-file">{entry.name}</span>
+                </button>
                 <span className="start-recent-time">
                   {t('start.recent.opened', { time: formatOpened(entry.openedAt) })}
                 </span>

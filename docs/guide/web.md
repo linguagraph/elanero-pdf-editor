@@ -91,8 +91,8 @@ is reloaded until you press it.
     edits text (Tab, the arrow keys, Enter, Delete, F6), and a key that another command already uses,
     which you must remove there first. Ctrl+O, Ctrl+S and Ctrl+P always stay with Elanero, so the
     browser's own dialogs do not open over it.
-  - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names and the saved file handles behind them,
-    uploaded fonts and custom stamps from this browser, then reloads the page. It is turned off while a document is
+  - **Privacy**: **Clear all local data…** removes your saved preferences, recent file names, their saved file handles and
+    previews, uploaded fonts and custom stamps from this browser, then reloads the page. It is turned off while a document is
     open; close the documents first. Your files are not touched, and the recovery copies of other
     open Elanero tabs are kept.
 
@@ -459,7 +459,7 @@ full policy, with what the desktop app stores, is in the
 |---|---|---|
 | Light, dark and system theme | Yes | Yes |
 | Preferences: language, author name, accent colour, translation, reduce motion, default zoom, default page layout, redaction box style | Yes | Saved; default zoom and page layout apply now; the author name and redaction style apply to the comments and marks you add next |
-| Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names and their saved file handles, uploaded fonts and custom stamps; disabled while a document is open |
+| Clear all local data (Preferences, Privacy) | Yes | Removes saved preferences, recent file names, their saved file handles and previews, uploaded fonts and custom stamps; disabled while a document is open |
 | Upload fonts for text editing | Uses the fonts installed on your PC | Yes (Preferences, Fonts) |
 | Install as an app | Windows Store or installer | Yes, with your browser's install option |
 | Works offline | Yes | Yes once loaded, for the app and the PDF engine's files |
