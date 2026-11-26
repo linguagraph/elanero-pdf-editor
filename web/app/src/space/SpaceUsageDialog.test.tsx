@@ -1,4 +1,5 @@
 import { act } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallResult } from '../engine/loader';
@@ -196,6 +197,49 @@ describe('SpaceUsageDialog', () => {
     expect(document.body.querySelector('table')).toBeNull();
     act(() => findButton(t('spaceUsage.close')).click());
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no Close, and Escape does not close it, from the first paint while the audit runs', async () => {
+    const closeShown = () =>
+      [...document.body.querySelectorAll('button')].some(
+        (candidate) => candidate.textContent === t('spaceUsage.close'),
+      );
+    // The audit's first engine call runs inside the dialog's effect, right after the first paint
+    // is committed and before any state update from that effect renders. Close must not be there.
+    const base = fakeEngine();
+    let closeOnFirstPaint: boolean | undefined;
+    const engine = {
+      call: vi.fn(async (method: string) => {
+        if (method === 'jobs.prepare') closeOnFirstPaint = closeShown();
+        return base.call(method);
+      }),
+    } as unknown as FileJobEngine;
+    const job = deferredWorker();
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const onClose = vi.fn();
+    const full: SpaceUsageDialogProps = {
+      isOpen: true,
+      onClose,
+      handle: 'doc-1',
+      engine,
+      progress,
+      startWorker: () => job.worker,
+    };
+    act(() => {
+      flushSync(() => root.render(<SpaceUsageDialog {...full} />));
+    });
+    await flush();
+    expect(closeOnFirstPaint).toBe(false);
+    expect(closeShown()).toBe(false);
+    expect(findButton(t('spaceUsage.cancel'))).toBeTruthy();
+
+    await act(async () => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    });
+    await flush();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('cancels the running audit with Cancel, which is not an error', async () => {

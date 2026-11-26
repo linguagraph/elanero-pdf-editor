@@ -108,6 +108,9 @@ export function readFileJobOutput(
     throw new ReplyShapeError('result.kind', `a ${job} job returns ${kind}`);
   }
   if (kind === 'report') {
+    if ('files' in value) {
+      throw new ReplyShapeError('result.files', `a ${job} job returns no files`);
+    }
     return { files: [], value: field(value, 'value', 'result') ?? null };
   }
   const items = expectArray(field(value, 'files', 'result'), 'result.files');

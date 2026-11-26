@@ -57,7 +57,8 @@ function shareText(size: number, total: number): string {
 // The dialog on the Overlay host. Its form is mounted only while the dialog is open, so each open
 // runs the audit again. While the audit runs, Escape and tap-outside do not close it; Cancel does.
 export function SpaceUsageDialog(props: SpaceUsageDialogProps) {
-  const [running, setRunning] = useState(false);
+  // Starts true: the audit starts in an effect, so the first paint must already withhold Close.
+  const [running, setRunning] = useState(true);
   return (
     <Overlay
       isOpen={props.isOpen}
@@ -134,12 +135,7 @@ function SpaceUsageForm({
           <p>{t('spaceUsage.total', { size: formatSize(audit.total) })}</p>
           {/* The wrapper scrolls the table for large text, and takes focus so a keyboard user can
               scroll it (axe scrollable-region-focusable). */}
-          <div
-            className="compress-audit"
-            role="group"
-            aria-label={t('spaceUsage.table')}
-            tabIndex={0}
-          >
+          <div className="compress-audit" role="group" tabIndex={0}>
             <table className="compress-audit-table" aria-describedby={noteId}>
               <caption>{t('spaceUsage.table')}</caption>
               <thead>

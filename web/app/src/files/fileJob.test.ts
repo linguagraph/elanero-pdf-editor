@@ -76,6 +76,18 @@ describe('readFileJobOutput (result kinds)', () => {
     expect(() => readFileJobOutput(reply, 'reduce_size')).toThrow(ReplyShapeError);
   });
 
+  it('refuses a report reply that carries files', () => {
+    const reply: CallResult = {
+      reply: JSON.stringify(
+        jobReply('report', {
+          files: [{ name: 'a.pdf', mime: 'application/pdf', data: { $bin: 0 } }],
+        }),
+      ),
+      buffers: [bytes],
+    };
+    expect(() => readFileJobOutput(reply, 'audit', 'report')).toThrow(ReplyShapeError);
+  });
+
   it('refuses a files reply when a report is expected', () => {
     expect(() => readFileJobOutput(filesReply(), 'audit', 'report')).toThrow(ReplyShapeError);
   });
