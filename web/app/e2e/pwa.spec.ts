@@ -8,8 +8,8 @@ import { expect, test } from '@playwright/test';
 const APP_URL = process.env.E2E_APP_URL ?? 'http://localhost:4174/';
 
 // The engine assets are staged by scripts/stage_engine_assets.mjs; without them the engine cannot
-// start and this block is skipped, as in open-during-load.spec.ts. CI does not stage them yet
-// (W9.1/W9.2), so this runs locally only.
+// start and this block is skipped, as in open-during-load.spec.ts. CI stages them and runs this
+// spec on every pull request (the web-browser job in ci.yml, W9.1).
 const STAGED_DIR = new URL('../public/engine-assets/', import.meta.url);
 const STAGED = existsSync(fileURLToPath(new URL('pyodide.mjs', STAGED_DIR)));
 
