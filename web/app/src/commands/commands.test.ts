@@ -425,7 +425,7 @@ describe('the Replace and Export commands (W6.7b slice 2b)', () => {
   });
 });
 
-describe('the Delete comment command (#732)', () => {
+describe('the Delete comment command (issue 732)', () => {
   const withDocument = state({ hasDocument: true });
   const oneComment = { ...withDocument, commentsSelected: true };
 

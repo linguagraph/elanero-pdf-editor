@@ -99,7 +99,7 @@ describe('a comment that is added', () => {
   });
 });
 
-describe('the Delete comment command (#732)', () => {
+describe('the Delete comment command (issue 732)', () => {
   // Adds one comment, which the view then selects under the Select tool.
   async function addComment(onCommentSelectionChange: (count: number) => void) {
     const { rpc } = fakeRpc();
@@ -140,6 +140,16 @@ describe('the Delete comment command (#732)', () => {
     expect(onCount.mock.calls.at(-1)?.[0]).toBe(0);
     // afterEach unmounts the root again, so give the host a fresh one.
     root = createRoot(host);
+  });
+
+  it('reports 0 while a drawing tool is on, and the selection again when Select is back', async () => {
+    const onCount = vi.fn();
+    const { viewRef } = await addComment(onCount);
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(1);
+    act(() => viewRef.current?.setCommentTool('rectangle'));
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(0);
+    act(() => viewRef.current?.setCommentTool(null));
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(1);
   });
 
   it('deletes the selected comment through the handle', async () => {

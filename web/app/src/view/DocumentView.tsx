@@ -207,7 +207,7 @@ export interface DocumentViewHandle {
   // Replaces the one picture the Edit tool has selected with the file (Replace Image, W6.7b slice
   // 2b). Nothing happens unless exactly one picture is selected and its list is current.
   replaceEditImage(file: Blob): void;
-  // Deletes the comments the Select tool has selected (the Delete comment command, #732). Nothing
+  // Deletes the comments the Select tool has selected (the Delete comment command, issue 732). Nothing
   // happens with no selection.
   deleteCommentSelection(): void;
   // Downloads the one picture the Edit tool has selected as its own file (Export Image, W6.7b
@@ -287,7 +287,7 @@ export interface DocumentViewProps {
   // Tells the host whether the Edit tool has exactly one picture selected (the Replace and Export
   // commands read it, W6.7b slice 2b). Called with false when the view goes away.
   readonly onEditImageChange?: (single: boolean) => void;
-  // Tells the host how many comments the Select tool has selected (the Delete comment command, #732).
+  // Tells the host how many comments the Select tool has selected (the Delete comment command, issue 732).
   // Called with 0 when the Select tool is off or the view goes away.
   readonly onCommentSelectionChange?: (count: number) => void;
   // The search hits to draw on the pages, and the selected one (W5.4).
@@ -737,12 +737,14 @@ export function DocumentView({
     setOpenNote(null);
     void deleteRefs({ rpc, handle, scheduler }, refs);
   }, [commentSelection, rpc, handle, scheduler]);
-  // The host learns how many comments the Select tool has selected, for Delete comment (#732). The
-  // count is 0 under any other tool, and the unmount clears the host's answer.
+  // The host learns how many comments the Select tool has selected, for Delete comment (issue 732).
+  // The count is 0 under any other tool or while a comment tool is on (the selection is hidden then),
+  // and the unmount clears the host's answer.
   useEffect(() => {
     if (onCommentSelectionChange === undefined) return;
-    onCommentSelectionChange(tool === 'select' ? commentSelection.length : 0);
-  }, [tool, commentSelection, onCommentSelectionChange]);
+    const selecting = tool === 'select' && commentTool === null;
+    onCommentSelectionChange(selecting ? commentSelection.length : 0);
+  }, [tool, commentTool, commentSelection, onCommentSelectionChange]);
   useEffect(() => () => onCommentSelectionChange?.(0), [onCommentSelectionChange]);
   // Delete and Backspace delete the Edit tool's selection; Delete alone deletes the selected comments
   // under the Select tool (Backspace there is left to the field or the page, as in the comments

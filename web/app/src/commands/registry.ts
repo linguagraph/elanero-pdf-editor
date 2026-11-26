@@ -61,7 +61,7 @@ export interface CommandState {
   // The Edit tool has exactly one picture selected (W6.7b slice 2b): the target of Replace and
   // Export. Optional, so a state without it reads as no picture selected.
   readonly singleImageSelected?: boolean;
-  // The Select tool has at least one comment selected (#732): the Delete comment command's target.
+  // The Select tool has at least one comment selected (issue 732): the Delete comment command's target.
   // Optional, so a state without it reads as no comment selected.
   readonly commentsSelected?: boolean;
   // There are marks to apply and no apply is running (W7.4). False when no document is open.
@@ -151,7 +151,7 @@ export const HAS_RECENT: Enabled = (state) => (state.hasRecentFiles ? null : 'no
 // Replace and Export work on exactly one selected picture (W6.7b slice 2b).
 export const SINGLE_IMAGE: Enabled = (state) =>
   state.singleImageSelected === true ? null : 'selectOneImage';
-// Delete comment works on the comments the Select tool has selected (#732), with a document open.
+// Delete comment works on the comments the Select tool has selected (issue 732), with a document open.
 export const HAS_COMMENT_SELECTION: Enabled = (state) =>
   NEEDS_DOCUMENT(state) ?? (state.commentsSelected === true ? null : 'selectComment');
 // Back and Forward need an open document, then an entry in the history that way (W5.3).
