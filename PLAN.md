@@ -617,25 +617,25 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [x] **W7.4** A7 Redaction and sanitize _(redaction marks, apply and sanitize are done in the web app (#259); sanitize leak tests per category (#467) and the refusal on signed documents (#468); the Redactions panel is W7.4b, done)_
 - [x] **W7.4b** Redactions panel in the web app (as on the desktop): the list of redaction marks with their fill, overlay text and text colour; select, edit and delete a mark; go to its page. Marks made in the viewer appear in the list. _(done: redactions panel with list, properties and Apply; user guide updated)_
 - [x] **W7.5** A8 Password protection and permissions _(done: save fixes, security RPC, Encrypt and Remove Security dialogs)_
-- [ ] **W7.6** A9 Document properties and metadata editing _(partial: properties dialog with editable Info fields and Undo done; Description, Advanced (PDF version), Fonts and Security tabs built, with their Python and Vitest tests; the Playwright spec (`properties.spec.ts`, axe per tab, password check on the Security tab) is written but not yet run; pending: a passing Chromium run in web-e2e, blocked by #567)_
+- [ ] **W7.6** A9 Document properties and metadata editing _(partial: properties dialog with editable Info fields and Undo done; Description, Advanced (PDF version), Fonts and Security tabs built, with their Python and Vitest tests; the Playwright spec (`properties.spec.ts`, axe per tab, password check on the Security tab) is written but not yet run; pending: confirmation that properties.spec.ts has passed in a web-e2e run on main (not confirmed in this PLAN update))_
 - [x] **W7.7** A10 Export pages as images and text _(done: export to text, Markdown, HTML, Word, images; real-app run not verified)_
 - [x] **W7.8** A11 Compare documents
-- [ ] **W7.9** A12–A13 Flatten annotations; attachments and layers _(partial: flatten annotations done with confirmation and tests; pending: attachments and layers (A13))_
+- [x] **W7.9** A12–A13 Flatten annotations; attachments and layers
 
 **W8 Quality, #141**
 
 - [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow and feature specs done; pending: a passing web-e2e run: the engine does not load in CI, so the feature specs fail (see #567); specs merged before a passing run: bookmarks, links, touch, split, compress, print)_
-- [ ] **W8.2** Visual golden tests for rendering _(partial: S3 browser worker render added to web-e2e, Chromium only; pending: S4 web UI screenshots, and a green web-e2e run before ticking)_
-- [ ] **W8.3** Performance tests in CI
+- [ ] **W8.2** Visual golden tests for rendering _(partial: S1 and S2 merged; S3 browser worker render merged (#729); its web-e2e step passes on the fix branch (#733, merged); pending: S4 web UI screenshots, and a green web-e2e run on main that includes S4)_
+- [ ] **W8.3** Performance tests in CI _(partial: S1 budget table (#704), S2 first-load size check (#721), S3 browser perf harness (#731) merged; S4 nightly web-perf, S5 trend log and S6 PR trigger pending)_
 - [x] **W8.4** Fuzz and robustness tests
 - [ ] **W8.5** Accessibility checks _(partial: axe, contrast and keyboard checks done; pending: passing web-a11y run, document view axe, reduced motion, touch targets, NVDA and VoiceOver pass)_
-- [ ] **W8.6** Security review
+- [ ] **W8.6** Security review _(partial: all slices merged, S7b in #722; F14 is recorded as open in docs/web/security-review.md (main); the security review is not ticked until its open follow-ups are closed or recorded)_
 
 **W9 Build, release and docs, #142**
 
 - [ ] **W9.1** CI: build wheels and front end _(partial: ci_changes.py skips desktop CI for web-only PRs (#145), the web gate and web-pytest always report (#229, #240), and the docs workflow ignores docs/web; web build jobs pending)_
 - [x] **W9.2** Deploy to GitHub Pages under `/app/` _(done: app deployed to GitHub Pages; gzip sizes within the 40 MB budget)_
-- [ ] **W9.3** User guide: "Web version" page _(partial: the page is written (#231) and its claims are checked against main (#432); pending: the desktop guide pages are not yet updated for the web, and the parity table lists features that are not built yet)_
+- [x] **W9.3** User guide: "Web version" page
 - [x] **W9.4** `PRIVACY.md` and landing page
 - [ ] **W9.5** `AGENTS.md`: web commands and rules _(partial: web section and licence notice generator done; npm entries checked with --verify-installed except client-only; pending: "To confirm" copyright lines for Pyodide and client-only. Both were checked against the installed packages: Pyodide 314.0.8 is under web/spike/node_modules/pyodide (not web/app), its package.json says MPL-2.0 and has no licence file or copyright line; client-only 0.0.1 has no licence file and no copyright line. Both need the upstream sources, which need network access)_
 - [x] **W9.6** Release checklist in `RELEASING.md`
