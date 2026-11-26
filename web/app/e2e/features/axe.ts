@@ -29,6 +29,11 @@ export async function checkAxe(
   testInfo: TestInfo,
   known: readonly KnownIssue[] = [],
 ): Promise<void> {
+  // The canvas pill fades 3 s after its last use, over 200 ms. Caught part way through that fade, its
+  // text is read as low contrast on a translucent surface (WebKit ran the check at about 30% opacity).
+  // The check waits for the fade to end: at 0 axe skips the pill, and at 1 it checks the pill as shown.
+  const pill = page.locator('.canvas-pill');
+  if ((await pill.count()) > 0) await expect(pill).toHaveCSS('opacity', /^[01]$/);
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const violations = (results.violations as unknown as AxeRule[])
     .map((rule) => ({

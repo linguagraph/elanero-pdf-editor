@@ -35,10 +35,26 @@ async function openComments(page: Page): Promise<Locator> {
   return list;
 }
 
+// A ribbon command, from the row or from the "More commands" menu. The Comment tab's Manage group is
+// its last, so it is the first to move into the menu when the row is too narrow for the tab
+// (ribbon/useGroupOverflow.ts). WebKit measures the row wider, so the group moves there at 1920 px
+// too. A command in the menu is not rendered until the menu opens, so the row is checked first.
+async function clickRibbonCommand(page: Page, command: string): Promise<void> {
+  const row = page.locator(`.ribbon .ribbon-toolbar [data-command="${command}"]`);
+  const more = page.locator('.ribbon .ribbon-more');
+  await expect(row.or(more).first()).toBeVisible();
+  if ((await row.count()) > 0) {
+    await row.click();
+    return;
+  }
+  await more.click();
+  await page.locator(`[role="dialog"] [data-command="${command}"]`).click();
+}
+
 // The panel opens from the Comment tab's Comments List button (W7.1b S1), which shows it.
 async function openCommentsFromRibbon(page: Page): Promise<Locator> {
   await openCommentTab(page);
-  await page.locator('.ribbon [data-command="comments-list"]').click();
+  await clickRibbonCommand(page, 'comments-list');
   const list = page.getByRole('list', { name: 'Comment threads' });
   await expect(list).toBeVisible();
   return list;
@@ -52,7 +68,7 @@ function thread(list: Locator, text: string): Locator {
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
   // A taller viewport than the default 720 px, so the page points used below stay on screen. At
-  // 1280 px the Comment tab's Manage group overflows and the Comments List button is not clickable.
+  // 1280 px the Comment tab's Manage group overflows into "More commands" (clickRibbonCommand).
   test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('a sticky note, a rectangle, a reply, a status and an edit: the saved file keeps them', async ({
@@ -214,7 +230,7 @@ test.describe('engine staged', () => {
     await openApp(fresh);
     await openPdf(fresh, 'text_multipage.pdf', fixture('text_multipage.pdf'));
     await openCommentTab(fresh);
-    await fresh.locator('.ribbon [data-command="comments-list"]').click();
+    await clickRibbonCommand(fresh, 'comments-list');
     await expect(fresh.getByRole('button', { name: 'Import comments', exact: true })).toBeVisible();
     await expect(fresh.getByRole('button', { name: 'Export comments', exact: true })).toHaveCount(
       0,
