@@ -79,6 +79,22 @@ describe('printImages', () => {
     expect(widths).toEqual(['72pt', '144pt']);
   });
 
+  // The @page sheet must come from the print frame's own window: WebKit refuses a sheet built in
+  // another document, and then the browser's margins print.
+  it('builds the @page sheet in the print frame, so the sheet is adopted there', async () => {
+    await printImages([page('a.png', 150, 300)], {
+      dpi: 150,
+      print: (w) => {
+        const sheets = w.document.adoptedStyleSheets;
+        expect(sheets).toHaveLength(1);
+        const frameSheetClass = (w as Window & typeof globalThis).CSSStyleSheet;
+        expect(sheets[0]).toBeInstanceOf(frameSheetClass);
+        expect(sheets[0]?.cssRules[0]?.cssText).toContain('@page');
+      },
+      waitForImages: async () => undefined,
+    });
+  });
+
   it('removes the iframe and revokes the blob URLs after the print dialog closes', async () => {
     let win: Window | undefined;
     await printImages([page('a.png', 150, 300)], {
