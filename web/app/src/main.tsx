@@ -11,6 +11,11 @@ import { startJobWorker } from './engine/start';
 import { FRAME_REFUSAL_MESSAGE, shouldRefuse } from './frame';
 import { registerAppServiceWorker } from './pwa/register';
 import { installLaunchInbox, launchQueueOf } from './pwa/launch';
+import {
+  createRecentHandleStore,
+  saveRecentHandle,
+  type StoredFileHandle,
+} from './recent/recentHandles';
 import { toasts } from './feedback/toasts';
 import { startWithLocale } from './i18n/locale';
 import { t } from './i18n/t';
@@ -30,10 +35,19 @@ function mount(root: HTMLElement): void {
   const fonts = createFontLibrary({ engine, store: createFontStore() });
   // The OS "Open with" launches (W4.6 S1). The consumer is set here, before the first render, so a
   // launch is not held by the browser; App attaches the sink that opens the files.
-  const launches = installLaunchInbox(launchQueueOf(window), {
-    failed: (name) => toasts.push('error', t('open.launchFailed', { name })),
-    tooMany: (max) => toasts.push('warning', t('open.launchTooMany', { max })),
-  });
+  // The saved handles for Open recent (issue 756); undefined where IndexedDB is missing.
+  const recentHandles = createRecentHandleStore();
+  const launches = installLaunchInbox(
+    launchQueueOf(window),
+    {
+      failed: (name) => toasts.push('error', t('open.launchFailed', { name })),
+      tooMany: (max) => toasts.push('warning', t('open.launchTooMany', { max })),
+    },
+    // A launched file is a real FileSystemFileHandle at runtime; the launch type is a narrow view.
+    (handle) => {
+      void saveRecentHandle(recentHandles, handle.name, handle as unknown as StoredFileHandle);
+    },
+  );
   createRoot(root).render(
     <StrictMode>
       <FontLibraryContext.Provider value={fonts}>
@@ -43,6 +57,7 @@ function mount(root: HTMLElement): void {
           jobs={jobs}
           startPrintWorker={jobs.acquire}
           launches={launches}
+          recentHandles={recentHandles}
         />
       </FontLibraryContext.Provider>
     </StrictMode>,

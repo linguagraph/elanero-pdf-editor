@@ -15,7 +15,20 @@ import { reportRpcError, toasts } from '../feedback/toasts';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
 import { markLoadStage } from '../perf/marks';
-import { addRecentFile, readRecentFiles, type RecentFile } from '../recent/recentFiles';
+import {
+  addRecentFile,
+  cleanRecentName,
+  readRecentFiles,
+  type RecentFile,
+} from '../recent/recentFiles';
+import {
+  filePickerOf,
+  type HandleStore,
+  loadRecentHandles,
+  reopenFromHandle,
+  saveRecentHandle,
+  type StoredFileHandle,
+} from '../recent/recentHandles';
 import { type AutosaveWarning, createAutosaver, watchPageShow } from '../storage/autosaver';
 import { createAutosaveStore } from '../storage/autosaveStore';
 import { browserTabId } from '../storage/tabId';
@@ -98,6 +111,10 @@ export interface Documents {
   // Drops a file that is still waiting for the engine. A file already opening can't be dropped.
   cancelPending(id: number): void;
   openPicker(hintName?: string): void;
+  // Opens a recent file from its saved handle with no dialog (issue 756); the picker when there is none.
+  openRecent(name: string): void;
+  // Keeps the handles of a PDF dropped on the start page (issue 756).
+  rememberDropped(data: DataTransfer): void;
   showStartPage(): void;
   selectTab(id: number): void;
   closeTab(id: number): void;
@@ -107,7 +124,27 @@ export interface Documents {
   renameTab(id: number, name: string): void;
 }
 
-export function useDocuments(engine: EngineConnection): Documents {
+// The File System Access type a picked PDF is offered as. The picker shows PDFs only.
+const PDF_PICKER_TYPES = [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }];
+
+// The shape of a dropped item that may carry a file handle (Chromium). Narrow on purpose: the
+// DOM library's typings do not always include the method.
+interface DropItem {
+  readonly kind: string;
+  getAsFileSystemHandle?(): Promise<unknown>;
+}
+
+function isFileHandle(value: unknown): value is StoredFileHandle {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === 'file' &&
+    typeof (value as { getFile?: unknown }).getFile === 'function' &&
+    typeof (value as { requestPermission?: unknown }).requestPermission === 'function'
+  );
+}
+
+export function useDocuments(engine: EngineConnection, handleStore?: HandleStore): Documents {
   const [tabs, setTabs] = useState<TabState>(EMPTY_TABS);
   // The latest tab state, updated at once on every change. The open loop reads the id of the tab it
   // has just added from here, which a state updater cannot give it synchronously.
@@ -128,7 +165,35 @@ export function useDocuments(engine: EngineConnection): Documents {
   const drainingRef = useRef(false);
   const nextQueueIdRef = useRef(1);
   const prefetchBudgetRef = useRef({ current: 0 });
+  // The saved handles by name, held in memory so a recent row's click needs no await before its
+  // permission request (the request must come from the click's own gesture).
+  const handlesRef = useRef(new Map<string, StoredFileHandle>());
   const dirty = hasDirtyTab(tabs);
+
+  // Loads the saved handles now and each time the start page shows. A handle saved in this visit
+  // is already in the map and is not replaced by the load.
+  const refreshHandles = useCallback(() => {
+    void loadRecentHandles(handleStore).then((loaded) => {
+      for (const [name, handle] of loaded) {
+        if (!handlesRef.current.has(name)) handlesRef.current.set(name, handle);
+      }
+    });
+  }, [handleStore]);
+  useEffect(() => {
+    refreshHandles();
+  }, [refreshHandles]);
+
+  // Keeps a handle for a name in memory and in the store. A failed save is silent: the file still
+  // opens, and the row simply uses the picker next time.
+  const remember = useCallback(
+    (name: string, handle: StoredFileHandle) => {
+      const key = cleanRecentName(name);
+      if (key === null) return;
+      handlesRef.current.set(key, handle);
+      void saveRecentHandle(handleStore, key, handle);
+    },
+    [handleStore],
+  );
   // The autosave copies of this page load (W3.9 S2). One scheduler per page; it is held in state
   // so the effects below see the same instance.
   const [autosaveStore] = useState(() => createAutosaveStore());
@@ -328,15 +393,88 @@ export function useDocuments(engine: EngineConnection): Documents {
     [showPending],
   );
 
-  const openPicker = useCallback((hintName?: string) => {
-    setPickHint(hintName ?? null);
-    inputRef.current?.click();
-  }, []);
+  // Chromium's File System Access picker when there is one, so the chosen handles can be kept; the
+  // hidden file input elsewhere, as before. The picker is called straight from the click.
+  const openPicker = useCallback(
+    (hintName?: string) => {
+      setPickHint(hintName ?? null);
+      const picker = filePickerOf(window);
+      if (picker === undefined) {
+        inputRef.current?.click();
+        return;
+      }
+      const startIn = hintName === undefined ? undefined : handlesRef.current.get(hintName);
+      void picker.call(window, { multiple: true, types: PDF_PICKER_TYPES, startIn }).then(
+        async (handles) => {
+          const files: File[] = [];
+          for (const handle of handles) {
+            try {
+              const file = await handle.getFile();
+              remember(file.name, handle);
+              files.push(file);
+            } catch {
+              // A file the browser cannot read now is skipped; the others still open.
+            }
+          }
+          if (files.length > 0) openFiles(files);
+        },
+        (error: unknown) => {
+          // Cancelling the picker is not a failure. SecurityError means the user's gesture expired
+          // (a permission prompt ran first): the input cannot be clicked either, so the hint stays.
+          // Any other error falls back to the input.
+          const name = (error as { name?: unknown } | null)?.name;
+          if (name === 'AbortError' || name === 'SecurityError') return;
+          inputRef.current?.click();
+        },
+      );
+    },
+    [openFiles, remember],
+  );
+
+  // A recent row: reopen from its saved handle with no dialog. Without a handle, or when the
+  // permission is refused or the file cannot be read, the picker opens with the hint.
+  const openRecent = useCallback(
+    (name: string) => {
+      const handle = handlesRef.current.get(name);
+      // Without a handle the picker opens at once, as before this change.
+      if (handle === undefined) {
+        openPicker(name);
+        return;
+      }
+      // No await before reopenFromHandle: it asks for permission from the click's gesture.
+      void reopenFromHandle(handle).then((file) => {
+        if (file === undefined) {
+          openPicker(name);
+          return;
+        }
+        openFiles([file]);
+      });
+    },
+    [openFiles, openPicker],
+  );
+
+  // The drop's items are read synchronously, as the browser requires during the drop event.
+  const rememberDropped = useCallback(
+    (data: DataTransfer) => {
+      const items = data.items as unknown as DropItem[] | undefined;
+      for (const item of Array.from(items ?? [])) {
+        if (item.kind !== 'file' || typeof item.getAsFileSystemHandle !== 'function') continue;
+        void item.getAsFileSystemHandle().then(
+          (handle) => {
+            if (isFileHandle(handle)) remember(handle.name, handle);
+          },
+          () => undefined,
+        );
+      }
+    },
+    [remember],
+  );
 
   const showStartPage = useCallback(() => {
     setShowStart(true);
     setRecent(readRecentFiles());
-  }, []);
+    refreshHandles();
+  }, [refreshHandles]);
 
   const selectTab = useCallback(
     (id: number) => {
@@ -389,6 +527,8 @@ export function useDocuments(engine: EngineConnection): Documents {
     openFiles,
     cancelPending,
     openPicker,
+    openRecent,
+    rememberDropped,
     showStartPage,
     selectTab,
     closeTab,

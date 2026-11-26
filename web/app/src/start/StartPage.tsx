@@ -20,6 +20,8 @@ export interface StartPageProps {
   onOpen(): void;
   onRecent(name: string): void;
   onFiles(files: readonly File[]): void;
+  // Keeps the file handles of a drop, for Open recent (issue 756). Optional: tests leave it out.
+  onDroppedHandles?(data: DataTransfer): void;
   // Opens the About overlay from the footer (the same overlay as the app menu).
   onAbout(): void;
 }
@@ -37,6 +39,7 @@ export function StartPage({
   onOpen,
   onRecent,
   onFiles,
+  onDroppedHandles,
   onAbout,
 }: StartPageProps) {
   const headingId = useId();
@@ -63,6 +66,7 @@ export function StartPage({
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
+        onDroppedHandles?.(event.dataTransfer);
         onFiles(Array.from(event.dataTransfer.files));
       }}
     >

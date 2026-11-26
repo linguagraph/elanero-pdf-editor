@@ -415,6 +415,57 @@ describe('start page', () => {
     );
   });
 
+  it('keeps the hint and does not click the input when the picker is refused after a permission prompt', async () => {
+    // Chromium picker refused with SecurityError: the user's gesture expired during the prompt.
+    const delay = () => new Promise((resolve) => setTimeout(resolve, 5));
+    const refused = vi.fn(async () => {
+      await delay();
+      throw new DOMException('no gesture', 'SecurityError');
+    });
+    Object.defineProperty(window, 'showOpenFilePicker', { configurable: true, value: refused });
+    try {
+      const handle = {
+        kind: 'file',
+        name: 'first.pdf',
+        getFile: async () => pdf('first.pdf'),
+        requestPermission: async () => {
+          await delay();
+          return 'denied';
+        },
+      };
+      const zone = host.querySelector<HTMLElement>('.start-drop');
+      const event = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'dataTransfer', {
+        value: {
+          files: [pdf('first.pdf')],
+          items: [{ kind: 'file', getAsFileSystemHandle: async () => handle }],
+        },
+      });
+      act(() => {
+        zone?.dispatchEvent(event);
+      });
+      await until(() => tabNames().length === 1);
+      act(() => {
+        closeTab('first.pdf');
+      });
+
+      const clicked = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+      act(() => {
+        buttonNamed('first.pdf').click();
+      });
+      await until(() => refused.mock.calls.length === 1);
+      await until(() => host.querySelector('.start-hint') !== null);
+      await delay();
+      expect(refused).toHaveBeenCalledTimes(1);
+      expect(clicked).not.toHaveBeenCalled();
+      expect(host.querySelector('.start-hint')?.textContent).toBe(
+        t('start.recent.pickAgain', { name: 'first.pdf' }),
+      );
+    } finally {
+      Reflect.deleteProperty(window, 'showOpenFilePicker');
+    }
+  });
+
   it('keeps only names and times in storage, never the file content', async () => {
     dropFiles([pdf('contract.pdf', '%PDF-1.7 SECRET-PAGE-TEXT')]);
     await until(() => window.localStorage.getItem(RECENT_STORAGE_KEY) !== null);

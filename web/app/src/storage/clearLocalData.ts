@@ -2,6 +2,7 @@
 // and nothing else: this origin can hold other apps' data (GitHub Pages shares one origin for all of
 // a user's project sites), so only the keys and folders below are touched.
 
+import { deleteRecentHandleDatabase } from '../recent/recentHandles';
 import { FONTS_FOLDER } from './fontStore';
 import { privateRoot, StorageUnsupportedError, type DirectoryLike } from './opfs';
 import { STAMPS_FOLDER } from './stampStore';
@@ -26,13 +27,16 @@ export interface ClearOutcome {
 export interface ClearLocalDataDeps {
   storage?: () => Storage;
   root?: () => Promise<DirectoryLike>;
+  // The recent-handle database (issue 756); resolves true when it is gone.
+  recentHandles?: () => Promise<boolean>;
 }
 
 // Never throws: each step has its own try/catch, so one failing step cannot stop the others.
 export async function clearLocalData(deps: ClearLocalDataDeps = {}): Promise<ClearOutcome> {
   const keys = clearPrefixedKeys(deps.storage ?? (() => window.localStorage));
   const folders = await clearFolders(deps.root ?? privateRoot);
-  return { keysRemoved: keys.removed, complete: keys.complete && folders };
+  const handles = await (deps.recentHandles ?? deleteRecentHandleDatabase)();
+  return { keysRemoved: keys.removed, complete: keys.complete && folders && handles };
 }
 
 // Runs a clear and, only when it is complete, tells the other tabs to drop their uploaded fonts. A
