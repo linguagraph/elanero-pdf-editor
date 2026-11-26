@@ -32,7 +32,16 @@ ID_PATTERN = re.compile(r"^[DW]\d+$")
 EMITTERS = {"_check": 1, "perf": 0}
 # Metrics measured by a script, not a Python budget test: W1 is the web build's gzip size, checked
 # by web/app/scripts/check-size.ts (design 2.3). Its tests below check the script and its workflow.
-EXTERNAL_EMITTERS = {"W1": "web/app/scripts/check-size.ts"}
+# W2, W3, W7 and W8 are timed by the browser harness, web/app/e2e/perf/perf.spec.ts, which records
+# each with record('<id>', ...). The check below reads that file as text.
+PERF_SPEC = "web/app/e2e/perf/perf.spec.ts"
+EXTERNAL_EMITTERS = {
+    "W1": "web/app/scripts/check-size.ts",
+    "W2": PERF_SPEC,
+    "W3": PERF_SPEC,
+    "W7": PERF_SPEC,
+    "W8": PERF_SPEC,
+}
 W1_BUDGET_TS = ROOT / "web" / "app" / "src" / "deploy" / "budget.ts"
 COMMON_FIELDS = (
     "id",
@@ -186,6 +195,18 @@ def test_w1_budget_matches_the_table() -> None:
     match = re.search(r"export const GZIP_BUDGET_BYTES = ([\d_]+);", text)
     assert match, f"no GZIP_BUDGET_BYTES constant in {W1_BUDGET_TS}"
     assert int(match.group(1).replace("_", "")) == metric("W1")["limit"]
+
+
+def test_web_perf_spec_records_match_the_table() -> None:
+    # Both directions for the browser emitter: each W row it owns has one record call, and each
+    # record call names a row. Only the record call is checked: the TypeScript file is not parsed,
+    # and the unenforced-assert rule above skips these rows (it reads Python only).
+    text = (ROOT / PERF_SPEC).read_text(encoding="utf-8")
+    recorded = re.findall(r"\brecord\('(W\d+)'", text)
+    owned = {mid for mid, path in EXTERNAL_EMITTERS.items() if path == PERF_SPEC}
+    assert len(recorded) == len(set(recorded)), f"a metric is recorded twice: {recorded}"
+    assert set(recorded) == owned, f"perf.spec.ts records {sorted(recorded)}, table owns {owned}"
+    assert owned <= set(metrics()), "perf.spec.ts rows missing from budgets.json"
 
 
 def test_w1_size_check_runs_in_web_pytest() -> None:

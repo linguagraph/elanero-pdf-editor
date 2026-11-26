@@ -90,6 +90,61 @@
       "baseline_date": null,
       "baseline_machine": null,
       "note": "PROVISIONAL label (no timing baseline; W1 counts bytes). The 40 MB decimal hard limit is enforced by the exit code of web/app/scripts/check-size.ts, run by web-pytest.yml on every web PR, not by this table's enforce flag. web/app/src/deploy/budget.ts must carry the same limit."
+    },
+    {
+      "id": "W2",
+      "name": "Repeat visit to page 1 (Pyodide start + import + open + paint)",
+      "unit": "ms",
+      "kind": "paired",
+      "stat": "median of 5 after a warm-up, compared with the baseline commit run in the same job",
+      "fixture": "perf_mixed_10",
+      "pct": 15,
+      "abs_ms": 300,
+      "enforce": false,
+      "baseline_ms": null,
+      "baseline_date": null,
+      "baseline_machine": null,
+      "note": "PROVISIONAL: HEAD fails only when it is more than 15% AND more than 300 ms slower than the baseline_ref build (src/perf/compare.ts). Not gated until web-perf (W8.3 S4b) runs it; then set enforce to true."
+    },
+    {
+      "id": "W3",
+      "name": "First visit (cold profile)",
+      "unit": "ms",
+      "kind": "trend",
+      "stat": "median of 5 cold profiles",
+      "fixture": "perf_mixed_10",
+      "enforce": false,
+      "baseline_ms": null,
+      "baseline_date": null,
+      "baseline_machine": null,
+      "note": "PROVISIONAL, trend only (enforce false): depends on the network, so it is reported and never gated."
+    },
+    {
+      "id": "W7",
+      "name": "Longest main-thread task while scrolling end to end",
+      "unit": "ms",
+      "kind": "absolute",
+      "stat": "median of the per-run maxima",
+      "fixture": "perf_mixed_1000",
+      "limit_ms": 50,
+      "enforce": false,
+      "baseline_ms": null,
+      "baseline_date": null,
+      "baseline_machine": null,
+      "note": "PROVISIONAL: the 50 ms limit (W1.4 section 14) is not yet measured on a CI runner, so the rule is not enforced (enforce false) until a baseline run is recorded."
+    },
+    {
+      "id": "W8",
+      "name": "Page sharp after scrolling stops",
+      "unit": "ms",
+      "kind": "trend",
+      "stat": "median of 5 runs",
+      "fixture": "perf_mixed_1000",
+      "enforce": false,
+      "baseline_ms": null,
+      "baseline_date": null,
+      "baseline_machine": null,
+      "note": "PROVISIONAL, trend only (enforce false): the target is for a mid-range laptop, so it is reported and never gated."
     }
   ]
 }
