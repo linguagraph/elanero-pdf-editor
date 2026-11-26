@@ -24,6 +24,14 @@ import { thumbnailScaleMilli, type ThumbnailSize } from '../view/thumbnails';
 import { extractName, runExtract } from './extract';
 import { insertFile, insertedCount, PasswordGaveUp } from './insertFile';
 import {
+  clearOrganizer,
+  hasQueuedOrganizerCommands,
+  type OrganizerActions,
+  publishOrganizer,
+  runOrganizerAction,
+  takeQueuedOrganizerCommands,
+} from './organizerBridge';
+import {
   canDelete,
   clampSelection,
   duplicatedPages,
@@ -86,12 +94,22 @@ export interface OrganizerPanelProps {
   // Asks for the password of an encrypted file to insert. The app's password dialog unless a test
   // passes its own.
   readonly prompt?: PasswordPrompt;
+  // The page a ribbon command preselects when it opens the panel (0-based): the page the view shows.
+  // The panel uses it only for a queued command, so a panel opened from the rail starts empty.
+  readonly initialPage?: number;
 }
 
 type PageChange =
   'pages.rotate' | 'pages.move' | 'pages.delete' | 'pages.insert_blank' | 'pages.duplicate';
 
-export function OrganizerPanel({
+// A new document gets a new panel (the key is the handle), so its selection, its pages and its status on
+// the ribbon start fresh: the old document's selection cannot be used against the new handle, and a
+// ribbon command in the reload queues until the new pages are in.
+export function OrganizerPanel(props: OrganizerPanelProps) {
+  return <OrganizerPanelContent key={props.handle} {...props} />;
+}
+
+function OrganizerPanelContent({
   rpc,
   handle,
   onClose,
@@ -101,11 +119,20 @@ export function OrganizerPanel({
   startWorker,
   download = downloadBytes,
   prompt = passwordPrompt,
+  initialPage,
 }: OrganizerPanelProps) {
   const [sizes, setSizes] = useState<readonly ThumbnailSize[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [selection, setSelection] = useState<PageSelection>(NO_SELECTION);
   const [busy, setBusy] = useState(false);
+  // The ribbon's actions read busy from a ref too: two presses before a re-render must not both run.
+  const busyRef = useRef(false);
+  const setBusyNow = (value: boolean) => {
+    busyRef.current = value;
+    setBusy(value);
+  };
+  // Whether a queued ribbon command has already preselected the initial page for this document.
+  const preselected = useRef(false);
   const [confirming, setConfirming] = useState(false);
   // A new scheduler after each change: the page indexes now mean other pages, so the cache of the
   // old one is left behind rather than drawn wrongly.
@@ -185,7 +212,8 @@ export function OrganizerPanel({
     message: string,
     nextSelection: (value: unknown) => PageSelection | undefined,
   ) => {
-    setBusy(true);
+    if (busyRef.current) return;
+    setBusyNow(true);
     try {
       const reply = await rpc.call('actions.run', { handle, name, args });
       if (!reply.executed) return;
@@ -194,7 +222,7 @@ export function OrganizerPanel({
     } catch (error) {
       reportFailure(error);
     } finally {
-      setBusy(false);
+      setBusyNow(false);
     }
   };
 
@@ -206,6 +234,7 @@ export function OrganizerPanel({
   };
 
   const rotate = (delta: number) => {
+    if (!hasSelection || busyRef.current) return;
     const count = picked.length;
     void change(
       'pages.rotate',
@@ -254,6 +283,7 @@ export function OrganizerPanel({
 
   // The copies go right after the last chosen page, and they become the selection.
   const duplicateSelected = () => {
+    if (!hasSelection || busyRef.current) return;
     const copies = duplicatedPages(picked);
     const count = picked.length;
     void change('pages.duplicate', { pages: picked }, tp('organizer.duplicated', count), () => ({
@@ -266,7 +296,7 @@ export function OrganizerPanel({
   // brought. The password dialog runs inside insertFile; a cancel there changes nothing.
   const insertFromFile = async (file: File) => {
     const at = insertAt(picked, total);
-    setBusy(true);
+    setBusyNow(true);
     try {
       const reply = await insertFile({ rpc, handle, file, at, prompt });
       if (reply === null || !reply.executed) return;
@@ -277,16 +307,17 @@ export function OrganizerPanel({
       if (error instanceof PasswordGaveUp) toastStore.push('error', t('organizer.passwordGaveUp'));
       else reportFailure(error);
     } finally {
-      setBusy(false);
+      setBusyNow(false);
     }
   };
 
   // The chosen pages go to a new file, which is downloaded. Nothing in the document changes, so
   // there is no Undo.
   const extract = async () => {
+    if (!hasSelection || busyRef.current) return;
     const name = extractName(documentName);
     const count = picked.length;
-    setBusy(true);
+    setBusyNow(true);
     try {
       const file = await runExtract({ engine: rpc, startWorker }, handle, picked);
       download(name, file.data);
@@ -294,12 +325,12 @@ export function OrganizerPanel({
     } catch (error) {
       if (!(error instanceof FileJobCancelled)) reportFailure(error);
     } finally {
-      setBusy(false);
+      setBusyNow(false);
     }
   };
 
   const deleteSelected = () => {
-    if (!canDelete(picked, total)) return;
+    if (!canDelete(picked, total) || busyRef.current) return;
     const count = picked.length;
     void change(
       'pages.delete',
@@ -308,6 +339,48 @@ export function OrganizerPanel({
       () => NO_SELECTION,
     );
   };
+
+  // The ribbon's view of this panel (issue 736). Each action is the closure a button above runs.
+  const actions: OrganizerActions = {
+    rotate: (delta) => rotate(delta),
+    insertFile: () => {
+      if (!busyRef.current) fileInput.current?.click();
+    },
+    duplicate: () => duplicateSelected(),
+    extract: () => void extract(),
+    askDelete: () => {
+      if (!busyRef.current && canDelete(picked, total)) setConfirming(true);
+    },
+  };
+  const ready = sizes !== null;
+  // Publishes the selection to the ribbon's rules, and withdraws it when the panel goes. Commands the
+  // ribbon queued (before the panel was ready, or while it loaded) run here, each once. A panel that a
+  // ribbon command opened first preselects the initial page, and the commands run on the next render,
+  // which holds that selection. Commands that arrive after this publish run at once from the bridge.
+  // No dependency list on purpose: the bridge needs the actions of every render, and this effect
+  // sets state only once (the preselect is guarded by a ref).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!ready) return;
+    publishOrganizer({ selected: picked.length, total, busy }, actions);
+    if (!hasQueuedOrganizerCommands()) return;
+    if (!preselected.current && picked.length === 0 && initialPage !== undefined && total > 0) {
+      preselected.current = true;
+      const index = Math.min(Math.max(initialPage, 0), total - 1);
+      setSelection(selectPage(NO_SELECTION, index, { ctrl: false, shift: false }));
+      return;
+    }
+    for (const id of takeQueuedOrganizerCommands()) {
+      // A file chooser opens only from a press, and this runs from an effect, so the browser would
+      // block it. The queued insert says what to press instead.
+      if (id === 'insert-pages') {
+        toastStore.push('info', t('organizer.insertFileHint'));
+        continue;
+      }
+      runOrganizerAction(id, actions);
+    }
+  });
+  useEffect(() => () => clearOrganizer(), []);
 
   if (loadFailed) {
     return (

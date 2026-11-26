@@ -1440,6 +1440,43 @@ describe('App: Organize Pages and the view toggles (W4.3a S6)', () => {
     expect(host.querySelector('#app-panel-right')?.textContent).toContain(t('organizer.title'));
   });
 
+  it('Rotate Pages Right from the ribbon with the panel closed opens it and rotates the current page', async () => {
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App engine={fakeEngine(scripted.client)} jobs={jobs as unknown as JobWorkerPool} />,
+      );
+    });
+    const zone = host.querySelector<HTMLElement>('.start-drop');
+    if (zone === null) throw new Error('no drop zone');
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [pdf('ribbon.pdf')] } });
+    act(() => {
+      zone.dispatchEvent(drop);
+    });
+    await until(() => scripted.renders() > 0);
+
+    openRibbonTab(TAB_LABELS.organize);
+    act(() => {
+      ribbonButton('rotate-pages-right').click();
+    });
+
+    // The panel opens, loads its one page, and the queued rotate runs on that page.
+    const engineCall = scripted.client.call as unknown as ReturnType<typeof vi.fn>;
+    await until(() =>
+      engineCall.mock.calls.some(
+        ([method, params]) =>
+          method === 'actions.run' &&
+          (params as { name?: string; args?: unknown }).name === 'pages.rotate' &&
+          JSON.stringify((params as { args?: unknown }).args) === '{"pages":[0],"delta":90}',
+      ),
+    );
+    expect(host.querySelector('[data-panel="organizer"]')?.getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
   it('marks the layout the view changed to as pressed on the ribbon', async () => {
     await openDocument();
     openRibbonTab(TAB_LABELS.view);

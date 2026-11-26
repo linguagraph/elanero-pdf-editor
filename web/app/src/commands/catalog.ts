@@ -9,8 +9,11 @@ import {
   CAN_EDIT_CONTENT,
   CAN_GO_BACK,
   CAN_GO_FORWARD,
+  CAN_DELETE_PAGES,
+  CAN_INSERT_PAGES,
   CAN_REDO,
   CAN_UNDO,
+  PAGES_SELECTED,
   CAN_ZOOM_IN,
   CAN_ZOOM_OUT,
   createRegistry,
@@ -222,15 +225,16 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
 
   // Organize
   cmd('organize-pages', 'command.organize-pages.label', 'organize.organize'),
-  cmd('insert-pages', 'command.insert-pages.label', 'organize.pages'),
+  // The page commands run the organizer panel's own actions (issue 736); their rules mirror its buttons.
+  cmd('insert-pages', 'command.insert-pages.label', 'organize.pages', CAN_INSERT_PAGES),
   aliased(
-    cmd('delete-pages', 'command.delete-pages.label', 'organize.pages'),
+    cmd('delete-pages', 'command.delete-pages.label', 'organize.pages', CAN_DELETE_PAGES),
     'command.delete-pages.keywords',
   ),
-  cmd('duplicate-pages', 'command.duplicate-pages.label', 'organize.pages'),
-  cmd('rotate-pages-left', 'command.rotate-pages-left.label', 'organize.pages'),
-  cmd('rotate-pages-right', 'command.rotate-pages-right.label', 'organize.pages'),
-  cmd('extract-pages', 'command.extract-pages.label', 'organize.assemble'),
+  cmd('duplicate-pages', 'command.duplicate-pages.label', 'organize.pages', PAGES_SELECTED),
+  cmd('rotate-pages-left', 'command.rotate-pages-left.label', 'organize.pages', PAGES_SELECTED),
+  cmd('rotate-pages-right', 'command.rotate-pages-right.label', 'organize.pages', PAGES_SELECTED),
+  cmd('extract-pages', 'command.extract-pages.label', 'organize.assemble', PAGES_SELECTED),
   cmd('replace-pages', 'command.replace-pages.label', 'organize.assemble'),
   aliased(
     cmd('split-document', 'command.split-document.label', 'organize.assemble'),

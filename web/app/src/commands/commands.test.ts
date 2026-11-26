@@ -663,6 +663,100 @@ describe('the stamp command', () => {
   });
 });
 
+// The organize ribbon's page commands (issue 736) read the organizer panel's status. With the panel
+// closed (organizer null) they are enabled, and the handler opens the panel.
+describe('the organize ribbon page commands', () => {
+  const organizer = (overrides: { selected?: number; total?: number; busy?: boolean } = {}) => ({
+    selected: 1,
+    total: 3,
+    busy: false,
+    ...overrides,
+  });
+  const docWith = (status: ReturnType<typeof organizer> | null) =>
+    state({ hasDocument: true, capabilities: ALL_CAPABILITIES, organizer: status });
+
+  it('needs an open document first', () => {
+    for (const id of ['insert-pages', 'delete-pages', 'rotate-pages-left', 'extract-pages']) {
+      expect(commandDisabledReasonOf(id, state({ organizer: organizer() }))).toBe('needsDocument');
+    }
+  });
+
+  it('is enabled when the panel is closed, since the handler opens it', () => {
+    const closed = docWith(null);
+    for (const id of [
+      'insert-pages',
+      'delete-pages',
+      'duplicate-pages',
+      'rotate-pages-left',
+      'rotate-pages-right',
+      'extract-pages',
+    ]) {
+      expect(commandDisabledReasonOf(id, closed)).toBeNull();
+    }
+  });
+
+  it('rotate, duplicate and extract need a selection', () => {
+    for (const id of [
+      'rotate-pages-left',
+      'rotate-pages-right',
+      'duplicate-pages',
+      'extract-pages',
+    ]) {
+      expect(commandDisabledReasonOf(id, docWith(organizer({ selected: 0 })))).toBe(
+        'noPagesSelected',
+      );
+      expect(commandDisabledReasonOf(id, docWith(organizer({ selected: 2 })))).toBeNull();
+      expect(commandDisabledReasonOf(id, docWith(organizer({ busy: true })))).toBe('pagesBusy');
+    }
+  });
+
+  it('delete needs a selection that leaves a page, and waits while busy', () => {
+    expect(commandDisabledReasonOf('delete-pages', docWith(organizer({ selected: 0 })))).toBe(
+      'noPagesSelected',
+    );
+    expect(commandDisabledReasonOf('delete-pages', docWith(organizer({ selected: 3 })))).toBe(
+      'keepOnePage',
+    );
+    expect(commandDisabledReasonOf('delete-pages', docWith(organizer({ selected: 1 })))).toBeNull();
+    expect(
+      commandDisabledReasonOf('delete-pages', docWith(organizer({ selected: 1, busy: true }))),
+    ).toBe('pagesBusy');
+  });
+
+  it('delete refuses a one-page document, which has no page to leave', () => {
+    expect(
+      commandDisabledReasonOf('delete-pages', docWith(organizer({ selected: 1, total: 1 }))),
+    ).toBe('keepOnePage');
+  });
+
+  it('insert waits while busy and is otherwise enabled, with or without a selection', () => {
+    expect(commandDisabledReasonOf('insert-pages', docWith(organizer({ selected: 0 })))).toBeNull();
+    expect(commandDisabledReasonOf('insert-pages', docWith(organizer({ busy: true })))).toBe(
+      'pagesBusy',
+    );
+  });
+
+  it('runs with a handler and a rule that passes', () => {
+    const handlers = { 'rotate-pages-left': () => {} };
+    expect(
+      commandDisabledReason(REGISTRY.get('rotate-pages-left')!, docWith(organizer()), handlers),
+    ).toBeNull();
+  });
+
+  it('leaves Replace and Page labels without a handler, so they still say not available yet', () => {
+    for (const id of ['replace-pages', 'page-labels']) {
+      expect(commandDisabledReason(REGISTRY.get(id)!, withDoc, {})).toBe('notAvailableYet');
+    }
+  });
+
+  it('gives every new reason a label', () => {
+    for (const reason of ['noPagesSelected', 'pagesBusy', 'keepOnePage'] as const) {
+      expect(DISABLED_REASON_LABELS[reason]).toBeDefined();
+      expect(EN[DISABLED_REASON_LABELS[reason]]).toBeTruthy();
+    }
+  });
+});
+
 describe('the Space Usage command (issue 737)', () => {
   it('needs a document, and runs its handler when there is one', () => {
     expect(commandDisabledReasonOf('space-usage', state())).toBe('needsDocument');

@@ -73,6 +73,16 @@ export interface CommandState {
   readonly canGoForward: boolean;
   // The open document's view (W4.3a S6); null when no document is shown.
   readonly view: ViewCommandState | null;
+  // The organizer panel's status (issue 736): null when the panel is closed or still loading. Optional,
+  // so a state without it reads as the panel closed.
+  readonly organizer?: OrganizerCommandStatus | null;
+}
+
+// The organizer panel's selection and whether a change runs, as the ribbon's page rules read them.
+export interface OrganizerCommandStatus {
+  readonly selected: number;
+  readonly total: number;
+  readonly busy: boolean;
 }
 
 // What the View and Home commands read from the open document's view.
@@ -103,6 +113,9 @@ export type DisabledReason =
   | 'lastPage'
   | 'maxZoom'
   | 'minZoom'
+  | 'noPagesSelected'
+  | 'pagesBusy'
+  | 'keepOnePage'
   | 'notAvailableYet';
 
 export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>> = {
@@ -121,6 +134,9 @@ export const DISABLED_REASON_LABELS: Readonly<Record<DisabledReason, MessageId>>
   lastPage: 'disabled.lastPage',
   maxZoom: 'disabled.maxZoom',
   minZoom: 'disabled.minZoom',
+  noPagesSelected: 'disabled.noPagesSelected',
+  pagesBusy: 'disabled.pagesBusy',
+  keepOnePage: 'organizer.keepOne',
   notAvailableYet: 'disabled.notAvailableYet',
 };
 
@@ -186,6 +202,29 @@ export const CAN_ZOOM_IN: Enabled = (state) => {
 export const CAN_ZOOM_OUT: Enabled = (state) => {
   if (!state.hasDocument) return 'needsDocument';
   return state.view === null || state.view.zoom > MIN_ZOOM ? null : 'minZoom';
+};
+
+// The organize ribbon's page commands (issue 736) mirror the organizer panel's disabled rules. With the
+// panel closed (organizer null) they are enabled: the handler opens the panel, and the panel checks again.
+export const PAGES_SELECTED: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  const organizer = state.organizer ?? null;
+  if (organizer === null) return null;
+  if (organizer.selected === 0) return 'noPagesSelected';
+  return organizer.busy ? 'pagesBusy' : null;
+};
+// Delete also needs a page left over: the panel says keep one page when every page is selected.
+export const CAN_DELETE_PAGES: Enabled = (state) => {
+  const reason = PAGES_SELECTED(state);
+  if (reason !== null) return reason;
+  const organizer = state.organizer ?? null;
+  if (organizer === null) return null;
+  return organizer.selected < organizer.total ? null : 'keepOnePage';
+};
+// Insert needs a document and no change running; it does not need a selection.
+export const CAN_INSERT_PAGES: Enabled = (state) => {
+  if (!state.hasDocument) return 'needsDocument';
+  return state.organizer?.busy === true ? 'pagesBusy' : null;
 };
 
 // A ribbon group (tab `null` marks a group that only the app menu uses).

@@ -10,6 +10,7 @@ import { RpcError } from '../rpc/client';
 import { PROTOCOL_VERSION } from '../rpc/generated';
 import { t, tp } from '../i18n/t';
 import { OrganizerPanel } from './OrganizerPanel';
+import { getOrganizerActions, getOrganizerStatus, runOrganizerCommand } from './organizerBridge';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -152,6 +153,8 @@ interface MountOptions {
   readonly prompt?: PasswordPrompt;
   readonly download?: (name: string, bytes: ArrayBuffer) => void;
   readonly worker?: () => JobWorker;
+  readonly initialPage?: number;
+  readonly handle?: string;
 }
 
 function mount(
@@ -164,7 +167,7 @@ function mount(
     root.render(
       <OrganizerPanel
         rpc={rpc}
-        handle="h"
+        handle={options.handle ?? 'h'}
         onClose={() => {}}
         toastStore={store}
         onChanged={onChanged}
@@ -172,6 +175,7 @@ function mount(
         startWorker={options.worker ?? extractWorker}
         download={options.download}
         prompt={options.prompt}
+        initialPage={options.initialPage}
       />,
     );
   });
@@ -755,5 +759,170 @@ describe('page organizer drag and drop', () => {
     const moveDown = buttonNamed(t('organizer.moveDown'));
     expect(moveDown.disabled).toBe(false);
     expect(moveDown.tabIndex).not.toBe(-1);
+  });
+});
+
+// The ribbon reaches the panel's operations through the bridge (issue 736). Each bridge action is the
+// panel's own closure, so it does what the matching button does.
+describe('page organizer ribbon bridge', () => {
+  it('publishes the selection, and the bridge rotate and duplicate run the same operations as the buttons', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[1]!);
+    expect(getOrganizerStatus()).toEqual({ selected: 1, total: 4, busy: false });
+
+    act(() => getOrganizerActions()?.rotate(90));
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.rotate', args: { pages: [1], delta: 90 } },
+    });
+
+    act(() => getOrganizerActions()?.duplicate());
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.duplicate', args: { pages: [1] } },
+    });
+  });
+
+  it('the bridge insert opens the same file input the Insert from file button opens', async () => {
+    const { rpc } = fakeRpc(3);
+    mount(rpc, createToastStore());
+    await flush();
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
+
+    act(() => getOrganizerActions()?.insertFile());
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(clickSpy.mock.contexts[0]).toBe(host.querySelector('input[type="file"]'));
+  });
+
+  it('the bridge extract downloads the selection, as the extract button does', async () => {
+    const { rpc } = fakeRpc(3);
+    const download = vi.fn();
+    mount(rpc, createToastStore(), undefined, { download });
+    await flush();
+    click(options()[0]!);
+
+    act(() => getOrganizerActions()?.extract());
+    await flush();
+    expect(download).toHaveBeenCalledTimes(1);
+  });
+
+  it('askDelete opens the confirmation in the panel, and confirming deletes the selection', async () => {
+    const { rpc, calls } = fakeRpc(3);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[0]!);
+
+    act(() => getOrganizerActions()?.askDelete());
+    await flush();
+    expect(document.body.textContent).toContain(t('organizer.deleteTitle'));
+
+    // As the existing delete test does: the dialog's own Delete, apart from the toolbar's label.
+    const dialog = document.querySelector('[role="dialog"]');
+    press(
+      Array.from(dialog?.querySelectorAll('button') ?? []).find(
+        (button) => button.textContent === t('organizer.deleteConfirm'),
+      ) as HTMLButtonElement,
+    );
+    await flush();
+    expect(calls).toContainEqual({
+      method: 'actions.run',
+      params: { handle: 'h', name: 'pages.delete', args: { pages: [0] } },
+    });
+  });
+
+  it('askDelete does nothing when the selection is every page', async () => {
+    const { rpc } = fakeRpc(1);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[0]!);
+
+    act(() => getOrganizerActions()?.askDelete());
+    await flush();
+    expect(document.body.textContent).not.toContain(t('organizer.deleteTitle'));
+  });
+
+  it('a panel opened from the rail starts with nothing selected, even with initialPage', async () => {
+    const { rpc } = fakeRpc(4);
+    mount(rpc, createToastStore(), undefined, { initialPage: 2 });
+    await flush();
+    expect(selectedPages()).toEqual([]);
+  });
+
+  it('a ribbon command that arrives while the pages load runs once, on the preselected page', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    mount(rpc, createToastStore(), undefined, { initialPage: 2 });
+    // The pages are in, but the panel has not published yet: the command lands in that window.
+    await Promise.resolve();
+    runOrganizerCommand('rotate-pages-right', () => {});
+    await flush();
+    const rotates = calls.filter((call) => call.params.name === 'pages.rotate');
+    expect(rotates).toEqual([
+      {
+        method: 'actions.run',
+        params: { handle: 'h', name: 'pages.rotate', args: { pages: [2], delta: 90 } },
+      },
+    ]);
+  });
+
+  it('a queued insert from the ribbon shows the hint and opens no file chooser', async () => {
+    const { rpc } = fakeRpc(3);
+    const store = createToastStore();
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
+    runOrganizerCommand('insert-pages', () => {});
+    mount(rpc, store, undefined, { initialPage: 0 });
+    await flush();
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+    expect(store.getState().visible[0]?.text).toBe(t('organizer.insertFileHint'));
+  });
+
+  it('switching to another document drops the old status and actions at once', async () => {
+    const { rpc } = fakeRpc(3);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[0]!);
+    expect(getOrganizerStatus()?.selected).toBe(1);
+
+    // The new handle's pages are still loading here, so the old selection must not be published.
+    mount(rpc, createToastStore(), undefined, { handle: 'h2' });
+    expect(getOrganizerStatus()).toBeNull();
+    expect(getOrganizerActions()).toBeNull();
+    await flush();
+  });
+
+  it('a command queued before the panel mounted runs once, on the preselected page', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    const open = vi.fn();
+    runOrganizerCommand('rotate-pages-right', open);
+    expect(open).toHaveBeenCalledTimes(1);
+
+    mount(rpc, createToastStore(), undefined, { initialPage: 2 });
+    await flush();
+    const rotates = calls.filter((call) => call.params.name === 'pages.rotate');
+    expect(rotates).toEqual([
+      {
+        method: 'actions.run',
+        params: { handle: 'h', name: 'pages.rotate', args: { pages: [2], delta: 90 } },
+      },
+    ]);
+  });
+
+  it('clears the bridge when the panel unmounts', async () => {
+    const { rpc } = fakeRpc(2);
+    mount(rpc, createToastStore());
+    await flush();
+    expect(getOrganizerStatus()).not.toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    expect(getOrganizerStatus()).toBeNull();
+    expect(getOrganizerActions()).toBeNull();
+    // afterEach unmounts the root again, so give it a fresh one.
+    root = createRoot(host);
   });
 });
