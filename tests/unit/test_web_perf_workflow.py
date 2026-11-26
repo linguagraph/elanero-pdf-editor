@@ -97,6 +97,55 @@ def test_web_perf_uploads_results_for_90_days() -> None:
     assert any("perf-results.json" in str(s["with"].get("path", "")) for s in uploads)
 
 
+def test_web_perf_concurrency_group_is_not_the_release_group() -> None:
+    # In a called workflow github.workflow is the caller's name, so the group must not use it.
+    group = str(_load(WEB_PERF)["concurrency"]["group"])
+    assert "github.workflow" not in group
+    assert group.startswith("web-perf-")
+    release_group = str(_load(RELEASE)["concurrency"]["group"])
+    assert not release_group.lower().startswith(group.split("$")[0].lower())
+
+
+def test_web_perf_artifact_names_include_run_attempt() -> None:
+    job = _job(_load(WEB_PERF))
+    uploads = [
+        s for s in _steps(job) if str(s.get("uses", "")).startswith("actions/upload-artifact")
+    ]
+    assert len(uploads) == 2, "expected the results and the serve-logs uploads"
+    for upload in uploads:
+        name = str(upload["with"]["name"])
+        assert "github.run_id" in name
+        assert "github.run_attempt" in name
+
+
+def test_web_perf_uploads_serve_logs_even_on_failure() -> None:
+    job = _job(_load(WEB_PERF))
+    logs = [s for s in _steps(job) if "serve-logs" in str(s.get("with", {}).get("name", ""))]
+    assert len(logs) == 1
+    assert str(logs[0].get("if")) == "${{ always() }}"
+    assert "serve-*.log" in str(logs[0]["with"]["path"])
+
+
+def test_web_perf_merge_steps_create_their_directory_first() -> None:
+    # The merge writes perf-out/attempt-N/<side>/perf-results.json; that directory is not made by
+    # the harness, so each merge step must mkdir it before node writes the file.
+    steps = {str(s.get("id", s.get("name"))): s for s in _steps(_job(_load(WEB_PERF)))}
+    for key in ("compare-1", "Compare the rounds (attempt 2, both attempts)"):
+        run = str(steps[key]["run"])
+        assert "mkdir -p" in run, key
+        assert run.index("mkdir -p") < run.index("node -e"), key
+
+
+def test_web_perf_second_compare_skips_a_failed_first_attempt() -> None:
+    # Attempt 1's files may be partial or missing after a failed round; the merge must skip them.
+    steps = _steps(_job(_load(WEB_PERF)))
+    second = next(
+        s for s in steps if s.get("name") == "Compare the rounds (attempt 2, both attempts)"
+    )
+    assert "steps.rounds-1.outcome" in str(second["env"]["ROUNDS1_OK"])
+    assert 'if [ "$ok" != success ]' in str(second["run"])
+
+
 def test_web_perf_npm_installs_ignore_scripts() -> None:
     runs = _runs(_job(_load(WEB_PERF)))
     for line in runs.splitlines():

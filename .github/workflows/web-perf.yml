@@ -39,8 +39,10 @@ on:
 permissions:
   contents: read
 
+# In a called workflow github.workflow is the caller's name (release.yml), so the group must not use it:
+# a release would share release.yml's group. This prefix is this workflow's own.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: web-perf-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -144,6 +146,10 @@ jobs:
       - name: Build the web package
         run: python scripts/build_web_wheel.py
 
+      # Owner decision (accepted limit, not a bug): the baseline is served with HEAD's whole engine-assets
+      # directory, including HEAD's pdfeditor-web.zip. So an engine regression in the zip shows on both
+      # sides and is not caught by the paired comparison. Building a second zip for the baseline is a
+      # larger change and is not done here. Recorded in the PR body too.
       - name: Stage the engine assets (Pyodide, the PyMuPDF wheel, the web zip)
         run: |
           set -euo pipefail
@@ -232,6 +238,7 @@ jobs:
           sides=(head); [ "$PAIRED" = true ] && sides+=(baseline)
           args=()
           for side in "${sides[@]}"; do
+            mkdir -p "$GITHUB_WORKSPACE/perf-out/attempt-$ATTEMPT/$side"
             node -e '
               const fs = require("node:fs");
               const [out, ...ins] = process.argv.slice(1);
@@ -275,14 +282,23 @@ jobs:
         if: ${{ steps.compare-1.outcome == 'failure' }}
         env:
           ROUNDS_OK: ${{ steps.rounds-2.outcome }}
+          ROUNDS1_OK: ${{ steps.rounds-1.outcome }}
           PAIRED: ${{ steps.baseline.outputs.paired }}
         run: |
           set -euo pipefail
           [ "$ROUNDS_OK" = success ] || { echo "::error::attempt 2: the rounds did not all run"; exit 1; }
           args=()
           for attempt in 1 2; do
+            # An attempt whose rounds did not all run is recorded as failed and left out, so its partial
+            # files are never compared. Attempt 2 has already been checked above.
+            ok="$ROUNDS1_OK"; [ "$attempt" = 2 ] && ok="$ROUNDS_OK"
+            if [ "$ok" != success ]; then
+              echo "> **Attempt $attempt:** the rounds did not all run; its numbers are left out." >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
             sides=(head); [ "$PAIRED" = true ] && sides+=(baseline)
             for side in "${sides[@]}"; do
+              mkdir -p "$GITHUB_WORKSPACE/perf-out/attempt-$attempt/$side"
               node -e '
                 const fs = require("node:fs");
                 const [out, ...ins] = process.argv.slice(1);
@@ -304,7 +320,16 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: web-perf-results-${{ github.run_id }}
+          name: web-perf-results-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           retention-days: 90
           path: perf-out/**/perf-results.json
+
+      - name: Upload the preview-server logs (kept with the results)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-perf-serve-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: ${{ runner.temp }}/serve-*.log
