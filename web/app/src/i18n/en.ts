@@ -1129,6 +1129,7 @@ export const EN = {
   'comment.tool.polygon': 'Polygon',
   'comment.tool.polyline': 'Polyline',
   'comment.tool.stamp': 'Stamp',
+  'comment.tool.attach': 'Attach File',
   'comment.layer.hint': 'Press Enter to place it at the centre of the page.',
   'comment.list.page': 'Comments on page {page}',
   'comment.list.by': '{type} by {author}',

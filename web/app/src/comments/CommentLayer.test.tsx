@@ -654,4 +654,27 @@ describe('comment tools from the keyboard', () => {
     press('Enter');
     expect(onPlace).toHaveBeenCalledTimes(1);
   });
+
+  it('an attach click places the comment at the click, with no text and no form', () => {
+    const onPlace = vi.fn();
+    act(() => root.render(<KeyedLayer tool="attach" onPlace={onPlace} />));
+    const el = container.querySelector<HTMLDivElement>('.comment-layer');
+    if (el === null) throw new Error('no layer');
+    const px = CSS_PX_PER_POINT;
+    act(() => pointer(el, 'pointerdown', 100 * px, 120 * px));
+    act(() => pointer(el, 'pointerup', 100 * px, 120 * px));
+    expect(onPlace).toHaveBeenCalledTimes(1);
+    const [rect, text, points] = onPlace.mock.calls[0] as [
+      { x0: number; y0: number; x1: number; y1: number },
+      string,
+      unknown[],
+    ];
+    expect(rect.x0).toBeCloseTo(100);
+    expect(rect.y0).toBeCloseTo(120);
+    expect(rect.x1).toBeCloseTo(rect.x0);
+    expect(rect.y1).toBeCloseTo(rect.y0);
+    expect(text).toBe('');
+    expect(points).toEqual([]);
+    expect(container.querySelector('textarea, input')).toBeNull();
+  });
 });

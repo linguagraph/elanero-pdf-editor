@@ -131,6 +131,11 @@ export function CommentLayer({ tool, zoom, widthPt, heightPt, onPlace }: Comment
       onPlace(pointRect(point), '', []);
       return;
     }
+    if (kind === 'attach') {
+      // An attach is placed at the click; the file is asked for by the place that handles it.
+      onPlace(pointRect(point), '', []);
+      return;
+    }
     if (kind === 'click') {
       setPending(pointRect(point));
       setNoteText('');

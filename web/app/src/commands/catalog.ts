@@ -325,7 +325,10 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('stamp', 'command.stamp.label', 'comment.comments'),
     checked: (state) => state.commentTool === 'stamp',
   },
-  cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
+  {
+    ...cmd('attach-file', 'command.attach-file.label', 'comment.comments'),
+    checked: (state) => state.commentTool === 'attach',
+  },
   {
     ...cmd('rectangle', 'command.rectangle.label', 'comment.drawing'),
     checked: (state) => state.commentTool === 'rectangle',

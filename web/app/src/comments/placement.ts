@@ -9,6 +9,7 @@ import { t } from '../i18n/t';
 import { RpcError } from '../rpc/client';
 import type { RenderScheduler } from '../view/renderScheduler';
 import type { PagePoint, PageRect } from './coordinates';
+import { chooseAttachment } from './attachFile';
 import type { CommentRef } from './hitTest';
 import type { CustomStampRef, StandardStamp } from './stamps';
 import { STAMP_LABEL } from './stamps';
@@ -49,6 +50,18 @@ export function createdComment(value: unknown): CommentRef | null {
   return typeof page === 'number' && typeof name === 'string' ? { page, name } : null;
 }
 
+// Attach File (issue 732): asks for the file at the click, then places it as a comment at the click. A
+// file the user cancels, or one over the size cap, adds nothing and the tool stays on.
+export async function placeAttachment(
+  deps: PlacementDeps,
+  page: number,
+  rect: PageRect,
+): Promise<CommentRef | null> {
+  const file = await chooseAttachment(deps.store ?? toasts);
+  if (file === null) return null;
+  return placeComment(deps, 'attach', page, rect, '', [], '', file);
+}
+
 // Runs annotations.create for one gesture and shows the Undo toast when a comment was added. It
 // resolves to the new comment, or null when nothing was added.
 export async function placeComment(
@@ -59,6 +72,7 @@ export async function placeComment(
   text: string,
   points: readonly PagePoint[] = [],
   stamp: StandardStamp | '' | CustomStampRef = '',
+  file: File | null = null,
 ): Promise<CommentRef | null> {
   const store = deps.store ?? toasts;
   try {
@@ -70,6 +84,8 @@ export async function placeComment(
       store.push('error', t('stamp.custom.unreadable'));
       return null;
     }
+    // An attachment's bytes are read now, after its size check (chooseAttachment).
+    const data = file === null ? undefined : await file.arrayBuffer();
     const name =
       typeof stamp === 'string' ? (stamp === '' ? '' : t(STAMP_LABEL[stamp])) : stamp.label;
     // The author is read at each comment, so a changed name applies to the next one (W4.5 S3).
@@ -86,6 +102,7 @@ export async function placeComment(
         // no name and carries its picture instead.
         ...(tool === 'stamp' ? { stamp: typeof stamp === 'string' ? stamp : '' } : {}),
         ...(image === undefined ? {} : { image }),
+        ...(file === null || data === undefined ? {} : { file_name: file.name, file: data }),
         author: readPreferences().authorName,
       },
     });

@@ -476,6 +476,11 @@ describe('the comment and redaction tools (W4.3a S7)', () => {
     expect(REGISTRY.get('highlight')?.checked?.(on)).toBe(false);
   });
 
+  it('shows Attach File as pressed only while the attach tool is on', () => {
+    expect(REGISTRY.get('attach-file')?.checked?.(state({ commentTool: 'attach' }))).toBe(true);
+    expect(REGISTRY.get('attach-file')?.checked?.(state({ commentTool: 'note' }))).toBe(false);
+  });
+
   it('shows Redact as pressed while the mark tool is on', () => {
     expect(REGISTRY.get('redact')?.checked?.(state({ redacting: true }))).toBe(true);
     expect(REGISTRY.get('redact')?.checked?.(state())).toBe(false);

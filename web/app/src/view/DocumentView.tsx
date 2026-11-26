@@ -83,7 +83,7 @@ import { deleteRefs } from '../comments/panel/edits';
 import { type ChosenStamp, DEFAULT_STAMP, afterStampRemoved } from '../comments/stamps';
 import { type StampLibrary, createStampLibrary } from '../comments/stampLibrary';
 import type { PagePoint, PageRect } from '../comments/coordinates';
-import { placeComment } from '../comments/placement';
+import { placeAttachment, placeComment } from '../comments/placement';
 import type { CommentToolId } from '../comments/tools';
 import type { ActionJobWorker } from '../actionJob/actionJob';
 import type { RedactionController } from '../redaction/controller';
@@ -1514,16 +1514,19 @@ export function DocumentView({
       // A comment that is added returns the tool to Select with the new comment selected, as the
       // desktop does by default (W7.1a Question 3). A failure keeps the tool on to retry.
       const drawnOn = tabId;
-      void placeComment(commentDeps, commentTool, page, rect, text, points, placed).then(
-        (added) => {
-          if (added === null) return;
-          // The tool is released only if it is still the one that placed this comment: a tool the
-          // user chose while the add was saving stays armed (the add answers later than the press).
-          setCommentTool((current) => (current === commentTool ? null : current));
-          setCommentSelection([added]);
-          onToolChange?.('select', drawnOn);
-        },
-      );
+      // An attachment asks for its file first (placeAttachment); the other tools place now.
+      const placing =
+        commentTool === 'attach'
+          ? placeAttachment(commentDeps, page, rect)
+          : placeComment(commentDeps, commentTool, page, rect, text, points, placed);
+      void placing.then((added) => {
+        if (added === null) return;
+        // The tool is released only if it is still the one that placed this comment: a tool the
+        // user chose while the add was saving stays armed (the add answers later than the press).
+        setCommentTool((current) => (current === commentTool ? null : current));
+        setCommentSelection([added]);
+        onToolChange?.('select', drawnOn);
+      });
     }
   };
   // A shape gesture (W6.7b): the engine adds it, and on success the tool returns to Select (one

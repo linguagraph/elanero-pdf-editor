@@ -6,6 +6,7 @@ round-trip rule), and every tool gets an undo step with the desktop's label.
 
 from __future__ import annotations
 
+import dataclasses
 import io
 from collections.abc import Iterator
 from pathlib import Path
@@ -24,6 +25,7 @@ from pdfeditor.actions.comment_tools import (
     HighlightText,
     MarkText,
     MarkupKind,
+    build_attachment,
     build_markup,
     build_note,
     build_shape,
@@ -894,4 +896,136 @@ def test_round_trip_of_a_custom_stamp(open_copy: Opener, tmp_path: Path) -> None
     record("stamp_image_pikepdf", out, page=0)
     record("annot_keys_pikepdf", out, subtype="/Stamp", present=["/Name"], contents="Logo")
     record("ink_region_pdfium", out, page=0, clip=[200.0, 250.0, 400.0, 350.0])
+    record("render_first_page_pdfium", out)
+
+
+# -- file attachments (#732 part 2) ----------------------------------------------------------------
+
+
+def attach(s: DocumentSession, data: bytes, at: Point, name: str = "notes.txt") -> object:
+    """A click at ``at`` with the Attach tool and a picked file (a zero-size rect, as the web)."""
+    args = CreateAnnotation(
+        CommentTool.ATTACH, 0, Rect(at.x, at.y, at.x, at.y), file_name=name, file=data
+    )
+    return make(s, args)
+
+
+@pytest.fixture
+def small_attachment_cap() -> Iterator[None]:
+    """A 1 KiB cap, so the oversize test does not need a 100 MB file (the web's cap is larger)."""
+    previous = model_platform.current()
+    model_platform.configure(dataclasses.replace(previous, max_attachment_bytes=1024))
+    try:
+        yield
+    finally:
+        model_platform.configure(previous)
+
+
+def test_an_attach_comment_carries_the_file_and_its_name(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    result = attach(s, b"hello file", Point(300, 300))
+    assert result.executed and result.label == "Attach File"  # type: ignore[attr-defined]
+    assert s.undo_stack.undo_label == "Attach File"
+    model = made_on_page(s, result)
+    assert model.type is AnnotationType.FILE_ATTACHMENT
+    assert model.file_name == "notes.txt"
+    assert model.file_data == b"hello file"
+    assert model.contents == "notes.txt"
+
+
+def test_an_attach_comment_is_boxed_at_the_note_icon_size() -> None:
+    """The builder boxes it as the desktop does (the engine reads a file icon back at its own
+    size, so the check is on the model the builder makes)."""
+    model = build_attachment(0, Point(300, 300), "notes.txt", b"x")
+    assert (model.rect.x0, model.rect.y0) == (300, 300)
+    assert model.rect.x1 - model.rect.x0 == NOTE_SIZE
+    assert model.rect.y1 - model.rect.y0 == NOTE_SIZE
+
+
+def test_an_empty_file_is_refused_and_adds_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    with pytest.raises(Refused) as caught:
+        attach(s, b"", Point(300, 300))
+    assert caught.value.reason == "attachment_empty"
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_an_oversize_file_is_refused_and_adds_nothing(
+    open_copy: Opener, small_attachment_cap: None
+) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    with pytest.raises(Refused) as caught:
+        attach(s, b"x" * 2048, Point(300, 300))
+    assert caught.value.reason == "attachment_too_large"
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_a_file_at_the_cap_is_allowed(open_copy: Opener, small_attachment_cap: None) -> None:
+    s = open_copy("annotations")
+    assert attach(s, b"x" * 1024, Point(300, 300)).executed  # type: ignore[attr-defined]
+
+
+def test_a_file_without_a_usable_name_is_refused(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    with pytest.raises(Refused) as caught:
+        attach(s, b"x", Point(300, 300), name="..")
+    assert caught.value.reason == "attachment_name"
+
+
+def test_an_attach_click_off_the_page_adds_nothing(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    result = attach(s, b"x", Point(10_000, 10_000))
+    assert not result.executed  # type: ignore[attr-defined]
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_undo_removes_the_attachment(open_copy: Opener) -> None:
+    s = open_copy("annotations")
+    before = [a.name for a in on_page(s)]
+    assert attach(s, b"x", Point(300, 300)).executed  # type: ignore[attr-defined]
+    assert s.undo()
+    assert [a.name for a in on_page(s)] == before
+
+
+def test_the_web_wire_args_carry_the_attachment() -> None:
+    """The file arrives as a $bin buffer and becomes the action's bytes, with its name."""
+    wire = {
+        "tool": "attach",
+        "page": 0,
+        "rect": {"x0": 10.0, "y0": 20.0, "x1": 10.0, "y1": 20.0},
+        "text": "",
+        "file_name": "report.pdf",
+        "file": {"$bin": 0},
+    }
+    args = from_json(CreateAnnotation, wire, BufferTable([b"%PDF-1.4"]), "args")
+    assert args.file == b"%PDF-1.4"
+    assert args.file_name == "report.pdf"
+    assert args.tool is CommentTool.ATTACH
+
+
+def test_round_trip_of_an_attachment(open_copy: Opener, tmp_path: Path) -> None:
+    """The attachment saves with its file and reopens with the same name and bytes; it is in
+    pikepdf's view as a FileAttachment with a file spec, and renders in pypdfium2."""
+    s = open_copy("annotations")
+    attach(s, b"hello file", Point(300, 300))
+    out = s.save(tmp_path / "attachment.pdf")
+
+    reopened = reopen(out)
+    try:
+        with reopened.lock:
+            files = [
+                m
+                for m in reopened.document.page(0).annotations()
+                if m.type is AnnotationType.FILE_ATTACHMENT
+            ]
+        assert [(m.file_name, m.file_data) for m in files] == [("notes.txt", b"hello file")]
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    record(
+        "annot_keys_pikepdf", out, subtype="/FileAttachment", present=["/FS"], contents="notes.txt"
+    )
     record("render_first_page_pdfium", out)

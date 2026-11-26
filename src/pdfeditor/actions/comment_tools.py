@@ -12,12 +12,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from pdfeditor.actions import action
+from pdfeditor.actions.attachments import EMPTY, NAME_UNUSABLE, TOO_LARGE_PREFIX, clean_filename
 from pdfeditor.actions.base import ActionResult, Refused, ensure_idle, execute_all
 from pdfeditor.actions.comments import DEFAULT_STYLES, WRITE
 from pdfeditor.actions.edit_geometry import MIN_DRAG
 from pdfeditor.actions.images import check_image
 from pdfeditor.core.commands import AddAnnotationCommand
 from pdfeditor.core.session import DocumentSession
+from pdfeditor.model import platform as model_platform
 from pdfeditor.model.annotations import (
     IMAGE_STAMP,
     STANDARD_STAMPS,
@@ -148,6 +150,28 @@ def build_image_stamp(
     )
 
 
+def build_attachment(
+    page: int, point: Point, name: str, data: bytes, author: str = ""
+) -> AnnotationModel:
+    """A file attachment whose icon's top-left corner is ``point``, embedding ``data`` as ``name``,
+    as the desktop's AttachTool builds it (the name is also the comment's contents)."""
+    style = DEFAULT_STYLES[AnnotationType.FILE_ATTACHMENT]
+    rect = Rect(point.x, point.y, point.x + NOTE_SIZE, point.y + NOTE_SIZE)
+    return AnnotationModel(
+        AnnotationType.FILE_ATTACHMENT,
+        page,
+        rect,
+        color=style.color,
+        fill=style.fill,
+        border_width=style.width,
+        opacity=style.opacity,
+        author=author,
+        contents=name,
+        file_name=name,
+        file_data=data,
+    )
+
+
 def build_text_box(page: int, box: Rect, text: str, author: str = "") -> AnnotationModel:
     """A text box: black 12 pt text and no border colour, as the desktop's Text Box tool."""
     style = DEFAULT_STYLES[AnnotationType.FREE_TEXT]
@@ -259,6 +283,7 @@ class CommentTool(StrEnum):
     POLYGON = "polygon"
     POLYLINE = "polyline"
     STAMP = "stamp"
+    ATTACH = "attach"
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +296,8 @@ class CreateAnnotation:
     ``rect`` is its box and its single tip is ``points[0]``. Pen, line, arrow, polygon and
     polyline use ``points`` and ignore ``rect``. A stamp is placed at the top-left corner of
     ``rect`` (a click is a zero-size rect) and takes its name from ``stamp``, or, when ``image``
-    holds PNG or JPEG bytes, is that custom image stamp, labelled ``text``."""
+    holds PNG or JPEG bytes, is that custom image stamp, labelled ``text``. An attach is placed
+    at the top-left corner of ``rect`` and embeds ``file`` under ``file_name``."""
 
     tool: CommentTool
     page: int
@@ -281,6 +307,8 @@ class CreateAnnotation:
     points: tuple[Point, ...] = ()
     stamp: str = ""
     image: bytes | None = None
+    file_name: str = ""
+    file: bytes | None = None
 
 
 _UNDO_LABELS = {
@@ -296,6 +324,7 @@ _UNDO_LABELS = {
     CommentTool.POLYGON: "Add Polygon",
     CommentTool.POLYLINE: "Add Polyline",
     CommentTool.STAMP: "Add Stamp",
+    CommentTool.ATTACH: "Attach File",
 }
 
 # Tools whose comment is a box of text: a blank one adds nothing. A sticky note may be blank (the
@@ -386,6 +415,27 @@ def _build_image_stamp(args: CreateAnnotation, page: Rect, point: Point) -> Anno
     return build_image_stamp(args.page, rect, data, args.text, args.author)
 
 
+def _build_attachment(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
+    """A file attachment at the click, as the desktop's AttachTool makes it. The file must be
+    non-empty, no larger than the platform's cap (the desktop's and the web's alike) and have a
+    usable name; the click must be on the page."""
+    data = args.file
+    if data is None:
+        raise Refused("an attachment needs a file")
+    if not data:
+        raise Refused(EMPTY, reason="attachment_empty")
+    cap = model_platform.current().max_attachment_bytes
+    if cap is not None and len(data) > cap:
+        raise Refused(f"{TOO_LARGE_PREFIX} {cap // 1024**2} MB.", reason="attachment_too_large")
+    name = clean_filename(args.file_name)
+    if not name:
+        raise Refused(NAME_UNUSABLE, reason="attachment_name")
+    point = Point(args.rect.x0, args.rect.y0)
+    if not (page.x0 <= point.x <= page.x1 and page.y0 <= point.y <= page.y1):
+        return None  # the click is off the page
+    return build_attachment(args.page, point, name, data, args.author)
+
+
 def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
     """The comment ``args`` describes, or None when the gesture adds nothing (off the page, too
     small, or a text tool with no text). Raises Refused for input the web can't legitimately send.
@@ -394,8 +444,12 @@ def _build(args: CreateAnnotation, page: Rect) -> AnnotationModel | None:
     _check_text(args.text)
     if args.image is not None and tool is not CommentTool.STAMP:
         raise Refused("only a stamp takes an image")
+    if args.file is not None and tool is not CommentTool.ATTACH:
+        raise Refused("only an attach takes a file")
     if tool in _TEXT_TOOLS and not args.text.strip():
         return None
+    if tool is CommentTool.ATTACH:
+        return _build_attachment(args, page)
     if tool is CommentTool.STAMP:
         point = Point(args.rect.x0, args.rect.y0)
         if args.image is not None:

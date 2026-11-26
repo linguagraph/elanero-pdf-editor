@@ -1175,6 +1175,20 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     expect(ribbonButton('sticky-note').getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('Attach File turns the attach tool on, and a second press turns it off', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    act(() => {
+      ribbonButton('attach-file').click();
+    });
+    expect(ribbonButton('attach-file').getAttribute('aria-pressed')).toBe('true');
+
+    act(() => {
+      ribbonButton('attach-file').click();
+    });
+    expect(ribbonButton('attach-file').getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('the box and line ribbon buttons turn their comment tool on, and a second press turns it off', async () => {
     await openDocument();
     selectTab(t('ribbon.tab.comment'));
