@@ -175,9 +175,9 @@ export function whenIdle(job: () => void): void {
 }
 
 // Makes and keeps the preview of a file just opened, then drops the previews of names that left
-// the recent list. An encrypted file gets none, and a render failure gets none. The file name is
-// the sha256 of the recent name, so the old file's preview would otherwise stay under this name:
-// both cases remove it first (issue 757). Other failures only mean no preview this time.
+// the recent list. An encrypted file gets none, and a render or write failure gets none. The file
+// name is the sha256 of the recent name, so the old file's preview would otherwise stay under this
+// name: each of these cases removes it first (issue 757). Other failures only mean no preview.
 // The preview is keyed by the cleaned name, the one the list and load use. `listed` is the list
 // just written for this open: pruning with it keeps this preview even when the write failed.
 export async function keepRecentThumb(
@@ -202,6 +202,9 @@ export async function keepRecentThumb(
     }
     if (await store.save(key, jpeg, encrypted)) {
       await store.prune(listed.map((entry) => entry.name));
+    } else {
+      // The browser refused the write: the old file's preview must not stay under this name.
+      await store.remove(key);
     }
   } catch {
     // The render failed: no preview for this file, and no old one left under its name.

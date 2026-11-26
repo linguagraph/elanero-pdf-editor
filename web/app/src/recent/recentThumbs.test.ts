@@ -356,5 +356,17 @@ describe('keepRecentThumb', () => {
       expect([...loaded.keys()]).toEqual(['a.pdf', 'b.pdf']);
       expect(await loaded.get('a.pdf')?.text()).toBe('NEW');
     });
+
+    it('removes the old preview of a name when the render works but the write fails', async () => {
+      const root = new MemoryDir();
+      const store = await storeWithOldPreview(root);
+      // The browser refuses the write (a full disk): the save reports false, the old file stays.
+      const refusing = { ...store, save: async () => false };
+      const client = scriptedClient(renderReply(111, 144));
+      mockCanvas('NEW');
+      const listed = addRecentFile('a.pdf');
+      await keepRecentThumb(refusing, client, 'doc-1', 'a.pdf', false, listed);
+      expect((await store.load(['a.pdf'])).size).toBe(0);
+    });
   });
 });
