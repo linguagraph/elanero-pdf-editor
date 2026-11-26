@@ -67,6 +67,17 @@ describe('web app manifest (W4.6)', () => {
     const html = readFileSync(resolve(appRoot, 'index.html'), 'utf8');
     expect(html).toContain('<link rel="manifest" href="manifest.webmanifest" />');
   });
+
+  it('sets the Elanero icon as the favicon and apple-touch-icon', () => {
+    const html = readFileSync(resolve(appRoot, 'index.html'), 'utf8');
+    expect(html).toContain(
+      '<link rel="icon" type="image/png" sizes="32x32" href="icons/elanero-32.png" />',
+    );
+    expect(html).toContain(
+      '<link rel="apple-touch-icon" sizes="256x256" href="icons/elanero-256.png" />',
+    );
+    expect(existsSync(resolve(appRoot, 'public', 'icons', 'elanero-32.png'))).toBe(true);
+  });
 });
 
 describe('service worker cache name (W4.6)', () => {
