@@ -100,6 +100,11 @@ function compareOne(
 ): RowResult {
   const gated = isGated(rule);
   const headSamples = findRecord(head, rule.id)?.samples ?? [];
+  // Fail closed before any median: sort() with a NaN (or a JSON null) misorders the samples, so a
+  // single bad sample could leave a finite median and pass. Every sample must be a finite number.
+  if (headSamples.length > 0 && !headSamples.every(Number.isFinite)) {
+    return row(rule, attempt, gated ? 'fail' : 'trend', null, null, 'non-finite HEAD sample');
+  }
   const headMedian = headSamples.length > 0 ? median(headSamples) : null;
   if (headMedian === null) {
     // A required metric missing from HEAD fails the run; a trend metric is only reported.
@@ -136,6 +141,9 @@ function compareOne(
     if (baseSamples.length === 0) {
       // The baseline run exists but has no record for this metric: a broken comparison, so fail.
       return row(rule, attempt, 'fail', headMedian, null, 'baseline run has no samples for it');
+    }
+    if (!baseSamples.every(Number.isFinite)) {
+      return row(rule, attempt, 'fail', headMedian, null, 'non-finite baseline sample');
     }
     const baseMedian = median(baseSamples);
     const slower = headMedian - baseMedian;

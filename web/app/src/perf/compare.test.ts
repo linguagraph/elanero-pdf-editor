@@ -89,12 +89,38 @@ describe('paired rule (W2)', () => {
   it('fails closed when a sample is NaN', () => {
     expect(one(paired, [Number.NaN], [2000])?.status).toBe('fail');
   });
+
+  it('fails when one NaN HEAD sample is among several (a finite median must not hide it)', () => {
+    // median([NaN, 3000, 3100]) is 3000, which is 100 ms over a 2900 baseline: under 300 ms, so
+    // the median-only check passed this row. The per-sample check must fail it.
+    const row = one(paired, [Number.NaN, 3000, 3100], [2900, 2900, 2900]);
+    expect(row?.status).toBe('fail');
+    expect(row?.reason).toBe('non-finite HEAD sample');
+  });
+
+  it('fails when a HEAD sample is null, as a serialized NaN is in JSON', () => {
+    // perf-results.json stores NaN as null; the type says number[], so the cast models the parse.
+    const nullSample = [null, 3000, 3100] as unknown as number[];
+    const row = one(paired, nullSample, [2900, 2900, 2900]);
+    expect(row?.status).toBe('fail');
+    expect(row?.reason).toBe('non-finite HEAD sample');
+  });
+
+  it('fails when a baseline sample is NaN among several', () => {
+    const row = one(paired, [2000, 2000, 2000], [Number.NaN, 2000, 2100]);
+    expect(row?.status).toBe('fail');
+    expect(row?.reason).toBe('non-finite baseline sample');
+  });
 });
 
 describe('absolute rule (W7): median of per-run maxima', () => {
   it('uses the median of the per-run maxima, so one slow run does not fail', () => {
     // Maxima 20, 45, 200 ms: the median 45 is under 50 even though one run hit 200 ms.
     expect(one(absolute, [20, 45, 200])?.status).toBe('pass');
+  });
+
+  it('fails when one maximum is NaN among several, even if the median is finite', () => {
+    expect(one(absolute, [Number.NaN, 20, 30])?.status).toBe('fail');
   });
 
   it('fails when the median of maxima is over the limit', () => {
