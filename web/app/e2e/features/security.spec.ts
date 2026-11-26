@@ -3,8 +3,8 @@
 // refused from the page, the engine worker and the job worker. Opening and saving a document makes
 // no request to another origin, a link click does not navigate, and the password of a protected file
 // reaches neither the storage nor the console. A framed copy of the app refuses to start (F10), and
-// a PDF with an OpenAction script runs no script on open (F9, browser half only: the engine half is
-// not in this change).
+// a PDF with an OpenAction script runs no script on open (F9, browser half; the engine half is
+// closed by #749).
 import { type BrowserContext, type Worker, expect, test } from '@playwright/test';
 import { CSP_POLICY } from '../../src/csp';
 import { FRAME_REFUSAL_MESSAGE } from '../../src/frame';
@@ -123,8 +123,8 @@ test.describe('engine staged', () => {
     // This is a smoke check: the dialog, new-page and console assertions only fire if the browser
     // runs the PDF's script, and no such path exists today, so they can pass trivially. The
     // page.on('console') listener sees only the main page, not messages from the engine worker, and
-    // watchPage has the same limit. The strict console check has not been run yet; the first web-e2e
-    // run on this branch decides whether a benign-message allowlist is needed.
+    // watchPage has the same limit. The strict console check was run in the first web-e2e run, and
+    // #758 came from that run: it allows the one known Firefox wasm note (FIREFOX_WASM_EH_NOTE).
     const dialogs: string[] = [];
     page.on('dialog', async (dialog) => {
       dialogs.push(`${dialog.type()}: ${dialog.message()}`);

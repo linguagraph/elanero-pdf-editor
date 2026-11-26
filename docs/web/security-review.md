@@ -122,7 +122,7 @@ listed separately; they get no new finding ID.
 | F6 | Low | **Open**. `csp.test.ts` still pins the two copies to each other; no test asserts `object-src`, `base-uri`, `require-trusted-types-for` or the exact `connect-src` set. Slice S2b | `web/app/src/csp.test.ts` |
 | F7 | Low | **Open**. `csp.ts` still has no `trusted-types` directive. Slice S2b, after the three-browser check | `web/app/src/csp.ts:3` |
 | F8 | Low | **Open**. `core/xmp.py` is unchanged: no DOCTYPE or ENTITY refusal, no size cap. Slice S8 | `src/pdfeditor/core/xmp.py` |
-| F9 | Low | **Engine half fixed** by `tests/unit/test_webapi_pdf_javascript.py`: `sensitive` and `xref_gap` open, render and copy-save with MuPDF's `pdf_js_supported` at 0 and the `/OpenAction` JavaScript kept. **Open:** the browser half (no dialog, console message or new page in the app), Slice S6b | `scripts/make_fixtures.py:574,583,792-794` |
+| F9 | Low | **Fixed** (engine #749, browser #706 and #758). Engine: `tests/unit/test_webapi_pdf_javascript.py` opens `sensitive` and `xref_gap`, renders and copy-saves them with MuPDF's `pdf_js_supported` at 0 and the `/OpenAction` JavaScript kept. Browser: `web/app/e2e/features/security.spec.ts` (no dialog, console message or new page; the spec was not run in the PR that closed this) | `scripts/make_fixtures.py:574,583,792-794` |
 | F10 | Low | **Open**. `main.tsx:55` calls `shouldRefuse`, but no test frames the app. Slice S6b | `web/app/src/main.tsx` |
 | F11 | Low | **Open**. `"services/signing/"` is not pinned by a test. Slice S9 | `scripts/web_package.py:20` |
 | F12 | Low | (a) **Closed by other work**: `tests/unit/test_webapi_jobs.py` checks `BUSY` on a second prepare. (b) **Open**: client and engine limits are still linked only by comments; no drift test. Slice S4b | `web/app/src/documents/openFile.ts`, `webapi/limits.py` |
@@ -132,8 +132,8 @@ listed separately; they get no new finding ID.
 | F16 | Low | **Open**. The five WebKit `test.fixme` messages still say "needs an issue", although #420 tracks it. Slice S6b | `web/app/e2e/features/crop.spec.ts:38` and four others |
 
 **Totals on main:** critical 0 · high 0 · medium 3 · low 13. Fixed: F1, F2, F4, and F3 once this PR
-merges. Closed by other work: F5, F12 (a). Open: F6, F7, F8, F9, F10, F11, F12 (b), F13, F14, F15,
-F16 (11 items).
+merges. Closed by other work: F5, F12 (a). Fixed in the F9 PRs (#749, #706, #758): F9. Open: F6,
+F7, F8, F10, F11, F12 (b), F13, F14, F15, F16 (10 items).
 
 **Fixed after the review (not findings in the original report):**
 
