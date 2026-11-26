@@ -28,15 +28,7 @@ const CROPPED_H = 842 - 72;
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
-  test('save writes the document back under its own name', async ({
-    browserName,
-    page,
-    context,
-  }, testInfo) => {
-    test.fixme(
-      browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
-    );
+  test('save writes the document back under its own name', async ({ page, context }, testInfo) => {
     const problems = watchPage(page);
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
@@ -66,11 +58,7 @@ test.describe('engine staged', () => {
     expect(reopenedProblems, 'CSP or page errors after reopen').toEqual([]);
   });
 
-  test('save as writes a new name and renames the tab', async ({ browserName, page }, testInfo) => {
-    test.fixme(
-      browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
-    );
+  test('save as writes a new name and renames the tab', async ({ page }, testInfo) => {
     const problems = watchPage(page);
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));

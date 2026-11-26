@@ -37,6 +37,21 @@ export function watchPage(page: Page): string[] {
     }
   });
   page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
+  // A blocked resource fires securitypolicyviolation in the page, whatever the browser prints to the
+  // console. The init script forwards each one, so a failure names the directive and what was blocked.
+  const report = (text: string) => problems.push(text);
+  page
+    .exposeFunction('__reportCsp', report)
+    .catch((error: unknown) => problems.push(`exposeFunction: ${String(error)}`));
+  page
+    .addInitScript(() => {
+      document.addEventListener('securitypolicyviolation', (event) => {
+        const forward = (window as Window & { __reportCsp?: (text: string) => void }).__reportCsp;
+        const blocked = event.blockedURI || '(inline)';
+        forward?.(`csp: ${event.violatedDirective} blocked ${blocked} sample "${event.sample}"`);
+      });
+    })
+    .catch((error: unknown) => problems.push(`addInitScript: ${String(error)}`));
   return problems;
 }
 

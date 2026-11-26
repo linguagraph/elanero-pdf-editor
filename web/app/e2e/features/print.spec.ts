@@ -19,13 +19,8 @@ test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   test('print the current page: the dialog opens, the job runs, and window.print is called', async ({
-    browserName,
     page,
   }) => {
-    test.fixme(
-      browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
-    );
     const problems = watchPage(page);
     // Stubbed before any page script runs, in the app's frame and in the print iframe alike.
     await page.addInitScript(() => {
@@ -66,14 +61,7 @@ test.describe('engine staged', () => {
 
   // The worker defect is fixed in #522. The spec runs in the Web end-to-end workflow on Chromium
   // (CI builds the PyMuPDF wheel); WebKit stays skipped below. See #560.
-  test('print a page range of two pages: the iframe gets both images', async ({
-    browserName,
-    page,
-  }) => {
-    test.fixme(
-      browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
-    );
+  test('print a page range of two pages: the iframe gets both images', async ({ page }) => {
     const problems = watchPage(page);
     // Stubbed before any page script runs, in the app's frame and in the print iframe alike.
     await page.addInitScript(() => {
