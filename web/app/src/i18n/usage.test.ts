@@ -71,6 +71,10 @@ const UNUSED_ALLOWED: Readonly<Record<string, string>> = {
   'view.actualSize': 'catalogue text for the actual-size control, not yet built',
   'bookmarks.expand': 'catalogue text for the bookmark tree toggle, not yet built',
   'bookmarks.collapse': 'catalogue text for the bookmark tree toggle, not yet built',
+  'command.rotate-view-counterclockwise.label':
+    'kept for Rotate View, deferred on the web (#735): the web cannot rotate the view yet',
+  'command.rotate-view-clockwise.label':
+    'kept for Rotate View, deferred on the web (#735): the web cannot rotate the view yet',
 };
 
 // The literal texts a file shows: text between tags (in .tsx only, since in .ts a `>` and a `<`

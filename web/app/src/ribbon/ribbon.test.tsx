@@ -839,6 +839,25 @@ describe('Ribbon: the View layout and night toggles (W4.3a S6)', () => {
     expect(button('night-reading').getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('shows no View button that reports the command as not available yet, and no Rotate View', () => {
+    // Every registry command gets a handler, as the app gives its commands on the web. A View
+    // button with no handler would then be the only one that reports notAvailableYet.
+    const handlers = Object.fromEntries(REGISTRY.commands.map((def) => [def.id, vi.fn()]));
+    render(
+      <Ribbon registry={REGISTRY} state={{ ...withDoc, view: viewState }} handlers={handlers} />,
+    );
+    openViewTab();
+    const ids = [...host.querySelectorAll<HTMLElement>('[data-command]')].map(
+      (el) => el.dataset.command,
+    );
+    expect(ids).toContain('night-reading');
+    expect(ids).not.toContain('rotate-view-clockwise');
+    expect(ids).not.toContain('rotate-view-counterclockwise');
+    for (const el of host.querySelectorAll<HTMLElement>('[data-command]')) {
+      expect(describedText(el), el.dataset.command).not.toContain(t('disabled.notAvailableYet'));
+    }
+  });
+
   it('disables Previous Page on the first page with its reason', () => {
     render(<Ribbon registry={REGISTRY} state={{ ...withDoc, view: viewState }} handlers={{}} />);
     const el = button('previous-page');

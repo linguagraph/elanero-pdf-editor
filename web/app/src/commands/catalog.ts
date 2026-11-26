@@ -47,6 +47,14 @@ export const WEB_ONLY_IDS: ReadonlySet<string> = new Set([
 // commands, so they have no ribbon, menu, palette or shortcut entry. A test checks this.
 export const DROPPED_IDS: ReadonlySet<string> = new Set(['new-window', 'exit']);
 
+// Desktop commands the web does not offer yet (the Reading group): the desktop rotates the view,
+// but the web cannot rotate it yet, so Rotate View would do nothing here. They stay in the shared
+// table, and they are not registry commands until the web can rotate the view (docs/guide/web.md).
+export const DEFERRED_IDS: ReadonlySet<string> = new Set([
+  'rotate-view-counterclockwise',
+  'rotate-view-clockwise',
+]);
+
 export const GROUPS: readonly GroupDef[] = [
   { id: 'home.file', tab: 'home', labelId: 'ribbon.group.home.file' },
   { id: 'home.history', tab: 'home', labelId: 'ribbon.group.home.history' },
@@ -374,8 +382,6 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
     ...cmd('two-up-with-cover-page', 'command.two-up-with-cover-page.label', 'view.display'),
     checked: (state) => state.view?.layout === 'twoPage' && state.view.firstAlone,
   },
-  cmd('rotate-view-counterclockwise', 'command.rotate-view-counterclockwise.label', 'view.reading'),
-  cmd('rotate-view-clockwise', 'command.rotate-view-clockwise.label', 'view.reading'),
   {
     ...cmd('night-reading', 'command.night-reading.label', 'view.reading'),
     checked: (state) => state.view?.night === true,
