@@ -424,10 +424,10 @@ export const EN = {
   'translate.noteAdded': 'The translation was added as a note.',
   'prefs.clearAll.open': 'Clear all local data…',
   'prefs.clearAll.hint':
-    'Removes your preferences, recent file names, uploaded fonts, custom stamps and stored secrets from this browser. Your files are not touched.',
+    'Removes your preferences, recent file names and their previews, uploaded fonts, custom stamps and stored secrets from this browser. Your files are not touched.',
   'prefs.clearAll.blocked': 'Close all documents first.',
   'prefs.clearAll.confirm':
-    'This cannot be undone. Your preferences, recent file names, uploaded fonts, custom stamps and stored secrets are removed, then the page reloads. Recovery copies used by other open Elanero tabs are kept.',
+    'This cannot be undone. Your preferences, recent file names and their previews, uploaded fonts, custom stamps and stored secrets are removed, then the page reloads. Recovery copies used by other open Elanero tabs are kept.',
   'prefs.clearAll.clear': 'Clear',
   'prefs.clearAll.keep': 'Keep',
   'prefs.clearAll.incomplete':
