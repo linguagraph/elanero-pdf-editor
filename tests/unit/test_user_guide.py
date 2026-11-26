@@ -97,14 +97,17 @@ def test_the_docs_workflow_builds_strictly_and_deploys_from_main() -> None:
     # web app ship in one artifact (W9.2).
     assert jobs["deploy"]["uses"] == "./.github/workflows/web-deploy.yml"
     web_deploy = (ROOT / ".github" / "workflows" / "web-deploy.yml").read_text(encoding="utf-8")
-    # Dependabot bumps these majors, so check that each step exists and is pinned to a major
-    # version tag (not a branch), without fixing the number.
+    # Each step must exist and be pinned, never to a branch: either a major version tag, or (F14)
+    # a full commit SHA with the release version as a trailing "# v<version>" comment. The SHA
+    # form is what web-deploy.yml uses for these actions, so accept it and do not fix the number.
     for action in (
         "actions/configure-pages",
         "actions/upload-pages-artifact",
         "actions/deploy-pages",
     ):
-        assert re.search(rf"uses: {re.escape(action)}@v\d+(\s|$)", web_deploy, re.MULTILINE), action
+        pinned = r"(?:v\d+|[0-9a-f]{40} # v\d+(?:\.\d+)*)"
+        step = rf"uses: {re.escape(action)}@{pinned}(\s|$)"
+        assert re.search(step, web_deploy, re.MULTILINE), action
     assert "refs/heads/main" in str(jobs["deploy"]["if"])
 
 
