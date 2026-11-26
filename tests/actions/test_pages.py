@@ -394,6 +394,57 @@ def test_set_labels_with_the_same_rules_is_not_executed(open_copy: Opener) -> No
     assert result.executed is False and not s.undo_stack.can_undo
 
 
+def test_set_labels_refuses_a_start_outside_the_document(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    n = s.page_count
+    before = page_rules(s)
+    for start in (-1, n):
+        with pytest.raises(Refused) as caught:
+            page_actions.set_labels(s, SetPageLabels((PageLabelRule(start),)))
+        assert caught.value.reason == "invalid_pages"
+    assert page_rules(s) == before and not s.undo_stack.can_undo
+
+
+def test_set_labels_refuses_a_first_number_below_one(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    with pytest.raises(Refused) as caught:
+        page_actions.set_labels(s, SetPageLabels((PageLabelRule(0, first=0),)))
+    assert caught.value.reason == "invalid_label"
+    assert not s.undo_stack.can_undo
+
+
+def test_set_labels_refuses_two_rules_with_the_same_start(open_copy: Opener) -> None:
+    s = open_copy("text_multipage")
+    rules = (PageLabelRule(0), PageLabelRule(0, LabelStyle.ROMAN_LOWER))
+    with pytest.raises(Refused) as caught:
+        page_actions.set_labels(s, SetPageLabels(rules))
+    assert caught.value.reason == "duplicate_label_start"
+    assert not s.undo_stack.can_undo
+
+
+def test_round_trip_edit_page_labels_on_the_labels_fixture(
+    open_copy: Opener, tmp_path: Path
+) -> None:
+    s = open_copy("page_labels")
+    assert len(page_rules(s)) == 4
+    rules = (
+        PageLabelRule(0, LabelStyle.ROMAN_LOWER),
+        PageLabelRule(3, LabelStyle.ALPHA_UPPER, prefix="Sec-", first=2),
+        PageLabelRule(6, LabelStyle.NONE, prefix="Appendix"),
+    )
+    result = page_actions.set_labels(s, SetPageLabels(rules))
+    assert result.executed is True
+    out = s.save(tmp_path / "relabelled.pdf")
+    reopened = DocumentSession.open(out)
+    try:
+        assert page_rules(reopened) == list(rules)
+    finally:
+        with reopened.lock:
+            reopened.document.close()
+    record("catalog_has_key_pikepdf", out, key="/PageLabels")
+    assert_reads_everywhere(out, s.page_count)
+
+
 # -- the shared helpers and the busy rule -----------------------------------------------------
 
 

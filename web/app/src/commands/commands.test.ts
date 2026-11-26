@@ -768,3 +768,21 @@ describe('the Space Usage command (issue 737)', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('the Page labels command (Organize, slice 1)', () => {
+  it('is enabled with a document and a handler, and needs a document without one', () => {
+    const def = REGISTRY.get('page-labels')!;
+    const handlers = { 'page-labels': vi.fn() };
+    expect(commandDisabledReason(def, state({ hasDocument: true }), handlers)).toBeNull();
+    expect(commandDisabledReason(def, state(), handlers)).toBe('needsDocument');
+    expect(commandDisabledReason(def, state({ hasDocument: true }), {})).toBe('notAvailableYet');
+  });
+
+  it('runs its handler with a document open', () => {
+    const handler = vi.fn();
+    expect(
+      runCommand(REGISTRY, 'page-labels', state({ hasDocument: true }), { 'page-labels': handler }),
+    ).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});

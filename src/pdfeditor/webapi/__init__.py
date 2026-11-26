@@ -67,6 +67,7 @@ METHODS: dict[str, Method] = {
     "session.close": Method(dto.HandleParams, session.close_document),
     "session.info": Method(dto.HandleParams, session.document_info),
     "session.pages": Method(dto.HandleParams, session.document_pages),
+    "session.label_rules": Method(dto.HandleParams, session.label_rules),
     "session.capabilities": Method(dto.HandleParams, session.document_capabilities),
     "session.unlock_owner": Method(dto.UnlockParams, session.unlock_owner),
     "session.outline": Method(dto.HandleParams, session.document_outline),

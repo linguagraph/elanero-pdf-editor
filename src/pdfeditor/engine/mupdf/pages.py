@@ -37,7 +37,9 @@ def label_rules(doc: MuDocument) -> list[PageLabelRule]:
     rules = []
     for r in doc.fz.get_page_labels():
         try:
-            style = LabelStyle(r.get("style", "D") or "")
+            # MuPDF leaves the style out for a prefix-only rule (no /S), so a missing key is NONE,
+            # not DECIMAL: reading it as DECIMAL would turn the rule into numbers on the next save.
+            style = LabelStyle(r.get("style", "") or "")
         except ValueError:
             style = LabelStyle.DECIMAL
         rules.append(

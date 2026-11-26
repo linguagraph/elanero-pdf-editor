@@ -73,6 +73,8 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   crop_too_large: 'error.REFUSED.cropTooLarge',
   invalid_margins: 'error.REFUSED.invalidMargins',
   invalid_pages: 'error.REFUSED.invalidPages',
+  invalid_label: 'error.REFUSED.invalidLabel',
+  duplicate_label_start: 'error.REFUSED.duplicateLabelStart',
   outline_too_deep: 'error.REFUSED.outlineTooDeep',
   // The image refusals of content.add_image (W6.7b slice 2a): worded here, since the engine's own
   // text is never shown.
