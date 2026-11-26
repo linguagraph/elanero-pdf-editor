@@ -240,6 +240,7 @@ export interface PageRpc {
   call<
     M extends
       | 'session.pages'
+      | 'session.label_rules'
       | 'session.info'
       | 'session.capabilities'
       | 'session.outline'
