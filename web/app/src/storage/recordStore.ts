@@ -54,6 +54,13 @@ export interface RecordSpec {
 
 export type PrivateRoot = () => Promise<DirectoryLike>;
 
+// TEMPORARY (WebKit font-upload diagnostic): the name and message of an error that a failed keep
+// swallows, so the cause can be read in the console. Remove once the WebKit cause is known.
+function describeError(error: unknown): string {
+  const e = error as { name?: unknown; message?: unknown } | null;
+  return `${String(e?.name ?? 'unknown')}: ${String(e?.message ?? error)}`;
+}
+
 function isNotFound(error: unknown): boolean {
   return (error as { name?: unknown } | null)?.name === 'NotFoundError';
 }
@@ -187,15 +194,21 @@ export function createRecordStore<R extends StoredRecord>(
     },
 
     async write(record, data) {
+      // TEMPORARY (WebKit font-upload diagnostic): the step that threw, for the log in the catch.
+      let step = 'root';
       try {
         const base = await root();
         // An item written here could never be listed back: refuse before writing a byte.
         if (!canList(base)) return 'unsupported';
+        step = 'estimate';
         if (!fitsQuota(data.size, await estimate())) return 'no-space';
+        step = 'folder';
         const folder = await base.getDirectoryHandle(spec.folder, { create: true });
         // The bytes first, the record last: the record is what marks the item as kept.
+        step = 'bytes';
         await writeFile(folder, bytesName(record.id), data);
         const json = JSON.stringify({ format: FORMAT, ...record });
+        step = 'record';
         await writeFile(
           folder,
           recordName(record.id),
@@ -204,7 +217,10 @@ export function createRecordStore<R extends StoredRecord>(
         return 'kept';
       } catch (error) {
         if (error instanceof StorageUnsupportedError) return 'unsupported';
-        return isQuotaError(error) ? 'no-space' : 'failed';
+        if (isQuotaError(error)) return 'no-space';
+        // TEMPORARY (WebKit font-upload diagnostic): the outcome stays 'failed'; only the log is new.
+        console.warn(`[storage] keep failed at ${step}: ${describeError(error)}`);
+        return 'failed';
       }
     },
 

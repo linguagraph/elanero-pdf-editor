@@ -85,15 +85,31 @@ export async function removeIfPresent(dir: DirectoryLike, name: string): Promise
 }
 
 export async function writeFile(dir: DirectoryLike, name: string, data: Blob): Promise<void> {
-  // A writable stream commits on close(), so the old file stays whole until the new one is complete.
-  const handle = await dir.getFileHandle(name, { create: true });
-  // Older Safari has no createWritable: say so, rather than failing the same way every minute.
-  if (typeof handle.createWritable !== 'function') {
-    throw new StorageUnsupportedError('the browser cannot write to private storage');
+  // TEMPORARY (WebKit font-upload diagnostic): the step that threw is logged, then the same error is
+  // rethrown unchanged. Remove once the WebKit cause is known.
+  let step = 'getFileHandle';
+  try {
+    // A writable stream commits on close(), so the old file stays whole until the new one is complete.
+    const handle = await dir.getFileHandle(name, { create: true });
+    // Older Safari has no createWritable: say so, rather than failing the same way every minute.
+    if (typeof handle.createWritable !== 'function') {
+      throw new StorageUnsupportedError('the browser cannot write to private storage');
+    }
+    step = 'createWritable';
+    const writable = await handle.createWritable();
+    step = 'write';
+    await writable.write(data);
+    step = 'close';
+    await writable.close();
+  } catch (error) {
+    if (!(error instanceof StorageUnsupportedError)) {
+      const e = error as { name?: unknown; message?: unknown } | null;
+      console.warn(
+        `[storage] writeFile ${name} threw at ${step}: ${String(e?.name ?? 'unknown')}: ${String(e?.message ?? error)}`,
+      );
+    }
+    throw error;
   }
-  const writable = await handle.createWritable();
-  await writable.write(data);
-  await writable.close();
 }
 
 function isMeta(value: unknown): value is AutosaveMeta & { size: number } {

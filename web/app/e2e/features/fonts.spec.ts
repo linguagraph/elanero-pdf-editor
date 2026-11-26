@@ -43,11 +43,22 @@ async function hasFontsFolder(page: Page): Promise<boolean> {
   });
 }
 
+// TEMPORARY (WebKit font-upload diagnostic): the console lines the storage code writes, collected
+// from the start of the flow. Remove with the diagnostic in the upload step once the cause is known.
+function collectStorageLog(page: Page): string[] {
+  const lines: string[] = [];
+  page.on('console', (message) => {
+    if (message.text().startsWith('[storage]')) lines.push(message.text());
+  });
+  return lines;
+}
+
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   test('upload, refuse, reload, remove, and clear uploaded fonts', async ({ page }) => {
     const problems = watchPage(page);
+    const storageLog = collectStorageLog(page);
     await openApp(page);
     let dialog = await openPreferences(page);
     const picker = dialog.locator('input[type="file"]');
@@ -59,7 +70,24 @@ test.describe('engine staged', () => {
       mimeType: 'font/ttf',
       buffer: fixture('fonts/TestSans-Regular.ttf'),
     });
-    await expect(rows.filter({ hasText: 'Test Sans' })).toBeVisible({ timeout: 60_000 });
+    try {
+      await expect(rows.filter({ hasText: 'Test Sans' })).toBeVisible({ timeout: 60_000 });
+    } catch (error) {
+      // TEMPORARY (WebKit font-upload diagnostic): when the keep failed, attach the status text and
+      // the storage log to the test and print them, so the CI log shows the swallowed error. The
+      // failure itself is rethrown unchanged. Remove once the WebKit cause is known.
+      const messages = (
+        await dialog.locator('[role="status"], [role="alert"]').allTextContents()
+      ).join(' | ');
+      if (messages.includes('could not be kept')) {
+        const body = [`status: ${messages}`, ...storageLog].join('\n');
+        console.log(`[webkit-font-upload-diagnostic]\n${body}`);
+        await test
+          .info()
+          .attach('webkit-font-upload-diagnostic', { body, contentType: 'text/plain' });
+      }
+      throw error;
+    }
     await expect(dialog.getByRole('status')).toContainText('TestSans-Regular.ttf was added.');
 
     // 2. A restricted font and a garbage file, together: each gets its own refusal, no new rows.
