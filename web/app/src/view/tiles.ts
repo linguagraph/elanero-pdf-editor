@@ -110,6 +110,8 @@ export function tileRect(
 // whole-page request for a page at or under 4 MP, and one tile request per tile of a larger page.
 // `distance` is measured from the viewport centre, so the queue sends the nearest first. Pages
 // outside the viewport are not visible; the queue sends them after the visible ones.
+// The page number is the box's index, not its position in `boxes`: in the single-page layout the
+// one mounted box is at position 0 but is page `index` (#734), and the view draws that page's cache.
 export function planPageRenders(args: {
   readonly boxes: readonly PageBox[];
   readonly sizes: readonly PageSizePt[];
@@ -123,13 +125,14 @@ export function planPageRenders(args: {
   const viewportCentre = args.scrollTop + args.viewportHeight / 2;
   for (let index = args.first; index < args.end; index += 1) {
     const box = args.boxes[index];
-    const size = args.sizes[index];
-    if (box === undefined || size === undefined) continue;
+    if (box === undefined) continue;
+    const size = args.sizes[box.index];
+    if (size === undefined) continue;
     const visible = isInViewport(box, args.scrollTop, args.viewportHeight);
     const tiled = tilesInViewport(box, size, args.scaleMilli, args.scrollTop, args.viewportHeight);
     if (tiled === null) {
       planned.push({
-        page: index,
+        page: box.index,
         scaleMilli: args.scaleMilli,
         visible,
         distance: Math.abs(box.top + box.height / 2 - viewportCentre),
@@ -141,7 +144,7 @@ export function planPageRenders(args: {
       const rect = tileRect(tiled.device, cell);
       const centre = box.top + (rect.y + rect.height / 2) * cssPerDevice;
       planned.push({
-        page: index,
+        page: box.index,
         scaleMilli: args.scaleMilli,
         visible,
         distance: Math.abs(centre - viewportCentre),
