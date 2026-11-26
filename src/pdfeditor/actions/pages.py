@@ -386,12 +386,25 @@ def trim_white_margins(session: DocumentSession, args: TrimWhiteMargins) -> Acti
     return ActionResult(label, len(targets))
 
 
+def _check_label_rules(rules: list[PageLabelRule], page_count: int) -> None:
+    """Refuse a start off the document, a first number below 1, or two ranges on one start."""
+    for rule in rules:
+        if not 0 <= rule.start < page_count:
+            raise Refused(f"Page {rule.start + 1} is not in the document.", reason="invalid_pages")
+        if rule.first < 1:
+            raise Refused("Start at must be 1 or more.", reason="invalid_label")
+    starts = [rule.start for rule in rules]
+    if len(set(starts)) != len(starts):
+        raise Refused("Two label ranges start on the same page.", reason="duplicate_label_start")
+
+
 @action("pages.set_labels", SetPageLabels)  # no capability flag: the desktop never checked one
 def set_labels(session: DocumentSession, args: SetPageLabels) -> ActionResult[None]:
     ensure_idle(session)
     label = "Edit Page Labels"
-    rules = list(args.rules)
+    rules = sorted(args.rules, key=lambda rule: rule.start)
     with session.lock:
+        _check_label_rules(rules, session.document.page_count)
         current = session.document.page_label_rules()
     if rules == current:
         return ActionResult(label, None, executed=False)

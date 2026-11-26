@@ -107,6 +107,20 @@ def document_pages(params: dto.HandleParams) -> dto.PagesResult:
     return dto.PagesResult(pages=sizes, labels=labels)
 
 
+def label_rules(params: dto.HandleParams) -> dto.LabelRulesResult:
+    session = REGISTRY.get(params.handle)
+    with session.lock:
+        rules = session.document.page_label_rules()
+    return dto.LabelRulesResult(
+        rules=tuple(
+            dto.PageLabelRuleDto(
+                start=rule.start, style=rule.style.value, prefix=rule.prefix, first=rule.first
+            )
+            for rule in rules
+        )
+    )
+
+
 def document_capabilities(params: dto.HandleParams) -> dto.CapabilitiesResult:
     session = REGISTRY.get(params.handle)
     engine = {

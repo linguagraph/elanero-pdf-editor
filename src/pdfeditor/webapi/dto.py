@@ -208,6 +208,21 @@ class PagesResult:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class PageLabelRuleDto:
+    start: int  # 0-based page index where the range starts
+    style: str  # "D", "R", "r", "A", "a", or "" for the prefix only (the engine's LabelStyle)
+    prefix: str
+    first: int  # the number the range's first page gets, 1 or more
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class LabelRulesResult:
+    # The document's own rules in start order; empty when it has none. Read here so a save from
+    # the Page labels dialog can keep them (W-Organize slice 1).
+    rules: tuple[PageLabelRuleDto, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class OutlineEntry:
     # One bookmark, in depth-first order. The tree is implied by ``level``: an entry's children
     # are the following entries of a greater level, up to the next entry at its own level or

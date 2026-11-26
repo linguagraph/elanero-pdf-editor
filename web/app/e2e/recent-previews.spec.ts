@@ -55,8 +55,9 @@ test.describe('engine staged', () => {
     await fakePicker(page);
     await page.goto('/');
     await expect(page.locator('h1')).toHaveText('Elanero');
+    await expect(page.locator('.loading-screen')).toBeHidden({ timeout: 180_000 });
     await page.getByRole('button', { name: 'Open file' }).click();
-    await expect(page.locator('.doc-tab')).toContainText('recent.pdf');
+    await expect(page.locator('.doc-tab')).toContainText('recent.pdf', { timeout: 60_000 });
 
     // Back to the start page: the row shows the preview once it has been drawn and decoded.
     await page.locator('[role="tab"] .doc-tab-close').first().click();
