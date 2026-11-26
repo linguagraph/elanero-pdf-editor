@@ -95,6 +95,7 @@ import { AttachmentsPanel } from './attachments/AttachmentsPanel';
 import { LayersPanel } from './layers/LayersPanel';
 import { ThumbnailsPanel } from './thumbnails/ThumbnailsPanel';
 import { OrganizerPanel } from './organizer/OrganizerPanel';
+import { runOrganizerCommand, useOrganizerStatus } from './organizer/organizerBridge';
 import { type FindRequest, SearchPanel } from './search/SearchPanel';
 import type { SearchMarks } from './search/search';
 import { RailButton } from './layout/RailButton';
@@ -110,6 +111,9 @@ import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
 
 // The command state every command reads before the document fields are filled in (see `state`).
+// The organize ribbon's page commands open the organizer panel when it is closed (issue 736).
+const openOrganizerPanel = (): void => openPanel('organizer');
+
 const BASE_COMMAND_STATE: CommandState = {
   hasDocument: false,
   hasRecentFiles: false,
@@ -436,6 +440,8 @@ export function App({
   // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
   const leftPanelOpen = useOpenPanel('left');
   const rightPanelOpen = useOpenPanel('right');
+  // The organizer panel's status, published while it is open (issue 736); null when it is closed.
+  const organizerStatus = useOrganizerStatus();
   // With the left rail hidden (below 768 px) the menu lists the left panels instead (W4.2a S7b).
   const leftRailShown = layoutForWidth(useViewportWidth()).leftRail;
   // The search hits the document view draws, with the tab they belong to (W5.4).
@@ -643,6 +649,7 @@ export function App({
     commentsSelected: documentShown && commentSelectionCount > 0,
     canGoBack: canGoBack(history),
     canGoForward: canGoForward(history),
+    organizer: documentShown ? organizerStatus : null,
     view: documentShown
       ? {
           page: viewState.page,
@@ -837,6 +844,14 @@ export function App({
           },
           // Organize Pages opens the organizer panel on the right, as its rail button does.
           'organize-pages': () => openPanel('organizer'),
+          // The organize ribbon's page commands run the organizer panel's own actions (issue 736). With the
+          // panel closed the handler opens it, and the panel runs the command on the current page.
+          'rotate-pages-left': () => runOrganizerCommand('rotate-pages-left', openOrganizerPanel),
+          'rotate-pages-right': () => runOrganizerCommand('rotate-pages-right', openOrganizerPanel),
+          'insert-pages': () => runOrganizerCommand('insert-pages', openOrganizerPanel),
+          'duplicate-pages': () => runOrganizerCommand('duplicate-pages', openOrganizerPanel),
+          'extract-pages': () => runOrganizerCommand('extract-pages', openOrganizerPanel),
+          'delete-pages': () => runOrganizerCommand('delete-pages', openOrganizerPanel),
           // Select and Hand (W4.10). Hand pressed again returns to Select, as on the desktop.
           'select-tool': () => {
             if (activeId !== null) setViewTool(activeId, 'select');
@@ -1099,6 +1114,7 @@ export function App({
             handle={session.handle}
             documentName={activeTab?.name ?? ''}
             startWorker={jobs.acquire}
+            initialPage={viewState.page - 1}
             onChanged={(pageCount) => {
               // The search marks name pages by index, which a change may have moved.
               setSearchMarks(null);

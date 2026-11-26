@@ -24,6 +24,14 @@ import { thumbnailScaleMilli, type ThumbnailSize } from '../view/thumbnails';
 import { extractName, runExtract } from './extract';
 import { insertFile, insertedCount, PasswordGaveUp } from './insertFile';
 import {
+  clearOrganizer,
+  type OrganizerActions,
+  type OrganizerCommandId,
+  publishOrganizer,
+  runOrganizerAction,
+  takeQueuedOrganizerCommands,
+} from './organizerBridge';
+import {
   canDelete,
   clampSelection,
   duplicatedPages,
@@ -86,6 +94,8 @@ export interface OrganizerPanelProps {
   // Asks for the password of an encrypted file to insert. The app's password dialog unless a test
   // passes its own.
   readonly prompt?: PasswordPrompt;
+  // The page to preselect when the panel opens (0-based): the page the view shows. Read once, at mount.
+  readonly initialPage?: number;
 }
 
 type PageChange =
@@ -101,11 +111,22 @@ export function OrganizerPanel({
   startWorker,
   download = downloadBytes,
   prompt = passwordPrompt,
+  initialPage,
 }: OrganizerPanelProps) {
   const [sizes, setSizes] = useState<readonly ThumbnailSize[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [selection, setSelection] = useState<PageSelection>(NO_SELECTION);
   const [busy, setBusy] = useState(false);
+  // The ribbon's actions read busy from a ref too: two presses before a re-render must not both run.
+  const busyRef = useRef(false);
+  const setBusyNow = (value: boolean) => {
+    busyRef.current = value;
+    setBusy(value);
+  };
+  // Ribbon commands that arrived before the pages loaded; they run once the pages are in. A ref, not
+  // state: the effect that runs them clears it, and nothing renders from it.
+  const queuedRef = useRef<readonly OrganizerCommandId[]>([]);
+  const startPage = useRef(initialPage);
   const [confirming, setConfirming] = useState(false);
   // A new scheduler after each change: the page indexes now mean other pages, so the cache of the
   // old one is left behind rather than drawn wrongly.
@@ -129,6 +150,12 @@ export function OrganizerPanel({
         if (!active) return;
         setScheduler(new RenderScheduler(rpc, handle));
         setSizes(reply.pages);
+        const page = startPage.current;
+        if (page !== undefined && reply.pages.length > 0) {
+          const index = Math.min(Math.max(page, 0), reply.pages.length - 1);
+          setSelection(selectPage(NO_SELECTION, index, { ctrl: false, shift: false }));
+        }
+        queuedRef.current = takeQueuedOrganizerCommands();
       })
       .catch(() => {
         if (active) setLoadFailed(true);
@@ -185,7 +212,7 @@ export function OrganizerPanel({
     message: string,
     nextSelection: (value: unknown) => PageSelection | undefined,
   ) => {
-    setBusy(true);
+    setBusyNow(true);
     try {
       const reply = await rpc.call('actions.run', { handle, name, args });
       if (!reply.executed) return;
@@ -194,7 +221,7 @@ export function OrganizerPanel({
     } catch (error) {
       reportFailure(error);
     } finally {
-      setBusy(false);
+      setBusyNow(false);
     }
   };
 
@@ -206,6 +233,7 @@ export function OrganizerPanel({
   };
 
   const rotate = (delta: number) => {
+    if (!hasSelection || busyRef.current) return;
     const count = picked.length;
     void change(
       'pages.rotate',
@@ -254,6 +282,7 @@ export function OrganizerPanel({
 
   // The copies go right after the last chosen page, and they become the selection.
   const duplicateSelected = () => {
+    if (!hasSelection || busyRef.current) return;
     const copies = duplicatedPages(picked);
     const count = picked.length;
     void change('pages.duplicate', { pages: picked }, tp('organizer.duplicated', count), () => ({
@@ -266,7 +295,7 @@ export function OrganizerPanel({
   // brought. The password dialog runs inside insertFile; a cancel there changes nothing.
   const insertFromFile = async (file: File) => {
     const at = insertAt(picked, total);
-    setBusy(true);
+    setBusyNow(true);
     try {
       const reply = await insertFile({ rpc, handle, file, at, prompt });
       if (reply === null || !reply.executed) return;
@@ -277,16 +306,17 @@ export function OrganizerPanel({
       if (error instanceof PasswordGaveUp) toastStore.push('error', t('organizer.passwordGaveUp'));
       else reportFailure(error);
     } finally {
-      setBusy(false);
+      setBusyNow(false);
     }
   };
 
   // The chosen pages go to a new file, which is downloaded. Nothing in the document changes, so
   // there is no Undo.
   const extract = async () => {
+    if (!hasSelection || busyRef.current) return;
     const name = extractName(documentName);
     const count = picked.length;
-    setBusy(true);
+    setBusyNow(true);
     try {
       const file = await runExtract({ engine: rpc, startWorker }, handle, picked);
       download(name, file.data);
@@ -294,7 +324,7 @@ export function OrganizerPanel({
     } catch (error) {
       if (!(error instanceof FileJobCancelled)) reportFailure(error);
     } finally {
-      setBusy(false);
+      setBusyNow(false);
     }
   };
 
@@ -308,6 +338,32 @@ export function OrganizerPanel({
       () => NO_SELECTION,
     );
   };
+
+  // The ribbon's view of this panel (issue 736). Each action is the closure a button above runs.
+  const actions: OrganizerActions = {
+    rotate: (delta) => rotate(delta),
+    insertFile: () => {
+      if (!busyRef.current) fileInput.current?.click();
+    },
+    duplicate: () => duplicateSelected(),
+    extract: () => void extract(),
+    askDelete: () => {
+      if (!busyRef.current && canDelete(picked, total)) setConfirming(true);
+    },
+  };
+  // Publishes the selection to the ribbon's rules, and withdraws it when the panel goes. A queued
+  // command runs here, on the render that holds the preselected page, so it acts on that page.
+  useEffect(() => {
+    if (sizes === null) return;
+    publishOrganizer({ selected: picked.length, total, busy }, actions);
+  });
+  useEffect(() => () => clearOrganizer(), []);
+  useEffect(() => {
+    const pending = queuedRef.current;
+    if (pending.length === 0) return;
+    queuedRef.current = [];
+    for (const id of pending) runOrganizerAction(id, actions);
+  });
 
   if (loadFailed) {
     return (

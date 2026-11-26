@@ -356,7 +356,6 @@ family when it has one.
 
 These features are on the desktop but not in the web version yet:
 
-- the ribbon's Insert, Delete, Duplicate and Rotate page commands (the Organize pages panel has insert, duplicate, extract and delete; see the table below);
 - **Rotate View** (the view rotation): it is not shown on the web yet, so the View ribbon has no Rotate View buttons;
 - the **Install App** command in the app menu;
 - saving back to the original file in place (Save downloads the document; see the table below);
@@ -464,7 +463,7 @@ full policy, with what the desktop app stores, is in the
 | Background colour behind the pages (Organize, Marks) | Yes | Yes, with undo; when the document already has a background, Replace, Add New or Remove |
 | Text or image watermark across the pages (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts, size, colour, opacity, angle and Behind page content for text, or a PNG or JPEG picture (up to 50 MB and 25 megapixels) with its width; when the document already has a watermark, Replace, Add New or Remove, and Update asks for the picture again |
 | Header & footer and Bates numbers (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts (uploaded fonts are not available here yet); when the document already has one, Replace, Add New or Remove; the Bates preview shows the first number |
-| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages); the ribbon's page commands are coming soon |
+| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages) and from the Organize tab's ribbon (Insert, Delete, Duplicate, Rotate left and right, Extract); Replace and Page labels are not available yet |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
 | Bookmarks: add, rename, delete, move, set destination | Yes | Yes (Bookmarks panel; Undo after each change; drag and drop with a mouse or pen) |

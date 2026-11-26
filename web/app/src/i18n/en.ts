@@ -117,6 +117,8 @@ export const EN = {
   'disabled.notAvailableYet': 'This command is not available yet.',
   'disabled.selectOneImage': 'Select one picture first.',
   'disabled.selectComment': 'Select a comment first.',
+  'disabled.noPagesSelected': 'Select one or more pages first.',
+  'disabled.pagesBusy': 'Wait for the page change to finish.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
   // Search aliases (W4.3b D3): the palette also matches these words. They are never shown.
