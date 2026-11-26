@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { CommentPageResult, Methods } from '../rpc/generated';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
-import { DocumentView, type DocumentViewHandle } from './DocumentView';
+import { DocumentView, type DocumentViewHandle, type DocumentViewState } from './DocumentView';
 import { computeColumn, computeSpreads, scrollTopForPage } from './layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -337,13 +337,28 @@ describe('DocumentView layouts and night reading', () => {
     savePreferences({ defaultZoom: 'actual' });
   });
 
-  const button = (label: string) =>
-    [...host.querySelectorAll('button')].find((b) => b.textContent === label);
+  // The layout and night state the view reports. The ribbon's commands drive them through the
+  // view's handle (W8 fix 702), so the tests drive the handle and read the reports.
+  const viewRef = createRef<DocumentViewHandle>();
+  let reported: DocumentViewState | null = null;
+  const reportTo = (state: DocumentViewState) => {
+    reported = state;
+  };
+  const pressedOf = (label: string): string | undefined => {
+    if (reported === null) return undefined;
+    const flags: Record<string, boolean> = {
+      'Two pages': reported.layout === 'twoPage',
+      'Page 1 alone': reported.firstAlone,
+      'Single column': reported.layout === 'continuous',
+      'Night reading': reported.night,
+    };
+    return String(flags[label]);
+  };
 
   it('pairs pages into two-page spreads and puts page 1 alone when asked', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
     const pages = () => [...host.querySelectorAll<HTMLElement>('.doc-page')];
@@ -352,52 +367,39 @@ describe('DocumentView layouts and night reading', () => {
     expect(continuousTops[0]).not.toBe(continuousTops[1]);
 
     act(() => {
-      button('Two pages')?.click();
+      viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: false });
     });
-    expect(button('Two pages')?.getAttribute('aria-pressed')).toBe('true');
+    expect(pressedOf('Two pages')).toBe('true');
     // Pages 1 and 2 share one spread, so they share a top edge.
     expect(pages()[0]?.style.top).toBe(pages()[1]?.style.top);
 
     act(() => {
-      button('Page 1 alone')?.click();
+      viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: true });
     });
-    expect(button('Page 1 alone')?.getAttribute('aria-pressed')).toBe('true');
+    expect(pressedOf('Page 1 alone')).toBe('true');
     // Page 1 is alone on the right of the first spread, so page 2 starts the next row.
     expect(pages()[0]?.style.top).not.toBe(pages()[1]?.style.top);
     expect(pages()[1]?.style.left).not.toBe(pages()[0]?.style.left);
   });
 
-  it('disables the page 1 control outside the two-page layout', async () => {
-    const { rpc } = fakeRpc(2);
-    act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
-    });
-    await flush();
-    expect((button('Page 1 alone') as HTMLButtonElement).disabled).toBe(true);
-    act(() => {
-      button('Two pages')?.click();
-    });
-    expect((button('Page 1 alone') as HTMLButtonElement).disabled).toBe(false);
-  });
-
   it('turns night reading on and off with a class on the view, and saves the choice', async () => {
     const { rpc } = fakeRpc(1);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
     const view = () => host.querySelector('.doc-view');
     expect(view()?.classList.contains('doc-view--night')).toBe(false);
 
     act(() => {
-      button('Night reading')?.click();
+      viewRef.current?.setNight(!(reported?.night ?? false));
     });
     expect(view()?.classList.contains('doc-view--night')).toBe(true);
-    expect(button('Night reading')?.getAttribute('aria-pressed')).toBe('true');
+    expect(pressedOf('Night reading')).toBe('true');
     expect(readPreferences().nightReading).toBe(true);
 
     act(() => {
-      button('Night reading')?.click();
+      viewRef.current?.setNight(!(reported?.night ?? false));
     });
     expect(view()?.classList.contains('doc-view--night')).toBe(false);
     expect(readPreferences().nightReading).toBe(false);
@@ -407,7 +409,7 @@ describe('DocumentView layouts and night reading', () => {
     writePreferences({ ...readPreferences(), nightReading: true });
     const { rpc } = fakeRpc(1);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
     expect(host.querySelector('.doc-view--night')).not.toBeNull();
@@ -418,32 +420,32 @@ describe('DocumentView layouts and night reading', () => {
     savePreferences({ defaultZoom: 'actual', pageLayout: 'twoPageCover' });
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
-    expect(button('Two pages')?.getAttribute('aria-pressed')).toBe('true');
-    expect(button('Page 1 alone')?.getAttribute('aria-pressed')).toBe('true');
-    expect(button('Single column')?.getAttribute('aria-pressed')).toBe('false');
+    expect(pressedOf('Two pages')).toBe('true');
+    expect(pressedOf('Page 1 alone')).toBe('true');
+    expect(pressedOf('Single column')).toBe('false');
   });
 
   it('starts in two pages without page 1 alone for the saved two-page layout', async () => {
     savePreferences({ defaultZoom: 'actual', pageLayout: 'twoPage' });
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
-    expect(button('Two pages')?.getAttribute('aria-pressed')).toBe('true');
-    expect(button('Page 1 alone')?.getAttribute('aria-pressed')).toBe('false');
+    expect(pressedOf('Two pages')).toBe('true');
+    expect(pressedOf('Page 1 alone')).toBe('false');
   });
 
   it('applies a changed default layout once, and saving other fields keeps the reader choice', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
-    const pressed = (label: string) => button(label)?.getAttribute('aria-pressed');
+    const pressed = (label: string) => pressedOf(label);
 
     act(() => {
       writePreferences({ ...readPreferences(), pageLayout: 'twoPage' });
@@ -452,7 +454,7 @@ describe('DocumentView layouts and night reading', () => {
 
     // The reader picks the single column; saving another field must not undo that.
     act(() => {
-      button('Single column')?.click();
+      viewRef.current?.setLayout({ layout: 'continuous', firstAlone: false });
     });
     act(() => {
       writePreferences({ ...readPreferences(), reduceMotion: true });
@@ -507,7 +509,7 @@ describe('DocumentView layouts and night reading', () => {
   it('zooms with Ctrl+wheel through the desktop steps and stops the browser zoom', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
     const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');
@@ -527,7 +529,7 @@ describe('DocumentView layouts and night reading', () => {
   it('leaves a plain wheel to the browser', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
     });
     await flush();
     const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');

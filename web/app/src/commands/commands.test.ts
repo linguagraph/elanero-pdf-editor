@@ -461,6 +461,18 @@ describe('the comment and redaction tools (W4.3a S7)', () => {
     expect(DISABLED_REASON_LABELS.redactionBusy).toBe('disabled.redactionBusy');
   });
 
+  it('clears the marks under the same rules as Apply, and not while an apply runs', () => {
+    expect(commandDisabledReasonOf('clear-redaction-marks', state())).toBe('needsDocument');
+    expect(commandDisabledReasonOf('clear-redaction-marks', withDoc)).toBe('noRedactionMarks');
+    const ready = state({ hasDocument: true, canApplyRedactions: true });
+    expect(commandDisabledReasonOf('clear-redaction-marks', ready)).toBeNull();
+    const busy = state({ hasDocument: true, canApplyRedactions: false, redactionBusy: true });
+    expect(commandDisabledReasonOf('clear-redaction-marks', busy)).toBe('redactionBusy');
+    // The command sits in the Protect group with Apply, and is web-only (no desktop id).
+    expect(REGISTRY.get('clear-redaction-marks')?.group).toBe('protect.redact');
+    expect(WEB_ONLY_IDS.has('clear-redaction-marks')).toBe(true);
+  });
+
   it('disables the Edit tool commands without the content_edit capability, with the reason', () => {
     // The engine's content_edit flag (W6.7a): without it the commands say why, and never run.
     const edit = ['edit-text-images', 'delete-selected-objects'];
@@ -561,6 +573,9 @@ describe('the View and Home commands (W4.3a S6)', () => {
     expect(checkedOf('two-up-continuous', twoPlain)).toBe(true);
     expect(checkedOf('two-up-with-cover-page', twoPlain)).toBe(false);
     expect(checkedOf('two-up-with-cover-page', twoCover)).toBe(true);
+    // Single Page is the layout that shows one page at a time (it had no pressed state before).
+    expect(checkedOf('single-page', inView)).toBe(false);
+    expect(checkedOf('single-page', { ...inView, view: viewOf({ layout: 'single' }) })).toBe(true);
     // A cover flag left over from a two-page layout does not press Single Page when continuous.
     expect(
       checkedOf('single-page-continuous', { ...inView, view: viewOf({ firstAlone: true }) }),

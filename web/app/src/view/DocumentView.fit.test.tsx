@@ -1,9 +1,9 @@
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
-import { DocumentView } from './DocumentView';
+import { DocumentView, type DocumentViewHandle } from './DocumentView';
 import { fitPageZoom, fitWidthZoom } from './layout';
 import { MAX_RENDER_SCALE_MILLI, quantizeScale, scaleMilli, stepZoom } from './zoom';
 
@@ -327,12 +327,13 @@ describe('DocumentView fit modes (W5.1e)', () => {
   it('fits the width of two pages side by side in the two-page layout', async () => {
     savePreferences({ defaultZoom: 'fitWidth' });
     const { rpc } = fakeRpc();
+    const viewRef = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" />);
     });
     await flush();
     act(() => {
-      button('Two pages')?.click();
+      viewRef.current?.setLayout({ layout: 'twoPage', firstAlone: false });
     });
     expect(zoomText()).toBe(`${Math.round(fitWidthZoom(LETTER.width, viewWidth(), 2) * 100)}%`);
     // Two pages fill less zoom than one page would, since each page is half the width.

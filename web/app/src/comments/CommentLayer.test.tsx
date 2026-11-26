@@ -3,7 +3,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CSS_PX_PER_POINT } from '../view/zoom';
 import { CommentLayer, type CommentLayerProps } from './CommentLayer';
-import { CommentToolbar } from './CommentToolbar';
 import type { CommentToolId } from './tools';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -99,20 +98,6 @@ describe('comment tools on a page', () => {
     });
     expect(onPlace).toHaveBeenCalledWith({ x0: 72, y0: 72, x1: 72, y1: 72 }, 'Check this', []);
     expect(container.querySelector('form')).toBeNull();
-  });
-
-  it('the toolbar turns a tool off when it is pressed again, and reports the choice', () => {
-    const onChoose = vi.fn();
-    act(() => root.render(<CommentToolbar tool="note" onChoose={onChoose} />));
-    const buttons = [...container.querySelectorAll('button')];
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual([
-      'true',
-      ...Array<string>(10).fill('false'),
-    ]);
-    act(() => buttons[0]?.click());
-    expect(onChoose).toHaveBeenLastCalledWith(null);
-    act(() => buttons[1]?.click());
-    expect(onChoose).toHaveBeenLastCalledWith('rectangle');
   });
 
   it('a drag of an oval draws the box, shaped as an oval', () => {

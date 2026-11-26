@@ -53,6 +53,8 @@ function fakeView(): DocumentViewHandle {
     cachedLines: vi.fn(() => undefined),
     setCommentTool: vi.fn(),
     setRedacting: vi.fn(),
+    chooseStamp: vi.fn(),
+    stampRemoved: vi.fn(),
     selectAll: vi.fn(),
     copyPlan: vi.fn(() => ({ kind: 'off' }) as const),
     selectedPageSpan: vi.fn(() => 0),

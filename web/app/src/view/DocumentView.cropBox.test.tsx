@@ -1,10 +1,10 @@
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import type { DrawnCrop } from '../crop/cropChoice';
-import { DocumentView } from './DocumentView';
+import { DocumentView, type DocumentViewHandle } from './DocumentView';
 import type { ViewTool } from './viewTool';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,8 +39,30 @@ afterEach(() => {
   host.remove();
 });
 
+// The comment tools are in the ribbon, not the view, so the test reads the tool through
+// onCommentToolChange and turns one on through the view's handle.
+let commentTool: string | null = null;
+const viewRef = createRef<DocumentViewHandle>();
+
 function view(tool: ViewTool, onCropBoxEnd?: (drawn: DrawnCrop | null) => void) {
-  return <DocumentView rpc={fakeRpc()} handle="h" tool={tool} onCropBoxEnd={onCropBoxEnd} />;
+  return (
+    <DocumentView
+      ref={viewRef}
+      rpc={fakeRpc()}
+      handle="h"
+      tool={tool}
+      onCropBoxEnd={onCropBoxEnd}
+      onCommentToolChange={(next) => {
+        commentTool = next;
+      }}
+    />
+  );
+}
+
+function chooseComment(): void {
+  act(() => {
+    viewRef.current?.setCommentTool('note');
+  });
 }
 
 async function mount(tool: ViewTool, onCropBoxEnd?: (drawn: DrawnCrop | null) => void) {
@@ -57,13 +79,6 @@ function pointer(element: HTMLElement, type: string, x: number, y: number): void
   act(() => {
     element.dispatchEvent(event);
   });
-}
-
-function commentButton(): HTMLButtonElement {
-  const group = host.querySelector(`[role="group"][aria-label="${t('comment.toolbarLabel')}"]`);
-  const button = group?.querySelector<HTMLButtonElement>('button');
-  if (!button) throw new Error('no comment tool button');
-  return button;
 }
 
 describe('DocumentView with the crop box tool (W4.11 S5)', () => {
@@ -106,12 +121,10 @@ describe('DocumentView with the crop box tool (W4.11 S5)', () => {
 
   it('turns a comment tool off when the crop box tool is chosen', async () => {
     await mount('select');
-    act(() => {
-      commentButton().click();
-    });
-    expect(commentButton().getAttribute('aria-pressed')).toBe('true');
+    chooseComment();
+    expect(commentTool).toBe('note');
     await mount('cropBox');
-    expect(commentButton().getAttribute('aria-pressed')).toBe('false');
+    expect(commentTool).toBeNull();
   });
 });
 

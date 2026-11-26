@@ -1,4 +1,11 @@
-import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import {
   Button,
   Dialog,
@@ -45,6 +52,9 @@ export interface RibbonProps {
   registry: Registry;
   state: CommandState;
   handlers: CommandHandlers;
+  // Controls drawn after a group's commands, keyed by the group id (the Comment tab's stamp menu,
+  // the Protect tab's mark count). They show in the row, the overflow menu and the collapsed tabs.
+  readonly groupExtras?: Readonly<Record<string, ReactNode>>;
 }
 
 const IS_MAC = isMacPlatform(navigator.platform);
@@ -91,7 +101,7 @@ interface FullRibbonProps extends RibbonProps {
 // the groups each tab shows. Tabs and the commands are react-aria widgets, so arrow keys move
 // between tabs and between commands, and Tab leaves the ribbon. A disabled command stays in the
 // ribbon with aria-disabled and the reason as its description; running it does nothing.
-function FullRibbon({ registry, state, handlers, form, wideSearch }: FullRibbonProps) {
+function FullRibbon({ registry, state, handlers, groupExtras, form, wideSearch }: FullRibbonProps) {
   const tabs = ribbonLayout(registry, state);
   const [selected, setSelected] = useState<TabId>('home');
   // Show the first tab when the selected one has no groups in this state (for example, Tools
@@ -182,6 +192,7 @@ function FullRibbon({ registry, state, handlers, form, wideSearch }: FullRibbonP
                       registry={registry}
                       state={state}
                       handlers={handlers}
+                      extra={groupExtras?.[group.group.id]}
                       compact={compact}
                     />
                   ),
@@ -192,6 +203,7 @@ function FullRibbon({ registry, state, handlers, form, wideSearch }: FullRibbonP
                     registry={registry}
                     state={state}
                     handlers={handlers}
+                    groupExtras={groupExtras}
                   />
                 ) : null}
               </Toolbar>
@@ -229,7 +241,7 @@ function CollapseChevron({ expanded, onPress }: CollapseChevronProps) {
 
 // The collapsed form: one row of tab buttons. A tab opens its groups in a popover, which closes
 // once a command in it runs (W1.6 section 2).
-function CollapsedRibbon({ registry, state, handlers }: RibbonProps) {
+function CollapsedRibbon({ registry, state, handlers, groupExtras }: RibbonProps) {
   const tabs = ribbonLayout(registry, state);
   return (
     <div className="ribbon ribbon-collapsed" data-form="collapsed" data-collapsed-by="tier">
@@ -247,6 +259,7 @@ function CollapsedRibbon({ registry, state, handlers }: RibbonProps) {
                     registry={registry}
                     state={state}
                     handlers={handlers}
+                    groupExtras={groupExtras}
                     close={close}
                   />
                 )}
@@ -266,12 +279,20 @@ interface CollapsedTabBodyProps {
   registry: Registry;
   state: CommandState;
   handlers: CommandHandlers;
+  groupExtras?: Readonly<Record<string, ReactNode>>;
   close: () => void;
 }
 
 // The groups of one tab in the collapsed popover. A press on a disabled command keeps the popover
 // open and states the reason in the status line below the groups.
-function CollapsedTabBody({ tab, registry, state, handlers, close }: CollapsedTabBodyProps) {
+function CollapsedTabBody({
+  tab,
+  registry,
+  state,
+  handlers,
+  groupExtras,
+  close,
+}: CollapsedTabBodyProps) {
   const [notice, setNotice] = useState('');
   return (
     <>
@@ -284,6 +305,7 @@ function CollapsedTabBody({ tab, registry, state, handlers, close }: CollapsedTa
           registry={registry}
           state={state}
           handlers={handlers}
+          extra={groupExtras?.[group.group.id]}
           onRun={close}
           onBlocked={setNotice}
         />
@@ -301,11 +323,12 @@ interface MoreCommandsProps {
   registry: Registry;
   state: CommandState;
   handlers: CommandHandlers;
+  groupExtras?: Readonly<Record<string, ReactNode>>;
 }
 
 // The "»" control at the row's end. Its menu holds the overflowed groups, rendered as the collapsed
 // drop-down renders them: it closes when a command runs and keeps the disabled notice.
-function MoreCommands({ tab, registry, state, handlers }: MoreCommandsProps) {
+function MoreCommands({ tab, registry, state, handlers, groupExtras }: MoreCommandsProps) {
   return (
     <DialogTrigger>
       <Button className="ribbon-more" aria-label={t('ribbon.more')}>
@@ -319,6 +342,7 @@ function MoreCommands({ tab, registry, state, handlers }: MoreCommandsProps) {
               registry={registry}
               state={state}
               handlers={handlers}
+              groupExtras={groupExtras}
               close={close}
             />
           )}
@@ -336,6 +360,8 @@ interface RibbonGroupProps {
   registry: Registry;
   state: CommandState;
   handlers: CommandHandlers;
+  // A control drawn after the group's commands (see RibbonProps.groupExtras).
+  extra?: ReactNode;
   // Called after a command in the group runs (the collapsed form closes its popover with it).
   onRun?: () => void;
   // Called with the reason when a disabled command is pressed.
@@ -351,6 +377,7 @@ function RibbonGroup({
   registry,
   state,
   handlers,
+  extra,
   onRun,
   onBlocked,
   compact = false,
@@ -371,6 +398,7 @@ function RibbonGroup({
             compact={compact}
           />
         ))}
+        {extra}
       </div>
       <span
         id={labelId}

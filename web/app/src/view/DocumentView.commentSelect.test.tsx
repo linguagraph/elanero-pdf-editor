@@ -1,14 +1,12 @@
 // After a comment is added the view returns to Select and selects the new comment (W7.1a
 // Question 3): the tool button is released, the page's comment layer goes, and the comment gets
 // its selection outline.
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
-import { t } from '../i18n/t';
-import { COMMENT_TOOL_LABEL } from '../comments/tools';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
-import { DocumentView } from './DocumentView';
+import { DocumentView, type DocumentViewHandle } from './DocumentView';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -80,16 +78,14 @@ describe('a comment that is added', () => {
   it('returns the view to Select and selects the new comment', async () => {
     const { rpc, calls } = fakeRpc();
     const onToolChange = vi.fn();
-    act(() => root.render(<DocumentView rpc={rpc} handle="h" onToolChange={onToolChange} />));
+    const viewRef = createRef<DocumentViewHandle>();
+    act(() =>
+      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="h" onToolChange={onToolChange} />),
+    );
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    const note = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === t(COMMENT_TOOL_LABEL.rectangle),
-    );
-    if (note === undefined) throw new Error('no rectangle tool');
-    act(() => note.click());
-    expect(note.getAttribute('aria-pressed')).toBe('true');
+    act(() => viewRef.current?.setCommentTool('rectangle'));
     const layer = host.querySelector<HTMLElement>('.comment-layer');
     if (layer === null) throw new Error('no comment layer');
     await act(async () => {
@@ -98,7 +94,6 @@ describe('a comment that is added', () => {
     });
     expect(calls()).toContain('actions.run');
     expect(onToolChange.mock.calls.at(-1)?.[0]).toBe('select');
-    expect(note.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelector('.comment-layer')).toBeNull();
     expect(host.querySelectorAll('.comment-select-outline')).toHaveLength(1);
   });

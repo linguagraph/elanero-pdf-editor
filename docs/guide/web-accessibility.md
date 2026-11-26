@@ -56,7 +56,7 @@ system's setting is on. Its change shows at once; **Cancel** puts back the saved
 ## Touch screens
 
 On a touch screen, the controls are at least 44 × 44 pixels: the ribbon buttons, tabs and menu
-items, the document tabs and their menu, the document view toolbar and page controls, the edit bar,
+items, the document tabs and their menu, the page controls, the edit bar,
 the font list, the theme choices, the update banner, the dialog buttons (Cancel, Done, Apply), the
 Combine and Properties fields and buttons, the security fields and checkboxes, and the translation
 bubble. Four things are not held to that size: the text on a page (you select it by dragging, and

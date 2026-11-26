@@ -284,11 +284,13 @@ message saying whether it was added.
   selected marks differ in a field, that field shows "Mixed", and a change sets only that field on
   every selected mark. A locked mark cannot be changed. **Delete** removes the selected marks.
   **Apply Selected** and **Apply All** burn the marks into the document after you confirm; Apply All
-  includes the marks already in the file. Marks are added with **Mark areas** on the document toolbar.
+  includes the marks already in the file. Marks are added with the **Redact** command on the **Protect**
+  tab, then dragging over the areas.
 - **Mark Text.** On the **Protect** tab, **Mark Text** marks the text you selected with the Select tool
   (a drag, or Select All) as redaction marks: one mark per page the selection covers, all in one undo
   step. It works on a selection of up to 300 pages. It only marks. Nothing is
-  removed until you apply the marks, from the Redactions panel or the toolbar's **Apply**. With no text
+  removed until you apply the marks, from the Redactions panel or the **Apply** command on the **Protect**
+  tab. With no text
   selected, the command asks you to select some first. A mark keeps the selected text in its note until
   the mark is applied, and applying the marks removes that text from the file.
 - **Mark Pages.** On the **Protect** tab, **Mark Pages** opens a dialog to choose the pages to mark
@@ -299,11 +301,12 @@ message saying whether it was added.
   does not open; a message says how many pages were marked.
 - **Comment tools.** On the **Comment** tab, **Note**, **Highlight** and **Rectangle** choose a
   comment tool for the open document. The chosen tool shows as pressed; choose it again, or the same
-  button in the document toolbar, to turn it off. A click places a note; a drag places a highlight or
+  button on the same tab, to turn it off. A click places a note; a drag places a highlight or
   a rectangle. Choosing a comment tool turns the Hand tool off.
-- **Redact and Apply.** On the **Protect** tab, **Redact** turns the mark tool on or off, the same as
-  **Mark areas** on the document toolbar. **Apply** asks you to confirm, then removes the content under
-  the marks, as the toolbar's Apply button does. It is disabled when there are no marks to apply.
+- **Redact and Apply.** On the **Protect** tab, **Redact** turns the mark tool on or off, and the group
+  shows how many marks the document has. **Apply** asks you to confirm, then removes the content under
+  the marks. It is disabled when there are no marks to apply. **Clear marks**, in the same group, drops
+  every mark at once, with no confirmation.
 
 ## Going to a page
 
@@ -472,7 +475,7 @@ full policy, with what the desktop app stores, is in the
 | Export comments as XFDF, CSV or PDF summary | Yes | Yes (Comment tab, Manage group, Export Comments; the PDF summary may be unavailable) |
 | Import comments from an XFDF file | Yes | Yes (Comment tab, Manage group, Import Comments; files up to 8 MB; Undo after each import) |
 | Document properties: title, author, subject, keywords | Yes | Yes (Home tab, File group, Document Properties, Ctrl+D, or the app menu; Undo after each change). The Advanced and Fonts tabs show the PDF version and file facts, and the fonts the pages use, read only. The Security tab shows the encryption method, the eight permissions and any change waiting for the next save, read only; Encrypt with Password and Remove Security change them |
-| Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Mark areas and Mark Text on the toolbar and the Protect tab; Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
+| Redaction: mark areas, Mark Text, Mark Pages, the Redactions panel, apply | Yes | Yes (Redact, Mark Text and Mark Pages on the Protect tab; the Redactions panel on the left rail; Undo after an apply works until you close the document) |
 | Links to pages in the document | Yes | Yes (click, tap, or Tab to the link and press Enter; Back returns) |
 | Web and email links | Yes | Yes: web and email links ask first, and show the full address |
 | Custom image stamps | Yes | Yes (Stamp menu, Add Custom Stamp) |
