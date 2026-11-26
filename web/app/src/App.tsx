@@ -60,6 +60,7 @@ import { ExportDialog } from './export/ExportDialog';
 import { ExtractFontsDialog } from './extract/ExtractFontsDialog';
 import { ExtractImagesDialog } from './extract/ExtractImagesDialog';
 import { CompressDialog } from './compress/CompressDialog';
+import { SpaceUsageDialog } from './space/SpaceUsageDialog';
 import { CompareDialog } from './compare/CompareDialog';
 import { ApplyConfirm } from './redaction/ApplyConfirm';
 import { RedactionController } from './redaction/controller';
@@ -222,6 +223,7 @@ export function App({
   const [extractImagesOpen, setExtractImagesOpen] = useState(false);
   const [extractFontsOpen, setExtractFontsOpen] = useState(false);
   const [compressOpen, setCompressOpen] = useState(false);
+  const [spaceUsageOpen, setSpaceUsageOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -320,6 +322,7 @@ export function App({
     'extract-images': () => setExtractImagesOpen(true),
     'extract-fonts': () => setExtractFontsOpen(true),
     'reduce-file-size': () => setCompressOpen(true),
+    'space-usage': () => setSpaceUsageOpen(true),
     'combine-files-into-pdf': () => setCombineOpen(true),
     'document-properties': () => setPropertiesOpen(true),
     'encrypt-with-password': () => setEncryptOpen(true),
@@ -1232,6 +1235,15 @@ export function App({
         <CompressDialog
           isOpen={compressOpen}
           onClose={() => setCompressOpen(false)}
+          engine={rpc}
+          handle={session.handle}
+          startWorker={jobs.acquire}
+        />
+      ) : null}
+      {documentShown && session !== null && rpc !== undefined ? (
+        <SpaceUsageDialog
+          isOpen={spaceUsageOpen}
+          onClose={() => setSpaceUsageOpen(false)}
           engine={rpc}
           handle={session.handle}
           startWorker={jobs.acquire}

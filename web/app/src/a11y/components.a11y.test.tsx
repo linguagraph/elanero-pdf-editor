@@ -15,6 +15,7 @@ import { PrintDialog } from '../print/PrintDialog';
 import { PreferencesDialog } from '../prefs/PreferencesDialog';
 import { CombineDialog } from '../combine/CombineDialog';
 import { CompressDialog } from '../compress/CompressDialog';
+import { SpaceUsageDialog } from '../space/SpaceUsageDialog';
 import { SpaceAuditTable } from '../compress/SpaceAuditTable';
 import { CommentsExportDialog } from '../commentsExport/CommentsExportDialog';
 import { CommentsImportDialog } from '../commentsImport/CommentsImportDialog';
@@ -222,6 +223,21 @@ describe('dialogs that open on an engine session (W8.5 S1)', () => {
         isOpen
         onClose={() => undefined}
         engine={engine}
+        handle="h1"
+        startWorker={() => ({}) as never}
+      />,
+    );
+    await expectAccessible();
+  });
+
+  it('space usage dialog while the audit runs', async () => {
+    // An engine whose audit never answers keeps the dialog in its running state.
+    const pending = { call: () => new Promise<never>(() => undefined) } as never;
+    render(
+      <SpaceUsageDialog
+        isOpen
+        onClose={() => undefined}
+        engine={pending}
         handle="h1"
         startWorker={() => ({}) as never}
       />,

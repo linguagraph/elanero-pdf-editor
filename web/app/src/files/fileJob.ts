@@ -66,14 +66,22 @@ export interface FileJobOutput {
   readonly value: unknown;
 }
 
+// What a file job's reply carries: its files ("files", the default), or only its value, a report
+// (the space audit, issue 737). The caller names the kind it expects; another kind is refused.
+export type FileJobKind = 'files' | 'report';
+
 // Reads the job worker's reply to job.run. A failure comes back as an error reply; a result is
 // kind "files". Each file's bytes are one of the reply's buffers, in $bin order (W1.2 section 5).
 export function readFilesReply(result: CallResult, job: string): ResultFile[] {
   return readFileJobOutput(result, job).files;
 }
 
-// The same reply, with the job's value as well (see FileJobOutput).
-export function readFileJobOutput(result: CallResult, job: string): FileJobOutput {
+// The same reply, with the job's value as well (see FileJobOutput). A report reply has no files.
+export function readFileJobOutput(
+  result: CallResult,
+  job: string,
+  kind: FileJobKind = 'files',
+): FileJobOutput {
   let parsed: unknown;
   try {
     parsed = JSON.parse(result.reply);
@@ -96,8 +104,11 @@ export function readFileJobOutput(result: CallResult, job: string): FileJobOutpu
   }
   checkKeys(reply, ['v', 'id', 'ok', 'result', 'events'], 'reply');
   const value = expectObject(field(reply, 'result', 'reply'), 'result');
-  if (field(value, 'kind', 'result') !== 'files') {
-    throw new ReplyShapeError('result.kind', `a ${job} job returns files`);
+  if (field(value, 'kind', 'result') !== kind) {
+    throw new ReplyShapeError('result.kind', `a ${job} job returns ${kind}`);
+  }
+  if (kind === 'report') {
+    return { files: [], value: field(value, 'value', 'result') ?? null };
   }
   const items = expectArray(field(value, 'files', 'result'), 'result.files');
   // The file bytes are the reply's buffers, in $bin order: one buffer per file.
@@ -128,12 +139,14 @@ export async function runFileJob(
   return (await runFileJobOutput(deps, handle, job, args)).files;
 }
 
-// Runs one file job and returns its files with the job's value (see FileJobOutput).
+// Runs one file job and returns its files with the job's value (see FileJobOutput). The kind is
+// the reply the job returns: "files" for the jobs that write files, "report" for the audit.
 export async function runFileJobOutput(
   deps: FileJobDeps,
   handle: string,
   job: string,
   args: Record<string, unknown>,
+  kind: FileJobKind = 'files',
 ): Promise<FileJobOutput> {
   const progress = deps.progress ?? jobProgress;
   const quiet = deps.ownToasts === true;
@@ -196,7 +209,7 @@ export async function runFileJobOutput(
       worker.call(request, [prepared.document], onNotice),
       cancelled,
     ]);
-    const output = readFileJobOutput(result, job);
+    const output = readFileJobOutput(result, job, kind);
     await engine.call('jobs.apply', {
       handle,
       token,
