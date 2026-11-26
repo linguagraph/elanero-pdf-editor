@@ -112,36 +112,53 @@
   color: var(--color-text-muted);
 }
 
+/* The recent files as a wrapping grid of cards (the desktop look): 128 px at least per card, so a
+   112 px preview fits with its padding and two cards fit a 375 px phone under the 16 px gutter. */
 .start-recent-list {
   display: grid;
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.start-recent-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface-alt);
+}
+
 .start-recent-name {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
   color: var(--color-accent-text);
   font: inherit;
   text-align: start;
-  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
-/* The first-page preview, or the file icon, in one fixed box so the rows do not shift (issue 757). */
+/* The first-page preview, or the file icon, in one fixed 112 by 144 px box so the cards do not
+   shift (issue 757). The page sits on the surface token (white in the light theme). */
 .start-recent-thumb {
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  flex: none;
-  width: 56px;
-  height: 72px;
-  margin-inline-end: var(--space-2);
-  border: 1px solid var(--color-border);
+  width: 112px;
+  max-width: 100%;
+  height: 144px;
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-small);
-  vertical-align: middle;
+  background: var(--color-surface);
   overflow: hidden;
 }
 
@@ -151,9 +168,22 @@
   object-fit: contain;
 }
 
+/* The file name in bold, on one line; a long name ends in an ellipsis. */
+.start-recent-file {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .start-recent-time {
+  overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .start-pending-list {
@@ -233,9 +263,15 @@
   .start-pending-cancel,
   .start-footer-button,
   .start-footer a {
-    display: inline-flex;
-    align-items: center;
     min-height: 44px;
     min-width: 44px;
+  }
+
+  .start-open,
+  .start-pending-cancel,
+  .start-footer-button,
+  .start-footer a {
+    display: inline-flex;
+    align-items: center;
   }
 }

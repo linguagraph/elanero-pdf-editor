@@ -148,7 +148,9 @@ export function StartPage({
         ) : (
           <ul className="start-recent-list">
             {recent.map((entry) => (
-              <li key={`${entry.name}-${entry.openedAt}`}>
+              <li key={`${entry.name}-${entry.openedAt}`} className="start-recent-card">
+                {/* The button's accessible name is the file name alone: the preview is decorative
+                    and the opened time sits outside the button. */}
                 <button
                   type="button"
                   className="start-recent-name"
@@ -163,8 +165,8 @@ export function StartPage({
                       <Icon name="file" size={24} />
                     )}
                   </span>
-                  {entry.name}
-                </button>{' '}
+                  <span className="start-recent-file">{entry.name}</span>
+                </button>
                 <span className="start-recent-time">
                   {t('start.recent.opened', { time: formatOpened(entry.openedAt) })}
                 </span>
