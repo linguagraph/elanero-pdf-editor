@@ -59,6 +59,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
+      WHEEL_FILE: ${{ needs.web-perf.outputs.wheel_file }}
+      WHEEL_SHA: ${{ needs.web-perf.outputs.wheel_sha256 }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -74,7 +76,13 @@ jobs:
           gh api "repos/$GH_REPO/releases" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" |
             while read -r id; do gh api -X DELETE "repos/$GH_REPO/releases/$id"; done
       - name: Create the GitHub release
-        run: gh release create "$TAG" assets/* --verify-tag --generate-notes --title "Elanero $TAG"
+        run: |
+          # The web engine wheel's provenance, first in the notes (W8.6 F14). An empty or malformed
+          # sha256 means the web-perf run did not verify the wheel, so the release stops here.
+          if ! printf '%s' "$WHEEL_SHA" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::web-perf gave no valid wheel sha256: '$WHEEL_SHA'"; exit 1
+          fi
+          gh release create "$TAG" assets/* --verify-tag --notes "Web engine wheel: $WHEEL_FILE, sha256 $WHEEL_SHA" --generate-notes --title "Elanero $TAG"
 
   microsoft-store:
     needs: github-release

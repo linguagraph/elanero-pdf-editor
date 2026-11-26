@@ -185,6 +185,7 @@ jobs:
           cd web/spike/dist/wheel-build
           test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
           sha256sum -c wheel.sha256
+          echo "Engine wheel: $(ls *.whl), sha256 $(cut -d' ' -f1 wheel.sha256)" >> "$GITHUB_STEP_SUMMARY"
 
       # Outside web/app/public/engine-assets, which the staging script clears first.
       - name: Build the web zip and copy the engine inputs out of the way
