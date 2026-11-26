@@ -1517,7 +1517,9 @@ export function DocumentView({
       void placeComment(commentDeps, commentTool, page, rect, text, points, placed).then(
         (added) => {
           if (added === null) return;
-          setCommentTool(null);
+          // The tool is released only if it is still the one that placed this comment: a tool the
+          // user chose while the add was saving stays armed (the add answers later than the press).
+          setCommentTool((current) => (current === commentTool ? null : current));
           setCommentSelection([added]);
           onToolChange?.('select', drawnOn);
         },

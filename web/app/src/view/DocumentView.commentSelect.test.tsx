@@ -166,3 +166,67 @@ describe('the Delete comment command (issue 732)', () => {
     expect(onCount.mock.calls.at(-1)?.[0]).toBe(0);
   });
 });
+
+describe('a tool chosen while an add is saving', () => {
+  // The engine answers annotations.create after a delay, so a tool chosen in the meantime is armed
+  // while the note is still being saved (the web's Select-tool spec presses Rectangle straight after
+  // Add note).
+  it('stays armed when the earlier add completes', async () => {
+    const rpc = {
+      call: vi.fn(async (method: string) => {
+        if (method === 'session.pages') {
+          return { pages: [{ width: 612, height: 792, rotation: 0 }], labels: [] };
+        }
+        if (method === 'actions.run') {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return {
+            label: 'Add Note',
+            executed: true,
+            value: [{ page: 0, name: NAME }],
+            changed: { changes: [], revisions: { '0': 1 } },
+            state: { history: 1 },
+          };
+        }
+        return new Promise(() => {});
+      }),
+    };
+    const viewRef = createRef<DocumentViewHandle>();
+    act(() =>
+      root.render(
+        <DocumentView
+          ref={viewRef}
+          rpc={rpc as unknown as PageRpc}
+          handle="h"
+          onToolChange={vi.fn()}
+        />,
+      ),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    act(() => viewRef.current?.setCommentTool('note'));
+    await act(async () => {
+      host
+        .querySelector<HTMLElement>('.comment-layer')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    const text = host.querySelector<HTMLTextAreaElement>('textarea');
+    if (text === null) throw new Error('no note text form');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
+        text,
+        'Check the margin',
+      );
+      text.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    // Add note, then the Rectangle press before the save has answered.
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.comment-note-actions button[type="submit"]')?.click();
+    });
+    act(() => viewRef.current?.setCommentTool('rectangle'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+    expect(host.querySelector('.comment-layer')).not.toBeNull();
+  });
+});
