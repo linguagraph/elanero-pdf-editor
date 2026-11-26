@@ -216,6 +216,20 @@ describe('runPrintWorker with partial notices', () => {
     );
   });
 
+  // Pins the current behaviour: printWorker.ts refuses any partial page whose mime is not image/png,
+  // even when its bytes arrive, so the print path never gets a PDF page.
+  it('refuses a partial page whose mime is application/pdf: a page is not a PNG', async () => {
+    const pdfPage = {
+      notice: 'partial',
+      id: 1,
+      data: { index: 0, name: 'page-01.pdf', mime: 'application/pdf', data: { $bin: 0 } },
+    };
+    const worker = streamingWorker([[pdfPage, pageBytes(1)]], replyWithPages(1));
+    await expect(runPrintWorker(worker, { dpi: 150, annotations: true }, DOC)).rejects.toThrow(
+      'the print job replied badly: a page is not a PNG',
+    );
+  });
+
   it('stops at the first bad partial: the worker is terminated and no later page is taken', async () => {
     // As the real worker does, this one rejects its call once it is terminated, and delivers no
     // notice after that. The first partial is out of order, so the job must stop there.
