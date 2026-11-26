@@ -112,11 +112,12 @@
   color: var(--color-text-muted);
 }
 
-/* The recent files as a wrapping grid of cards (the desktop look): 128 px at least per card, so a
-   112 px preview fits with its padding and two cards fit a 375 px phone under the 16 px gutter. */
+/* The recent files as a wrapping grid of cards (the desktop look): 130 px at least per card, which
+   is the 112 px preview plus 8 px padding on each side and the 1 px border, so the preview fits.
+   Two cards still fit a 320 px window under the 16 px gutter (288 px of content). */
 .start-recent-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -182,6 +183,7 @@
   overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--font-size-small);
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -157,6 +157,16 @@ describe('StartPage layout (#626 S1)', () => {
     expect(body).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   });
 
+  // The recent-file cards: the grid column minimum fits the 112 px preview with its padding and
+  // border (130 px), and the time line is centred under the centred name. Read from the stylesheet.
+  it('sizes the recent cards to fit the 112 px preview and centres the time', () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'start.css'), 'utf8');
+    expect(css).toMatch(/\.start-recent-list\s*\{[^}]*minmax\(130px,\s*1fr\)/);
+    const time = /\.start-recent-time\s*\{([^}]*)\}/.exec(css);
+    expect(time).not.toBeNull();
+    expect(time?.[1] ?? '').toMatch(/text-align:\s*center;/);
+  });
+
   it('shows the version, licence and About button in the footer', () => {
     const onAbout = vi.fn();
     renderPage({ onAbout });
