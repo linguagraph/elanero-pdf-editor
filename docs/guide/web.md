@@ -276,6 +276,13 @@ message saying whether it was added.
   To move pages by dragging, press a page and drag it with the mouse or a pen (a selection moves
   as a block). A line shows where the pages will land, and Escape cancels the drag. A drop that
   changes nothing does nothing. Touch has no drag: use Move up and Move down instead.
+- **Page labels.** Organize tab, Page Setup group, **Page Labels** opens a dialog with one row per
+  label range: From page (the page the range starts on), Style (1, 2, 3; i, ii, iii; I, II, III; a, b, c;
+  A, B, C; or none for a prefix only), Prefix, and Start at (the number the first page of the range
+  gets, 1 or more). Add Range adds a row, and Remove takes out the row you last worked in. Two rows
+  with the same From page are merged, and the later row wins. OK saves the labels as one change that
+  Undo reverts, and the navigator, thumbnails and page numbers update at once. A document without
+  labels shows plain page numbers.
 - **Redactions.** The **Redactions** button on the left rail lists every redaction mark in the
   document: the marks you drew, the ones an undo brought back, and the ones already in the file.
   Each row shows its page, the text it covers (or "Area") and its overlay text, with a swatch of its
@@ -465,7 +472,7 @@ full policy, with what the desktop app stores, is in the
 | Background colour behind the pages (Organize, Marks) | Yes | Yes, with undo; when the document already has a background, Replace, Add New or Remove |
 | Text or image watermark across the pages (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts, size, colour, opacity, angle and Behind page content for text, or a PNG or JPEG picture (up to 50 MB and 25 megapixels) with its width; when the document already has a watermark, Replace, Add New or Remove, and Update asks for the picture again |
 | Header & footer and Bates numbers (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts (uploaded fonts are not available here yet); when the document already has one, Replace, Add New or Remove; the Bates preview shows the first number |
-| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages) and from the Organize tab's ribbon (Insert, Delete, Duplicate, Rotate left and right, Extract); Replace and Page labels are not available yet |
+| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages) and from the Organize tab's ribbon (Insert, Delete, Duplicate, Rotate left and right, Extract); Replace is not available yet; Page labels is available (see Page labels above) |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
 | Space usage (what takes up the space in the file) | Yes | Yes (Tools tab, Optimize group, Space Usage; shows the total and the size and share of each part, and reads the file only) |

@@ -1,0 +1,44 @@
+/* The Page labels dialog (Organize, slice 1). Colours and sizes come from the theme tokens. */
+.labels-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.labels-description {
+  margin: 0;
+}
+
+.labels-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.labels-table th {
+  text-align: start;
+  font-weight: 600;
+  padding: var(--space-1);
+}
+
+.labels-table td {
+  padding: var(--space-1);
+}
+
+.labels-table input,
+.labels-table select {
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.labels-row-actions,
+.labels-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.labels-error {
+  margin: 0;
+  color: var(--color-danger);
+}

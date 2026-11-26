@@ -533,6 +533,10 @@ export interface JobPrepareResult {
   baseline: number | null;
 }
 
+export interface LabelRulesResult {
+  rules: PageLabelRuleDto[];
+}
+
 export interface LanguageDto {
   /** the service's code, as the translate calls send it */
   code: string;
@@ -714,6 +718,16 @@ export interface PageImage {
   format: string;
   /** empty when the revision changed */
   pixels: ArrayBuffer;
+}
+
+export interface PageLabelRuleDto {
+  /** 0-based page index where the range starts */
+  start: number;
+  /** "D", "R", "r", "A", "a", or "" for the prefix only (the engine's LabelStyle) */
+  style: string;
+  prefix: string;
+  /** the number the range's first page gets, 1 or more */
+  first: number;
 }
 
 /** One content object on a page. ``key`` is valid for the page revision it was listed at. */
@@ -1196,6 +1210,7 @@ export interface Methods {
   'session.close': { params: HandleParams; result: Empty; deadline: 'instant' };
   'session.fonts': { params: HandleParams; result: FontsResult; deadline: 'action' };
   'session.info': { params: HandleParams; result: DocInfo; deadline: 'instant' };
+  'session.label_rules': { params: HandleParams; result: LabelRulesResult; deadline: 'instant' };
   'session.links': { params: PageParams; result: LinksResult; deadline: 'render' };
   'session.open': { params: OpenParams; result: OpenResult; deadline: 'io' };
   'session.outline': { params: HandleParams; result: OutlineResult; deadline: 'instant' };
@@ -1251,6 +1266,7 @@ export const METHOD_DEADLINE: { readonly [M in MethodName]: DeadlineClass } = {
   'session.close': 'instant',
   'session.fonts': 'action',
   'session.info': 'instant',
+  'session.label_rules': 'instant',
   'session.links': 'render',
   'session.open': 'io',
   'session.outline': 'instant',
@@ -1311,6 +1327,7 @@ export const RESULT_DECODERS: {
   'session.close': decodeEmpty,
   'session.fonts': decodeFontsResult,
   'session.info': decodeDocInfo,
+  'session.label_rules': decodeLabelRulesResult,
   'session.links': decodeLinksResult,
   'session.open': decodeOpenResult,
   'session.outline': decodeOutlineResult,
@@ -2085,6 +2102,18 @@ export function decodeJobPrepareResult(
   };
 }
 
+export function decodeLabelRulesResult(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): LabelRulesResult {
+  const o = expectObject(value, path);
+  checkKeys(o, ['rules'], path);
+  return {
+    rules: expectArray(field(o, 'rules', path), `${path}.rules`).map((item1, index1) => decodePageLabelRuleDto(item1, ctx, `${`${path}.rules`}[${index1}]`)),
+  };
+}
+
 export function decodeLanguageDto(
   value: unknown,
   ctx: DecodeContext,
@@ -2353,6 +2382,21 @@ export function decodePageImage(
     revision: expectInteger(field(o, 'revision', path), `${path}.revision`),
     format: expectString(field(o, 'format', path), `${path}.format`),
     pixels: takeBinary(field(o, 'pixels', path), ctx, `${path}.pixels`),
+  };
+}
+
+export function decodePageLabelRuleDto(
+  value: unknown,
+  ctx: DecodeContext,
+  path: string,
+): PageLabelRuleDto {
+  const o = expectObject(value, path);
+  checkKeys(o, ['start', 'style', 'prefix', 'first'], path);
+  return {
+    start: expectInteger(field(o, 'start', path), `${path}.start`),
+    style: expectString(field(o, 'style', path), `${path}.style`),
+    prefix: expectString(field(o, 'prefix', path), `${path}.prefix`),
+    first: expectInteger(field(o, 'first', path), `${path}.first`),
   };
 }
 

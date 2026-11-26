@@ -778,6 +778,29 @@ export const EN = {
   'crop.done': { one: 'Cropped {count} page', other: 'Cropped {count} pages' },
   'crop.failed': 'The pages could not be cropped. Try again.',
 
+  // Page labels (Organize, slice 1): the dialog, its checks and its failures.
+  'labels.title': 'Page Labels',
+  'labels.description':
+    'Labels replace page numbers in the navigator, thumbnails and printing dialogs.',
+  'labels.column.from': 'From page',
+  'labels.column.style': 'Style',
+  'labels.column.prefix': 'Prefix',
+  'labels.column.first': 'Start at',
+  'labels.style.decimal': '1, 2, 3',
+  'labels.style.romanLower': 'i, ii, iii',
+  'labels.style.romanUpper': 'I, II, III',
+  'labels.style.alphaLower': 'a, b, c',
+  'labels.style.alphaUpper': 'A, B, C',
+  'labels.style.none': 'none (prefix only)',
+  'labels.add': 'Add Range',
+  'labels.remove': 'Remove',
+  'labels.ok': 'OK',
+  'labels.cancel': 'Cancel',
+  'labels.problem.fromPage': 'From page must be a page number from 1 to {count}.',
+  'labels.problem.startAt': 'Start at must be 1 or more.',
+  'labels.loadFailed': 'The page labels could not be read. Try again.',
+  'labels.failed': 'The page labels could not be saved. Try again.',
+
   // Flatten annotations (W7.9): the confirmation, then the result.
   'flatten.title': 'Flatten annotations',
   'flatten.counting': 'Checking the comments...',
@@ -1397,6 +1420,8 @@ export const EN = {
     'The margins would leave less than 1 pt of a page. Enter smaller margins.',
   'error.REFUSED.invalidMargins': 'A margin cannot be negative.',
   'error.REFUSED.invalidPages': 'One of the chosen pages is not in this document.',
+  'error.REFUSED.invalidLabel': 'Start at must be 1 or more.',
+  'error.REFUSED.duplicateLabelStart': 'Two label ranges start on the same page.',
   'error.REFUSED.outlineTooDeep': 'Bookmarks cannot be nested more than 32 levels deep.',
   'error.REFUSED.imageUnreadable': 'This file is not an image the editor can read.',
   'error.REFUSED.imageFormat': 'Only PNG and JPEG images can be added here.',
