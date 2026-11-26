@@ -183,3 +183,20 @@ describe('the comment a placement adds (W7.1a)', () => {
     ).toBeNull();
   });
 });
+
+describe('placing an attachment (issue 732)', () => {
+  const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+  const file = (name: string, size: number) =>
+    ({ name, size, arrayBuffer: async () => bytes.buffer }) as unknown as File;
+
+  it('sends the file as a buffer and its name, with the attach tool', async () => {
+    const { call, deps } = setup();
+    await placeComment(deps, 'attach', 0, rect, '', [], '', file('notes.pdf', 4));
+    const params = call.mock.calls[0] as unknown as [string, { args: Record<string, unknown> }];
+    const { args } = params[1];
+    expect(args['tool']).toBe('attach');
+    expect(args['file']).toBeInstanceOf(ArrayBuffer);
+    expect(args['file_name']).toBe('notes.pdf');
+    expect(args['image']).toBeUndefined();
+  });
+});

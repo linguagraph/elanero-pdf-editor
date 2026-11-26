@@ -14,7 +14,8 @@ export type CommentToolId =
   | 'pen'
   | 'polygon'
   | 'polyline'
-  | 'stamp';
+  | 'stamp'
+  | 'attach';
 
 // The stamp is not in COMMENT_TOOLS: its menu (StampMenu) sits beside the toolbar, since the tool
 // places a chosen standard stamp.
@@ -45,6 +46,7 @@ export const COMMENT_TOOL_LABEL: Readonly<Record<CommentToolId, MessageId>> = {
   polygon: 'comment.tool.polygon',
   polyline: 'comment.tool.polyline',
   stamp: 'comment.tool.stamp',
+  attach: 'comment.tool.attach',
 };
 
 // How a tool takes its gesture. A click places a sticky note; a text box is a drag or a click,
@@ -53,7 +55,7 @@ export const COMMENT_TOOL_LABEL: Readonly<Record<CommentToolId, MessageId>> = {
 // then its text. A pen is a drag that draws a stroke; a polygon or polyline takes a click per
 // vertex and finishes on a double-click (or Enter).
 export type GestureKind =
-  'click' | 'text' | 'box' | 'line' | 'callout' | 'stroke' | 'poly' | 'stamp';
+  'click' | 'text' | 'box' | 'line' | 'callout' | 'stroke' | 'poly' | 'stamp' | 'attach';
 
 export const GESTURE_KIND: Readonly<Record<CommentToolId, GestureKind>> = {
   note: 'click',
@@ -68,6 +70,8 @@ export const GESTURE_KIND: Readonly<Record<CommentToolId, GestureKind>> = {
   polygon: 'poly',
   polyline: 'poly',
   stamp: 'stamp',
+  // A click asks for a file (the picker opens from the click), and places it where clicked.
+  attach: 'attach',
 };
 
 // Choosing a comment tool turns it on, or off when it is the one already on (W7.1a). The ribbon's

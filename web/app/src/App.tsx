@@ -803,6 +803,9 @@ export function App({
           polyline: () =>
             viewRef.current?.setCommentTool(commentTool === 'polyline' ? null : 'polyline'),
           pen: () => viewRef.current?.setCommentTool(commentTool === 'pen' ? null : 'pen'),
+          // Attach File (issue 732) is a toggle like the other comment tools: the next click asks for a file.
+          'attach-file': () =>
+            viewRef.current?.setCommentTool(commentTool === 'attach' ? null : 'attach'),
           // The ribbon's Stamp toggles the stamp tool with the stamp last chosen in the stamp menu.
           stamp: () =>
             toggleCommentTool(commentTool, 'stamp', (tool) =>

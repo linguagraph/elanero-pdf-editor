@@ -28,7 +28,8 @@ The **Comments** group:
 - **Stamp**: choose a standard stamp such as **Approved**, **Draft**, **Confidential** or **Final**,
   or your own image. Choose **Add Custom Stamp…** to add a PNG or JPEG image as a stamp, and
   **Remove Custom Stamp** to delete one.
-- **Attach File**: click a spot on the page and choose a file to attach to it.
+- **Attach File**: click a spot on the page and choose a file to attach to it. In the web
+  version the file must be no larger than 100 MB, and an empty file is refused.
 
 ## Draw
 
@@ -39,7 +40,7 @@ The **Drawing** group:
 - **Pen**: draw freehand. Strokes are smoothed when you release the mouse.
 
 In the web version, the Comment tab has Sticky Note, Text Box, Rectangle, Highlight, Oval,
-Line, Arrow, Callout, Pen, Polygon and Polyline. Beside them, the **Stamp** menu lists the 14
+Line, Arrow, Callout, Pen, Polygon, Polyline and Attach File. Beside them, the **Stamp** menu lists the 14
 standard stamps (Approved, Draft, Confidential and the rest); choose one, then click a page to
 place it centred on the click, or press Enter to place it at the centre of the page. Below the
 standard stamps are your own stamps. **Add Custom Stamp…** keeps a PNG or JPEG image (up to 20 MB)
