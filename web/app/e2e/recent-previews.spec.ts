@@ -48,6 +48,28 @@ async function previewWidth(page: Page): Promise<number> {
     .catch(() => 0);
 }
 
+// The number of preview files in the browser's private storage. The preview is saved in the
+// background after the file opens, and the start page (where previewWidth reads it) is hidden
+// while the file is open, so the save is waited for through the storage instead.
+async function savedPreviewCount(page: Page): Promise<number> {
+  return page
+    .evaluate(async () => {
+      try {
+        const root = await navigator.storage.getDirectory();
+        const dir = await root.getDirectoryHandle('recent-thumbs');
+        const names = (dir as unknown as { keys(): AsyncIterable<string> }).keys();
+        let count = 0;
+        for await (const name of names) {
+          if (name.endsWith('.jpg')) count += 1;
+        }
+        return count;
+      } catch {
+        return 0;
+      }
+    })
+    .catch(() => 0);
+}
+
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
@@ -58,6 +80,9 @@ test.describe('engine staged', () => {
     await expect(page.locator('.loading-screen')).toBeHidden({ timeout: 180_000 });
     await page.getByRole('button', { name: 'Open file' }).click();
     await expect(page.locator('.doc-tab')).toContainText('recent.pdf', { timeout: 60_000 });
+    // The preview is saved once the browser is idle after the file opens. Wait for that save while
+    // the file is still open, before the tab closes.
+    await expect.poll(() => savedPreviewCount(page), { timeout: 15_000 }).toBeGreaterThan(0);
 
     // Back to the start page: the row shows the preview once it has been drawn and decoded.
     await page.locator('[role="tab"] .doc-tab-close').first().click();
