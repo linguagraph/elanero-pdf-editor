@@ -116,6 +116,7 @@ export const EN = {
   'disabled.minZoom': 'The zoom is at its smallest.',
   'disabled.notAvailableYet': 'This command is not available yet.',
   'disabled.selectOneImage': 'Select one picture first.',
+  'disabled.selectComment': 'Select a comment first.',
 
   // Command palette and keyboard shortcuts help (W1.6 section 9, W4.3b).
   // Search aliases (W4.3b D3): the palette also matches these words. They are never shown.

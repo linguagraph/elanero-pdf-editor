@@ -425,6 +425,26 @@ describe('the Replace and Export commands (W6.7b slice 2b)', () => {
   });
 });
 
+describe('the Delete comment command (#732)', () => {
+  const withDocument = state({ hasDocument: true });
+  const oneComment = { ...withDocument, commentsSelected: true };
+
+  it('needs a document, then a selected comment', () => {
+    expect(commandDisabledReasonOf('delete-comment', state())).toBe('needsDocument');
+    expect(commandDisabledReasonOf('delete-comment', withDocument)).toBe('selectComment');
+    expect(commandDisabledReasonOf('delete-comment', oneComment)).toBeNull();
+  });
+
+  it('has a handler, and its reason says what to do in words', () => {
+    const handler = vi.fn();
+    expect(runCommand(REGISTRY, 'delete-comment', oneComment, { 'delete-comment': handler })).toBe(
+      true,
+    );
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(EN[DISABLED_REASON_LABELS.selectComment]).toMatch(/Select/);
+  });
+});
+
 describe('the Add Image command (W6.7b slice 2a)', () => {
   const editable = state({ hasDocument: true, capabilities: ALL_CAPABILITIES, contentEdit: true });
 

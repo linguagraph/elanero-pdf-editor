@@ -45,6 +45,7 @@ function fakeView(): DocumentViewHandle {
     stepPage: vi.fn(),
     focusPageField: vi.fn(),
     deleteEditSelection: vi.fn(),
+    deleteCommentSelection: vi.fn(),
     replaceEditImage: vi.fn(),
     exportEditImage: vi.fn(),
     dropTextEdit: vi.fn(),
