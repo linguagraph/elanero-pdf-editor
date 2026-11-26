@@ -1313,6 +1313,7 @@ export const EN = {
   'organizer.duplicated': { one: 'Duplicated {count} page', other: 'Duplicated {count} pages' },
   'organizer.insertFile': 'Insert from file…',
   'organizer.insertFileLabel': 'Choose a PDF or image to insert',
+  'organizer.insertFileHint': 'Press Insert from file… in the organize panel to choose a file.',
   'organizer.passwordGaveUp': 'The file is still locked, so no pages were inserted.',
   'organizer.extracted': {
     one: 'Extracted {count} page to {name}',

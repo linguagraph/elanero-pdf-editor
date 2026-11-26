@@ -110,7 +110,6 @@ import { toasts } from './feedback/toasts';
 import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
 import './app.css';
 
-// The command state every command reads before the document fields are filled in (see `state`).
 // The organize ribbon's page commands open the organizer panel when it is closed (issue 736).
 const openOrganizerPanel = (): void => openPanel('organizer');
 
@@ -622,6 +621,7 @@ export function App({
     /\.pdf$/i,
     '',
   );
+  // The command state every command reads before the document fields are filled in.
   // The commands read the document as it is shown now, so the ribbon enables the document commands
   // only while one is open.
   const state: CommandState = {

@@ -267,7 +267,9 @@ message saying whether it was added.
   selected), the same size as the page before it. Duplicate puts a copy of each selected page right
   after the last one. Insert from file adds the pages of a PDF, or one image, after the last selected
   page (or at the end when nothing is selected); an encrypted PDF asks for its
-  password, up to five times. Extract downloads the selected pages as a new PDF named
+  password, up to five times. Insert from file on the Organize tab's ribbon cannot open the file
+  chooser by itself (the browser allows it only from a press in the panel), so it shows a hint:
+  press Insert from file in the panel. Extract downloads the selected pages as a new PDF named
   "<name> (extract).pdf"; the document itself does not change. Each change, other than an
   extract, can be undone from the notice that follows it. Undo on a notice undoes only that change;
   if you have changed the document since, nothing is undone and the notice says so.

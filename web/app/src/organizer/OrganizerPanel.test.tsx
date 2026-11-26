@@ -154,6 +154,7 @@ interface MountOptions {
   readonly download?: (name: string, bytes: ArrayBuffer) => void;
   readonly worker?: () => JobWorker;
   readonly initialPage?: number;
+  readonly handle?: string;
 }
 
 function mount(
@@ -166,7 +167,7 @@ function mount(
     root.render(
       <OrganizerPanel
         rpc={rpc}
-        handle="h"
+        handle={options.handle ?? 'h'}
         onClose={() => {}}
         toastStore={store}
         onChanged={onChanged}
@@ -844,11 +845,53 @@ describe('page organizer ribbon bridge', () => {
     expect(document.body.textContent).not.toContain(t('organizer.deleteTitle'));
   });
 
-  it('initialPage preselects that page', async () => {
+  it('a panel opened from the rail starts with nothing selected, even with initialPage', async () => {
     const { rpc } = fakeRpc(4);
     mount(rpc, createToastStore(), undefined, { initialPage: 2 });
     await flush();
-    expect(selectedPages()).toEqual([2]);
+    expect(selectedPages()).toEqual([]);
+  });
+
+  it('a ribbon command that arrives while the pages load runs once, on the preselected page', async () => {
+    const { rpc, calls } = fakeRpc(4);
+    mount(rpc, createToastStore(), undefined, { initialPage: 2 });
+    // The pages are in, but the panel has not published yet: the command lands in that window.
+    await Promise.resolve();
+    runOrganizerCommand('rotate-pages-right', () => {});
+    await flush();
+    const rotates = calls.filter((call) => call.params.name === 'pages.rotate');
+    expect(rotates).toEqual([
+      {
+        method: 'actions.run',
+        params: { handle: 'h', name: 'pages.rotate', args: { pages: [2], delta: 90 } },
+      },
+    ]);
+  });
+
+  it('a queued insert from the ribbon shows the hint and opens no file chooser', async () => {
+    const { rpc } = fakeRpc(3);
+    const store = createToastStore();
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
+    runOrganizerCommand('insert-pages', () => {});
+    mount(rpc, store, undefined, { initialPage: 0 });
+    await flush();
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+    expect(store.getState().visible[0]?.text).toBe(t('organizer.insertFileHint'));
+  });
+
+  it('switching to another document drops the old status and actions at once', async () => {
+    const { rpc } = fakeRpc(3);
+    mount(rpc, createToastStore());
+    await flush();
+    click(options()[0]!);
+    expect(getOrganizerStatus()?.selected).toBe(1);
+
+    // The new handle's pages are still loading here, so the old selection must not be published.
+    mount(rpc, createToastStore(), undefined, { handle: 'h2' });
+    expect(getOrganizerStatus()).toBeNull();
+    expect(getOrganizerActions()).toBeNull();
+    await flush();
   });
 
   it('a command queued before the panel mounted runs once, on the preselected page', async () => {

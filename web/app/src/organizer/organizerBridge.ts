@@ -53,14 +53,21 @@ export function publishOrganizer(next: OrganizerStatus, nextActions: OrganizerAc
   notify();
 }
 
-// Called when the panel unmounts: the ribbon's page commands go back to opening the panel, and a
-// command still queued for a panel that is gone is dropped.
-export function clearOrganizer(): void {
+// Stops publishing: the panel's status and actions are withdrawn, and the ribbon's page commands
+// queue (and open the panel) until the panel publishes again. Queued commands stay queued.
+export function withdrawOrganizer(): void {
   actions = null;
-  queued = [];
   if (status === null) return;
   status = null;
   notify();
+}
+
+// Called when the panel unmounts: the ribbon's page commands go back to opening the panel, and a
+// command still queued for a panel that is gone is dropped. (The app does not run under StrictMode;
+// there, the simulated unmount right after mount would drop a command queued before the mount.)
+export function clearOrganizer(): void {
+  queued = [];
+  withdrawOrganizer();
 }
 
 export function subscribeOrganizer(listener: () => void): () => void {
@@ -76,6 +83,11 @@ export function getOrganizerStatus(): OrganizerStatus | null {
 
 export function getOrganizerActions(): OrganizerActions | null {
   return actions;
+}
+
+// Whether any ribbon command waits for the panel.
+export function hasQueuedOrganizerCommands(): boolean {
+  return queued.length > 0;
 }
 
 // The panel's pending commands, in order. Taking them empties the queue, so each runs once.
