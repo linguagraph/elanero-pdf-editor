@@ -69,6 +69,26 @@ describe('paired rule (W2)', () => {
   it('is skipped, not failed, when there is no baseline run', () => {
     expect(one(paired, [3000])?.status).toBe('skipped');
   });
+
+  it('fails when the baseline run exists but has no record for the metric', () => {
+    const input: AttemptInput = {
+      attempt: 1,
+      head: run('W2', [3000]),
+      baseline: run('W9', [2000]),
+    };
+    const row = compareAttempts([paired], [input]).attempts[0]?.rows[0];
+    expect(row?.status).toBe('fail');
+    expect(row?.reason).toBe('baseline run has no samples for it');
+  });
+
+  it('fails closed when a threshold is missing', () => {
+    const noPct: MetricRule = { id: 'W2', kind: 'paired', enforce: true, absMs: 300 };
+    expect(one(noPct, [3000], [2000])?.status).toBe('fail');
+  });
+
+  it('fails closed when a sample is NaN', () => {
+    expect(one(paired, [Number.NaN], [2000])?.status).toBe('fail');
+  });
 });
 
 describe('absolute rule (W7): median of per-run maxima', () => {
@@ -95,6 +115,13 @@ describe('ceiling rule', () => {
 
   it('fails above factor times the baseline', () => {
     expect(one(ceiling, [126])?.status).toBe('fail');
+  });
+
+  it('fails, not skipped, when an enforced ceiling has no baseline', () => {
+    const unset: MetricRule = { id: 'W9', kind: 'ceiling', enforce: true, factor: 1.25 };
+    const row = one(unset, [1]);
+    expect(row?.status).toBe('fail');
+    expect(row?.reason).toBe('enforced ceiling has no baseline_ms');
   });
 });
 

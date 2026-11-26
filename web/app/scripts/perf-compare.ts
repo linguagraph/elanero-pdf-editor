@@ -5,7 +5,8 @@
 // Each head/baseline pair is one attempt (the retry is a second pair). The baseline may be "-"
 // when the baseline commit could not be built: paired rows are then skipped with a notice. Only
 // the web rows (ids starting with W) are compared, so the desktop D rows are left out. Exit code 1
-// when every attempt fails (src/perf/compare.ts).
+// when every attempt fails (src/perf/compare.ts); exit code 2 for a broken input (a missing or
+// corrupt results file, or a bad argument list), which is not a perf regression.
 import { readFile } from 'node:fs/promises';
 import {
   compareAttempts,
@@ -94,4 +95,10 @@ async function main(): Promise<number> {
   return 0;
 }
 
-process.exitCode = await main();
+// A thrown error (unreadable or corrupt input) is exit 2, so CI can tell it from a regression (1).
+try {
+  process.exitCode = await main();
+} catch (error) {
+  console.error(`::error::${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 2;
+}

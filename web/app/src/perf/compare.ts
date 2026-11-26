@@ -117,24 +117,36 @@ function compareOne(
 
   if (rule.kind === 'ceiling') {
     const base = rule.baselineMs ?? null;
-    if (base === null) return row(rule, attempt, 'skipped', headMedian, null, 'no baseline');
+    // An enforced ceiling without baseline_ms is a configuration error (the table test forbids
+    // it), so it fails loudly instead of passing as skipped.
+    if (base === null) {
+      return row(rule, attempt, 'fail', headMedian, null, 'enforced ceiling has no baseline_ms');
+    }
     const ceiling = (rule.factor ?? Number.NaN) * base;
     const status = headMedian <= ceiling ? 'pass' : 'fail';
     return row(rule, attempt, status, headMedian, base, `ceiling ${ceiling}`);
   }
 
   if (rule.kind === 'paired') {
+    // No baseline run (for example, its commit could not be built): skipped with a notice.
+    if (baseline === null || baseline === undefined) {
+      return row(rule, attempt, 'skipped', headMedian, null, 'no baseline run');
+    }
     const baseSamples = findRecord(baseline, rule.id)?.samples ?? [];
     if (baseSamples.length === 0) {
-      // No baseline run (for example, its wheel was not cached): skipped with a notice, not failed.
-      return row(rule, attempt, 'skipped', headMedian, null, 'no baseline samples');
+      // The baseline run exists but has no record for this metric: a broken comparison, so fail.
+      return row(rule, attempt, 'fail', headMedian, null, 'baseline run has no samples for it');
     }
     const baseMedian = median(baseSamples);
     const slower = headMedian - baseMedian;
+    // Fail closed: a missing or NaN threshold or sample must not pass as "not over the limit".
+    if (![headMedian, baseMedian, rule.pct, rule.absMs].every(Number.isFinite)) {
+      return row(rule, attempt, 'fail', headMedian, baseMedian, 'paired values are not finite');
+    }
     // Strictly more than both limits: exactly 15% or exactly 300 ms over is not a failure.
     // Written as a cross-multiplication so the 15% test has no float rounding at the boundary.
-    const overPct = slower * 100 > (rule.pct ?? Number.NaN) * baseMedian;
-    const overAbs = slower > (rule.absMs ?? Number.NaN);
+    const overPct = slower * 100 > (rule.pct as number) * baseMedian;
+    const overAbs = slower > (rule.absMs as number);
     const status = overPct && overAbs ? 'fail' : 'pass';
     return row(rule, attempt, status, headMedian, baseMedian, `slower by ${slower} ms`);
   }

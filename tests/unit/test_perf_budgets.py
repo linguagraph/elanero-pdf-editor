@@ -202,7 +202,9 @@ def test_web_perf_spec_records_match_the_table() -> None:
     # record call names a row. Only the record call is checked: the TypeScript file is not parsed,
     # and the unenforced-assert rule above skips these rows (it reads Python only).
     text = (ROOT / PERF_SPEC).read_text(encoding="utf-8")
-    recorded = re.findall(r"\brecord\('(W\d+)'", text)
+    # Commented-out calls (a line starting with //) do not record anything.
+    live = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
+    recorded = re.findall(r"\brecord\('(W\d+)'", live)
     owned = {mid for mid, path in EXTERNAL_EMITTERS.items() if path == PERF_SPEC}
     assert len(recorded) == len(set(recorded)), f"a metric is recorded twice: {recorded}"
     assert set(recorded) == owned, f"perf.spec.ts records {sorted(recorded)}, table owns {owned}"
