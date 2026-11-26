@@ -419,10 +419,12 @@ export function useDocuments(engine: EngineConnection, handleStore?: HandleStore
           if (files.length > 0) openFiles(files);
         },
         (error: unknown) => {
-          // Cancelling the picker is not a failure; any other error falls back to the input.
-          if ((error as { name?: unknown } | null)?.name !== 'AbortError') {
-            inputRef.current?.click();
-          }
+          // Cancelling the picker is not a failure. SecurityError means the user's gesture expired
+          // (a permission prompt ran first): the input cannot be clicked either, so the hint stays.
+          // Any other error falls back to the input.
+          const name = (error as { name?: unknown } | null)?.name;
+          if (name === 'AbortError' || name === 'SecurityError') return;
+          inputRef.current?.click();
         },
       );
     },

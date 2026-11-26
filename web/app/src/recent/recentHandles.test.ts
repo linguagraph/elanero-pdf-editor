@@ -182,6 +182,18 @@ describe('recent handles: the database', () => {
     expect(await deleteRecentHandleDatabase(factory)).toBe(false);
   });
 
+  it('reports false when the delete is blocked by an open connection', async () => {
+    // A blocked delete stays pending until the connection closes, so it must not be waited on.
+    const factory = {
+      deleteDatabase: () => {
+        const request: { onblocked?: () => void } = {};
+        queueMicrotask(() => request.onblocked?.());
+        return request;
+      },
+    } as unknown as IDBFactory;
+    expect(await deleteRecentHandleDatabase(factory)).toBe(false);
+  });
+
   it('reports true when the browser has no IndexedDB', async () => {
     expect(await deleteRecentHandleDatabase(undefined)).toBe(true);
   });

@@ -177,12 +177,14 @@ export async function deleteRecentHandleDatabase(
 ): Promise<boolean> {
   if (!factory) return true;
   try {
-    await new Promise<void>((resolve, reject) => {
+    // A connection still open elsewhere blocks the delete, and it stays pending until that
+    // connection closes. Report it as not gone now, so Clear all says it is incomplete.
+    return await new Promise<boolean>((resolve, reject) => {
       const req = factory.deleteDatabase(RECENT_HANDLE_DB);
-      req.onsuccess = () => resolve();
+      req.onsuccess = () => resolve(true);
       req.onerror = () => reject(req.error);
+      req.onblocked = () => resolve(false);
     });
-    return true;
   } catch {
     return false;
   }
