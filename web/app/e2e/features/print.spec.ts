@@ -13,7 +13,7 @@ interface PrintCall {
 }
 
 // The print log lives on the top window; the app's frame and the print iframe both write to it.
-type PrintWindow = Window & { __printLog?: PrintCall[] };
+type PrintWindow = Window & { __printLog?: PrintCall[]; __printRules?: string[] };
 
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
@@ -24,14 +24,22 @@ test.describe('engine staged', () => {
     const problems = watchPage(page);
     // Stubbed before any page script runs, in the app's frame and in the print iframe alike.
     await page.addInitScript(() => {
-      const top = window.top as Window & { __printLog?: unknown[] };
-      if (window === window.top) top.__printLog = [];
+      const top = window.top as Window & { __printLog?: unknown[]; __printRules?: string[] };
+      if (window === window.top) {
+        top.__printLog = [];
+        top.__printRules = [];
+      }
       Object.defineProperty(window, 'print', {
         configurable: true,
         writable: true,
         value: function stubbedPrint(this: Window) {
           const log = top.__printLog;
           log?.push({ images: this.document.images.length });
+          // The rule text of the sheets adopted by this document: the @page margin rule is among them.
+          const rules = [...this.document.adoptedStyleSheets].flatMap((sheet) =>
+            [...sheet.cssRules].map((rule) => rule.cssText),
+          );
+          top.__printRules?.push(...rules);
         },
       });
     });
@@ -55,24 +63,35 @@ test.describe('engine staged', () => {
         timeout: 120_000,
       })
       .toEqual([{ images: 1 }]);
+    // The @page rule is built in the print frame's window, so the browser applies it (no margins).
+    const rules = await page.evaluate(() => (window as PrintWindow).__printRules ?? []);
+    expect(rules.join('\n')).toContain('@page');
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
-  // The worker defect is fixed in #522. The spec runs in the Web end-to-end workflow on Chromium
-  // (CI builds the PyMuPDF wheel); WebKit stays skipped below. See #560.
+  // The worker defect is fixed in #522. The spec runs in the Web end-to-end workflow (CI builds
+  // the PyMuPDF wheel). See #560.
   test('print a page range of two pages: the iframe gets both images', async ({ page }) => {
     const problems = watchPage(page);
     // Stubbed before any page script runs, in the app's frame and in the print iframe alike.
     await page.addInitScript(() => {
-      const top = window.top as Window & { __printLog?: unknown[] };
-      if (window === window.top) top.__printLog = [];
+      const top = window.top as Window & { __printLog?: unknown[]; __printRules?: string[] };
+      if (window === window.top) {
+        top.__printLog = [];
+        top.__printRules = [];
+      }
       Object.defineProperty(window, 'print', {
         configurable: true,
         writable: true,
         value: function stubbedPrint(this: Window) {
           const log = top.__printLog;
           log?.push({ images: this.document.images.length });
+          // The rule text of the sheets adopted by this document: the @page margin rule is among them.
+          const rules = [...this.document.adoptedStyleSheets].flatMap((sheet) =>
+            [...sheet.cssRules].map((rule) => rule.cssText),
+          );
+          top.__printRules?.push(...rules);
         },
       });
     });

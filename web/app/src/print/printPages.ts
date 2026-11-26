@@ -90,12 +90,16 @@ export async function printImages(
     win.addEventListener('afterprint', cleanup, { once: true });
 
     // The @page rule removes the browser's margins; CSSOM only, so the CSP is not touched.
+    // The sheet must be built by the print frame's own window: WebKit refuses to adopt a sheet
+    // from another document (NotAllowedError), so it is built there, not with the app's
+    // CSSStyleSheet. The catch covers that refusal and browsers without constructable sheets;
+    // either way the browser's own margins apply.
     try {
-      const sheet = new CSSStyleSheet();
+      const sheet = new (win as Window & typeof globalThis).CSSStyleSheet();
       sheet.replaceSync('@page { margin: 0; }');
       win.document.adoptedStyleSheets = [sheet];
     } catch {
-      // Without constructable stylesheets the browser's own margins apply.
+      // The browser's own margins apply.
     }
 
     const images: HTMLImageElement[] = [];
