@@ -59,6 +59,13 @@ function shareText(size: number, total: number): string {
 export function SpaceUsageDialog(props: SpaceUsageDialogProps) {
   // Starts true: the audit starts in an effect, so the first paint must already withhold Close.
   const [running, setRunning] = useState(true);
+  // This component stays mounted while closed, so a finished audit would leave running false for
+  // the next open. Each open is reset to running in the same render, before anything is painted.
+  const [wasOpen, setWasOpen] = useState(props.isOpen);
+  if (props.isOpen !== wasOpen) {
+    setWasOpen(props.isOpen);
+    if (props.isOpen) setRunning(true);
+  }
   return (
     <Overlay
       isOpen={props.isOpen}

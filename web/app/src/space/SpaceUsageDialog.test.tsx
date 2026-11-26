@@ -242,6 +242,68 @@ describe('SpaceUsageDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('starts a reopen in the running state: no Close, and Escape does not close, on its first paint', async () => {
+    const closeShown = () =>
+      [...document.body.querySelectorAll('button')].some(
+        (candidate) => candidate.textContent === t('spaceUsage.close'),
+      );
+    // Each open's audit first calls jobs.prepare from the effect; the reopen's first paint is read
+    // there, so a Close left over from the finished first open would show up.
+    const base = fakeEngine();
+    let prepares = 0;
+    let closeOnReopenPaint: boolean | undefined;
+    const engine = {
+      call: vi.fn(async (method: string) => {
+        if (method === 'jobs.prepare') {
+          prepares += 1;
+          if (prepares === 2) closeOnReopenPaint = closeShown();
+        }
+        return base.call(method);
+      }),
+    } as unknown as FileJobEngine;
+    const workers = [deferredWorker(), deferredWorker()];
+    let started = 0;
+    const progress = createJobProgressStore({ toasts: createToastStore() });
+    const onClose = vi.fn();
+    const props = (isOpen: boolean): SpaceUsageDialogProps => ({
+      isOpen,
+      onClose,
+      handle: 'doc-1',
+      engine,
+      progress,
+      startWorker: () => workers[started++]?.worker ?? deferredWorker().worker,
+    });
+
+    act(() => {
+      flushSync(() => root.render(<SpaceUsageDialog {...props(true)} />));
+    });
+    await flush();
+    await act(async () => workers[0]?.finish(reportReply(auditValue({ images: 100 }, 470))));
+    await flush();
+    expect(closeShown()).toBe(true);
+
+    act(() => {
+      flushSync(() => root.render(<SpaceUsageDialog {...props(false)} />));
+    });
+    await flush();
+    act(() => {
+      flushSync(() => root.render(<SpaceUsageDialog {...props(true)} />));
+    });
+    await flush();
+
+    expect(prepares).toBe(2);
+    expect(closeOnReopenPaint).toBe(false);
+    expect(findButton(t('spaceUsage.cancel'))).toBeTruthy();
+
+    await act(async () => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    });
+    await flush();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('cancels the running audit with Cancel, which is not an error', async () => {
     const { call, engine } = fakeEngine();
     const job = deferredWorker();
