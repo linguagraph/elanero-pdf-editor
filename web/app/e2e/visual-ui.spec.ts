@@ -5,10 +5,16 @@
 // skips without it, and skips off Linux.
 import { existsSync } from 'node:fs';
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
-import { fixture, openApp, openPdf, STAGED } from './features/support';
+import { fixture, inkPixels, openApp, openPdf, STAGED } from './features/support';
+
+// The production build (the layout and feature specs use the same port, playwright.config.ts). The
+// default baseURL is the dev harness, which injects its CSS inline and would be blocked by the CSP.
+test.use({ baseURL: process.env.E2E_APP_URL ?? 'http://localhost:4174' });
 
 const SCHEMES = ['light', 'dark'] as const;
 const DOCUMENT = 'text_multipage.pdf';
+// The first paint on a cold CI worker can take longer than the default 5 s poll.
+const PAINT_TIMEOUT = 30_000;
 const UPDATE_HINT =
   'gh workflow run web-e2e.yml --ref <branch> -f update_snapshots=true, then download the ' +
   'web-ui-snapshots artifact into tests/golden/web/linux and commit the PNGs';
@@ -22,8 +28,9 @@ function requireReference(testInfo: TestInfo, name: string): void {
 }
 
 // Ink pixels of the first canvas matching the selector (opaque, dark pixels, sampled), so the
-// screenshot waits until the page or thumbnail is painted, not blank.
-async function paintedInk(page: Page, selector: string): Promise<number> {
+// screenshot waits until a thumbnail is painted, not blank. The organizer thumbnails are not document
+// pages, so inkPixels (which is keyed on a document page index) does not apply to them.
+async function thumbnailInk(page: Page, selector: string): Promise<number> {
   return page.evaluate((sel) => {
     const canvas = document.querySelector<HTMLCanvasElement>(sel);
     const context = canvas?.getContext('2d');
@@ -35,6 +42,28 @@ async function paintedInk(page: Page, selector: string): Promise<number> {
     }
     return ink;
   }, selector);
+}
+
+// The indexes of the document pages whose canvas overlaps the viewport now.
+async function visiblePageIndexes(page: Page): Promise<number[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLCanvasElement>('canvas.doc-page-canvas'))
+      .filter((canvas) => {
+        const box = canvas.getBoundingClientRect();
+        return box.bottom > 0 && box.top < window.innerHeight && box.width > 0;
+      })
+      .map((canvas) => Number(canvas.closest<HTMLElement>('[data-page]')?.dataset.page))
+      .filter((index) => Number.isInteger(index)),
+  );
+}
+
+// Waits until page 0 and every other document page in the viewport show ink, so a slow page 1 cannot
+// be captured blank.
+async function waitForVisiblePages(page: Page): Promise<void> {
+  await expect.poll(() => visiblePageIndexes(page), { timeout: PAINT_TIMEOUT }).toContain(0);
+  for (const index of await visiblePageIndexes(page)) {
+    await expect.poll(() => inkPixels(page, index), { timeout: PAINT_TIMEOUT }).toBeGreaterThan(0);
+  }
 }
 
 // Before a shot: the mouse leaves the page and focus is dropped, so no hover or focus ring shows.
@@ -77,9 +106,7 @@ test.describe('engine staged', () => {
         requireReference(testInfo, name);
         await openApp(page);
         await openPdf(page, DOCUMENT, fixture(DOCUMENT));
-        await expect
-          .poll(() => paintedInk(page, '[data-page="0"] canvas.doc-page-canvas'))
-          .toBeGreaterThan(0);
+        await waitForVisiblePages(page);
         await settle(page);
         await expect(page).toHaveScreenshot(name);
       });
@@ -92,9 +119,7 @@ test.describe('engine staged', () => {
         await runCommandById(page, 'Night', 'night-reading');
         // The view gets the night class once the command has applied.
         await expect(page.locator('.doc-view--night')).toHaveCount(1);
-        await expect
-          .poll(() => paintedInk(page, '[data-page="0"] canvas.doc-page-canvas'))
-          .toBeGreaterThan(0);
+        await waitForVisiblePages(page);
         await settle(page);
         await expect(page).toHaveScreenshot(name);
       });
@@ -109,7 +134,12 @@ test.describe('engine staged', () => {
         await expect(rail).toHaveAttribute('aria-expanded', 'true');
         // The thumbnails paint after the panel opens; the first one must show ink.
         await expect
-          .poll(() => paintedInk(page, '.organizer-item[data-page="0"] canvas.organizer-canvas'))
+          .poll(
+            () => thumbnailInk(page, '.organizer-item[data-page="0"] canvas.organizer-canvas'),
+            {
+              timeout: PAINT_TIMEOUT,
+            },
+          )
           .toBeGreaterThan(0);
         await settle(page);
         await expect(page).toHaveScreenshot(name);
@@ -120,9 +150,7 @@ test.describe('engine staged', () => {
         requireReference(testInfo, name);
         await openApp(page);
         await openPdf(page, DOCUMENT, fixture(DOCUMENT));
-        await expect
-          .poll(() => paintedInk(page, '[data-page="0"] canvas.doc-page-canvas'))
-          .toBeGreaterThan(0);
+        await waitForVisiblePages(page);
         await runCommandById(page, 'Header', 'add-header-footer');
         const dialog = page.getByRole('dialog', { name: 'Header & Footer', exact: true });
         await expect(dialog).toBeVisible();
