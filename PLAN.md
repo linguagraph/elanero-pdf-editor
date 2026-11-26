@@ -625,11 +625,11 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 **W8 Quality, #141**
 
 - [ ] **W8.1** End-to-end tests (Playwright) for required features on three browsers _(partial: harness, nightly workflow and feature specs done; pending: a passing web-e2e run: the engine does not load in CI, so the feature specs fail (see #567); specs merged before a passing run: bookmarks, links, touch, split, compress, print)_
-- [ ] **W8.2** Visual golden tests for rendering _(partial: S1 and S2 merged; S3 browser worker render merged (#729); its web-e2e step passes on the fix branch (#733, merged); pending: S4 web UI screenshots, and a green web-e2e run on main that includes S4)_
-- [ ] **W8.3** Performance tests in CI _(partial: S1 budget table (#704), S2 first-load size check (#721), S3 browser perf harness (#731) merged; S4 nightly web-perf, S5 trend log and S6 PR trigger pending)_
+- [ ] **W8.2** Visual golden tests for rendering _(partial: S1 and S2 merged; S3 browser worker render merged (#729) and its web-e2e step passes on the fix branch (#733, merged); S4 web UI screenshot checks merged (#746); pending: the reference images from a dispatch run with update_snapshots=true, committed by a follow-up PR)_
+- [ ] **W8.3** Performance tests in CI _(partial: S1 budget table (#704), S2 first-load size check (#721), S3 browser perf harness (#731), S4a compare rules (#743) and S4b nightly web-perf workflow with release hook (#745) merged; pending: the first web-perf run on main, which S4 is ticked after (the run must be green), S5 trend log, S6 PR trigger after the trial; W2 and W7 stay unenforced until the owner decides)_
 - [x] **W8.4** Fuzz and robustness tests
-- [ ] **W8.5** Accessibility checks _(partial: axe, contrast and keyboard checks done; pending: passing web-a11y run, document view axe, reduced motion, touch targets, NVDA and VoiceOver pass)_
-- [ ] **W8.6** Security review _(partial: all slices merged, S7b in #722; the npm ci guard (`--ignore-scripts` on every workflow `npm ci`, tests/unit/test_workflow_npm_ci.py) is in place (F3 second half, S7c); F14 is recorded as open in docs/web/security-review.md (main); the security review is not ticked until its open follow-ups are closed or recorded)_
+- [ ] **W8.5** Accessibility checks _(partial: axe, contrast, keyboard, touch-target and reduced-motion checks done; the WebKit dark-mode contrast failure fixed in #748 (needs a green web-a11y run on main); pending: that run, and the NVDA and VoiceOver pass)_
+- [ ] **W8.6** Security review _(partial: F3 npm ci guard (#742), F14 Pages actions pinned by SHA (#747), F9 engine half (#749) merged; pending: F7 (trusted types), the F9 browser half (S6b), the security spec on PRs (W8.1), the unpinned actions in ci.yml, docs.yml and release.yml, and the wheel provenance part of F14; see docs/web/security-review.md)_
 
 **W9 Build, release and docs, #142**
 
