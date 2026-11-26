@@ -161,3 +161,46 @@ def test_release_calls_web_perf_and_github_release_waits_for_it() -> None:
     assert jobs["web-perf"]["uses"] == "./.github/workflows/web-perf.yml"
     assert jobs["web-perf"]["with"]["head_ref"] == "${{ github.sha }}"
     assert set(jobs["github-release"]["needs"]) == {"ci", "web-perf"}
+
+
+def test_web_perf_exposes_the_wheel_provenance_as_outputs() -> None:
+    # The release notes read the wheel's file name and sha256 from these outputs (W8.6 F14).
+    doc = _load(WEB_PERF)
+    call_outputs = _triggers(doc)["workflow_call"]["outputs"]
+    assert {"wheel_file", "wheel_sha256"} <= set(call_outputs)
+    job_outputs = _job(doc)["outputs"]
+    assert job_outputs["wheel_file"] == "${{ steps.wheel.outputs.wheel_file }}"
+    assert job_outputs["wheel_sha256"] == "${{ steps.wheel.outputs.wheel_sha256 }}"
+    for name in ("wheel_file", "wheel_sha256"):
+        value = str(call_outputs[name]["value"])
+        assert value == f"${{{{ jobs.web-perf.outputs.{name} }}}}", name
+
+
+def test_web_perf_verify_step_writes_the_wheel_outputs() -> None:
+    steps = _steps(_job(_load(WEB_PERF)))
+    verify = next(s for s in steps if s.get("name") == "Verify the wheel against wheel.sha256")
+    assert verify["id"] == "wheel"
+    run = str(verify["run"])
+    assert "wheel_sha256=$(cut -d' ' -f1 wheel.sha256)" in run
+    assert "wheel=$(ls *.whl)" in run
+    assert 'echo "wheel_file=$wheel"' in run
+    assert '>> "$GITHUB_OUTPUT"' in run
+    # The outputs are written after the hash check, so a failed check publishes nothing.
+    assert run.index("sha256sum -c") < run.index("GITHUB_OUTPUT")
+
+
+def test_release_notes_carry_the_wheel_sha256() -> None:
+    job = _load(RELEASE)["jobs"]["github-release"]
+    env = job["env"]
+    assert env["WHEEL_FILE"] == "${{ needs.web-perf.outputs.wheel_file }}"
+    assert env["WHEEL_SHA"] == "${{ needs.web-perf.outputs.wheel_sha256 }}"
+    steps = _steps(job)
+    check = next(
+        s for s in steps if "WHEEL_SHA" in str(s.get("run", "")) and "grep" in str(s.get("run", ""))
+    )
+    assert "^[0-9a-f]{64}$" in str(check["run"])
+    create = next(s for s in steps if "gh release create" in str(s.get("run", "")))
+    run = str(create["run"])
+    assert '--notes "Web engine wheel: $WHEEL_FILE, sha256 $WHEEL_SHA"' in run
+    assert "--generate-notes" in run
+    assert run.index("WHEEL_SHA") < run.index("gh release create")

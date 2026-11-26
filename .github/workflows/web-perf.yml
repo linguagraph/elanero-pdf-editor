@@ -35,6 +35,14 @@ on:
         type: string
         required: false
         default: ""
+    # The wheel's provenance for the caller's release notes (W8.6 F14). Set by the verify step.
+    outputs:
+      wheel_file:
+        description: "File name of the PyMuPDF web wheel the perf run used."
+        value: ${{ jobs.web-perf.outputs.wheel_file }}
+      wheel_sha256:
+        description: "sha256 of that wheel, from wheel.sha256 after the hash check."
+        value: ${{ jobs.web-perf.outputs.wheel_sha256 }}
 
 permissions:
   contents: read
@@ -50,6 +58,9 @@ jobs:
     name: web-perf
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    outputs:
+      wheel_file: ${{ steps.wheel.outputs.wheel_file }}
+      wheel_sha256: ${{ steps.wheel.outputs.wheel_sha256 }}
     env:
       BASELINE_INPUT: ${{ inputs.baseline_ref }}
       # The pins that must match for the two builds to share one engine (design 2.2, item 2).
@@ -123,11 +134,19 @@ jobs:
           exit 1
 
       - name: Verify the wheel against wheel.sha256
+        id: wheel
         run: |
           set -euo pipefail
           cd web/spike/dist/wheel-build
           test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
           sha256sum -c wheel.sha256
+          # Recorded only after the hash check passes, for the release notes (W8.6 F14).
+          wheel=$(ls *.whl)
+          test "$(printf '%s\n' "$wheel" | wc -l)" -eq 1 || { echo "::error::expected one wheel, found: $wheel"; exit 1; }
+          {
+            echo "wheel_file=$wheel"
+            echo "wheel_sha256=$(cut -d' ' -f1 wheel.sha256)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up the host Python (fixtures, the web package and the staging)
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
