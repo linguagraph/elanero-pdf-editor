@@ -42,8 +42,16 @@ jobs:
     needs: version
     uses: ./.github/workflows/ci.yml
 
+  # The W8.3 web perf check of this commit against the baseline_ref in tests/perf/budgets.json (the
+  # previous release, moved by RELEASING.md). A failed check blocks the release, as the desktop budgets do.
+  web-perf:
+    needs: version
+    uses: ./.github/workflows/web-perf.yml
+    with:
+      head_ref: ${{ github.sha }}
+
   github-release:
-    needs: ci
+    needs: [ci, web-perf]
     runs-on: ubuntu-latest
     permissions:
       contents: write

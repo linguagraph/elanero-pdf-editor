@@ -1,0 +1,335 @@
+name: Web perf (W8.3)
+
+# The W8.3 browser performance numbers (W2, W3, W7, W8; docs/web/design/W8.3-performance.md, sections 2.2
+# and 2.3). It builds HEAD and the baseline commit (the baseline_ref in tests/perf/budgets.json, or the
+# ref given by hand), serves both production builds, and runs the perf harness on them in five
+# interleaved rounds (HEAD, baseline, HEAD, ...). The paired comparison is perf-compare.ts: a metric fails
+# when HEAD is more than 15% and 300 ms slower. The run retries once and fails only if both attempts fail
+# (src/perf/compare.ts).
+#
+# It runs nightly after web-e2e has warmed the wheel cache, by hand, and from release.yml (head_ref is
+# the release commit). It is not a required check and does not run on pull requests. The engine wheel
+# comes from the cache web-pytest.yml fills (the same key as web-e2e); a cache miss fails this run.
+# If the baseline has no web app or its engine pins differ, the paired comparison is skipped with a
+# notice in the summary, and HEAD's numbers are still recorded.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: "Baseline commit or tag. Empty: the baseline_ref in tests/perf/budgets.json."
+        type: string
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      head_ref:
+        description: "Commit to measure as HEAD. Empty: the commit this workflow runs on."
+        type: string
+        required: false
+        default: ""
+      baseline_ref:
+        description: "Baseline commit or tag. Empty: the baseline_ref in tests/perf/budgets.json."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# In a called workflow github.workflow is the caller's name (release.yml), so the group must not use it:
+# a release would share release.yml's group. This prefix is this workflow's own.
+concurrency:
+  group: web-perf-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  web-perf:
+    name: web-perf
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      BASELINE_INPUT: ${{ inputs.baseline_ref }}
+      # The pins that must match for the two builds to share one engine (design 2.2, item 2).
+      PINS: '{pyodide, pymupdf, pythonLine, pyodideBuild, node}'
+    steps:
+      - name: Check out HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.head_ref || github.sha }}
+          fetch-depth: 0 # the baseline ref may be a tag
+
+      - name: Read the pinned versions
+        id: versions
+        run: |
+          v=web/spike/versions.json
+          {
+            echo "pyodide=$(jq -r .pyodide $v)"
+            echo "pymupdf=$(jq -r .pymupdf $v)"
+            echo "node=$(jq -r .node $v)"
+            echo "host_python=$(jq -r .hostPython $v)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve the baseline and decide whether it can be paired
+        id: baseline
+        run: |
+          set -euo pipefail
+          ref="${BASELINE_INPUT:-}"
+          if [ -z "$ref" ]; then ref=$(jq -r .baseline_ref tests/perf/budgets.json); fi
+          sha=$(git rev-parse --verify -q "$ref^{commit}") || { echo "::error::baseline_ref $ref is not a commit"; exit 1; }
+          paired=true
+          reason=""
+          if ! git cat-file -e "$sha:web/app/package.json" 2>/dev/null; then
+            paired=false
+            reason="$ref has no web app, so it cannot be built"
+          elif [ "$(git show "$sha:web/spike/versions.json" 2>/dev/null | jq -cS "$PINS" 2>/dev/null || true)" != "$(jq -cS "$PINS" web/spike/versions.json)" ]; then
+            paired=false
+            reason="the engine pins in web/spike/versions.json differ from $ref"
+          fi
+          {
+            echo "ref=$ref"
+            echo "sha=$sha"
+            echo "paired=$paired"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$paired" = false ]; then
+            echo "::notice title=web-perf::paired comparison skipped: $reason"
+            echo "> **Paired comparison skipped:** $reason. HEAD's numbers are recorded; nothing is compared." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "baseline $ref -> $sha (paired: $paired)"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+
+      - name: Install the npm packages of the Pyodide pin (web/spike, for the staging)
+        working-directory: web/spike
+        run: npm ci --ignore-scripts
+
+      # The key is web-pytest.yml's key (see web-e2e.yml). A miss fails here: no cold wheel build.
+      - name: Restore the PyMuPDF wheel from the cache
+        id: wheel-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: web/spike/dist/wheel-build
+          key: pymupdf-${{ steps.versions.outputs.pymupdf }}-pyodide-${{ steps.versions.outputs.pyodide }}-${{ hashFiles('.github/workflows/web-pytest.yml', 'web/spike/versions.json') }}
+
+      - name: Stop on a cache miss (no cold build here)
+        if: ${{ steps.wheel-cache.outputs.cache-hit != 'true' }}
+        run: |
+          echo "::error::no PyMuPDF wheel in the cache for this key. Run web-pytest.yml (workflow_dispatch) on main first; this job does not build the wheel."
+          exit 1
+
+      - name: Verify the wheel against wheel.sha256
+        run: |
+          set -euo pipefail
+          cd web/spike/dist/wheel-build
+          test -f wheel.sha256 || { echo "::error::wheel.sha256 missing from the wheel cache"; exit 1; }
+          sha256sum -c wheel.sha256
+
+      - name: Set up the host Python (fixtures, the web package and the staging)
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.versions.outputs.host_python }}
+
+      - name: Install the host packages and generate the fixtures
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet $(jq -r '.hostPins | join(" ")' web/spike/versions.json)
+          python scripts/make_fixtures.py
+          # The harness skips without these; a skip here would be a quiet green, so fail instead.
+          test -f tests/fixtures/generated/perf_mixed_10.pdf
+          test -f tests/fixtures/generated/perf_mixed_1000.pdf
+
+      - name: Build the web package
+        run: python scripts/build_web_wheel.py
+
+      # Owner decision (accepted limit, not a bug): the baseline is served with HEAD's whole engine-assets
+      # directory, including HEAD's pdfeditor-web.zip. So an engine regression in the zip shows on both
+      # sides and is not caught by the paired comparison. Building a second zip for the baseline is a
+      # larger change and is not done here. Recorded in the PR body too.
+      - name: Stage the engine assets (Pyodide, the PyMuPDF wheel, the web zip)
+        run: |
+          set -euo pipefail
+          n=$(ls web/spike/dist/wheel-build/*.whl | wc -l)
+          test "$n" -eq 1 || { echo "expected one PyMuPDF wheel, found $n"; exit 1; }
+          node scripts/stage_engine_assets.mjs --wheel "$(ls web/spike/dist/wheel-build/*.whl)" --zip dist/web/pdfeditor-web.zip
+          test -f web/app/public/engine-assets/pyodide.mjs
+          test -f web/app/public/engine-assets/pyodide-lock.json
+
+      - name: Install the HEAD npm packages (exact, from the lockfile)
+        working-directory: web/app
+        run: npm ci --ignore-scripts
+
+      - name: Build HEAD (the production build the harness measures)
+        working-directory: web/app
+        run: npx vite build --base=/ --outDir dist/perf
+
+      - name: Check out the baseline in its own worktree
+        if: ${{ steps.baseline.outputs.paired == 'true' }}
+        env:
+          SHA: ${{ steps.baseline.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/baseline" "$SHA"
+          # Same pins (checked above), so the same engine assets serve both builds.
+          mkdir -p "$RUNNER_TEMP/baseline/web/app/public"
+          cp -r web/app/public/engine-assets "$RUNNER_TEMP/baseline/web/app/public/"
+
+      - name: Build the baseline
+        if: ${{ steps.baseline.outputs.paired == 'true' }}
+        working-directory: ${{ runner.temp }}/baseline/web/app
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npx vite build --base=/ --outDir dist/perf
+
+      - name: Install the browser (chromium) and its system libraries
+        working-directory: web/app
+        run: npx playwright install --with-deps chromium
+
+      - name: Serve HEAD on port 4176
+        working-directory: web/app
+        run: |
+          nohup npx vite preview --outDir dist/perf --port 4176 --strictPort > "$RUNNER_TEMP/serve-head.log" 2>&1 &
+          curl --retry 60 --retry-delay 1 --retry-all-errors -fsS -o /dev/null http://localhost:4176/
+
+      - name: Serve the baseline on port 4177
+        if: ${{ steps.baseline.outputs.paired == 'true' }}
+        working-directory: ${{ runner.temp }}/baseline/web/app
+        run: |
+          nohup npx vite preview --outDir dist/perf --port 4177 --strictPort > "$RUNNER_TEMP/serve-baseline.log" 2>&1 &
+          curl --retry 60 --retry-delay 1 --retry-all-errors -fsS -o /dev/null http://localhost:4177/
+
+      # Five rounds, each HEAD then the baseline (A B A B ...), one harness run per side and round.
+      # PERF_RUNS=1 is one measured run after the warm-up run 0 (perf.spec.ts). Each file is one round.
+      - name: Run the interleaved rounds (attempt 1)
+        id: rounds-1
+        continue-on-error: true # the compare step decides; a failed round is a failed attempt
+        env:
+          ATTEMPT: "1"
+          PAIRED: ${{ steps.baseline.outputs.paired }}
+        working-directory: web/app
+        run: |
+          set -euo pipefail
+          for round in 1 2 3 4 5; do
+            for side in head baseline; do
+              [ "$side" = baseline ] && [ "$PAIRED" != true ] && continue
+              port=4176; [ "$side" = baseline ] && port=4177
+              out="$GITHUB_WORKSPACE/perf-out/attempt-$ATTEMPT/round-$round/$side/perf-results.json"
+              mkdir -p "$(dirname "$out")"
+              E2E_APP_URL="http://localhost:$port" PERF_RUNS=1 PERF_OUT="$out" \
+                npx playwright test -c playwright.perf.config.ts --reporter=list
+            done
+          done
+
+      - name: Compare the rounds (attempt 1)
+        id: compare-1
+        continue-on-error: true # a failure starts attempt 2
+        env:
+          ATTEMPT: "1"
+          ROUNDS_OK: ${{ steps.rounds-1.outcome }}
+          PAIRED: ${{ steps.baseline.outputs.paired }}
+        run: |
+          set -euo pipefail
+          [ "$ROUNDS_OK" = success ] || { echo "::error::attempt $ATTEMPT: the rounds did not all run"; exit 1; }
+          sides=(head); [ "$PAIRED" = true ] && sides+=(baseline)
+          args=()
+          for side in "${sides[@]}"; do
+            mkdir -p "$GITHUB_WORKSPACE/perf-out/attempt-$ATTEMPT/$side"
+            node -e '
+              const fs = require("node:fs");
+              const [out, ...ins] = process.argv.slice(1);
+              const byId = new Map();
+              for (const file of ins) for (const r of JSON.parse(fs.readFileSync(file, "utf8")).records) {
+                byId.set(r.id, (byId.get(r.id) ?? []).concat(r.samples));
+              }
+              fs.writeFileSync(out, JSON.stringify({ records: [...byId].map(([id, samples]) => ({ id, samples })) }));
+            ' "$GITHUB_WORKSPACE/perf-out/attempt-$ATTEMPT/$side/perf-results.json" \
+              "$GITHUB_WORKSPACE"/perf-out/attempt-$ATTEMPT/round-*/"$side"/perf-results.json
+            args+=("perf-out/attempt-$ATTEMPT/$side/perf-results.json")
+          done
+          [ "$PAIRED" = true ] || args+=("-")
+          echo "### Web perf, attempt $ATTEMPT" >> "$GITHUB_STEP_SUMMARY"
+          node --experimental-strip-types web/app/scripts/perf-compare.ts tests/perf/budgets.json "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Run the rounds again (attempt 2, after a failed compare)
+        if: ${{ steps.compare-1.outcome == 'failure' }}
+        id: rounds-2
+        continue-on-error: true
+        env:
+          ATTEMPT: "2"
+          PAIRED: ${{ steps.baseline.outputs.paired }}
+        working-directory: web/app
+        run: |
+          set -euo pipefail
+          for round in 1 2 3 4 5; do
+            for side in head baseline; do
+              [ "$side" = baseline ] && [ "$PAIRED" != true ] && continue
+              port=4176; [ "$side" = baseline ] && port=4177
+              out="$GITHUB_WORKSPACE/perf-out/attempt-$ATTEMPT/round-$round/$side/perf-results.json"
+              mkdir -p "$(dirname "$out")"
+              E2E_APP_URL="http://localhost:$port" PERF_RUNS=1 PERF_OUT="$out" \
+                npx playwright test -c playwright.perf.config.ts --reporter=list
+            done
+          done
+
+      # The second compare gets both attempts' pairs: the run passes if either attempt passes, and the
+      # summary keeps both sets of numbers (design 2.2, item 4).
+      - name: Compare the rounds (attempt 2, both attempts)
+        if: ${{ steps.compare-1.outcome == 'failure' }}
+        env:
+          ROUNDS_OK: ${{ steps.rounds-2.outcome }}
+          ROUNDS1_OK: ${{ steps.rounds-1.outcome }}
+          PAIRED: ${{ steps.baseline.outputs.paired }}
+        run: |
+          set -euo pipefail
+          [ "$ROUNDS_OK" = success ] || { echo "::error::attempt 2: the rounds did not all run"; exit 1; }
+          args=()
+          for attempt in 1 2; do
+            # An attempt whose rounds did not all run is recorded as failed and left out, so its partial
+            # files are never compared. Attempt 2 has already been checked above.
+            ok="$ROUNDS1_OK"; [ "$attempt" = 2 ] && ok="$ROUNDS_OK"
+            if [ "$ok" != success ]; then
+              echo "> **Attempt $attempt:** the rounds did not all run; its numbers are left out." >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            sides=(head); [ "$PAIRED" = true ] && sides+=(baseline)
+            for side in "${sides[@]}"; do
+              mkdir -p "$GITHUB_WORKSPACE/perf-out/attempt-$attempt/$side"
+              node -e '
+                const fs = require("node:fs");
+                const [out, ...ins] = process.argv.slice(1);
+                const byId = new Map();
+                for (const file of ins) for (const r of JSON.parse(fs.readFileSync(file, "utf8")).records) {
+                  byId.set(r.id, (byId.get(r.id) ?? []).concat(r.samples));
+                }
+                fs.writeFileSync(out, JSON.stringify({ records: [...byId].map(([id, samples]) => ({ id, samples })) }));
+              ' "$GITHUB_WORKSPACE/perf-out/attempt-$attempt/$side/perf-results.json" \
+                "$GITHUB_WORKSPACE"/perf-out/attempt-$attempt/round-*/"$side"/perf-results.json
+              args+=("perf-out/attempt-$attempt/$side/perf-results.json")
+            done
+            [ "$PAIRED" = true ] || args+=("-")
+          done
+          echo "### Web perf, attempt 2 (both attempts)" >> "$GITHUB_STEP_SUMMARY"
+          node --experimental-strip-types web/app/scripts/perf-compare.ts tests/perf/budgets.json "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the perf results (perf-results.json, 90 days)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-perf-results-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: perf-out/**/perf-results.json
+
+      - name: Upload the preview-server logs (kept with the results)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-perf-serve-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: ${{ runner.temp }}/serve-*.log

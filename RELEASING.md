@@ -194,6 +194,9 @@ Pushing the tag (step 3) starts `.github/workflows/release.yml`:
 - **Tests and build:** runs the whole of CI: every test on Windows and Linux, the performance
   budgets and the install tests. CI doesn't run after a merge, so this is what proves the commit.
   It also makes the release's only build of the app, and every package comes from that build.
+  The web perf job restores the PyMuPDF wheel from a cache keyed on `web-pytest.yml` and
+  `web/spike/versions.json`. If either changed since the last web-pytest run, run
+  `gh workflow run web-pytest.yml --ref main` first, or the release is blocked on a cache miss.
 - **GitHub release:** attaches that `Elanero.exe` and installer to a release for the tag (step 8).
   If this or the Store job fails, re-run just the failed job: nothing is built or tested again.
 - **Microsoft Store:** waits for your approval in Actions (the `microsoft-store` environment),
