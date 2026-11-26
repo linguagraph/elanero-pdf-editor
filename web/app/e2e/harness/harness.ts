@@ -1,6 +1,6 @@
 // Test-only page script (W3.1): starts the engine and the job worker through the real start.ts,
 // and reports what the browser test needs. The Playwright test reads window.__harness.
-import { LOAD_TIMEOUT_MS } from '../../src/engine/engineConnection';
+import { LOAD_TIMEOUT_MS } from '../../src/engine/loadTimeout';
 import { EngineLoadError } from '../../src/engine/errors';
 import { createJobWorkerPool, type JobWorkerPool } from '../../src/engine/jobPool';
 import { startEngine, startJobWorker, type WorkerClient } from '../../src/engine/start';
