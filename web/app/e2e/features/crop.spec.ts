@@ -29,14 +29,9 @@ test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
   test('crop the margins, see the page shrink, undo it, then crop again and save', async ({
-    browserName,
     page,
     context,
   }, testInfo) => {
-    test.fixme(
-      browserName === 'webkit',
-      'WebKit: the style-src CSP refuses a stylesheet (console message), so the CSP check fails there; tracked in #420',
-    );
     const problems = watchPage(page);
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
