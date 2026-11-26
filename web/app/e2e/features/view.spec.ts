@@ -99,4 +99,35 @@ test.describe('engine staged', () => {
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
+
+  test('the View ribbon has no Rotate View, and no button is off because it is not available yet', async ({
+    page,
+  }) => {
+    // #735: Rotate View did nothing on the web. The page-step buttons are off on page 1 and Back and
+    // Forward have no history yet; those are off for their own reasons, so only the reason text is checked.
+    const problems = watchPage(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+    await page.getByRole('tab', { name: 'View', exact: true }).click();
+
+    const buttons = await page.locator('.ribbon-panel:visible [data-command]').evaluateAll((els) =>
+      els.map((el) => ({
+        id: el.getAttribute('data-command'),
+        off: el.getAttribute('aria-disabled') === 'true',
+        text: (el.getAttribute('aria-describedby') ?? '')
+          .split(' ')
+          .map((id) => document.getElementById(id)?.textContent ?? '')
+          .join(' '),
+      })),
+    );
+    const ids = buttons.map((button) => button.id);
+    expect(ids).toContain('night-reading');
+    expect(ids).toContain('zoom-in');
+    expect(ids).not.toContain('rotate-view-clockwise');
+    expect(ids).not.toContain('rotate-view-counterclockwise');
+    expect(buttons.find((button) => button.id === 'zoom-in')?.off).toBe(false);
+    expect(buttons.filter((button) => button.text.includes('not available yet'))).toEqual([]);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
 });

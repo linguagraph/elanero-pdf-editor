@@ -45,6 +45,7 @@ Hold **Ctrl** and turn the mouse wheel to zoom. The zoom box shows the current l
 **View ▸ Rotate View Clockwise** (**Ctrl+Shift+=**) and **Rotate View Counterclockwise**
 (**Ctrl+Shift+-**) turn the pages on screen. This changes only how the document is displayed. To turn
 the pages in the file itself, use [Pages](pages.md#insert-delete-duplicate-and-rotate).
+The web version does not offer Rotate View yet; see [the web version](web.md).
 
 ## Night reading
 

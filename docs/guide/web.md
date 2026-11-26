@@ -165,7 +165,7 @@ message saying whether it was added.
   on the first and last page. Organize Pages opens the organizer panel. The document's layout
   buttons also offer **Single page**, which shows one page at a time: Previous and Next Page, the
   page field and Home and End move between pages, and the page you were on stays the page when you
-  change layout. The view rotation is not available yet.
+  change layout. Rotate View is not shown on the web yet.
 - **Hand tool.** Choose **Hand** (or press **H**) and a drag with the mouse or a pen moves the pages
   under the pointer. One-finger touch still scrolls the page as the browser does. Choose **Select**
   (or press **V**) to go back. Hand changes only the view: it does not change the document, and it is
@@ -357,7 +357,7 @@ family when it has one.
 These features are on the desktop but not in the web version yet:
 
 - the ribbon's Insert, Delete, Duplicate and Rotate page commands (the Organize pages panel has insert, duplicate, extract and delete; see the table below);
-- **Rotate View** (the view rotation);
+- **Rotate View** (the view rotation): it is not shown on the web yet, so the View ribbon has no Rotate View buttons;
 - the **Install App** command in the app menu;
 - saving back to the original file in place (Save downloads the document; see the table below);
 - uploaded fonts in headers, footers and watermarks.

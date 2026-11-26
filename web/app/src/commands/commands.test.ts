@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import shortcutTable from '../../../src/generated/shortcuts.json';
 import { EN, type MessageId } from '../i18n/en';
-import { COMMANDS, GROUPS, MENU, REGISTRY, WEB_ONLY_IDS } from './catalog';
+import { COMMANDS, DEFERRED_IDS, GROUPS, MENU, REGISTRY, WEB_ONLY_IDS } from './catalog';
 import { MAX_ZOOM, MIN_ZOOM } from '../view/zoom';
 import {
   type CommandState,
@@ -124,6 +124,27 @@ describe('registry declarations', () => {
     for (const id of WEB_ONLY_IDS) {
       expect(isSharedId(id), id).toBe(false);
     }
+  });
+
+  it('keeps the deferred ids out of the registry, the menu and the ribbon, though they are shared', () => {
+    expect([...DEFERRED_IDS].sort()).toEqual([
+      'rotate-view-clockwise',
+      'rotate-view-counterclockwise',
+    ]);
+    const listed = REGISTRY.commands.map((def) => def.id);
+    for (const id of DEFERRED_IDS) {
+      expect(REGISTRY.get(id), id).toBeUndefined();
+      expect(listed, id).not.toContain(id);
+      expect(MENU.flat(), id).not.toContain(id);
+      expect(isSharedId(id), id).toBe(true);
+    }
+  });
+
+  it('shows only Night Mode in the Reading group on the web', () => {
+    const reading = REGISTRY.commands
+      .filter((def) => def.group === 'view.reading')
+      .map((def) => def.id);
+    expect(reading).toEqual(['night-reading']);
   });
 
   it('has an English label for every label id, group, tab and reason', () => {
