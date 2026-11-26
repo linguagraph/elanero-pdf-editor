@@ -7,11 +7,10 @@ import type { BootReport, PoolCancelReport, PoolReuseReport } from './harness/ha
 
 const WHEEL = /\/pymupdf-[^/]+\.whl$/;
 const STAGES = ['pyodide', 'packages', 'engine', 'ready'];
-// Quarantine reason for the three boot tests that fail on the Ubuntu runner. Tracked in #770.
-const QUARANTINE_HELLO =
-  'quarantined from the PR-level web-browser job (ci.yml): it failed on the first Ubuntu CI run ' +
-  '(run 45869411737) because the engine did not answer hello within 3 s on a cold runner ' +
-  '(RpcTimeoutError, TIMEOUT). It runs in the nightly web-e2e instead. Tracked in #770.';
+// Quarantine reason for the pool-reuse test, which still fails on the Ubuntu runner. Tracked in #770.
+const QUARANTINE_POOL =
+  'quarantined from the PR-level web-browser job (ci.yml): two job workers started, cause unknown ' +
+  '(see #770). It runs in the nightly web-e2e instead.';
 
 async function openHarness(page: Page): Promise<string[]> {
   // A CSP violation is reported to the console; collect them so a blocked worker or Pyodide fails
@@ -37,7 +36,6 @@ test('the served page carries the production CSP', async ({ page }) => {
 });
 
 test('the engine loads, reports the stages in order, and answers hello', async ({ page }) => {
-  test.fixme(true, QUARANTINE_HELLO);
   const workers: Worker[] = [];
   page.on('worker', (worker) => workers.push(worker));
   const violations = await openHarness(page);
@@ -58,7 +56,6 @@ test('the engine loads, reports the stages in order, and answers hello', async (
 test('the job worker loads, answers hello, and has the network globals removed', async ({
   page,
 }) => {
-  test.fixme(true, QUARANTINE_HELLO);
   // The job worker removes fetch, XMLHttpRequest, WebSocket and importScripts before the engine
   // stage (jobworker.ts). The worker is read directly after 'ready'; the engine worker is read
   // as the control, since it keeps fetch for the package downloads.
@@ -113,7 +110,7 @@ function onePagePdf(): string {
 test('the job pool reuses one job worker for two jobs, and the reused worker stays locked down', async ({
   page,
 }) => {
-  test.fixme(true, QUARANTINE_HELLO);
+  test.fixme(true, QUARANTINE_POOL);
   const workers: Worker[] = [];
   page.on('worker', (worker) => workers.push(worker));
   const violations = await openHarness(page);
