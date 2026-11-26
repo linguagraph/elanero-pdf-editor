@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PageBox } from './layout';
+import { type PageBox, singlePageScene } from './layout';
 import {
   cacheBudgetBytes,
   devicePageSize,
@@ -92,6 +92,43 @@ describe('whole pages and tiles (W1.4 section 4)', () => {
     expect(tiles.length).toBeGreaterThan(0);
     expect(tiles.every((item) => item.page === 1 && item.tileY !== undefined)).toBe(true);
     expect(tiles.every((item) => item.visible === false)).toBe(true);
+  });
+});
+
+describe('single-page planning (#734)', () => {
+  // The single-page scene keeps the shown page's own index (3) at array position 0. The planner
+  // must request that page, not the page at position 0.
+  const small = { width: 612, height: 792 };
+  const sizes = [small, small, small, small, small];
+
+  it('plans the shown page, not page 0, for a whole-page render', () => {
+    const { boxes } = singlePageScene(sizes, 1, 3);
+    const planned = planPageRenders({
+      boxes,
+      sizes,
+      first: 0,
+      end: 1,
+      scrollTop: 0,
+      viewportHeight: 768,
+      scaleMilli: 1333,
+    });
+    expect(planned.map((item) => item.page)).toEqual([3]);
+  });
+
+  it('plans the tiles of the shown page, not page 0, for a large page', () => {
+    const large = [small, small, small, { width: 2250, height: 2250 }];
+    const { boxes } = singlePageScene(large, 1, 3);
+    const planned = planPageRenders({
+      boxes,
+      sizes: large,
+      first: 0,
+      end: 1,
+      scrollTop: 0,
+      viewportHeight: 768,
+      scaleMilli: 1333,
+    });
+    expect(planned.length).toBeGreaterThan(0);
+    expect(planned.every((item) => item.page === 3 && item.tileY !== undefined)).toBe(true);
   });
 });
 
