@@ -185,11 +185,20 @@ export function useDocuments(
   const [thumbs] = useState(() => previewStore ?? createRecentThumbs());
   const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(() => new Map());
   const previewUrlsRef = useRef(new Map<string, string>());
+  // The number of the latest load. A load that finishes after a newer one started (or after unmount)
+  // is stale: its URLs are freed at once and it changes nothing, so an older list never overwrites a
+  // newer one.
+  const previewRequestRef = useRef(0);
   const loadPreviews = useCallback(
     (names: readonly string[]) => {
+      const request = ++previewRequestRef.current;
       void thumbs.load(names).then((blobs) => {
         const next = new Map<string, string>();
         for (const [name, blob] of blobs) next.set(name, URL.createObjectURL(blob));
+        if (request !== previewRequestRef.current) {
+          for (const url of next.values()) URL.revokeObjectURL(url);
+          return;
+        }
         for (const url of previewUrlsRef.current.values()) URL.revokeObjectURL(url);
         previewUrlsRef.current = next;
         setPreviews(next);
@@ -205,7 +214,10 @@ export function useDocuments(
   }, [startShown, recent, loadPreviews]);
   useEffect(
     () => () => {
+      // A load still running is stale now: it frees its own URLs when it lands.
+      previewRequestRef.current += 1;
       for (const url of previewUrlsRef.current.values()) URL.revokeObjectURL(url);
+      previewUrlsRef.current = new Map();
     },
     [],
   );

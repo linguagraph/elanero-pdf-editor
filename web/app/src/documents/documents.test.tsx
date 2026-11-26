@@ -14,6 +14,21 @@ import { passwordPrompt } from './passwordRequest';
 import { installLaunchInbox, type LaunchFileHandleLike, type LaunchQueueLike } from '../pwa/launch';
 import type { RpcEvent } from '../rpc/generated';
 
+// The first-page previews are kept in a fake store that records each prune (issue 757). The real
+// renderer still runs, so a preview is made and sent to the fake store's (empty) load and save.
+const thumbPrunes = vi.hoisted(() => [] as string[][]);
+vi.mock('../recent/recentThumbs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createRecentThumbs: () => ({
+    save: async () => false,
+    load: async () => new Map(),
+    prune: async (names: readonly string[]) => {
+      thumbPrunes.push([...names]);
+    },
+    remove: async () => undefined,
+  }),
+}));
+
 // The autosave copies go to a fake store, which records the document each delete names (W4.8 S1).
 const autosaveRemoved = vi.hoisted(() => [] as number[]);
 vi.mock('../storage/autosaveStore', async (importOriginal) => ({
@@ -103,6 +118,7 @@ let calls: Recorded[];
 
 beforeEach(() => {
   window.localStorage.clear();
+  thumbPrunes.length = 0;
   // Tab sessions live in a module-level store, so each test starts with none for the first tabs.
   for (const id of [1, 2, 3]) setTabSession(id, null);
   const scripted = engineClient();
@@ -583,14 +599,21 @@ describe('document tabs', () => {
       host.querySelector(`[aria-label="${t('view.pageNumber', { page: 1, total: 3 })}"]`),
     ).not.toBeNull();
     // The view and the Pages panel, which is open by default (W4.2a S1), each ask once. The
-    // first-page preview of the recent file (issue 757) asks too, once the browser is idle, so it
-    // may or may not have run by now.
+    // first-page preview of the recent file (issue 757) asks once more, when the browser is idle
+    // (a timer here, which the wait below lets run), so the count is exactly three.
+    await until(() => calls.filter((call) => call.method === 'session.pages').length === 3);
     const pagesCalls = calls.filter((call) => call.method === 'session.pages');
-    expect(pagesCalls.length === 2 || pagesCalls.length === 3).toBe(true);
+    expect(pagesCalls).toHaveLength(3);
     expect(pagesCalls.slice(0, 2)).toEqual([
       { method: 'session.pages', params: { handle: 'doc-1' } },
       { method: 'session.pages', params: { handle: 'doc-1' } },
     ]);
+  });
+
+  it('prunes the previews to the recent list when a file opens', async () => {
+    dropFiles([pdf('a.pdf')]);
+    await until(() => thumbPrunes.length > 0);
+    expect(thumbPrunes.at(-1)).toEqual(['a.pdf']);
   });
 
   it('shows only the document view when a document is open, with no footer or About text', async () => {

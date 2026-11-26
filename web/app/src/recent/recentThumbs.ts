@@ -24,6 +24,9 @@ export interface RecentThumbs {
   load(names: readonly string[]): Promise<Map<string, Blob>>;
   // Deletes every preview whose name is not in the list.
   prune(names: readonly string[]): Promise<void>;
+  // Deletes the preview of one name, if any. Used when the file now under that name has no preview
+  // (encrypted, or it would not render): the old file's preview must not stay under the name.
+  remove(name: string): Promise<void>;
 }
 
 // The file name of a recent name: its sha256 in hex, with the .jpg extension.
@@ -74,6 +77,16 @@ export function createRecentThumbs(root: () => Promise<DirectoryLike> = privateR
         }
       }
       return found;
+    },
+
+    async remove(name) {
+      try {
+        const dir = await folder(false);
+        if (dir === null) return;
+        await dir.removeEntry(await thumbFileName(name));
+      } catch {
+        // No preview was kept under this name, or the browser refused the delete.
+      }
     },
 
     async prune(names) {
@@ -148,7 +161,9 @@ export function whenIdle(job: () => void): void {
 }
 
 // Makes and keeps the preview of a file just opened, then drops the previews of names that left
-// the recent list. An encrypted file gets none, and a failure only means no preview (issue 757).
+// the recent list. An encrypted file gets none, and a render failure gets none. The file name is
+// the sha256 of the recent name, so the old file's preview would otherwise stay under this name:
+// both cases remove it first (issue 757). Other failures only mean no preview this time.
 export async function keepRecentThumb(
   store: RecentThumbs,
   client: EngineClient,
@@ -156,14 +171,21 @@ export async function keepRecentThumb(
   name: string,
   encrypted: boolean,
 ): Promise<void> {
-  if (encrypted) return;
+  if (encrypted) {
+    await store.remove(name);
+    return;
+  }
   try {
     const jpeg = await renderRecentThumb(client, handle);
-    if (jpeg === undefined) return;
+    if (jpeg === undefined) {
+      await store.remove(name);
+      return;
+    }
     if (await store.save(name, jpeg, encrypted)) {
       await store.prune(readRecentFiles().map((entry) => entry.name));
     }
   } catch {
-    // No preview for this file this time.
+    // The render failed: no preview for this file, and no old one left under its name.
+    await store.remove(name);
   }
 }
