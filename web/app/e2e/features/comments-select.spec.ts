@@ -67,13 +67,15 @@ async function addRectangle(page: Page): Promise<void> {
     'true',
   );
   // The page's list is read again after the add. A press before that read finds no comment and
-  // clears the selection (CommentSelectLayer), so the test waits until the list shows the box.
+  // clears the selection (CommentSelectLayer), so the test waits until the list shows the box. The
+  // read is an engine round trip after the add, and on a cold CI runner it took longer than the
+  // default 5 s (web-e2e 45808334530: first attempt failed, retry passed), so this wait is longer.
   await expect(
     page.getByRole('group', { name: 'Comments on page 1' }).getByRole('button', {
       name: 'Rectangle',
       exact: true,
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 test.describe('engine staged', () => {
