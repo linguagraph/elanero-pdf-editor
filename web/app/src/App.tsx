@@ -679,14 +679,14 @@ export function App({
     const view = viewRef.current;
     if (view !== null) runViewCommand(id, view);
   }, []);
-  // A crop (or its Undo) changes the page sizes and the visible space: the search marks name the
-  // old positions, and the view and thumbnails mount again to read the new sizes.
   // Page labels change how pages are numbered in the navigator and thumbnails, so the view is
   // remounted as a crop does (the labels are structure, not content).
   const onLabelsSet = (changed: ChangedDto | null) => {
     setStructureRevision((value) => value + 1);
     scheduler?.noteRevisions(changed?.revisions ?? {});
   };
+  // A crop (or its Undo) changes the page sizes and the visible space: the search marks name the
+  // old positions, and the view and thumbnails mount again to read the new sizes.
   const onCropped = (changed: ChangedDto | null) => {
     setSearchMarks(null);
     setStructureRevision((value) => value + 1);

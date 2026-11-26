@@ -71,8 +71,11 @@ async function settle(): Promise<void> {
   });
 }
 
+// The inputs of one column, named "Range N: <column>" (see rowLabel in the dialog).
 function column(label: string): HTMLInputElement[] {
-  return [...document.querySelectorAll<HTMLInputElement>(`input[aria-label="${label}"]`)];
+  return [...document.querySelectorAll<HTMLInputElement>('input')].filter((input) =>
+    input.getAttribute('aria-label')?.endsWith(`: ${label}`),
+  );
 }
 
 function typeText(input: HTMLInputElement, text: string): void {
@@ -89,6 +92,11 @@ function button(text: string): HTMLButtonElement {
   );
   if (found === undefined) throw new Error(`no ${text} button`);
   return found;
+}
+
+// The calls that ran a command (actions.run), in order.
+function actionRuns(call: { mock: { calls: unknown[][] } }): unknown[][] {
+  return call.mock.calls.filter(([method]) => method === 'actions.run');
 }
 
 function alertText(): string | null {
@@ -134,8 +142,19 @@ describe('PageLabelsDialog', () => {
         ],
       },
     });
+    // One save is one engine command, so one undo step: a save split into several runs fails here.
+    expect(actionRuns(call)).toHaveLength(1);
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('names each row by its number, so a row is found by its label', async () => {
+    const { rpc } = fakeRpc();
+    render(rpc);
+    await settle();
+    expect(
+      column(t('labels.column.from')).map((input) => input.getAttribute('aria-label')),
+    ).toEqual(['Range 1: From page', 'Range 2: From page']);
   });
 
   it('shows the engine refusal inside the dialog, which stays open', async () => {
@@ -160,8 +179,8 @@ describe('PageLabelsDialog', () => {
       button(t('labels.ok')).click();
     });
     await settle();
-    expect(alertText()).toBe(t('labels.problem.fromPage', { count: 8 }));
-    expect(call).not.toHaveBeenCalledWith('actions.run', expect.anything());
+    expect(alertText()).toBe(t('labels.problem.fromPage', { row: 2, count: 8 }));
+    expect(actionRuns(call)).toHaveLength(0);
     expect(onClose).not.toHaveBeenCalled();
   });
 

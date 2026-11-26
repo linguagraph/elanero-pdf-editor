@@ -4,7 +4,7 @@
   gap: var(--space-3);
 }
 
-.labels-description {
+.labels-form p {
   margin: 0;
 }
 
@@ -13,14 +13,14 @@
   border-collapse: collapse;
 }
 
-.labels-table th {
-  text-align: start;
-  font-weight: 600;
+.labels-table th,
+.labels-table td {
   padding: var(--space-1);
 }
 
-.labels-table td {
-  padding: var(--space-1);
+.labels-table th {
+  text-align: start;
+  font-weight: 600;
 }
 
 .labels-table input,
@@ -31,7 +31,6 @@
   box-sizing: border-box;
 }
 
-.labels-row-actions,
 .labels-actions {
   display: flex;
   justify-content: flex-end;
@@ -39,6 +38,5 @@
 }
 
 .labels-error {
-  margin: 0;
   color: var(--color-danger);
 }

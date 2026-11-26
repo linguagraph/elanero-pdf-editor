@@ -1,6 +1,6 @@
-// The Page labels dialog (Organize, slice 1): one row per label range (from page, style, prefix,
-// start at). It loads the document's rules on open, checks the rows (labelRules.ts) and runs
-// `pages.set_labels`. A refusal shows inside the dialog, which stays open so the rows can be fixed.
+// The Page labels dialog (Organize, slice 1): one row per label range. It loads the document's rules
+// on open, checks the rows (labelRules.ts) and runs `pages.set_labels`; a refusal shows inside the
+// dialog, which stays open so the rows can be fixed.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { PageRpc } from '../engine/engineConnection';
 import type { MessageId } from '../i18n/en';
@@ -100,10 +100,11 @@ function LabelsForm({ onClose, rpc, handle, pageCount, onChanged }: PageLabelsDi
     if (running || rows === null) return;
     const checked = checkLabelRows(rows, pageCount);
     if (!checked.ok) {
+      const row = checked.row + 1;
       setError(
         checked.problem === 'fromPage'
-          ? t('labels.problem.fromPage', { count: pageCount })
-          : t('labels.problem.startAt'),
+          ? t('labels.problem.fromPage', { row, count: pageCount })
+          : t('labels.problem.startAt', { row }),
       );
       return;
     }
@@ -125,7 +126,17 @@ function LabelsForm({ onClose, rpc, handle, pageCount, onChanged }: PageLabelsDi
       );
   };
 
-  // A text field of a row: the row becomes the selected one when the field takes focus.
+  // Each control is named with its row number, so a screen reader says which range it is in.
+  const rowLabel = (index: number, label: MessageId) =>
+    t('labels.rowLabel', { row: index + 1, field: t(label) });
+
+  // The one place a dialog error is shown (a failed load, or a refused save or check).
+  const errorNote = (text: string) => (
+    <p role="alert" className="labels-error">
+      {text}
+    </p>
+  );
+
   const field = (
     index: number,
     label: MessageId,
@@ -137,9 +148,8 @@ function LabelsForm({ onClose, rpc, handle, pageCount, onChanged }: PageLabelsDi
         type="text"
         autoComplete="off"
         inputMode={key === 'prefix' ? undefined : 'numeric'}
-        aria-label={t(label)}
+        aria-label={rowLabel(index, label)}
         value={value}
-        onFocus={() => setSelected(index)}
         onChange={(event) => edit(index, { [key]: event.target.value })}
       />
     </td>
@@ -148,11 +158,7 @@ function LabelsForm({ onClose, rpc, handle, pageCount, onChanged }: PageLabelsDi
   return (
     <form className="labels-form" onSubmit={submit} noValidate>
       <p className="labels-description">{t('labels.description')}</p>
-      {loadFailed ? (
-        <p role="alert" className="labels-error">
-          {t('labels.loadFailed')}
-        </p>
-      ) : null}
+      {loadFailed ? errorNote(t('labels.loadFailed')) : null}
       {rows !== null ? (
         <table className="labels-table">
           <thead>
@@ -165,13 +171,13 @@ function LabelsForm({ onClose, rpc, handle, pageCount, onChanged }: PageLabelsDi
           </thead>
           <tbody>
             {rows.map((row, index) => (
-              <tr key={index}>
+              // Focus anywhere in a row selects it: focus events bubble to the row.
+              <tr key={index} onFocus={() => setSelected(index)}>
                 {field(index, 'labels.column.from', row.from, 'from')}
                 <td>
                   <select
-                    aria-label={t('labels.column.style')}
+                    aria-label={rowLabel(index, 'labels.column.style')}
                     value={row.style}
-                    onFocus={() => setSelected(index)}
                     onChange={(event) =>
                       edit(index, { style: event.target.value as LabelStyleCode })
                     }
@@ -202,11 +208,7 @@ function LabelsForm({ onClose, rpc, handle, pageCount, onChanged }: PageLabelsDi
           {t('labels.remove')}
         </button>
       </div>
-      {error !== null ? (
-        <p role="alert" className="labels-error">
-          {error}
-        </p>
-      ) : null}
+      {error !== null ? errorNote(error) : null}
       <div className="labels-actions">
         <button type="submit" disabled={running || rows === null}>
           {t('labels.ok')}

@@ -796,8 +796,9 @@ export const EN = {
   'labels.remove': 'Remove',
   'labels.ok': 'OK',
   'labels.cancel': 'Cancel',
-  'labels.problem.fromPage': 'From page must be a page number from 1 to {count}.',
-  'labels.problem.startAt': 'Start at must be 1 or more.',
+  'labels.rowLabel': 'Range {row}: {field}',
+  'labels.problem.fromPage': 'Range {row}: From page must be a page number from 1 to {count}.',
+  'labels.problem.startAt': 'Range {row}: Start at must be 1 or more.',
   'labels.loadFailed': 'The page labels could not be read. Try again.',
   'labels.failed': 'The page labels could not be saved. Try again.',
 
