@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineClient } from '../engine/engineConnection';
-import { addRecentFile } from './recentFiles';
+import { addRecentFile, readRecentFiles } from './recentFiles';
 import { type DirectoryLike } from '../storage/opfs';
 import { MemoryDir } from '../storage/testRoot';
 import {
@@ -168,6 +168,27 @@ describe('renderRecentThumb', () => {
     );
   });
 
+  it('draws a bitmap reply (the worker drew the page) and closes the bitmap after drawing', async () => {
+    setRatio(1);
+    const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+    const client = scriptedClient((method) =>
+      method === 'session.pages'
+        ? { pages: [{ width: 612, height: 792, rotation: 0 }] }
+        : {
+            width: 10,
+            height: 10,
+            revision: 0,
+            format: 'bitmap',
+            pixels: new ArrayBuffer(0),
+            bitmap,
+          },
+    );
+    const blob = await renderRecentThumb(client, 'doc-1');
+    expect(blob?.type).toBe('image/jpeg');
+    expect(jpegSizes).toEqual([[10, 10]]);
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+  });
+
   it('gives no preview when the document has no page', async () => {
     const client = scriptedClient((method) =>
       method === 'session.pages' ? { pages: [] } : renderReply(1, 1)(method),
@@ -205,7 +226,7 @@ describe('keepRecentThumb', () => {
     const root = new MemoryDir();
     const store = await storeWithOldPreview(root);
     const client = scriptedClient(renderReply(111, 144));
-    await keepRecentThumb(store, client, 'doc-1', 'a.pdf', true);
+    await keepRecentThumb(store, client, 'doc-1', 'a.pdf', true, []);
     expect((await store.load(['a.pdf'])).size).toBe(0);
     expect(client.call).not.toHaveBeenCalled();
   });
@@ -214,7 +235,9 @@ describe('keepRecentThumb', () => {
     const root = new MemoryDir();
     const store = await storeWithOldPreview(root);
     const client = scriptedClient(renderReply(0, 0));
-    await expect(keepRecentThumb(store, client, 'doc-1', 'a.pdf', false)).resolves.toBeUndefined();
+    await expect(
+      keepRecentThumb(store, client, 'doc-1', 'a.pdf', false, []),
+    ).resolves.toBeUndefined();
     expect((await store.load(['a.pdf'])).size).toBe(0);
   });
 
@@ -225,7 +248,9 @@ describe('keepRecentThumb', () => {
       if (method === 'session.pages') throw new Error('engine gone');
       return renderReply(1, 1)(method);
     });
-    await expect(keepRecentThumb(store, client, 'doc-1', 'a.pdf', false)).resolves.toBeUndefined();
+    await expect(
+      keepRecentThumb(store, client, 'doc-1', 'a.pdf', false, []),
+    ).resolves.toBeUndefined();
     expect((await store.load(['a.pdf'])).size).toBe(0);
   });
 
@@ -247,9 +272,89 @@ describe('keepRecentThumb', () => {
     });
     // The name is on the recent list, as it is when the file opens: the prune keeps its preview.
     window.localStorage.clear();
-    addRecentFile('a.pdf');
-    await keepRecentThumb(store, client, 'doc-1', 'a.pdf', false);
+    const listed = addRecentFile('a.pdf');
+    await keepRecentThumb(store, client, 'doc-1', 'a.pdf', false, listed);
     expect(await (await store.load(['a.pdf'])).get('a.pdf')?.text()).toBe('NEW');
     vi.restoreAllMocks();
+  });
+
+  describe('with the render mocked to a canvas that encodes the given text', () => {
+    beforeEach(() => {
+      window.localStorage.clear();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function mockCanvas(text: string): void {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        createImageData: (width: number, height: number) => ({
+          data: new Uint8ClampedArray(width * height * 4),
+        }),
+        putImageData: vi.fn(),
+        drawImage: vi.fn(),
+        fillRect: vi.fn(),
+        fillStyle: '',
+      } as unknown as CanvasRenderingContext2D);
+      vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => {
+        callback(new Blob([text], { type: 'image/jpeg' }));
+      });
+    }
+
+    it('saves the preview of a bitmap render under the name, and closes the bitmap', async () => {
+      const root = new MemoryDir();
+      const store = await storeWithOldPreview(root);
+      const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+      const client = scriptedClient((method) =>
+        method === 'session.pages'
+          ? { pages: [{ width: 612, height: 792, rotation: 0 }] }
+          : {
+              width: 10,
+              height: 10,
+              revision: 0,
+              format: 'bitmap',
+              pixels: new ArrayBuffer(0),
+              bitmap,
+            },
+      );
+      mockCanvas('NEW');
+      const listed = addRecentFile('a.pdf');
+      await keepRecentThumb(store, client, 'doc-1', 'a.pdf', false, listed);
+      expect(await (await store.load(['a.pdf'])).get('a.pdf')?.text()).toBe('NEW');
+      expect(bitmap.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('saves under the cleaned name, the one the list and load use', async () => {
+      const root = new MemoryDir();
+      const store = createRecentThumbs(async () => root);
+      const client = scriptedClient(renderReply(111, 144));
+      mockCanvas('CLEAN');
+      await keepRecentThumb(store, client, 'doc-1', 'a.pdf   ', false, [
+        { name: 'a.pdf', openedAt: 1 },
+      ]);
+      expect(await (await store.load(['a.pdf'])).get('a.pdf')?.text()).toBe('CLEAN');
+      expect((await store.load(['a.pdf   '])).size).toBe(0);
+    });
+
+    it('prunes with the list just written, so the new preview stays when the write fails', async () => {
+      addRecentFile('b.pdf', 1);
+      const root = new MemoryDir();
+      const store = createRecentThumbs(async () => root);
+      await store.save('b.pdf', new Blob(['B']), false);
+      await store.save('stale.pdf', new Blob(['S']), false);
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      const listed = addRecentFile('a.pdf', 2);
+      // The write failed: the stored list is still the old one, without a.pdf.
+      expect(readRecentFiles().map((entry) => entry.name)).toEqual(['b.pdf']);
+      mockCanvas('NEW');
+      const client = scriptedClient(renderReply(111, 144));
+      await keepRecentThumb(store, client, 'doc-1', 'a.pdf', false, listed);
+      const loaded = await store.load(['a.pdf', 'b.pdf', 'stale.pdf']);
+      expect([...loaded.keys()]).toEqual(['a.pdf', 'b.pdf']);
+      expect(await loaded.get('a.pdf')?.text()).toBe('NEW');
+    });
   });
 });
