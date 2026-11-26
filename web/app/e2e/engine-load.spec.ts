@@ -47,10 +47,11 @@ test('the engine loads, reports the stages in order, and answers hello', async (
   expect(report.hello).toEqual({ protocol: 1, engine: expect.any(String), platform: 'web' });
   expect(violations, 'CSP or page errors').toEqual([]);
 
-  // Control for the job worker test: the engine worker keeps fetch.
+  // Control for the job worker test: the engine worker loses fetch after boot (W8.6 F1,
+  // engine.worker.ts beforeEngine lockDownGlobals), so the control is the post-boot state.
   const engineWorker = workers.find((worker) => worker.url().startsWith('blob:'));
   expect(engineWorker, 'the engine worker was seen by Playwright').toBeDefined();
-  expect(await engineWorker!.evaluate(() => typeof fetch)).toBe('function');
+  expect(await engineWorker!.evaluate(() => typeof fetch)).toBe('undefined');
 });
 
 test('the job worker loads, answers hello, and has the network globals removed', async ({
