@@ -50,6 +50,7 @@ import { BackgroundDialog } from './marks/BackgroundDialog';
 import { HeaderFooterDialog } from './marks/HeaderFooterDialog';
 import { WatermarkDialog } from './marks/WatermarkDialog';
 import { CropDialog } from './crop/CropDialog';
+import { PageLabelsDialog } from './labels/PageLabelsDialog';
 import { useCropSession } from './crop/useCropSession';
 import type { ChangedDto, HistoryResult, TranslateParams } from './rpc/generated';
 import { type HistoryDirection, historyRefresh, runHistoryStep } from './history/runHistory';
@@ -232,6 +233,7 @@ export function App({
   const [extractFontsOpen, setExtractFontsOpen] = useState(false);
   const [compressOpen, setCompressOpen] = useState(false);
   const [spaceUsageOpen, setSpaceUsageOpen] = useState(false);
+  const [pageLabelsOpen, setPageLabelsOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -677,6 +679,12 @@ export function App({
     const view = viewRef.current;
     if (view !== null) runViewCommand(id, view);
   }, []);
+  // Page labels change how pages are numbered in the navigator and thumbnails, so the view is
+  // remounted as a crop does (the labels are structure, not content).
+  const onLabelsSet = (changed: ChangedDto | null) => {
+    setStructureRevision((value) => value + 1);
+    scheduler?.noteRevisions(changed?.revisions ?? {});
+  };
   // A crop (or its Undo) changes the page sizes and the visible space: the search marks name the
   // old positions, and the view and thumbnails mount again to read the new sizes.
   const onCropped = (changed: ChangedDto | null) => {
@@ -883,6 +891,8 @@ export function App({
           redo: () => runHistory('redo'),
           // Crop (W4.11) opens the crop dialog for the open document.
           'crop-pages': () => crop.openDialog(),
+          // Page labels (Organize, slice 1) opens the labels dialog for the open document.
+          'page-labels': () => setPageLabelsOpen(true),
           // Background (W7.3) opens the marks dialog; the other marks follow in their slices.
           'add-background': () => setBackgroundOpen(true),
           'add-header-footer': () => setHeaderFooterMode('headerFooter'),
@@ -1365,6 +1375,16 @@ export function App({
           handle={session.handle}
           pageCount={activeTab.pages}
           currentPage={viewState.page}
+        />
+      ) : null}
+      {documentShown && session !== null && activeTab !== undefined ? (
+        <PageLabelsDialog
+          isOpen={pageLabelsOpen}
+          onClose={() => setPageLabelsOpen(false)}
+          rpc={session.rpc}
+          handle={session.handle}
+          pageCount={activeTab.pages}
+          onChanged={onLabelsSet}
         />
       ) : null}
       {documentShown && session !== null && activeTab !== undefined ? (
