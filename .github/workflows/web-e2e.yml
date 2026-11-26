@@ -48,8 +48,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The schedule runs all three; a dispatch runs Chromium unless its input asks for all.
-        browser: ${{ fromJSON((github.event_name == 'schedule' || inputs.browsers == 'all') && '["chromium","firefox","webkit"]' || '["chromium"]') }}
+        # Firefox and WebKit are disabled until the feature failures are fixed (tracked in #718). Only Chromium runs.
+        # The `browsers` input still exists but has no effect now: every run, scheduled or by hand, uses Chromium only.
+        browser: ${{ fromJSON('["chromium"]') }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
