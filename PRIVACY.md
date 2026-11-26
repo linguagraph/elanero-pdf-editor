@@ -39,6 +39,11 @@ site, and your documents are not uploaded to any server.
   - `elanero.layout.panelWidths`: the widths of the side panels.
 
   A notice you dismiss is remembered for the browser tab only, in `sessionStorage`.
+- **Previews of recent files** are kept on this device: a small picture of the first page of each
+  recent file, in the browser's private storage, in a folder named `recent-thumbs`. A preview is
+  document content, so it is never sent anywhere, and no preview is made for an encrypted file. The
+  previews of files that leave the recent list are removed, and **Clear all local data** removes
+  them all.
 - **Custom stamps you add** (the web Stamp menu) are kept in the browser's private storage, in a
   folder named `stamps`: each picture and a small record beside it. They stay until you remove
   them, and **Clear all local data** removes them. Nothing is sent anywhere.

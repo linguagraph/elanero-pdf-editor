@@ -13,6 +13,7 @@ import { deleteRecentHandleDatabase } from '../recent/recentHandles';
 import { createFontStore, FONTS_FOLDER } from './fontStore';
 import { createStampStore, STAMPS_FOLDER } from './stampStore';
 import { MemoryDir as TreeDir, memoryRoot } from './testRoot';
+import { RECENT_THUMBS_FOLDER } from '../recent/recentThumbs';
 
 // An in-memory Storage, enough for clearLocalData (length, key, removeItem).
 class MemoryStorage {
@@ -107,6 +108,20 @@ function populatedStorage(): MemoryStorage {
   memory.setItem('other.key', 'keep');
   return memory;
 }
+
+describe('clearLocalData: recent-file previews', () => {
+  it('removes the recent-thumbs folder with the other local data', async () => {
+    const root = populatedRoot();
+    root.dirs.set(RECENT_THUMBS_FOLDER, new MemoryDir());
+    const outcome = await clearLocalData({
+      storage: () => asStorage(new MemoryStorage()),
+      root: async () => root,
+    });
+    expect(outcome.complete).toBe(true);
+    expect(root.dirs.has(RECENT_THUMBS_FOLDER)).toBe(false);
+    expect(LOCAL_DATA_FOLDERS).toContain(RECENT_THUMBS_FOLDER);
+  });
+});
 
 describe('clearLocalData: localStorage', () => {
   it('removes every elanero.* key and keeps the other keys on the origin', async () => {
@@ -231,7 +246,7 @@ describe('clearLocalData: OPFS folders', () => {
   });
 
   it('lists exactly the folders it removes, and never autosave', () => {
-    expect([...LOCAL_DATA_FOLDERS]).toEqual(['fonts', 'stamps', 'secrets']);
+    expect([...LOCAL_DATA_FOLDERS]).toEqual(['fonts', 'stamps', 'recent-thumbs', 'secrets']);
     expect(LOCAL_DATA_FOLDERS).not.toContain('autosave');
   });
 

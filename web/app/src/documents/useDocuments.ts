@@ -29,6 +29,12 @@ import {
   saveRecentHandle,
   type StoredFileHandle,
 } from '../recent/recentHandles';
+import {
+  createRecentThumbs,
+  keepRecentThumb,
+  type RecentThumbs,
+  whenIdle,
+} from '../recent/recentThumbs';
 import { type AutosaveWarning, createAutosaver, watchPageShow } from '../storage/autosaver';
 import { createAutosaveStore } from '../storage/autosaveStore';
 import { browserTabId } from '../storage/tabId';
@@ -100,6 +106,9 @@ async function contentEditOf(client: EngineClient, handle: string): Promise<bool
 export interface Documents {
   readonly tabs: TabState;
   readonly recent: readonly RecentFile[];
+  // The first-page previews of the recent files, as object URLs by name (issue 757). Kept on this
+  // device only; a name without one shows the file icon.
+  readonly previews: ReadonlyMap<string, string>;
   // True when the start page is shown next to the tabs (Open Recent asks for it).
   readonly showStart: boolean;
   // The name of a recent file the user picked, so the start page can say which one to pick again.
@@ -144,7 +153,11 @@ function isFileHandle(value: unknown): value is StoredFileHandle {
   );
 }
 
-export function useDocuments(engine: EngineConnection, handleStore?: HandleStore): Documents {
+export function useDocuments(
+  engine: EngineConnection,
+  handleStore?: HandleStore,
+  previewStore?: RecentThumbs,
+): Documents {
   const [tabs, setTabs] = useState<TabState>(EMPTY_TABS);
   // The latest tab state, updated at once on every change. The open loop reads the id of the tab it
   // has just added from here, which a state updater cannot give it synchronously.
@@ -168,6 +181,34 @@ export function useDocuments(engine: EngineConnection, handleStore?: HandleStore
   // The saved handles by name, held in memory so a recent row's click needs no await before its
   // permission request (the request must come from the click's own gesture).
   const handlesRef = useRef(new Map<string, StoredFileHandle>());
+  // The first-page previews (issue 757). Their object URLs are freed when a newer set replaces them.
+  const [thumbs] = useState(() => previewStore ?? createRecentThumbs());
+  const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const previewUrlsRef = useRef(new Map<string, string>());
+  const loadPreviews = useCallback(
+    (names: readonly string[]) => {
+      void thumbs.load(names).then((blobs) => {
+        const next = new Map<string, string>();
+        for (const [name, blob] of blobs) next.set(name, URL.createObjectURL(blob));
+        for (const url of previewUrlsRef.current.values()) URL.revokeObjectURL(url);
+        previewUrlsRef.current = next;
+        setPreviews(next);
+      });
+    },
+    [thumbs],
+  );
+  // The start page shows with no tab open too (after the last tab closes), so the previews load
+  // whenever it is on screen and the list changes.
+  const startShown = showStart || tabs.tabs.length === 0;
+  useEffect(() => {
+    if (startShown) loadPreviews(recent.map((entry) => entry.name));
+  }, [startShown, recent, loadPreviews]);
+  useEffect(
+    () => () => {
+      for (const url of previewUrlsRef.current.values()) URL.revokeObjectURL(url);
+    },
+    [],
+  );
   const dirty = hasDirtyTab(tabs);
 
   // Loads the saved handles now and each time the start page shows. A handle saved in this visit
@@ -300,11 +341,17 @@ export function useDocuments(engine: EngineConnection, handleStore?: HandleStore
       );
       setTabSession(id, { rpc: client, handle });
       void memoryWarner.check(client, 'open');
-      setRecent(addRecentFile(file.name));
+      const next = addRecentFile(file.name);
+      setRecent(next);
+      void thumbs.prune(next.map((entry) => entry.name));
+      // The preview is drawn once the browser is idle, so the first page is not delayed.
+      whenIdle(() => {
+        void keepRecentThumb(thumbs, client, handle, file.name, encrypted);
+      });
       setShowStart(false);
       setPickHint(null);
     },
-    [commitTabs],
+    [commitTabs, thumbs],
   );
 
   // Opens the queue once the engine is ready. A dispose rejects the wait: the queue is then dropped
@@ -512,14 +559,17 @@ export function useDocuments(engine: EngineConnection, handleStore?: HandleStore
   const renameTab = useCallback(
     (id: number, name: string) => {
       commitTabs((state) => renameTabState(state, id, name));
-      setRecent(addRecentFile(name));
+      const next = addRecentFile(name);
+      setRecent(next);
+      void thumbs.prune(next.map((entry) => entry.name));
     },
-    [commitTabs],
+    [commitTabs, thumbs],
   );
 
   return {
     tabs,
     recent,
+    previews,
     showStart,
     pickHint,
     pending,

@@ -277,3 +277,23 @@ describe('StartPage layout (#626 S1)', () => {
     expect(card?.dataset.dragging).toBeUndefined();
   });
 });
+
+describe('StartPage recent previews', () => {
+  const recent = [{ name: 'a.pdf', openedAt: 1 }];
+
+  it('shows the first-page preview image in the recent row when one exists', () => {
+    renderPage({ recent, thumbs: new Map([['a.pdf', 'blob:preview-a']]) });
+    const image = host.querySelector<HTMLImageElement>('.start-recent-list img');
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute('src')).toBe('blob:preview-a');
+    expect(image?.getAttribute('alt')).toBe('');
+  });
+
+  it('shows the file icon in the same box when there is no preview', () => {
+    renderPage({ recent });
+    expect(host.querySelector('.start-recent-list img')).toBeNull();
+    const thumb = host.querySelector('.start-recent-list .start-recent-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb?.querySelector('svg')).not.toBeNull();
+  });
+});

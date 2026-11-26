@@ -582,8 +582,12 @@ describe('document tabs', () => {
     expect(
       host.querySelector(`[aria-label="${t('view.pageNumber', { page: 1, total: 3 })}"]`),
     ).not.toBeNull();
-    // The view and the Pages panel, which is open by default (W4.2a S1), each ask once.
-    expect(calls.filter((call) => call.method === 'session.pages')).toEqual([
+    // The view and the Pages panel, which is open by default (W4.2a S1), each ask once. The
+    // first-page preview of the recent file (issue 757) asks too, once the browser is idle, so it
+    // may or may not have run by now.
+    const pagesCalls = calls.filter((call) => call.method === 'session.pages');
+    expect(pagesCalls.length === 2 || pagesCalls.length === 3).toBe(true);
+    expect(pagesCalls.slice(0, 2)).toEqual([
       { method: 'session.pages', params: { handle: 'doc-1' } },
       { method: 'session.pages', params: { handle: 'doc-1' } },
     ]);

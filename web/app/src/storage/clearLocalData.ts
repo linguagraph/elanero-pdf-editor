@@ -2,6 +2,7 @@
 // and nothing else: this origin can hold other apps' data (GitHub Pages shares one origin for all of
 // a user's project sites), so only the keys and folders below are touched.
 
+import { RECENT_THUMBS_FOLDER } from '../recent/recentThumbs';
 import { deleteRecentHandleDatabase } from '../recent/recentHandles';
 import { FONTS_FOLDER } from './fontStore';
 import { privateRoot, StorageUnsupportedError, type DirectoryLike } from './opfs';
@@ -14,8 +15,14 @@ export const LOCAL_STORAGE_PREFIX = 'elanero.';
 // keeps its recovery copies there, and another tab's unsaved work must survive a clear. Clear all
 // is offered only when no document is open in this tab, so its own copies are not at risk either.
 // The fonts and stamps folders are the ones the font store (W6.9 slice 3) and the stamp library
-// (W7.3b) write, so Clear all removes what they keep.
-export const LOCAL_DATA_FOLDERS = [FONTS_FOLDER, STAMPS_FOLDER, 'secrets'] as const;
+// (W7.3b) write, so Clear all removes what they keep. The recent-thumbs folder holds the first-page
+// previews of the recent files (issue 757).
+export const LOCAL_DATA_FOLDERS = [
+  FONTS_FOLDER,
+  STAMPS_FOLDER,
+  RECENT_THUMBS_FOLDER,
+  'secrets',
+] as const;
 
 export interface ClearOutcome {
   readonly keysRemoved: number;
