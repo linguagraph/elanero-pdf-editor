@@ -20,7 +20,7 @@ WEB_PYTEST = ROOT / ".github" / "workflows" / "web-pytest.yml"
 E2E = ROOT / "web" / "app" / "e2e"
 JOB = "web-browser"
 
-# The specs that run on every pull request (the nine root-level app specs with no long document,
+# The specs that run on every pull request (the eleven root-level app specs with no long document,
 # visual golden or key probe). A new spec in e2e/ must be listed here or excluded below.
 PR_SPECS = (
     "app-start",
@@ -29,7 +29,9 @@ PR_SPECS = (
     "forced-colours",
     "layout",
     "open-during-load",
+    "open-recent",
     "pwa",
+    "recent-previews",
     "ribbon",
     "split-job",
 )
