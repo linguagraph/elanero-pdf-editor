@@ -20,6 +20,14 @@ const PROBE = `(async () => {
   try { await fetch(${JSON.stringify(FOREIGN)}); return 'resolved'; } catch { return 'rejected'; }
 })()`;
 
+// Firefox logs this warning when it compiles the engine's wasm (the Pyodide and PyMuPDF build still
+// uses the legacy wasm exception-handling 'try' opcode). It is a third-party build note, not app code
+// and not PDF script output. Only this exact text, only as a warning, and only in Firefox are
+// allowed; any other message, and any message in Chromium or WebKit, still fails the check.
+const FIREFOX_WASM_EH_NOTE =
+  `[JavaScript Warning: "The WebAssembly exception handling 'try' instruction is deprecated and ` +
+  `should no longer be used. Please recompile to use the 'try_table' instruction instead."]`;
+
 // Every request the context makes (pages, frames and workers share it).
 function recordRequests(context: BrowserContext): string[] {
   const urls: string[] = [];
@@ -104,7 +112,11 @@ test.describe('engine staged', () => {
     expect(problems, 'CSP or page errors').toEqual([]);
   });
 
-  test('a PDF with an OpenAction script runs no script on open', async ({ page, context }) => {
+  test('a PDF with an OpenAction script runs no script on open', async ({
+    page,
+    context,
+    browserName,
+  }) => {
     // sensitive.pdf and xref_gap.pdf carry /OpenAction JavaScript (make_fixtures.py). The engine
     // never hands that script to the browser, so opening them shows no dialog (alert, confirm,
     // prompt), opens no page and logs no error or warning. The rule is observable, not a mechanism.
@@ -122,7 +134,14 @@ test.describe('engine staged', () => {
     context.on('page', (created) => opened.push(created.url()));
     const logged: string[] = [];
     page.on('console', (message) => {
-      if (message.type() === 'error' || message.type() === 'warning') logged.push(message.text());
+      if (message.type() === 'error' || message.type() === 'warning') {
+        const text = message.text();
+        const knownFirefoxNote =
+          browserName === 'firefox' &&
+          message.type() === 'warning' &&
+          text === FIREFOX_WASM_EH_NOTE;
+        if (!knownFirefoxNote) logged.push(text);
+      }
     });
     const problems = watchPage(page);
     await openApp(page);
