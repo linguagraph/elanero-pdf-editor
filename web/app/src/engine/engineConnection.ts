@@ -14,6 +14,7 @@ import {
 } from '../rpc/client';
 import { CallError, EngineLoadError } from './errors';
 import { markLoadStage } from '../perf/marks';
+import { LOAD_TIMEOUT_MS } from './loadTimeout';
 import type { FailedStage, Stage } from './protocol';
 import { startEngine, type StartOptions, type WorkerClient } from './start';
 import type { MethodName, Methods } from '../rpc/generated';
@@ -21,10 +22,8 @@ import type { MethodName, Methods } from '../rpc/generated';
 // The calls the app makes on the engine. The real RPC client satisfies it; tests pass a fake.
 export type EngineClient = Pick<RpcClient, 'call' | 'chunked'>;
 
-// The first call waits for the whole load, so it gets no short deadline: a first visit can take
-// minutes on a slow network (docs/web/plan.md, decision 10). This only stops a worker that never
-// answers at all.
-export const LOAD_TIMEOUT_MS = 10 * 60 * 1000;
+// Re-exported for existing importers; the value lives in loadTimeout.ts (see there).
+export { LOAD_TIMEOUT_MS } from './loadTimeout';
 
 export interface EngineConnection {
   // The stage store the loading screen reads.

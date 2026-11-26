@@ -1,5 +1,6 @@
 // Test-only page script (W3.1): starts the engine and the job worker through the real start.ts,
 // and reports what the browser test needs. The Playwright test reads window.__harness.
+import { LOAD_TIMEOUT_MS } from '../../src/engine/loadTimeout';
 import { EngineLoadError } from '../../src/engine/errors';
 import { createJobWorkerPool, type JobWorkerPool } from '../../src/engine/jobPool';
 import { startEngine, startJobWorker, type WorkerClient } from '../../src/engine/start';
@@ -50,7 +51,7 @@ async function bootEngine(): Promise<BootReport> {
   });
   const seen = track(client);
   try {
-    const hello = await new RpcClient(client).call('hello', {});
+    const hello = await new RpcClient(client).call('hello', {}, { timeoutMs: LOAD_TIMEOUT_MS });
     return { stages: seen.stages, readyMs: seen.readyAt(), hello };
   } catch (error) {
     return { stages: seen.stages, readyMs: seen.readyAt(), error: describe(error) };
@@ -69,7 +70,7 @@ async function bootJob(): Promise<BootReport> {
   job = client;
   const seen = track(client);
   try {
-    const hello = await new RpcClient(client).call('hello', {});
+    const hello = await new RpcClient(client).call('hello', {}, { timeoutMs: LOAD_TIMEOUT_MS });
     return { stages: seen.stages, readyMs: seen.readyAt(), hello };
   } catch (error) {
     return { stages: seen.stages, readyMs: seen.readyAt(), error: describe(error) };

@@ -157,25 +157,25 @@ test('desktop width (1366 px): both rails at their edges, panels docked', async 
   expect((rightBox?.x ?? 0) + (rightBox?.width ?? 0)).toBeCloseTo(1366, 0);
 });
 
-test('desktop width: the left rail holds Pages, Bookmarks and Search, in that order', async ({
-  page,
-}) => {
-  // Quarantined from the PR-level web-browser job (ci.yml): it failed on the first Ubuntu CI run
-  // (run 45869411737) because the rail order did not match on that runner. It runs in the nightly
-  // web-e2e instead. Tracked in #770.
-  test.fixme(
-    true,
-    'quarantined from the PR-level web-browser job (ci.yml): it failed on the first Ubuntu CI run ' +
-      '(run 45869411737) because the left rail order did not match on that runner. It runs in the ' +
-      'nightly web-e2e instead. Tracked in #770.',
-  );
+// The left rail's panels, top to bottom (App.tsx renders them in this order).
+const LEFT_RAIL_PANELS = [
+  'pages',
+  'bookmarks',
+  'attachments',
+  'layers',
+  'redactions',
+  'search',
+  'comments',
+];
+
+test('desktop width: the left rail holds seven panels, in order', async ({ page }) => {
   await openAtWidth(page, 1366, 768);
   await showRails(page);
   const buttons = page.getByRole('toolbar', { name: 'Left panels' }).locator('button');
-  await expect(buttons).toHaveCount(3);
-  await expect(buttons.nth(0)).toHaveAttribute('data-panel', 'pages');
-  await expect(buttons.nth(1)).toHaveAttribute('data-panel', 'bookmarks');
-  await expect(buttons.nth(2)).toHaveAttribute('data-panel', 'search');
+  await expect(buttons).toHaveCount(LEFT_RAIL_PANELS.length);
+  for (const [index, panel] of LEFT_RAIL_PANELS.entries()) {
+    await expect(buttons.nth(index)).toHaveAttribute('data-panel', panel);
+  }
 });
 
 test('tablet width (800 px): left rail shown, no horizontal scroll', async ({ page }) => {
