@@ -15,6 +15,8 @@ import type { MessageId } from './i18n/en';
 import { TAB_LABELS } from './commands/registry';
 import { closePanel, openPanel } from './layout/sidePanels';
 import { toasts } from './feedback/toasts';
+import { addRecentFile } from './recent/recentFiles';
+import type { HandleStore, StoredFileHandle, StoredRecent } from './recent/recentHandles';
 
 // jsdom has no CSS.escape, and react-aria calls it when a tab takes focus.
 if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS?.escape !== 'function') {
@@ -1809,5 +1811,116 @@ describe('App: change events reach the render scheduler and the layers panel (W7
     });
 
     expect(layerListReads(scripted)).toBe(before);
+  });
+});
+
+// Open recent with a saved file handle (issue 756). The handle store is an in-memory fake; the
+// click is the same one a user makes on a recent row.
+describe('App Open recent from a saved handle', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    for (const id of [1, 2, 3]) setTabSession(id, null);
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  function savedHandle(name: string, permission: 'granted' | 'denied' | 'prompt' = 'granted') {
+    const requestPermission = vi.fn(async () => permission);
+    const getFile = vi.fn(async () => pdf(name));
+    const handle = { name, getFile, requestPermission } as unknown as StoredFileHandle;
+    return { handle, requestPermission, getFile };
+  }
+
+  function storeWith(handles: Record<string, StoredFileHandle>): HandleStore {
+    const rows = new Map<string, StoredRecent>(
+      Object.entries(handles).map(([name, handle]) => [name, { name, savedAt: 1, handle }]),
+    );
+    return {
+      put: async (entry) => {
+        rows.set(entry.name, entry);
+      },
+      get: async (name) => rows.get(name),
+      remove: async (name) => {
+        rows.delete(name);
+      },
+      all: async () => [...rows.values()],
+    };
+  }
+
+  // Renders the app on the start page with one recent file, and lets the handle load.
+  async function renderStartWith(recentHandles: HandleStore | undefined) {
+    addRecentFile('saved.pdf', 1000);
+    const scripted = drawingEngine();
+    const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+    act(() => {
+      root.render(
+        <App
+          engine={fakeEngine(scripted.client)}
+          jobs={jobs as unknown as JobWorkerPool}
+          recentHandles={recentHandles}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    const row = host.querySelector<HTMLButtonElement>('.start-recent-name');
+    if (row === null) throw new Error('no recent row');
+    return { row, scripted };
+  }
+
+  it('reopens a recent file from its saved handle with no picker', async () => {
+    const saved = savedHandle('saved.pdf');
+    const { row, scripted } = await renderStartWith(storeWith({ 'saved.pdf': saved.handle }));
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+    act(() => {
+      row.click();
+    });
+    await until(() => scripted.renders() > 0);
+    expect(saved.requestPermission).toHaveBeenCalledWith({ mode: 'read' });
+    expect(saved.getFile).toHaveBeenCalled();
+    expect(scripted.renders()).toBeGreaterThan(0);
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the picker with the hint when permission is refused', async () => {
+    const saved = savedHandle('saved.pdf', 'denied');
+    const { row, scripted } = await renderStartWith(storeWith({ 'saved.pdf': saved.handle }));
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+    act(() => {
+      row.click();
+    });
+    await until(() => click.mock.calls.length > 0);
+    expect(saved.getFile).not.toHaveBeenCalled();
+    expect(scripted.renders()).toBe(0);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.start-hint')?.textContent).toBe(
+      t('start.recent.pickAgain', { name: 'saved.pdf' }),
+    );
+  });
+
+  it('uses the picker with the hint when the recent file has no saved handle', async () => {
+    const { row } = await renderStartWith(storeWith({}));
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+    act(() => {
+      row.click();
+    });
+    await until(() => click.mock.calls.length > 0);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.start-hint')).not.toBeNull();
   });
 });

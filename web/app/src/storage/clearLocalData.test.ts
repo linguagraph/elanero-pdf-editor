@@ -9,6 +9,7 @@ import {
 } from './clearLocalData';
 import type { BlobLike, DirectoryLike, FileLike, WritableLike } from './opfs';
 import { StorageUnsupportedError } from './opfs';
+import { deleteRecentHandleDatabase } from '../recent/recentHandles';
 import { createFontStore, FONTS_FOLDER } from './fontStore';
 import { createStampStore, STAMPS_FOLDER } from './stampStore';
 import { MemoryDir as TreeDir, memoryRoot } from './testRoot';
@@ -297,5 +298,34 @@ describe('clear and notify the other tabs', () => {
 
   it('clears without a font library, as the Preferences dialog does when none is open', async () => {
     await expect(clearDataAndNotify(async () => done, undefined)).resolves.toEqual(done);
+  });
+});
+
+describe('clearLocalData: recent file handles (issue 756)', () => {
+  it('deletes the elanero-recent database', async () => {
+    const deleteDatabase = vi.fn(() => {
+      const request: { onsuccess?: () => void } = {};
+      queueMicrotask(() => request.onsuccess?.());
+      return request;
+    });
+    const factory = { deleteDatabase } as unknown as IDBFactory;
+    const memory = new MemoryStorage();
+    const outcome = await clearLocalData({
+      storage: () => asStorage(memory),
+      root: async () => new TreeDir(),
+      recentHandles: () => deleteRecentHandleDatabase(factory),
+    });
+    expect(deleteDatabase).toHaveBeenCalledWith('elanero-recent');
+    expect(outcome.complete).toBe(true);
+  });
+
+  it('reports incomplete when the recent-handle database cannot be deleted', async () => {
+    const memory = new MemoryStorage();
+    const outcome = await clearLocalData({
+      storage: () => asStorage(memory),
+      root: async () => new TreeDir(),
+      recentHandles: async () => false,
+    });
+    expect(outcome.complete).toBe(false);
   });
 });

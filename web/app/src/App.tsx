@@ -109,6 +109,7 @@ import { pdfFileName } from './save/fileName';
 import { SaveAsDialog } from './save/SaveAsDialog';
 import { toasts } from './feedback/toasts';
 import { type LaunchInbox, installLaunchInbox } from './pwa/launch';
+import type { HandleStore } from './recent/recentHandles';
 import './app.css';
 
 // The organize ribbon's page commands open the organizer panel when it is closed (issue 736).
@@ -145,6 +146,9 @@ export interface AppProps {
   readonly jobs?: JobWorkerPool;
   // The OS launches of PDFs (W4.6 S1). Tests leave it out: nothing is delivered then.
   readonly launches?: LaunchInbox;
+  // The saved file handles behind Open recent (issue 756). Tests and browsers without IndexedDB
+  // leave it out: every recent row then opens the picker, as before.
+  readonly recentHandles?: HandleStore;
 }
 
 const NO_LAUNCHES = installLaunchInbox(undefined, {
@@ -158,6 +162,7 @@ export function App({
   startPrintWorker,
   jobs: jobsProp,
   launches = NO_LAUNCHES,
+  recentHandles,
 }: AppProps) {
   const ownPool = useMemo(
     () => createJobWorkerPool({ start: () => startJobWorker(jobWorkerBootOptions()) }),
@@ -255,7 +260,7 @@ export function App({
   // The tab Save As is asked about (W4.9): the dialog is open while it is set.
   const [saveAsTab, setSaveAsTab] = useState<DocumentTab | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
-  const docs = useDocuments(engine);
+  const docs = useDocuments(engine, recentHandles);
   // The crop dialog's session (W4.11 S5): the form kept across Draw on page and Esc, and the box
   // drawn on a page, if any. A change of tab clears it and leaves the crop box tool.
   // The tab, and the tool, whose Edit or shape tool waits for the signed-document warning (W6.7a
@@ -1455,8 +1460,9 @@ export function App({
             pending={docs.pending}
             onCancelPending={docs.cancelPending}
             onOpen={() => docs.openPicker()}
-            onRecent={(name) => docs.openPicker(name)}
+            onRecent={(name) => docs.openRecent(name)}
             onFiles={docs.openFiles}
+            onDroppedHandles={docs.rememberDropped}
             onAbout={() => setAboutOpen(true)}
           />
         ) : null}

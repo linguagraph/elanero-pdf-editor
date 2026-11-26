@@ -52,9 +52,11 @@ export function hasFileHandling(win: Window): boolean {
 }
 
 // Sets the queue's consumer once. Without a queue the inbox never delivers anything.
+// `remember` gets each launched file's handle, so Open recent can reopen it (issue 756).
 export function installLaunchInbox(
   queue: LaunchQueueLike | undefined,
   report: LaunchReport,
+  remember?: (handle: LaunchFileHandleLike) => void,
 ): LaunchInbox {
   let sink: Sink | null = null;
   // Launches that arrived before a sink was attached, in arrival order, as File references only.
@@ -82,6 +84,8 @@ export function installLaunchInbox(
     settled.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         files.push(result.value);
+        const handle = taken[index];
+        if (handle !== undefined) remember?.(handle);
       } else {
         report.failed(taken[index]?.name ?? '');
       }
