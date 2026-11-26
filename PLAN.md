@@ -629,7 +629,7 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 - [ ] **W8.3** Performance tests in CI _(partial: S1 budget table (#704), S2 first-load size check (#721), S3 browser perf harness (#731) merged; S4 nightly web-perf, S5 trend log and S6 PR trigger pending)_
 - [x] **W8.4** Fuzz and robustness tests
 - [ ] **W8.5** Accessibility checks _(partial: axe, contrast and keyboard checks done; pending: passing web-a11y run, document view axe, reduced motion, touch targets, NVDA and VoiceOver pass)_
-- [ ] **W8.6** Security review _(partial: all slices merged, S7b in #722; F14 is recorded as open in docs/web/security-review.md (main); the security review is not ticked until its open follow-ups are closed or recorded)_
+- [ ] **W8.6** Security review _(partial: all slices merged, S7b in #722; the npm ci guard (`--ignore-scripts` on every workflow `npm ci`, tests/unit/test_workflow_npm_ci.py) is in place (F3 second half, S7c); F14 is recorded as open in docs/web/security-review.md (main); the security review is not ticked until its open follow-ups are closed or recorded)_
 
 **W9 Build, release and docs, #142**
 

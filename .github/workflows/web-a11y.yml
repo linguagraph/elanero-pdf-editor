@@ -53,7 +53,7 @@ jobs:
 
       - name: Install the npm packages of the Pyodide pin (web/spike, for the staging)
         working-directory: web/spike
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # Same key as web-e2e.yml and web-pytest.yml, so this restores the wheel they saved.
       - name: Restore the PyMuPDF wheel from the cache
