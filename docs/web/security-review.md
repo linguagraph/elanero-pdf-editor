@@ -116,7 +116,7 @@ listed separately; they get no new finding ID.
 |---|---|---|---|
 | F1 | Medium | **Fixed** by #438 (engine worker network locked after boot). The second half, dropping the translation origins from `connect-src`, closed with W6.6: `connect-src` now lists only MyMemory | `web/app/src/engine/engine.worker.ts`, `networkLock.ts`, `csp.ts:3` |
 | F2 | Low | **Fixed** by #475 (ESLint bans on DOM sinks; built-output inline check) | `web/app/eslint.config.js`, `build.test.ts` |
-| F3 | Medium | **Open** (second half). The first half is done by #437 (Dependabot, nightly `npm audit` and `pip-audit`). `npm ci --ignore-scripts` is used only in `security-audit.yml:30`; the other `npm ci` lines in `.github/workflows/` still run install scripts. Slice S7b, or defer to W9.1 | `.github/workflows/*.yml` |
+| F3 | Medium | **Fixed** (second half, W8.6 S7c, this PR). The first half is done by #437 (Dependabot, nightly `npm audit` and `pip-audit`). Every `npm ci` in `.github/workflows/` now passes `--ignore-scripts`; `web-a11y.yml:56` and `web-pytest.yml:215` were the two that did not. `tests/unit/test_workflow_npm_ci.py` fails any new plain `npm ci` or `npm install` line, unless the line above is `# install scripts needed: <reason>` | `.github/workflows/*.yml`, `tests/unit/test_workflow_npm_ci.py` |
 | F4 | Medium | **Fixed** by #439: the Playwright security spec checks the CSP inside the page, engine and job worker. It runs in `web-e2e` (nightly) only, not on PRs; the PR gate is W8.1 | `web/app/e2e/features/security.spec.ts` |
 | F5 | Low | **Closed by other work**: W5.3 shipped. `links.spec.ts` checks that `javascript:` and Launch links are refused | `links.spec.ts:172-196` |
 | F6 | Low | **Open**. `csp.test.ts` still pins the two copies to each other; no test asserts `object-src`, `base-uri`, `require-trusted-types-for` or the exact `connect-src` set. Slice S2b | `web/app/src/csp.test.ts` |
@@ -131,9 +131,9 @@ listed separately; they get no new finding ID.
 | F15 | Low | **Open**. No `sw.test.ts` case for an unlisted same-origin GET. Slice S9 | `web/app/src/pwa/sw.test.ts` |
 | F16 | Low | **Open**. The five WebKit `test.fixme` messages still say "needs an issue", although #420 tracks it. Slice S6b | `web/app/e2e/features/crop.spec.ts:38` and four others |
 
-**Totals on main:** critical 0 · high 0 · medium 3 · low 13. Fixed: F1, F2, F4. Closed by other
-work: F5, F12 (a). Open: F3, F6, F7, F8, F9, F10, F11, F12 (b), F13, F14, F15, F16 (12 items, of
-which F3 is partly done).
+**Totals on main:** critical 0 · high 0 · medium 3 · low 13. Fixed: F1, F2, F4, and F3 once this PR
+merges. Closed by other work: F5, F12 (a). Open: F6, F7, F8, F9, F10, F11, F12 (b), F13, F14, F15,
+F16 (11 items).
 
 **Fixed after the review (not findings in the original report):**
 

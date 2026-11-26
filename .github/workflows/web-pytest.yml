@@ -212,7 +212,7 @@ jobs:
       - name: Install the app's npm packages (W1)
         if: ${{ inputs.run_web != 'false' }}
         working-directory: web/app
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build the app (W1)
         if: ${{ inputs.run_web != 'false' }}
