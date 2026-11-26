@@ -17,11 +17,22 @@ const GAP = PAGE_GAP_PT * CSS_PX_PER_POINT; // at zoom 1
 
 // Only session.pages is answered; the renders and the text layers never are, so the queue does
 // not change what the tests read.
-function fakeRpc(pages: readonly PageSizePt[]): PageRpc {
+// `answerRenders` makes render.page resolve with a 1x1 image, for a test that needs the scheduler's
+// in-flight slots to free up (its two slots would otherwise stay held by the first renders).
+function fakeRpc(pages: readonly PageSizePt[], answerRenders = false): PageRpc {
   const rpc = {
     call: vi.fn((method: string) => {
       if (method === 'session.pages') {
         return Promise.resolve({ pages: pages.map((p) => ({ ...p, rotation: 0 })), labels: [] });
+      }
+      if (answerRenders && method === 'render.page') {
+        return Promise.resolve({
+          width: 1,
+          height: 1,
+          revision: 0,
+          format: 'rgba',
+          pixels: new ArrayBuffer(4),
+        });
       }
       return new Promise(() => undefined);
     }),
@@ -32,6 +43,7 @@ function fakeRpc(pages: readonly PageSizePt[]): PageRpc {
 let host: HTMLDivElement;
 let root: Root;
 let reported: DocumentViewState | undefined;
+let rpc: PageRpc;
 
 async function flush(): Promise<void> {
   await act(async () => {
@@ -56,13 +68,17 @@ const mountedPages = () =>
   [...host.querySelectorAll<HTMLElement>('.doc-page')].map((el) => Number(el.dataset.page));
 
 // Mounts the view and returns its ref (the handle changes on each render, so tests read ref.current).
-async function mount(pages: readonly PageSizePt[]): Promise<RefObject<DocumentViewHandle | null>> {
+async function mount(
+  pages: readonly PageSizePt[],
+  answerRenders = false,
+): Promise<RefObject<DocumentViewHandle | null>> {
   const ref = createRef<DocumentViewHandle>();
+  rpc = fakeRpc(pages, answerRenders);
   act(() => {
     root.render(
       <DocumentView
         ref={ref}
-        rpc={fakeRpc(pages)}
+        rpc={rpc}
         handle="doc-1"
         onViewChange={(state) => {
           reported = state;
@@ -190,6 +206,30 @@ describe('DocumentView single-page layout (W5.1a S3)', () => {
     await flush();
     expect(reported?.page).toBe(5);
     expect(mountedPages()).toEqual([4]);
+  });
+
+  it('renders the shown page, not page 0, after a step (#734)', async () => {
+    const view = await mount(
+      Array.from({ length: 5 }, () => PORTRAIT),
+      true,
+    );
+    act(() => {
+      view.current?.setLayout({ layout: 'single', firstAlone: false });
+    });
+    await flush();
+    act(() => {
+      view.current?.stepPage(1);
+    });
+    act(() => {
+      view.current?.stepPage(1);
+    });
+    await flush();
+    expect(mountedPages()).toEqual([2]);
+    const renderedPages = vi
+      .mocked(rpc.call)
+      .mock.calls.filter(([method]) => method === 'render.page')
+      .map(([, params]) => (params as { page: number }).page);
+    expect(renderedPages).toContain(2);
   });
 
   it('opens in the single page when that is the saved default', async () => {

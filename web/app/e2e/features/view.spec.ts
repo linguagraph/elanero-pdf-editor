@@ -99,4 +99,30 @@ test.describe('engine staged', () => {
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
+
+  test('single page: the page shown after steps renders, without scrolling the others (#734)', async ({
+    page,
+  }) => {
+    const problems = watchPage(page);
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+
+    // Switch to Single page from the palette, then step to page 4 (index 3) with Next Page. No
+    // scrolling, so the pages before it are never on screen.
+    const runCommand = async (query: string, id: string): Promise<void> => {
+      await page.getByRole('searchbox', { name: 'Search tools' }).fill(query);
+      await page.locator(`.palette-row[data-command="${id}"]`).click();
+    };
+    await runCommand('Single', 'single-page');
+    for (let step = 0; step < 3; step += 1) {
+      await runCommand('Next', 'next-page');
+    }
+
+    // Only the shown page is mounted, and its canvas is painted (not blank).
+    await expect(page.locator('.doc-page')).toHaveCount(1);
+    await expect(page.locator('[data-page="3"]')).toBeVisible();
+    await expect.poll(() => inkPixels(page, 3)).toBeGreaterThan(0);
+
+    expect(problems, 'CSP or page errors').toEqual([]);
+  });
 });
