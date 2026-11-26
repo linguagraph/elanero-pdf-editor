@@ -1,13 +1,13 @@
-"""The GitHub Pages deploy pins its actions by commit SHA (W8.6, F14).
+"""Every workflow pins its third-party actions by commit SHA (W8.6 F14, #752).
 
-``web-deploy.yml`` runs with ``pages: write`` and ``id-token: write``, so a retagged or hijacked
-action there could publish to the site. A tag can be moved; a commit SHA cannot. Each third-party
-``uses:`` line in that file must therefore name a full 40-character SHA, with the release version
-kept as a trailing comment for review: ``uses: actions/<name>@<sha> # v<version>``.
+Workflows run with write permissions (``pages: write``, ``id-token: write``, ``contents: write``,
+and the Microsoft Store publish), so a retagged or hijacked action could publish or alter a
+release. A tag can be moved; a commit SHA cannot. Each third-party ``uses:`` line in every file
+under ``.github/workflows`` must therefore name a full 40-character SHA, with the release version
+kept as a trailing comment for review: ``uses: owner/name@<sha> # v<version>``.
 
 Local ``./`` references are not third-party code and pass. The check is a text scan (no YAML parser
-needed), so it runs under Pyodide with the other workflow checks. Only ``web-deploy.yml`` is in
-scope; the other workflows are a follow-up.
+needed), so it runs under Pyodide with the other workflow checks. No line is exempt.
 """
 
 from __future__ import annotations
@@ -15,8 +15,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
-DEPLOY_WORKFLOW = ROOT / ".github" / "workflows" / "web-deploy.yml"
+WORKFLOWS_DIR = ROOT / ".github" / "workflows"
+WORKFLOWS = sorted(WORKFLOWS_DIR.glob("*.yml"))
 USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<value>\S*)(?P<rest>.*)$")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
 VERSION_COMMENT = re.compile(r"^\s*#\s*v\d+(?:\.\d+)*\S*\s*$")
@@ -38,10 +41,14 @@ def find_violations(name: str, text: str) -> list[str]:
     return found
 
 
-def test_deploy_workflow_actions_pinned_by_sha() -> None:
-    text = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
-    assert any(USES.match(line) for line in text.splitlines()), "no uses: lines found"
-    violations = find_violations("web-deploy.yml", text)
+def test_workflows_found() -> None:
+    assert WORKFLOWS, f"no workflow files in {WORKFLOWS_DIR}"
+
+
+@pytest.mark.parametrize("workflow", WORKFLOWS, ids=lambda path: path.name)
+def test_workflow_actions_pinned_by_sha(workflow: Path) -> None:
+    text = workflow.read_text(encoding="utf-8")
+    violations = find_violations(workflow.name, text)
     assert not violations, (
         "uses: lines not pinned by commit SHA (use 'uses: owner/name@<40 hex> # vX.Y.Z'):\n"
         + "\n".join(violations)

@@ -751,3 +751,15 @@ describe('the organize ribbon page commands', () => {
     }
   });
 });
+
+describe('the Space Usage command (issue 737)', () => {
+  it('needs a document, and runs its handler when there is one', () => {
+    expect(commandDisabledReasonOf('space-usage', state())).toBe('needsDocument');
+    expect(commandDisabledReasonOf('space-usage', state({ hasDocument: true }))).toBeNull();
+    const handler = vi.fn();
+    expect(
+      runCommand(REGISTRY, 'space-usage', state({ hasDocument: true }), { 'space-usage': handler }),
+    ).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});

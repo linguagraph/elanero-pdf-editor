@@ -58,8 +58,10 @@ and the space taken by each category, such as images, fonts, page content, comme
 tags, attachments and metadata. Use it to decide which **Reduce Size** settings will help most. It
 only reads the file; it changes nothing.
 
-On the web, the space by part is in the **Reduce File Size** result (see above) until this command is
-available there.
+On the web, **Tools ▸ Optimize ▸ Space Usage…** shows the total and a table of the parts, largest
+first, with each part's size and its share of the total. The sizes can add up to more than the file
+size, because the audit counts packed object streams twice. The dialog runs the audit when it opens;
+Cancel stops it.
 
 ## Compare two versions
 
