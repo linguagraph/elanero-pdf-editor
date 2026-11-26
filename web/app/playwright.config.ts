@@ -17,6 +17,14 @@ export default defineConfig({
   // feature round trips run on three browsers under playwright.features.config.ts (W8.1).
   testIgnore: ['keys.spec.ts', 'features/**', 'perf/**'],
   timeout: 5 * 60_000,
+  // Screenshot references (W8.2 S4, visual-ui.spec.ts) live with the desktop UI goldens, one folder
+  // per platform. They change only through a web-e2e dispatch with update_snapshots=true (D6): the
+  // spec fails on a missing reference and names that command, and updateSnapshots stays 'none' here.
+  snapshotPathTemplate: '../../tests/golden/web/linux/{arg}{ext}',
+  updateSnapshots: 'none',
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: 'disabled', caret: 'hide' },
+  },
   use: {
     baseURL: process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`,
   },

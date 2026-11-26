@@ -22,6 +22,13 @@ on:
         options:
           - chromium
           - all
+      # W8.2 S4 (docs/web/design/W8.2-visual-golden.md, D6): rewrites the web UI screenshot references in
+      # tests/golden/web/linux and uploads them as the web-ui-snapshots artifact. The nightly run never sets it.
+      update_snapshots:
+        description: "Rewrite the web UI screenshot references (W8.2 S4) and upload them"
+        type: boolean
+        required: false
+        default: false
 
 env:
   # Worker count for the feature suite (a repository variable, default 4).
@@ -162,6 +169,25 @@ jobs:
       - name: Compare the browser renders with the golden references (chromium only)
         if: ${{ always() && matrix.browser == 'chromium' && steps.visual.conclusion != 'skipped' }}
         run: python -m tests.golden.compare_dir web/app/test-results/visual --out web/app/test-results/visual-diff
+
+      # W8.2 S4 (design D6): the web UI screenshots, compared with tests/golden/web/linux. A dispatch with
+      # update_snapshots=true rewrites them instead (--update-snapshots=all); the nightly run only compares.
+      # It runs after the features even when they failed; a dispatch that updates also runs it then.
+      - name: Screenshot the web UI (chromium only)
+        id: visual-ui
+        if: ${{ always() && matrix.browser == 'chromium' && (steps.features.conclusion != 'skipped' || inputs.update_snapshots) }}
+        working-directory: web/app
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright test visual-ui.spec.ts --output=test-results/visual-ui-run ${{ inputs.update_snapshots && '--update-snapshots=all' || '' }}
+
+      - name: Upload the web UI snapshots (chromium only)
+        if: ${{ always() && matrix.browser == 'chromium' && steps.visual-ui.conclusion != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-ui-snapshots
+          if-no-files-found: warn
+          path: tests/golden/web/linux/
 
       # The host halves of the round trips (W1.7 section 4.2): pikepdf and pypdfium2 replay the bytes
       # each flow saved. Runs even when the browser run failed, since the manifest is written then too.
