@@ -9,8 +9,9 @@ import type { AuditRow } from './compressJob';
 import { formatSize } from './formatSize';
 
 // The labels of the parts, by the stable key (the desktop's names are not read). A new key in
-// SPACE_CATEGORY_KEYS fails the typecheck here until it has a label.
-const CATEGORY_LABELS: Readonly<Record<SpaceCategoryKey, MessageId>> = {
+// SPACE_CATEGORY_KEYS fails the typecheck here until it has a label. The space usage dialog reads
+// the same labels.
+export const CATEGORY_LABELS: Readonly<Record<SpaceCategoryKey, MessageId>> = {
   images: 'space.category.images',
   fonts: 'space.category.fonts',
   page_content: 'space.category.page_content',
