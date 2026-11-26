@@ -358,7 +358,7 @@ export function useDocuments(
       void thumbs.prune(next.map((entry) => entry.name));
       // The preview is drawn once the browser is idle, so the first page is not delayed.
       whenIdle(() => {
-        void keepRecentThumb(thumbs, client, handle, file.name, encrypted);
+        void keepRecentThumb(thumbs, client, handle, file.name, encrypted, next);
       });
       setShowStart(false);
       setPickHint(null);

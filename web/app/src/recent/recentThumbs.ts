@@ -4,7 +4,7 @@
 // can fail (no private storage, a full disk, a refused render), and a failure only means no preview:
 // the start page then shows the file icon.
 import type { EngineClient } from '../engine/engineConnection';
-import { readRecentFiles } from './recentFiles';
+import { cleanRecentName, type RecentFile } from './recentFiles';
 import { type DirectoryLike, privateRoot } from '../storage/opfs';
 import { drawPixels } from '../view/pixels';
 import { MAX_RENDER_SCALE_MILLI, quantizeScale } from '../view/zoom';
@@ -132,9 +132,23 @@ export async function renderRecentThumb(
     rotation: 0,
     annotations: true,
   });
-  if (image.width === 0 || image.height === 0 || image.pixels.byteLength === 0) return undefined;
+  // The worker may send the page as an ImageBitmap (W5.1b S5) with empty pixels: that is drawable
+  // too. The bitmap is ours to close, once it is drawn.
+  const bitmap = image.bitmap;
+  if (
+    image.width === 0 ||
+    image.height === 0 ||
+    (bitmap === undefined && image.pixels.byteLength === 0)
+  ) {
+    bitmap?.close();
+    return undefined;
+  }
   const source = document.createElement('canvas');
-  drawPixels(source, { width: image.width, height: image.height, pixels: image.pixels });
+  try {
+    drawPixels(source, { width: image.width, height: image.height, pixels: image.pixels, bitmap });
+  } finally {
+    bitmap?.close();
+  }
   // A JPEG has no alpha: the page is drawn over white, not over black.
   const canvas = document.createElement('canvas');
   canvas.width = image.width;
@@ -164,28 +178,33 @@ export function whenIdle(job: () => void): void {
 // the recent list. An encrypted file gets none, and a render failure gets none. The file name is
 // the sha256 of the recent name, so the old file's preview would otherwise stay under this name:
 // both cases remove it first (issue 757). Other failures only mean no preview this time.
+// The preview is keyed by the cleaned name, the one the list and load use. `listed` is the list
+// just written for this open: pruning with it keeps this preview even when the write failed.
 export async function keepRecentThumb(
   store: RecentThumbs,
   client: EngineClient,
   handle: string,
   name: string,
   encrypted: boolean,
+  listed: readonly RecentFile[],
 ): Promise<void> {
+  const key = cleanRecentName(name);
+  if (key === null) return;
   if (encrypted) {
-    await store.remove(name);
+    await store.remove(key);
     return;
   }
   try {
     const jpeg = await renderRecentThumb(client, handle);
     if (jpeg === undefined) {
-      await store.remove(name);
+      await store.remove(key);
       return;
     }
-    if (await store.save(name, jpeg, encrypted)) {
-      await store.prune(readRecentFiles().map((entry) => entry.name));
+    if (await store.save(key, jpeg, encrypted)) {
+      await store.prune(listed.map((entry) => entry.name));
     }
   } catch {
     // The render failed: no preview for this file, and no old one left under its name.
-    await store.remove(name);
+    await store.remove(key);
   }
 }
