@@ -585,6 +585,12 @@ export function App({
   // Whether the Edit tool has exactly one picture selected, as the view reports it (W6.7b slice 2b).
   const [editImageOne, setEditImageOne] = useState(false);
   const onEditImageChange = useCallback((single: boolean) => setEditImageOne(single), []);
+  // How many comments the Select tool has selected (the Delete comment command, issue 732).
+  const [commentSelectionCount, setCommentSelectionCount] = useState(0);
+  const onCommentSelectionChange = useCallback(
+    (count: number) => setCommentSelectionCount(count),
+    [],
+  );
   // A jump or a thumbnail click that moves the view by more than a page is recorded per tab; Back
   // and Forward move through it (W5.3).
   const history = useNavHistory(activeId);
@@ -634,6 +640,7 @@ export function App({
     contentEdit: documentShown && (activeTab?.contentEdit ?? false),
     // Exactly one picture selected in the Edit tool (W6.7b slice 2b): Replace and Export need it.
     singleImageSelected: documentShown && editImageOne,
+    commentsSelected: documentShown && commentSelectionCount > 0,
     canGoBack: canGoBack(history),
     canGoForward: canGoForward(history),
     view: documentShown
@@ -874,6 +881,8 @@ export function App({
           'extract-image': () => viewRef.current?.exportEditImage(documentStem),
           // Delete Objects (W6.7a S5) deletes the Edit tool's selection; with none, nothing happens.
           'delete-selected-objects': () => viewRef.current?.deleteEditSelection(),
+          // Delete comment (issue 732) deletes the comments the Select tool has selected; with none, nothing happens.
+          'delete-comment': () => viewRef.current?.deleteCommentSelection(),
           // Save As (W4.9) asks for a name, then writes a full copy under it.
           'save-as': () => {
             if (activeTab !== undefined) setSaveAsTab(activeTab);
@@ -1431,6 +1440,7 @@ export function App({
             stampLibrary={stampLibrary ?? undefined}
             onViewChange={onViewChange}
             onEditImageChange={onEditImageChange}
+            onCommentSelectionChange={onCommentSelectionChange}
             startWorker={jobs.acquire}
             tool={viewTool}
             tabId={activeId}

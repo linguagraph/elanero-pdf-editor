@@ -98,3 +98,71 @@ describe('a comment that is added', () => {
     expect(host.querySelectorAll('.comment-select-outline')).toHaveLength(1);
   });
 });
+
+describe('the Delete comment command (issue 732)', () => {
+  // Adds one comment, which the view then selects under the Select tool.
+  async function addComment(onCommentSelectionChange: (count: number) => void) {
+    const { rpc } = fakeRpc();
+    const viewRef = createRef<DocumentViewHandle>();
+    act(() =>
+      root.render(
+        <DocumentView
+          ref={viewRef}
+          rpc={rpc}
+          handle="h"
+          onCommentSelectionChange={onCommentSelectionChange}
+        />,
+      ),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    act(() => viewRef.current?.setCommentTool('rectangle'));
+    const layer = host.querySelector<HTMLElement>('.comment-layer');
+    if (layer === null) throw new Error('no comment layer');
+    await act(async () => {
+      layer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return { viewRef, rpc };
+  }
+
+  it('reports the number of comments the Select tool has selected', async () => {
+    const onCount = vi.fn();
+    await addComment(onCount);
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(1);
+  });
+
+  it('reports 0 when the view goes away', async () => {
+    const onCount = vi.fn();
+    await addComment(onCount);
+    act(() => root.unmount());
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(0);
+    // afterEach unmounts the root again, so give the host a fresh one.
+    root = createRoot(host);
+  });
+
+  it('reports 0 while a drawing tool is on, and the selection again when Select is back', async () => {
+    const onCount = vi.fn();
+    const { viewRef } = await addComment(onCount);
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(1);
+    act(() => viewRef.current?.setCommentTool('rectangle'));
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(0);
+    act(() => viewRef.current?.setCommentTool(null));
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(1);
+  });
+
+  it('deletes the selected comment through the handle', async () => {
+    const onCount = vi.fn();
+    const { viewRef, rpc } = await addComment(onCount);
+    await act(async () => {
+      viewRef.current?.deleteCommentSelection();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(rpc.call).toHaveBeenCalledWith(
+      'actions.run',
+      expect.objectContaining({ name: 'annotations.delete' }),
+    );
+    expect(onCount.mock.calls.at(-1)?.[0]).toBe(0);
+  });
+});
