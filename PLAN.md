@@ -610,14 +610,14 @@ The Python PDF stack (`model`, `engine`, `core`, `services`) runs in Pyodide ins
 
 **W7 Added features, #140**
 
-- [ ] **W7.1a** A4 Comment tools and `annotations.create` _(partial: sticky note, rectangle and highlight tools with Undo done; pending: remaining tools, selection, move and resize, note popup, keyboard use)_
-- [ ] **W7.1b** A4 Comments panel _(partial: on main: `comments.list` #389, controller and filters #401, read-only panel #409; reply and set status (#417) and edit and delete (#433) are in; pending: the Comments command and the Import and Export buttons, and the undo, redo and save refresh test)_
+- [x] **W7.1a** A4 Comment tools and `annotations.create`
+- [x] **W7.1b** A4 Comments panel
 - [x] **W7.2** A5 Comment summary export and XFDF import/export _(on main: comment summary PDF and XFDF DOCTYPE/ENTITY refusal (#276), `comments_export` read-only job (#282), 8 MiB XFDF bound and `comments.xfdf_preview` (#287), web Export Comments dialog (#289), web Import Comments dialog (#292))_
-- [ ] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds _(partial: `marks.list` (#273) and the web mark argument builders (#284) are done; pending: the marks dialogs)_
+- [x] **W7.3** A6 Stamps, watermarks, headers/footers, Bates, backgrounds
 - [x] **W7.4** A7 Redaction and sanitize _(redaction marks, apply and sanitize are done in the web app (#259); sanitize leak tests per category (#467) and the refusal on signed documents (#468); the Redactions panel is W7.4b, done)_
 - [x] **W7.4b** Redactions panel in the web app (as on the desktop): the list of redaction marks with their fill, overlay text and text colour; select, edit and delete a mark; go to its page. Marks made in the viewer appear in the list. _(done: redactions panel with list, properties and Apply; user guide updated)_
 - [x] **W7.5** A8 Password protection and permissions _(done: save fixes, security RPC, Encrypt and Remove Security dialogs)_
-- [ ] **W7.6** A9 Document properties and metadata editing _(partial: properties dialog with editable Info fields and Undo done; Description, Advanced (PDF version), Fonts and Security tabs built, with their Python and Vitest tests; the Playwright spec (`properties.spec.ts`, axe per tab, password check on the Security tab) is written but not yet run; pending: confirmation that properties.spec.ts has passed in a web-e2e run on main (not confirmed in this PLAN update))_
+- [x] **W7.6** A9 Document properties and metadata editing
 - [x] **W7.7** A10 Export pages as images and text _(done: export to text, Markdown, HTML, Word, images; real-app run not verified)_
 - [x] **W7.8** A11 Compare documents
 - [x] **W7.9** A12–A13 Flatten annotations; attachments and layers
