@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-BUDGETS = Path(__file__).resolve().parents[1] / "tests" / "perf" / "budgets.json"
+TREND_METRICS = ("D1", "D2", "D3", "D4", "D5", "W1", "W2", "W3", "W7", "W8")  # budget ids read
 WINDOW = 14  # earlier scheduled runs beside tonight's
 MIN_POINTS = 10  # fewer points: "collecting", no drift check
 DRIFT_NIGHTS, DRIFT_PCT, DRIFT_MS = 7, 10.0, 1.0  # 1 ms: the web's whole-ms rounding
@@ -91,7 +91,11 @@ def _point(
     problems: list[str],
 ) -> Point | None:
     number = value if isinstance(value, int | float) and not isinstance(value, bool) else None
-    if metric not in known or number is None or not math.isfinite(number):
+    try:
+        finite = number is not None and math.isfinite(number)
+    except OverflowError:  # an int too large for a float
+        finite = False
+    if metric not in known or number is None or not finite:
         problems.append(
             f"{series} run {run.id}: record {metric!r} skipped (unknown id or no number)"
         )
@@ -144,7 +148,13 @@ def web_points(
     attempts = sorted({attempt for attempt, _, _ in heads})
     complete = [a for a in attempts if sum(x == a for x, _, _ in heads) >= ROUNDS]
     chosen_attempt = (complete or attempts)[0]
-    chosen = sorted((rnd, data) for attempt, rnd, data in heads if attempt == chosen_attempt)
+    chosen = sorted(
+        ((rnd, data) for attempt, rnd, data in heads if attempt == chosen_attempt),
+        key=lambda item: item[0],  # two files of one round: the data dicts do not compare
+    )
+    rounds = [rnd for rnd, _ in chosen]
+    if len(rounds) != len(set(rounds)):
+        problems.append(f"web-chromium run {run.id}: attempt {chosen_attempt} repeats a round")
     first = chosen[0][1] if isinstance(chosen[0][1], dict) else {}
     meta = {"date": first.get("date"), "runner": first.get("runner"), "commit": first.get("commit")}
     pooled: dict[str, list[float]] = {}
@@ -369,11 +379,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--run-id", type=int, required=True, help="the scheduled run to report")
     args = parser.parse_args(argv)
-    known = tuple(row["id"] for row in json.loads(BUDGETS.read_text(encoding="utf-8"))["metrics"])
     try:
         with tempfile.TemporaryDirectory() as tmp:
             tonight, tonight_dir, history = fetch(args.run_id, Path(tmp))
-            report = build(tonight, tonight_dir, history, known)
+            report = build(tonight, tonight_dir, history, TREND_METRICS)
     except TrendError as exc:
         print(f"::error title=perf-trend::{exc}", file=sys.stderr)
         return 1

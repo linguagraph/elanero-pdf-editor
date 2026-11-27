@@ -34,9 +34,7 @@ def _load_script() -> ModuleType:
 
 
 pt = _load_script()
-KNOWN: tuple[str, ...] = tuple(
-    row["id"] for row in json.loads(BUDGETS.read_text("utf-8"))["metrics"]
-)
+KNOWN: tuple[str, ...] = pt.TREND_METRICS
 
 
 def _run(run_id: int, created: str = "2026-11-27T03:00:00Z", conclusion: str = "success") -> Any:
@@ -184,10 +182,40 @@ def test_drift_fires_at_ten_percent_and_one_ms_and_not_below(tmp_path: Path) -> 
     assert len(report.warnings) == 1 and "D1" in report.warnings[0]
 
 
+def test_drift_at_exactly_ten_percent_is_not_drift(tmp_path: Path) -> None:
+    assert "drift" not in _report([100.0] * 3 + [110.0] * 7, tmp_path / "ten").markdown
+
+
+def test_one_ms_edge_is_not_drift_but_just_over_is(tmp_path: Path) -> None:
+    assert "drift" not in _report([5.0] * 3 + [6.0] * 7, tmp_path / "edge").markdown  # 1.0 ms
+    assert "drift" in _report([5.0] * 3 + [6.01] * 7, tmp_path / "over").markdown  # 1.01 ms
+
+
 def test_drift_with_a_zero_median_uses_only_the_one_ms_rule(tmp_path: Path) -> None:
     report = _report([0.0] * 3 + [2.0] * 7, tmp_path)
     assert any("+2.0 ms" in w for w in report.warnings)
     assert "drift" not in _report([0.0] * 3 + [0.5] * 7, tmp_path / "small").markdown
+
+
+def test_huge_integer_value_is_skipped_not_a_crash(tmp_path: Path) -> None:
+    root = tmp_path / "run"
+    art = root / "perf-desktop-linux-1-1"
+    art.mkdir(parents=True)
+    records = [{"id": "D1", "samples": [1], "median": 10**400, "runner_image": "ubuntu24-1"}]
+    (art / "perf-results.json").write_text(json.dumps(records), encoding="utf-8")
+    problems: list[str] = []
+    found = pt.load_run_dir(_run(7), root, KNOWN, problems)
+    assert found["desktop-linux"] == {}  # the sample is skipped like a NaN
+    assert len(problems) == 1 and "D1" in problems[0]
+
+
+def test_two_files_sharing_an_attempt_and_round_warn_and_still_trend(tmp_path: Path) -> None:
+    art = tmp_path / "web-perf-results-7-1"  # two copies of attempt 1, round 1 in one artifact
+    for copy in ("a", "b"):
+        _web_round(art / copy, 1, 1, "head", {"W2": [3000.0]})
+    report = pt.build(_run(7), tmp_path, [], KNOWN)  # no TypeError from the sort
+    assert "| W2 | 3000.0 ms |" in report.markdown
+    assert any("web-chromium run 7" in w and "repeats a round" in w for w in report.warnings)
 
 
 def test_fewer_than_ten_points_is_collecting_and_never_warns(tmp_path: Path) -> None:
@@ -302,5 +330,5 @@ def test_main_exits_zero_on_drift_and_one_with_no_input(
 
 def test_every_metric_the_trend_reads_is_a_budget_row() -> None:
     ids = {row["id"] for row in json.loads(BUDGETS.read_text("utf-8"))["metrics"]}
-    assert {"D1", "D2", "D3", "D4", "D5", "W2", "W3", "W7", "W8"} <= ids
-    assert set(KNOWN) == ids
+    assert set(pt.TREND_METRICS) <= ids
+    assert {"D1", "D2", "D3", "D4", "D5", "W2", "W3", "W7", "W8"} <= set(pt.TREND_METRICS)
