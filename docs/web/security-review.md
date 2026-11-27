@@ -120,7 +120,7 @@ listed separately; they get no new finding ID.
 | F4 | Medium | **Fixed** by #439: the Playwright security spec checks the CSP inside the page, engine and job worker. It runs in `web-e2e` (nightly) only, not on PRs; the PR gate is W8.1 | `web/app/e2e/features/security.spec.ts` |
 | F5 | Low | **Closed by other work**: W5.3 shipped. `links.spec.ts` checks that `javascript:` and Launch links are refused | `links.spec.ts:172-196` |
 | F6 | Low | **Open**. `csp.test.ts` still pins the two copies to each other; no test asserts `object-src`, `base-uri`, `require-trusted-types-for` or the exact `connect-src` set. Slice S2b | `web/app/src/csp.test.ts` |
-| F7 | Low | **Open**. `csp.ts` still has no `trusted-types` directive. Slice S2b, after the three-browser check | `web/app/src/csp.ts:3` |
+| F7 | Low | **Fixed in the S2b PR** (`trusted-types elanero-worker-url elanero-sw-url` in `csp.ts` and `index.html`; dev policy adds `'allow-duplicates'`). Checked by `csp.test.ts` (list, and a source scan of `createPolicy` names) and `build.test.ts` (bundle scan). Browser specs were **not run** for this change: Chromium through `web-e2e` or by hand, Firefox and WebKit by hand (the PR body lists the gate). | `web/app/src/csp.ts:3`; `web/app/src/csp.test.ts`; `web/app/src/build.test.ts` |
 | F8 | Low | **Open**. `core/xmp.py` is unchanged: no DOCTYPE or ENTITY refusal, no size cap. Slice S8 | `src/pdfeditor/core/xmp.py` |
 | F9 | Low | **Fixed** (engine #749, browser #706 and #758). Engine: `tests/unit/test_webapi_pdf_javascript.py` opens `sensitive` and `xref_gap`, renders and copy-saves them with MuPDF's `pdf_js_supported` at 0 and the `/OpenAction` JavaScript kept. Browser: `web/app/e2e/features/security.spec.ts` (no dialog, console message or new page; the spec was not run in the PR that closed this) | `scripts/make_fixtures.py:574,583,792-794` |
 | F10 | Low | **Open**. `main.tsx:55` calls `shouldRefuse`, but no test frames the app. Slice S6b | `web/app/src/main.tsx` |
@@ -132,8 +132,8 @@ listed separately; they get no new finding ID.
 | F16 | Low | **Open**. The five WebKit `test.fixme` messages still say "needs an issue", although #420 tracks it. Slice S6b | `web/app/e2e/features/crop.spec.ts:38` and four others |
 
 **Totals on main:** critical 0 · high 0 · medium 3 · low 13. Fixed: F1, F2, F4, and F3 once this PR
-merges. Closed by other work: F5, F12 (a). Fixed in the F9 PRs (#749, #706, #758): F9. Open: F6,
-F7, F8, F10, F11, F12 (b), F13, F14, F15, F16 (10 items).
+merges. Closed by other work: F5, F12 (a). Fixed in the F9 PRs (#749, #706, #758): F9. Fixed in the S2b
+PR: F7 (browser specs pending, see §4.1). Open: F6, F8, F10, F11, F12 (b), F13, F14, F15, F16 (9 items).
 
 **Fixed after the review (not findings in the original report):**
 

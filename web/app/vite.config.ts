@@ -42,6 +42,10 @@ const DEV_SCRIPT_SRC = "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'";
 // Vite's dev server injects CSS through <style> elements, which style-src 'self' blocks, so the
 // dev policy also allows inline styles. The build's CSS is a stylesheet file and needs neither.
 const DEV_STYLE_SRC = "style-src 'self' 'unsafe-inline'";
+// HMR re-runs start.ts and register.ts, so their module-level policy is created a second time under
+// the same name. Chromium rejects that unless duplicates are allowed. Only the dev policy allows it.
+const TRUSTED_TYPES_SRC = 'trusted-types elanero-worker-url elanero-sw-url';
+const DEV_TRUSTED_TYPES_SRC = `${TRUSTED_TYPES_SRC} 'allow-duplicates'`;
 function devRelaxedCsp(): Plugin {
   return {
     name: 'elanero-dev-relaxed-csp',
@@ -51,10 +55,9 @@ function devRelaxedCsp(): Plugin {
       if (!html.includes(CSP_POLICY)) {
         throw new Error('index.html CSP meta does not match CSP_POLICY');
       }
-      const relaxed = CSP_POLICY.replace(strictScriptSrc, DEV_SCRIPT_SRC).replace(
-        "style-src 'self'",
-        DEV_STYLE_SRC,
-      );
+      const relaxed = CSP_POLICY.replace(strictScriptSrc, DEV_SCRIPT_SRC)
+        .replace("style-src 'self'", DEV_STYLE_SRC)
+        .replace(TRUSTED_TYPES_SRC, DEV_TRUSTED_TYPES_SRC);
       return html.replace(CSP_POLICY, relaxed);
     },
   };

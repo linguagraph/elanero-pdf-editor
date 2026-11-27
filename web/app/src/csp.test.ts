@@ -1,14 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { TRANSLATION_ORIGINS } from './engine/translationNet';
 import { CSP_POLICY, REFERRER_POLICY } from './csp';
 
-// F7 (trusted-types) is deferred, not shipped: the design (W8.6 S2b, owner question 2) adds
-// `trusted-types elanero-worker-url elanero-sw-url` only after the engine-load and security specs
-// pass on Chromium, Firefox and WebKit. Those specs were not run for this change, so the policy
-// keeps only `require-trusted-types-for 'script'` and no `trusted-types` allow-list.
+// The `trusted-types` allow-list names the two app policies (W8.6 S2b, security review F7). A
+// policy created under any other name throws at runtime, so the list and the code must agree.
+const APP_TRUSTED_TYPES = ['elanero-worker-url', 'elanero-sw-url'];
 
 const indexHtml = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), '..', 'index.html'),
@@ -66,6 +65,7 @@ describe('CSP_POLICY directives', () => {
     'object-src',
     'base-uri',
     'require-trusted-types-for',
+    'trusted-types',
   ])('has the %s directive', (name) => {
     expect(directives.has(name)).toBe(true);
   });
@@ -116,6 +116,30 @@ describe('CSP_POLICY directives', () => {
   it('keeps connect-src in step with the engine translation origins', () => {
     const connect = (directives.get('connect-src') ?? []).filter((source) => source !== "'self'");
     expect(connect).toEqual([...TRANSLATION_ORIGINS]);
+  });
+
+  it('allows only the two app Trusted Types policies, with no default or duplicates', () => {
+    const allowed = directives.get('trusted-types') ?? [];
+    expect(new Set(allowed)).toEqual(new Set(APP_TRUSTED_TYPES));
+    expect(allowed).toHaveLength(APP_TRUSTED_TYPES.length);
+    for (const forbidden of ["'none'", "'allow-duplicates'", '*', 'default']) {
+      expect(allowed).not.toContain(forbidden);
+    }
+  });
+
+  it('lists every createPolicy name used in app source, and no other', () => {
+    const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)));
+    const names = new Set<string>();
+    for (const file of readdirSync(srcRoot, { recursive: true }) as string[]) {
+      if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file)) continue;
+      const source = readFileSync(resolve(srcRoot, file), 'utf8');
+      for (const match of source.matchAll(/createPolicy\(\s*'([^']+)'/g)) {
+        names.add(match[1] ?? '');
+      }
+    }
+    // The scan must find the real calls, or it passes vacuously.
+    expect(names.size).toBeGreaterThan(0);
+    expect(names).toEqual(new Set(APP_TRUSTED_TYPES));
   });
 
   it("never uses 'unsafe-inline' or 'unsafe-eval' in any directive", () => {
