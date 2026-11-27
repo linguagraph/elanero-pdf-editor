@@ -6,6 +6,7 @@
 // the panels, the status bar) and Open and Save need the staged engine (STAGED) and are not here yet.
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { expectFocusWithin, expectVisibleFocus, focusInfo, type FocusInfo, tabWalk } from './focus';
+import { openPreferences } from '../harness/openPreferences';
 
 // WebKit does not put links in the Tab order by default (the macOS "tab to links" setting, which
 // Playwright's WebKit inherits). The skip link is still focusable, and the Tab walk covers the rest.
@@ -126,11 +127,9 @@ test('Preferences: Tab stays inside the dialog, F6 does nothing, Esc returns the
   page,
 }) => {
   await openStartPage(page);
-  const opener = page.getByRole('button', { name: 'Preferences…', exact: true });
-  await opener.focus();
-  await page.keyboard.press('Enter');
-  const dialog = page.getByRole('dialog').first();
-  await expect(dialog).toBeVisible();
+  // Preferences opens from the Main menu; Esc must return the focus to that menu button.
+  const opener = page.getByRole('button', { name: 'Main menu', exact: true });
+  const dialog = await openPreferences(page);
 
   for (let i = 1; i <= 30; i++) {
     await page.keyboard.press('Tab');
@@ -150,9 +149,7 @@ test('nested dialog: Esc closes Keyboard Shortcuts first, then Preferences; focu
   page,
 }) => {
   await openStartPage(page);
-  await page.getByRole('button', { name: 'Preferences…', exact: true }).click();
-  const prefs = page.getByRole('dialog').first();
-  await expect(prefs).toBeVisible();
+  const prefs = await openPreferences(page);
   const shortcutsButton = page.getByRole('button', { name: 'Keyboard Shortcuts…', exact: true });
   await shortcutsButton.focus();
   await page.keyboard.press('Enter');
