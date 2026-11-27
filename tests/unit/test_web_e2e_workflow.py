@@ -38,3 +38,43 @@ def test_matrix_expression_maps_the_choices_and_keeps_the_nightly_on_chromium() 
     assert '["chromium"]' in matrix
     assert '["chromium","firefox","webkit"]' in matrix
     assert "format('[\"{0}\"]', inputs.browsers)" in matrix
+
+
+def _expanded_jobs() -> list[dict[str, str]]:
+    # GitHub runs the cross product of the matrix keys, minus each `exclude` entry it matches.
+    # The browser list is an expression, so the jobs are built here for each browser it can pick.
+    matrix = _doc()["jobs"]["web-e2e"]["strategy"]["matrix"]
+    jobs = []
+    for browser in ("chromium", "firefox", "webkit"):
+        for shard in matrix["shard"]:
+            job = {"browser": browser, "shard": shard}
+            if not any(all(job.get(k) == v for k, v in ex.items()) for ex in matrix["exclude"]):
+                jobs.append(job)
+    return jobs
+
+
+def test_shard_matrix_gives_one_chromium_job_and_three_shards_for_webkit_and_firefox() -> None:
+    jobs = _expanded_jobs()
+    shards = {
+        browser: sorted(j["shard"] for j in jobs if j["browser"] == browser)
+        for browser in ("chromium", "firefox", "webkit")
+    }
+    assert shards == {
+        "chromium": ["1/1"],
+        "firefox": ["1/3", "2/3", "3/3"],
+        "webkit": ["1/3", "2/3", "3/3"],
+    }
+
+
+def test_feature_step_runs_its_shard_and_artifacts_carry_the_shard() -> None:
+    steps = _doc()["jobs"]["web-e2e"]["steps"]
+    feature = next(s for s in steps if s.get("id") == "features")
+    assert "--shard=${{ matrix.shard }}" in feature["run"]
+    assert "--reporter=list,html" in feature["run"]
+    upload = next(
+        s
+        for s in steps
+        if str(s.get("uses", "")).startswith("actions/upload-artifact")
+        and "web-e2e-" in str(s["with"]["name"])
+    )
+    assert "matrix.shard" in upload["with"]["name"]
