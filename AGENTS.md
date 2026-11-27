@@ -56,8 +56,8 @@ side is `pdfeditor.webapi`, packed by `scripts/web_package.py`. Run the npm comm
   `node scripts/stage_engine_assets.mjs --wheel <pymupdf-wasm.whl> --zip dist/web/pdfeditor-web.zip`
   (or set `PYMUPDF_WHEEL` and `WEB_ZIP`), after `npm ci` in `web/spike`.
 - Feature round trips (W8.1): `npm run e2e:features:chromium` in `web/app` runs them on Chromium, after the
-  same staging; `npm run e2e:features` runs all three browsers. The `web-e2e` workflow runs all three nightly;
-  on demand it runs Chromium only unless its `browsers` input is `all`. It reads the PyMuPDF wheel from the
+  same staging; `npm run e2e:features` runs all three browsers. The `web-e2e` workflow runs Chromium only
+  nightly; by hand its `browsers` input picks `chromium` (default), `webkit`, `firefox` or `all`. It reads the PyMuPDF wheel from the
   cache that a `web-pytest` run on main fills, and does not build one. `web-a11y` (axe, three browsers) runs on
   demand only. Neither is a required check.
 - Pyodide run (CI's `web-pytest` job, from the repo root): `npm ci` in `web/spike`,
