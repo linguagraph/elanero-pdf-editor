@@ -1,9 +1,9 @@
 name: Web end-to-end (W8.1)
 
 # The W8.1 feature round trips (web/app/e2e/features, their config playwright.features.config.ts)
-# on Chromium, Firefox and WebKit, one job per browser. It runs nightly, after the 03:00 CI nightly
-# has warmed the PyMuPDF wheel cache. By hand it runs Chromium only, unless `browsers` is `all`
-# (W8.1 section 3). It is not a required check and does not run on pull requests.
+# one job per browser. It runs nightly on Chromium only, after the 03:00 CI nightly has warmed the
+# PyMuPDF wheel cache. By hand, `browsers` picks chromium (default), webkit, firefox or all (W8.1
+# section 3; W8.5 slice 1). It is not a required check and does not run on pull requests.
 #
 # The engine wheel comes from the cache web-pytest.yml fills (the same key, so the two share it).
 # On a cache miss this run fails with a message instead of building the wheel: a cold build takes up
@@ -15,12 +15,14 @@ on:
   workflow_dispatch:
     inputs:
       browsers:
-        description: "Browsers to run: chromium (default) or all three"
+        description: "Browser to run: chromium (default), webkit, firefox, or all three"
         type: choice
         required: true
         default: chromium
         options:
           - chromium
+          - webkit
+          - firefox
           - all
       # W8.2 S4 (docs/web/design/W8.2-visual-golden.md, D6): rewrites the web UI screenshot references in
       # tests/golden/web/linux and uploads them as the web-ui-snapshots artifact. The nightly run never sets it.
@@ -48,9 +50,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Firefox and WebKit are disabled until the feature failures are fixed (tracked in #718). Only Chromium runs.
-        # The `browsers` input still exists but has no effect now: every run, scheduled or by hand, uses Chromium only.
-        browser: ${{ fromJSON('["chromium"]') }}
+        # The nightly (schedule) runs Chromium only; Firefox and WebKit stay off it until the feature
+        # failures are fixed (#718). By hand, `browsers` picks one browser, or all three (#420 needs WebKit).
+        browser: ${{ fromJSON(github.event_name == 'schedule' && '["chromium"]' || inputs.browsers == 'all' && '["chromium","firefox","webkit"]' || format('["{0}"]', inputs.browsers)) }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
