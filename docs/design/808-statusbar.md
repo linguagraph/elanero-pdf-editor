@@ -1,6 +1,6 @@
 # Status bar: thinner, with the page navigation bar folded in (issue #808)
 
-**Status: proposed, for owner approval; no production code in this change.**
+**Status: approved by owner (chat, 2026); recommended answers accepted, with Q3 changed to a centred layout. No production code in this change.**
 
 Issue #808 ("Statusbar is way too bigger than needed"), the owner's words: "The status bar is too thick
 and useless. The buttons at the left side are unclear what their purpose is. The right side is ok, but
@@ -92,15 +92,16 @@ bar has no message area today.
 
 ### 2.1 What the bar holds
 
-One row, full width, under the document. Left to right:
+One row, full width, under the document. The floating bar sits in the centre of the status bar, and
+the sides stay empty. Left to right within the centred bar:
 
 | Area | Content | From |
 | --- | --- | --- |
-| Start | Previous page, page field with `/ N`, Next page | the pill's navigator, unchanged |
-| End | Zoom out, zoom box with presets, Zoom in, a 1 px separator, Fit width, Fit page | the pill's zoom group, unchanged |
+| Centre, first group | Previous page, page field with `/ N`, Next page | the pill's navigator, unchanged |
+| Centre, second group | Zoom out, zoom box with presets, Zoom in, a 1 px separator, Fit width, Fit page | the pill's zoom group, unchanged |
 
-The page navigator goes where Back and Forward were; the zoom group goes where the zoom and layout
-text were, which the owner called "ok". The middle stays empty (no message area, Q4).
+The navigator and the zoom group stay together as one bar, centred (owner decision, Q3). The sides
+hold no controls, and there is no message area (Q4).
 
 **Removed**: Back and Forward (the ribbon and Alt+Left/Right keep them), the read-only zoom text (the
 zoom box shows it), the read-only layout text (the ribbon's View toggles show it).
@@ -115,7 +116,7 @@ goes. The controls keep their names, icons, tooltips, `aria-pressed` and keyboar
 | --- | --- |
 | Fine pointer, 1366 by 768 | Footer box **29 px tall (± 1)**: 24 px controls, 2 px padding top and bottom, 1 px top border. One row; every control at least 24 by 24 px; all controls on the same row (tops within 1 px). Down from 49 px. |
 | Coarse pointer, 1366 by 768 | Every control at least 44 by 44 px; one row; footer at most 50 px. |
-| Coarse pointer, 390 by 844 | The two groups wrap to two rows (navigator above, zoom below), every control still 44 px; no horizontal page scroll; footer at most 100 px (Q5). |
+| Coarse pointer, 390 by 844 | The two groups wrap to two rows (navigator above, zoom below), both rows centred, every control still 44 px; no horizontal page scroll; footer at most 100 px (Q5). |
 | Fine pointer, 390 by 844 | One row if it fits, else two; no horizontal page scroll. |
 
 The page area gains about 20 px of height from the thinner bar, and the bottom 48 px it lost to the
@@ -250,8 +251,8 @@ The desktop (no change unless Q6), Pyodide `web-pytest` (no Python change), `rpc
   Navigate) and on Alt+Left and Alt+Right, as on the desktop, which never had them on its status bar.
 - **Q2. Remove the read-only zoom and layout text?** Recommended: **yes**. The zoom box shows the
   zoom; the ribbon's View toggles show the layout.
-- **Q3. Placement in the bar?** Recommended: **page navigator at the left, zoom group at the right**
-  (where the owner said the bar was "ok"). Alternative: both groups centred, as the pill was.
+- **Q3. Placement in the bar?** Recommended: **the whole floating bar (page navigator and zoom group
+  together) sits in the centre of the status bar**. Owner decision (chat, 2026): centred, as the floating bar.
 - **Q4. Add a message area (the active tool with a Stop button, and job progress), as the desktop's
   status bar has?** Recommended: **not in this issue**. The bar stays page and zoom only; open a
   follow-up if wanted (slice 2).
