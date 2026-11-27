@@ -1161,7 +1161,7 @@ export const EN = {
   'comment.list.by': '{type} by {author}',
   'comment.list.label': '{name}: {text}',
   'comment.list.locked': '{label}, locked',
-  'stamp.menu': 'Stamp',
+  'stamp.places': 'Places the {name} stamp',
   'stamp.menuButton': 'Stamp options',
   'stamp.menuLabel': 'Stamps',
   'stamp.custom.add': 'Add Custom Stamp…',

@@ -13,16 +13,21 @@ import {
   Section,
   Separator,
   SubmenuTrigger,
+  Tooltip,
+  TooltipTrigger,
 } from 'react-aria-components';
 import { type ToastStore, toasts } from '../feedback/toasts';
 import { pickFile } from '../files/pickFile';
 import type { MessageId } from '../i18n/en';
 import { t } from '../i18n/t';
+import { Icon } from '../theme/Icon';
 import type { BlobLike } from '../storage/opfs';
 import { type ChosenStamp, STAMP_LABEL, STANDARD_STAMPS, type StandardStamp } from './stamps';
 import { type HeldReason, type LibraryStamp, type StampLibrary, refusalText } from './stampLibrary';
 
 const PICK_ACCEPT = 'image/png,image/jpeg,.png,.jpg,.jpeg';
+// How long the pointer rests on the arrow before its tooltip shows (as the ribbon's commands).
+const ARROW_TIP_DELAY_MS = 400;
 // What a stamp kept for this tab only says (W7.3b section 3.2, step 6).
 const HELD_TEXT: Readonly<Record<HeldReason, MessageId>> = {
   unsupported: 'stamp.custom.sessionOnly',
@@ -135,10 +140,14 @@ export function StampMenu({ library, onChoose, onRemoved, store = toasts }: Stam
         } else close();
       }}
     >
-      {/* A distinct name, so it is not mistaken for the Stamp toggle beside it in the ribbon. */}
-      <Button aria-label={t('stamp.menuButton')} className="stamp-menu-button">
-        {t('stamp.menu')}
-      </Button>
+      {/* The arrow of the ribbon's Stamp split button (issue 801). Its name is distinct, so it is
+          not mistaken for the Stamp command beside it. Icon-only, so it has a tooltip. */}
+      <TooltipTrigger delay={ARROW_TIP_DELAY_MS}>
+        <Button aria-label={t('stamp.menuButton')} className="ribbon-split-arrow stamp-menu-button">
+          <Icon name="chevron-down" size={14} />
+        </Button>
+        <Tooltip className="ribbon-tooltip">{t('stamp.menuButton')}</Tooltip>
+      </TooltipTrigger>
       <Popover className="app-menu-popover">
         {shown.sessionOnly ? (
           <p className="app-menu-note">{t('stamp.custom.sessionOnly')}</p>

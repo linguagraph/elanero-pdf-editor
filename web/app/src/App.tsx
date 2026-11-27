@@ -88,6 +88,7 @@ import { type CommentToolId, toggleCommentTool } from './comments/tools';
 import { MARKUP_COMMAND_KINDS, type MarkupKind, pressMarkup } from './comments/markup';
 import { createStampLibrary } from './comments/stampLibrary';
 import { StampMenu } from './comments/stampTool';
+import { type ChosenStamp, DEFAULT_STAMP, STAMP_LABEL } from './comments/stamps';
 import { canGoBack, canGoForward } from './view/navigation';
 import { DEFAULT_ZOOM } from './view/zoom';
 import { RenderScheduler } from './view/renderScheduler';
@@ -257,6 +258,9 @@ export function App({
   // The comment tool on in the open document (W7.1a), as the view reports it for the ribbon's
   // pressed state (W4.3a S7). Apply Redactions asks first, as the ribbon's Apply does.
   const [commentTool, setCommentToolState] = useState<CommentToolId | null>(null);
+  // The stamp the stamp tool places in the open document (issue 801), for the Stamp button's
+  // description; the view reports it on mount, so a switched tab reports its own stamp.
+  const [chosenStamp, setChosenStamp] = useState<ChosenStamp>(DEFAULT_STAMP);
   const [applyOpen, setApplyOpen] = useState(false);
   const [sanitizeOpen, setSanitizeOpen] = useState(false);
   const [flattenOpen, setFlattenOpen] = useState(false);
@@ -940,10 +944,10 @@ export function App({
         }
       : {}),
   };
-  // Controls the ribbon draws inside a group (W8 fix 702): the Comment tab's Stamp menu, and the
-  // Protect tab's mark count, which a polite status region announces as it changes.
-  const groupExtras: Readonly<Record<string, ReactNode>> = {
-    'comment.comments':
+  // The Comment tab's Stamp button: its arrow opens the stamp menu (issue 801), and its hidden
+  // description names the stamp the main part places.
+  const commandMenus: Readonly<Record<string, ReactNode>> = {
+    stamp:
       documentShown && stampLibrary !== null ? (
         <StampMenu
           library={stampLibrary}
@@ -951,6 +955,15 @@ export function App({
           onRemoved={(id) => viewRef.current?.stampRemoved(id)}
         />
       ) : null,
+  };
+  const commandNotes: Readonly<Record<string, string>> = {
+    stamp: t('stamp.places', {
+      name: chosenStamp.kind === 'standard' ? t(STAMP_LABEL[chosenStamp.name]) : chosenStamp.label,
+    }),
+  };
+  // Controls the ribbon draws inside a group (W8 fix 702): the Protect tab's mark count, which a
+  // polite status region announces as it changes.
+  const groupExtras: Readonly<Record<string, ReactNode>> = {
     'protect.redact': documentShown ? (
       <span role="status" className="ribbon-count">
         {t('redact.count', { count: redactionState?.marks.length ?? 0 })}
@@ -1164,6 +1177,8 @@ export function App({
             state={state}
             handlers={handlers}
             groupExtras={groupExtras}
+            commandMenus={commandMenus}
+            commandNotes={commandNotes}
             start={
               <div className="ribbon-start">
                 <AppMenu
@@ -1523,6 +1538,7 @@ export function App({
             }}
             onCropBoxEnd={crop.boxEnded}
             onCommentToolChange={setCommentToolState}
+            onStampChange={setChosenStamp}
             onLinkGoTo={onLinkGoTo}
             searchMarks={
               searchMarks !== null && searchMarks.tabId === activeId ? searchMarks.marks : undefined

@@ -54,6 +54,21 @@ test.describe('engine staged', () => {
   // button (used after the reopen) is not on the ribbon. The comment specs use the same viewport.
   test.use({ viewport: { width: 1920, height: 1080 } });
 
+  // The Stamp button (issue 801) is one split button: its main part places the stamp last chosen from
+  // the arrow's menu, and its hidden description names that stamp. Approved at first.
+  test('the Stamp button names Approved first, then the stamp chosen from its arrow', async ({
+    page,
+  }) => {
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+    await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
+    const stampButton = page.getByRole('button', { name: 'Stamp', exact: true });
+    await expect(stampButton).toHaveAccessibleDescription('Places the Approved stamp');
+    await openStampMenu(page);
+    await page.getByRole('menuitem', { name: 'Draft', exact: true }).click();
+    await expect(stampButton).toHaveAccessibleDescription('Places the Draft stamp');
+  });
+
   test('a custom stamp: added, placed, undone, redone, saved; kept after a reload', async ({
     page,
     context,

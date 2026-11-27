@@ -56,6 +56,12 @@ export interface RibbonProps {
   // Controls drawn after a group's commands, keyed by the group id (the Comment tab's stamp menu,
   // the Protect tab's mark count). They show in the row, the overflow menu and the collapsed tabs.
   readonly groupExtras?: Readonly<Record<string, ReactNode>>;
+  // A control drawn beside a command, keyed by the command id: the command becomes a split button
+  // whose main part runs the command and whose arrow is this control (the Stamp menu, issue 801).
+  // A note is the main part's hidden description (what it will do). Both show in the row, the
+  // overflow menu and the collapsed tabs, as groupExtras do.
+  readonly commandMenus?: Readonly<Record<string, ReactNode>>;
+  readonly commandNotes?: Readonly<Record<string, string>>;
   // Controls drawn first in the tab row, before the tabs (the app menu, the logo and quick access
   // in the web app, as the desktop's tab row has them). The ribbon does not know what they are.
   readonly start?: ReactNode;
@@ -112,6 +118,8 @@ function FullRibbon({
   state,
   handlers,
   groupExtras,
+  commandMenus,
+  commandNotes,
   start,
   form,
   wideSearch,
@@ -209,6 +217,8 @@ function FullRibbon({
                       state={state}
                       handlers={handlers}
                       extra={groupExtras?.[group.group.id]}
+                      menus={commandMenus}
+                      notes={commandNotes}
                       compact={compact}
                     />
                   ),
@@ -220,6 +230,8 @@ function FullRibbon({
                     state={state}
                     handlers={handlers}
                     groupExtras={groupExtras}
+                    commandMenus={commandMenus}
+                    commandNotes={commandNotes}
                   />
                 ) : null}
               </Toolbar>
@@ -262,6 +274,8 @@ function CollapsedRibbon({
   state,
   handlers,
   groupExtras,
+  commandMenus,
+  commandNotes,
   start,
   showTheme,
 }: RibbonProps & { showTheme: boolean }) {
@@ -284,6 +298,8 @@ function CollapsedRibbon({
                     state={state}
                     handlers={handlers}
                     groupExtras={groupExtras}
+                    commandMenus={commandMenus}
+                    commandNotes={commandNotes}
                     close={close}
                   />
                 )}
@@ -305,6 +321,8 @@ interface CollapsedTabBodyProps {
   state: CommandState;
   handlers: CommandHandlers;
   groupExtras?: Readonly<Record<string, ReactNode>>;
+  commandMenus?: Readonly<Record<string, ReactNode>>;
+  commandNotes?: Readonly<Record<string, string>>;
   close: () => void;
 }
 
@@ -316,6 +334,8 @@ function CollapsedTabBody({
   state,
   handlers,
   groupExtras,
+  commandMenus,
+  commandNotes,
   close,
 }: CollapsedTabBodyProps) {
   const [notice, setNotice] = useState('');
@@ -331,6 +351,8 @@ function CollapsedTabBody({
           state={state}
           handlers={handlers}
           extra={groupExtras?.[group.group.id]}
+          menus={commandMenus}
+          notes={commandNotes}
           onRun={close}
           onBlocked={setNotice}
         />
@@ -349,11 +371,21 @@ interface MoreCommandsProps {
   state: CommandState;
   handlers: CommandHandlers;
   groupExtras?: Readonly<Record<string, ReactNode>>;
+  commandMenus?: Readonly<Record<string, ReactNode>>;
+  commandNotes?: Readonly<Record<string, string>>;
 }
 
 // The "»" control at the row's end. Its menu holds the overflowed groups, rendered as the collapsed
 // drop-down renders them: it closes when a command runs and keeps the disabled notice.
-function MoreCommands({ tab, registry, state, handlers, groupExtras }: MoreCommandsProps) {
+function MoreCommands({
+  tab,
+  registry,
+  state,
+  handlers,
+  groupExtras,
+  commandMenus,
+  commandNotes,
+}: MoreCommandsProps) {
   return (
     <DialogTrigger>
       <Button className="ribbon-more" aria-label={t('ribbon.more')}>
@@ -368,6 +400,8 @@ function MoreCommands({ tab, registry, state, handlers, groupExtras }: MoreComma
               state={state}
               handlers={handlers}
               groupExtras={groupExtras}
+              commandMenus={commandMenus}
+              commandNotes={commandNotes}
               close={close}
             />
           )}
@@ -387,6 +421,10 @@ interface RibbonGroupProps {
   handlers: CommandHandlers;
   // A control drawn after the group's commands (see RibbonProps.groupExtras).
   extra?: ReactNode;
+  // Controls beside commands, keyed by command id, and the main parts' descriptions (see
+  // RibbonProps.commandMenus).
+  menus?: Readonly<Record<string, ReactNode>>;
+  notes?: Readonly<Record<string, string>>;
   // Called after a command in the group runs (the collapsed form closes its popover with it).
   onRun?: () => void;
   // Called with the reason when a disabled command is pressed.
@@ -403,6 +441,8 @@ function RibbonGroup({
   state,
   handlers,
   extra,
+  menus,
+  notes,
   onRun,
   onBlocked,
   compact = false,
@@ -411,18 +451,23 @@ function RibbonGroup({
   return (
     <div role="group" aria-labelledby={labelId} className="ribbon-group" data-group={groupId}>
       <div className="ribbon-group-commands">
-        {commands.map((def) => (
-          <CommandButton
-            key={def.id}
-            def={def}
-            registry={registry}
-            state={state}
-            handlers={handlers}
-            onRun={onRun}
-            onBlocked={onBlocked}
-            compact={compact}
-          />
-        ))}
+        {commands.map((def) => {
+          const command = {
+            def,
+            registry,
+            state,
+            handlers,
+            onRun,
+            onBlocked,
+            compact,
+          };
+          const menu = menus?.[def.id];
+          return menu === undefined || menu === null ? (
+            <CommandButton key={def.id} {...command} />
+          ) : (
+            <SplitCommand key={def.id} {...command} menu={menu} note={notes?.[def.id]} />
+          );
+        })}
         {extra}
       </div>
       <span
@@ -432,6 +477,29 @@ function RibbonGroup({
         {label}
       </span>
     </div>
+  );
+}
+
+// A command with a control beside it (issue 801): the main part runs the command, the control is
+// the arrow. The two share one border, so they read as one split button; the note, when given, is
+// the main part's hidden description.
+interface SplitCommandProps extends Omit<CommandButtonProps, 'noteId'> {
+  menu: ReactNode;
+  note?: string;
+}
+
+function SplitCommand({ menu, note, ...command }: SplitCommandProps) {
+  const noteId = useId();
+  return (
+    <span className="ribbon-split" data-command-split={command.def.id}>
+      <CommandButton {...command} noteId={note === undefined ? undefined : noteId} />
+      {note === undefined ? null : (
+        <span id={noteId} hidden>
+          {note}
+        </span>
+      )}
+      {menu}
+    </span>
   );
 }
 
@@ -445,6 +513,8 @@ interface CommandButtonProps {
   compact: boolean;
   // The icon's size in px. Defaults to the ribbon's size for the form (full or compact).
   iconSize?: number;
+  // The id of a hidden element that describes the command (a split button's note).
+  noteId?: string;
 }
 
 export function CommandButton({
@@ -456,6 +526,7 @@ export function CommandButton({
   onBlocked,
   compact,
   iconSize = compact ? RIBBON_COMPACT_ICON_SIZE : RIBBON_ICON_SIZE,
+  noteId,
 }: CommandButtonProps) {
   useShortcutBindings();
   const reason = commandDisabledReason(def, state, handlers);
@@ -467,7 +538,11 @@ export function CommandButton({
   const reasonText = reason === null ? undefined : t(DISABLED_REASON_LABELS[reason]);
   // The reason (when disabled) and the shortcut are described by hidden text, because react-aria's
   // Button does not pass a title or aria-keyshortcuts through.
-  const describedBy = [reasonText === undefined ? null : reasonId, shortcut ? shortcutId : null]
+  const describedBy = [
+    reasonText === undefined ? null : reasonId,
+    shortcut ? shortcutId : null,
+    noteId ?? null,
+  ]
     .filter((id): id is string => id !== null)
     .join(' ');
   // A compact command with an icon shows only the icon, so its label is the accessible name and

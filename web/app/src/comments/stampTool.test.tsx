@@ -73,6 +73,16 @@ describe('the stamp menu', () => {
     expect(chosen).toMatchObject({ kind: 'standard' });
     expect(STANDARD_STAMPS).toContain(chosen?.name);
   });
+
+  it('its trigger is the icon arrow named Stamp options, with no text of its own', () => {
+    act(() =>
+      root.render(<StampMenu library={emptyLibrary()} onChoose={vi.fn()} onRemoved={vi.fn()} />),
+    );
+    const arrow = container.querySelector<HTMLButtonElement>('.stamp-menu-button');
+    expect(arrow?.getAttribute('aria-label')).toBe(t('stamp.menuButton'));
+    expect(arrow?.textContent).toBe('');
+    expect(arrow?.querySelector('svg')).not.toBeNull();
+  });
 });
 
 describe('the stamp tool on a page', () => {

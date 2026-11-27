@@ -314,6 +314,9 @@ export interface DocumentViewProps {
   // Reports which comment tool is on (or null), so the ribbon shows it pressed (W4.3a S7). Called
   // on mount too, so a remounted view reports its reset state.
   readonly onCommentToolChange?: (tool: CommentToolId | null) => void;
+  // Reports the stamp the stamp tool places, on mount and after each choice, so the ribbon's Stamp
+  // button can name it (issue 801).
+  readonly onStampChange?: (stamp: ChosenStamp) => void;
   // A link jumped to a page of this document (W5.3). The app records the jump in the tab's history
   // and scrolls; without it the view scrolls itself and records nothing (tests).
   readonly onLinkGoTo?: (page: number, top: number | null) => void;
@@ -451,6 +454,7 @@ export function DocumentView({
   onToolChange,
   onCropBoxEnd,
   onCommentToolChange,
+  onStampChange,
   onLinkGoTo,
 }: DocumentViewProps) {
   const [sizes, setSizes] = useState<readonly PageSizePt[] | null>(null);
@@ -567,6 +571,9 @@ export function DocumentView({
   useEffect(() => {
     onCommentToolChange?.(commentTool);
   }, [commentTool, onCommentToolChange]);
+  useEffect(() => {
+    onStampChange?.(stamp);
+  }, [stamp, onStampChange]);
   // The Hand and crop box tools and the comment or mark tools are not on together: choosing one of
   // the view tools turns them off (the last tool chosen wins, as the desktop has one tool per
   // document). The comment tool is reset while rendering, when the tool prop changes, so no effect

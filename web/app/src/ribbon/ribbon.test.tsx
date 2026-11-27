@@ -966,6 +966,55 @@ describe('Ribbon: the comment and redaction tools (W4.3a S7)', () => {
   });
 });
 
+describe('Ribbon: a command with a control beside it (issue 801)', () => {
+  function selectTab(label: string): void {
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"], .ribbon-tabs > button')].find(
+      (el) => el.textContent?.trim() === label,
+    );
+    if (tab === undefined) throw new Error(`no tab ${label}`);
+    act(() => {
+      tab.click();
+    });
+  }
+  const menu = <span className="menu-test">menu</span>;
+
+  it('puts the control right after its command, in one split wrapper', () => {
+    render(
+      <Ribbon registry={REGISTRY} state={withDoc} handlers={{}} commandMenus={{ stamp: menu }} />,
+    );
+    selectTab(t('ribbon.tab.comment'));
+    const split = host.querySelector<HTMLElement>('.ribbon-split[data-command-split="stamp"]');
+    expect(split?.querySelector('[data-command="stamp"]')).not.toBeNull();
+    expect(split?.querySelector('.menu-test')?.textContent).toBe('menu');
+    // Nothing else in the Comment tab is split.
+    expect(host.querySelectorAll('.ribbon-split').length).toBe(1);
+  });
+
+  it('describes the main part by the note', () => {
+    render(
+      <Ribbon
+        registry={REGISTRY}
+        state={withDoc}
+        handlers={{}}
+        commandMenus={{ stamp: menu }}
+        commandNotes={{ stamp: 'Places the Draft stamp' }}
+      />,
+    );
+    selectTab(t('ribbon.tab.comment'));
+    const describedBy = button('stamp').getAttribute('aria-describedby') ?? '';
+    const noteIds = describedBy.split(' ').filter((id) => id !== '');
+    const notes = noteIds.map((id) => document.getElementById(id)?.textContent);
+    expect(notes).toContain('Places the Draft stamp');
+  });
+
+  it('keeps the plain command when no control is given for it', () => {
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    selectTab(t('ribbon.tab.comment'));
+    expect(host.querySelector('.ribbon-split')).toBeNull();
+    expect(button('stamp')).not.toBeNull();
+  });
+});
+
 describe('the theme switch in the ribbon tab row (#795)', () => {
   const realWidth = window.innerWidth;
   afterEach(() => {
