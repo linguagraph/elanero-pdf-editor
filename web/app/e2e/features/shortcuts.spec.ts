@@ -49,6 +49,11 @@ async function record(
 test('a rebound key runs its command, survives a reload, and Reset all restores the default', async ({
   page,
 }) => {
+  // Chromium's Open uses window.showOpenFilePicker, which emits no filechooser event. Removing it
+  // sends Open to the <input type=file> fallback, which does emit one (as open-recent.spec.ts does).
+  await page.addInitScript(() => {
+    delete (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker;
+  });
   await openStartPage(page);
   const dialog = await openShortcutsFromPreferences(page);
 
