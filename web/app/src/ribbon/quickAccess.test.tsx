@@ -70,7 +70,13 @@ describe('QuickAccess', () => {
     expect(undo?.querySelector('.ribbon-command-label')).toBeNull();
   });
 
-  it('keeps only Undo, Redo and Save below 1024 px', () => {
+  it('keeps only Undo, Redo and Save below 1280 px, so the tab row has room', () => {
+    setWidth(1100);
+    render(<QuickAccess registry={REGISTRY} state={state} handlers={{}} />);
+    expect(commandsShown()).toEqual(['undo', 'redo', 'save']);
+  });
+
+  it('keeps only Undo, Redo and Save at the tablet width', () => {
     setWidth(900);
     render(<QuickAccess registry={REGISTRY} state={state} handlers={{}} />);
     expect(commandsShown()).toEqual(['undo', 'redo', 'save']);

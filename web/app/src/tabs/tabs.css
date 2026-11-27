@@ -1,5 +1,20 @@
-/* The document tab strip (W4.2b), in the top bar (W1.6 section 1). Tabs take the free middle of the
-   bar and scroll sideways rather than wrap, so the strip stays one row at every width. */
+/* The document strip (W1.6 S2.5): a slim row under the ribbon panel, in the window colour, with the
+   tabs sitting on the page. It has no children when no document is open, so it takes no height. */
+.doc-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  padding: 2px var(--space-2) 0;
+  background: var(--color-window);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.doc-strip:empty {
+  display: none;
+}
+
+/* The document tab strip (W4.2b). Tabs take the free middle of the strip and scroll sideways rather
+   than wrap, so the strip stays one row at every width. */
 .doc-tabs {
   flex: 1 1 0;
   align-self: stretch;
@@ -51,7 +66,7 @@
 .doc-tabs-list {
   display: flex;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-2) 0;
+  padding: 2px var(--space-2) 0;
 }
 
 .doc-tab {
@@ -60,7 +75,7 @@
   gap: var(--space-2);
   min-width: 6rem;
   max-width: 16rem;
-  padding: var(--space-1) var(--space-2);
+  padding: 2px var(--space-2);
   border: 1px solid var(--color-border);
   border-bottom: 0;
   /* A 2 px top edge on every tab, transparent unless selected, so selecting a tab never moves it. */

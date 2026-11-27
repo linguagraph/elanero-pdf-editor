@@ -20,7 +20,7 @@
 }
 
 .ribbon-tab {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -49,7 +49,8 @@
   flex-wrap: nowrap;
   align-items: stretch;
   gap: var(--space-2);
-  padding: var(--space-2);
+  /* The inline padding is what useGroupOverflow measures; only the block padding is slimmed. */
+  padding: var(--space-1) var(--space-2);
 }
 
 .ribbon-group {
@@ -157,8 +158,8 @@
 }
 
 .app-menu-button {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 28px;
+  min-height: 28px;
   background: none;
   border: 1px solid transparent;
   border-radius: var(--radius-small);
@@ -245,7 +246,15 @@
 
 /* The collapsed form (narrow windows): the tab row scrolls inside itself, never the page, and the
    touch targets are at least 44 px (W1.6, touch). */
+.ribbon-collapsed {
+  /* The collapsed form is a row: the start controls, the tab buttons, then the tools. */
+  flex-direction: row;
+  align-items: center;
+}
+
 .ribbon-collapsed .ribbon-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   border-bottom: none;
 }
@@ -296,12 +305,37 @@
   flex: 1 1 auto;
   min-width: 0;
   border-bottom: none;
+  /* If a translation makes the row too wide, the tabs scroll inside it and the page does not (W1.6
+     S2.4). The scrollbar is hidden; the arrow keys still reach every tab. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* The start controls: the app menu, the logo and quick access, before the tabs. */
+.ribbon-start {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-2);
+  min-width: 0;
+}
+
+/* Phone width (W1.6 S2.4): the tab row takes two lines, the controls first, then the tab buttons at
+   full width. The DOM order stays, so the Tab order does too. */
+.app-frame[data-tier='phone'] .ribbon-collapsed {
+  flex-wrap: wrap;
+}
+
+.app-frame[data-tier='phone'] .ribbon-collapsed .ribbon-tabs {
+  order: 1;
+  flex-basis: 100%;
 }
 
 .ribbon-help {
   flex: 0 0 auto;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 28px;
+  min-height: 28px;
   margin-inline: var(--space-1);
   background: none;
   border: 1px solid transparent;
@@ -323,7 +357,7 @@
 .ribbon-search {
   flex: 0 1 180px;
   min-width: 120px;
-  min-height: 32px;
+  min-height: 28px;
   margin-inline: var(--space-1);
   padding-inline: var(--space-2);
   background: var(--color-surface);
@@ -344,8 +378,8 @@
 
 .ribbon-search-button {
   flex: 0 0 auto;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 28px;
+  min-height: 28px;
   margin-inline: var(--space-1);
   background: none;
   border: 1px solid transparent;
@@ -372,8 +406,8 @@
 
 .ribbon-chevron {
   flex: 0 0 auto;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 28px;
+  min-height: 28px;
   margin-inline: var(--space-1);
   background: none;
   border: 1px solid transparent;

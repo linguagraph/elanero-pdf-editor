@@ -56,6 +56,9 @@ export interface RibbonProps {
   // Controls drawn after a group's commands, keyed by the group id (the Comment tab's stamp menu,
   // the Protect tab's mark count). They show in the row, the overflow menu and the collapsed tabs.
   readonly groupExtras?: Readonly<Record<string, ReactNode>>;
+  // Controls drawn first in the tab row, before the tabs (the app menu, the logo and quick access
+  // in the web app, as the desktop's tab row has them). The ribbon does not know what they are.
+  readonly start?: ReactNode;
 }
 
 const IS_MAC = isMacPlatform(navigator.platform);
@@ -104,7 +107,15 @@ interface FullRibbonProps extends RibbonProps {
 // the groups each tab shows. Tabs and the commands are react-aria widgets, so arrow keys move
 // between tabs and between commands, and Tab leaves the ribbon. A disabled command stays in the
 // ribbon with aria-disabled and the reason as its description; running it does nothing.
-function FullRibbon({ registry, state, handlers, groupExtras, form, wideSearch }: FullRibbonProps) {
+function FullRibbon({
+  registry,
+  state,
+  handlers,
+  groupExtras,
+  start,
+  form,
+  wideSearch,
+}: FullRibbonProps) {
   const tabs = ribbonLayout(registry, state);
   const [selected, setSelected] = useState<TabId>('home');
   // Show the first tab when the selected one has no groups in this state (for example, Tools
@@ -169,6 +180,7 @@ function FullRibbon({ registry, state, handlers, groupExtras, form, wideSearch }
         onDoubleClickCapture={onRowDoubleClick}
         onKeyDownCapture={onRowKeyDown}
       >
+        {start}
         <TabList aria-label={t('ribbon.label')} className="ribbon-tabs">
           {tabs.map((entry) => (
             <Tab key={entry.tab} id={entry.tab} className="ribbon-tab">
@@ -250,11 +262,13 @@ function CollapsedRibbon({
   state,
   handlers,
   groupExtras,
+  start,
   showTheme,
 }: RibbonProps & { showTheme: boolean }) {
   const tabs = ribbonLayout(registry, state);
   return (
     <div className="ribbon ribbon-collapsed" data-form="collapsed" data-collapsed-by="tier">
+      {start}
       <div className="ribbon-tabs" role="group" aria-label={t('ribbon.label')}>
         {tabs.map((entry) => (
           <DialogTrigger key={entry.tab}>

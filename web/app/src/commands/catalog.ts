@@ -472,7 +472,7 @@ export const MENU: readonly (readonly string[])[] = [
   ['help', 'whats-different', 'install-app', 'about-elanero'],
 ];
 
-// The header's quick-access buttons, in the desktop's order (W1.6 section 2). Below 1024 px only
+// The tab row's quick-access buttons, in the desktop's order (W1.6 section 2). Below 1280 px only
 // the last three stay (the table in W1.6 section 8 keeps Undo, Redo and Save).
 export const QUICK_ACCESS: readonly string[] = ['select-tool', 'hand-tool', 'undo', 'redo', 'save'];
 export const QUICK_ACCESS_NARROW: readonly string[] = ['undo', 'redo', 'save'];

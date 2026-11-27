@@ -131,8 +131,9 @@ message saying whether it was added.
 
 ## Ribbon and keyboard shortcuts
 
-- **Ribbon.** The ribbon sits under the top bar with the same seven tabs as the desktop (Home, Edit,
-  Organize, Protect, Comment, View and Tools). Each command shows its icon above its label, the same
+- **Ribbon.** The tab row at the top holds the menu button, the Elanero logo (from 1280 px) and the
+  quick-access buttons, then the same seven tabs as the desktop (Home, Edit, Organize, Protect,
+  Comment, View and Tools). The open documents sit in a slim strip under the ribbon. Each command shows its icon above its label, the same
   icon as on the desktop. A command that is not available in the web version yet, or that needs an
   open document, stays visible but greyed out; point at it to see why.
 - **Ribbon forms.** The ribbon follows the window width. From 1280 px it shows the full ribbon, with
@@ -146,8 +147,8 @@ message saying whether it was added.
   tabs, and shows it again. Press **Ctrl+F1** to do the same. Pressing a tab, or double-clicking
   one, also brings a collapsed ribbon back. **Compact ribbon** in Preferences (Appearance) shows
   icons only on wide windows as well (1280 px and up). Both choices are kept in this browser.
-- **Quick access and help.** Above the ribbon, next to the menu button, the quick-access buttons
-  are Select, Hand, Undo, Redo and Save; below 1024 px only Undo, Redo and Save remain. The **?**
+- **Quick access and help.** Next to the menu button, in the tab row, the quick-access buttons are
+  Select, Hand, Undo, Redo and Save; below 1280 px only Undo, Redo and Save remain. The **?**
   button at the right of the tab row opens this guide at the page for the tab you are on. **About Elanero** in the app menu, or at the bottom of the start page, shows the version, the licence and
   a link to the source code. Close in the app menu closes the open document. Select and Hand switch
   the tool of the open tab (see Hand tool below). Save works (see Saving below).
