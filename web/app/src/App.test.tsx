@@ -333,8 +333,17 @@ describe('App: Clear all is disabled while a tab is open', () => {
     await until(() => host.querySelector('.start-drop') !== null);
     expect(host.querySelector('.start-drop')).not.toBeNull();
 
-    const preferences = buttonIn(host, t('command.preferences.label'));
-    if (preferences === undefined) throw new Error('no preferences button');
+    // Preferences is in the app menu (the top bar has no button for it since #795).
+    act(() => {
+      menu.click();
+    });
+    const preferences = await vi.waitFor(() => {
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (el) => el.textContent?.trim() === t('command.preferences.label'),
+      );
+      if (item === undefined) throw new Error('no preferences item');
+      return item;
+    });
     act(() => {
       preferences.click();
     });

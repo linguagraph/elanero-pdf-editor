@@ -47,13 +47,21 @@ function dialog(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[role="dialog"]');
 }
 
+// Preferences is an app menu item (the top bar has no button for it, #795).
 function openFromCommand(): HTMLElement {
-  const button = [...host.querySelectorAll('button')].find(
-    (b) => b.textContent === t('command.preferences.label'),
-  );
-  expect(button).toBeDefined();
+  // Already open: the menu item is gone, so there is nothing to click.
+  const open = dialog();
+  if (open !== null) return open;
+  const menu = host.querySelector<HTMLButtonElement>(`button[aria-label="${t('appMenu.label')}"]`);
   act(() => {
-    button?.click();
+    menu?.click();
+  });
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (el) => el.textContent?.trim() === t('command.preferences.label'),
+  );
+  expect(item).toBeDefined();
+  act(() => {
+    item?.click();
   });
   const opened = dialog();
   expect(opened?.textContent).toContain(t('prefs.title'));

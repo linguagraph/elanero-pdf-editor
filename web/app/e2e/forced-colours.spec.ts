@@ -16,12 +16,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(true);
     await expect(page.locator('.app-frame')).toBeVisible();
 
-    // The brand image (or its wordmark fallback) and the Preferences button are in the header.
+    // The brand image (or its wordmark fallback) is in the top bar. Preferences is no longer a top
+    // bar button (#795): it is in the Main menu, and the theme switch is in the ribbon's tab row.
     const logo = page.locator('.app-header img.brand-logo');
     await expect(logo).toBeVisible();
     await expect(logo).toHaveAttribute('alt', 'Elanero logo');
-    const preferences = page.locator('.app-header').getByRole('button', { name: 'Preferences' });
-    await expect(preferences).toBeVisible();
+    await expect(
+      page.locator('.app-header').getByRole('button', { name: 'Preferences' }),
+    ).toHaveCount(0);
 
     // Keyboard focus (Tab) on the theme choice, so :focus-visible applies as it does for a user.
     const system = page.getByRole('radio', { name: 'System' });
