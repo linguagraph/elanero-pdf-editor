@@ -135,6 +135,37 @@ describe('Ribbon', () => {
     expect(activeCommand()).toBe('save');
     key(button('save'), 'ArrowRight');
     expect(activeCommand()).toBe('print');
+    key(button('print'), 'ArrowLeft');
+    expect(activeCommand()).toBe('save');
+  });
+
+  it('lets Alt+ArrowLeft and Alt+ArrowRight reach the document while a ribbon button has focus (#814)', () => {
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    button('open').focus();
+    const seen: string[] = [];
+    const onDocument = (e: KeyboardEvent): void => {
+      seen.push(e.key);
+    };
+    document.addEventListener('keydown', onDocument);
+    try {
+      for (const name of ['ArrowLeft', 'ArrowRight']) {
+        const event = new KeyboardEvent('keydown', {
+          key: name,
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+        });
+        act(() => {
+          button('open').dispatchEvent(event);
+        });
+        expect(event.defaultPrevented).toBe(false);
+      }
+    } finally {
+      document.removeEventListener('keydown', onDocument);
+    }
+    expect(seen).toEqual(['ArrowLeft', 'ArrowRight']);
+    // The toolbar did not move focus for the modified arrows either.
+    expect(activeCommand()).toBe('open');
   });
 
   it('shows a disabled command as aria-disabled with its reason, and does not run it', () => {

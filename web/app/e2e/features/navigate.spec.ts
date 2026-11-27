@@ -113,8 +113,6 @@ test.describe('engine staged', () => {
     await expect(jump).toHaveValue('5');
     await expectNavDisabled(page, 'Back', false);
 
-    // Move focus out of the ribbon toolbar, which swallows Alt+Arrow.
-    await thumbnail(5).focus();
     await page.keyboard.press('Alt+ArrowLeft');
     await expect(jump).toHaveValue('3');
     await page.keyboard.press('Alt+ArrowLeft');
@@ -122,8 +120,6 @@ test.describe('engine staged', () => {
     await expectNavDisabled(page, 'Back', true);
     await expectNavDisabled(page, 'Forward', false);
 
-    // Move focus out of the ribbon toolbar, which swallows Alt+Arrow.
-    await thumbnail(5).focus();
     await page.keyboard.press('Alt+ArrowRight');
     await expect(jump).toHaveValue('3');
     await page.keyboard.press('Alt+ArrowRight');

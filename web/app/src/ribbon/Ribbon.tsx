@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useToolbar } from 'react-aria';
 import {
   Button,
   Dialog,
@@ -16,7 +17,6 @@ import {
   TabPanel,
   Tabs,
   ToggleButton,
-  Toolbar,
   Tooltip,
   TooltipTrigger,
 } from 'react-aria-components';
@@ -205,7 +205,7 @@ function FullRibbon({
         ? null
         : tabs.map((entry) => (
             <TabPanel key={entry.tab} id={entry.tab} className="ribbon-panel">
-              <Toolbar aria-label={t('ribbon.label')} className="ribbon-toolbar">
+              <RibbonToolbar aria-label={t('ribbon.label')}>
                 {(entry.tab === current ? entry.groups.slice(0, fitting) : entry.groups).map(
                   (group) => (
                     <RibbonGroup
@@ -234,7 +234,7 @@ function FullRibbon({
                     commandNotes={commandNotes}
                   />
                 ) : null}
-              </Toolbar>
+              </RibbonToolbar>
             </TabPanel>
           ))}
     </Tabs>
@@ -361,6 +361,33 @@ function CollapsedTabBody({
         {notice}
       </p>
     </>
+  );
+}
+
+/**
+ * The ribbon's arrow-key toolbar. react-aria's own toolbar stops ArrowLeft and ArrowRight in the
+ * capture phase whatever modifiers are held, so Alt+Arrow (Back and Forward) never reached the
+ * document once focus was on a ribbon button (#814). Here a modified arrow is left alone, and
+ * plain arrows keep moving focus inside the toolbar. The class is set here because the wrapper
+ * is a plain div, not react-aria's Toolbar.
+ */
+function RibbonToolbar({ children, ...props }: { children: ReactNode; 'aria-label': string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { toolbarProps } = useToolbar(props, ref);
+  const { onKeyDownCapture, ...rest } = toolbarProps;
+  return (
+    <div
+      {...rest}
+      ref={ref}
+      className="ribbon-toolbar"
+      onKeyDownCapture={(e: KeyboardEvent<HTMLDivElement>) => {
+        const isArrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+        if (isArrow && (e.altKey || e.ctrlKey || e.metaKey)) return;
+        onKeyDownCapture?.(e);
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
