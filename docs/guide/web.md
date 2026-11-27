@@ -133,7 +133,8 @@ message saying whether it was added.
 
 - **Ribbon.** The tab row at the top holds the menu button, the Elanero logo (from 1280 px) and the
   quick-access buttons, then the same seven tabs as the desktop (Home, Edit, Organize, Protect,
-  Comment, View and Tools). The open documents sit in a slim strip under the ribbon. Each command shows its icon above its label, the same
+  Comment, View and Tools). The open documents sit in a slim strip under the ribbon, and its **+** button at the right opens
+  a file, as Open does on the Home tab. Each command shows its icon above its label, the same
   icon as on the desktop. A command that is not available in the web version yet, or that needs an
   open document, stays visible but greyed out; point at it to see why.
 - **Ribbon forms.** The ribbon follows the window width. From 1280 px it shows the full ribbon, with

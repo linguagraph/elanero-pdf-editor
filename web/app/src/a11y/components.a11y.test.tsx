@@ -143,6 +143,7 @@ describe('component axe checks (W8.5 S1)', () => {
         state={activateTab(tabs, 2)}
         onSelect={() => undefined}
         onClose={() => undefined}
+        onOpen={() => undefined}
       />,
     );
     await expectAccessible(host);
