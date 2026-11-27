@@ -42,6 +42,18 @@ async function overlaps(a: Locator, b: Locator): Promise<boolean> {
   );
 }
 
+// Back is in the ribbon's Home > Navigate group, which overflows into the "More commands" menu at
+// this window size. The menu closes when a command runs, so its state is read by opening it again.
+async function expectBackDisabled(page: Page, disabled: boolean): Promise<void> {
+  await page.getByRole('button', { name: 'More commands', exact: true }).click();
+  const back = page
+    .getByRole('dialog', { name: 'More commands', exact: true })
+    .getByRole('button', { name: 'Back', exact: true });
+  if (disabled) await expect(back).toBeDisabled();
+  else await expect(back).toBeEnabled();
+  await page.keyboard.press('Escape');
+}
+
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
@@ -69,8 +81,7 @@ test.describe('engine staged', () => {
 
     // A move of one page is not recorded in the history (navigation.ts recordJump, W5.3 design
     // question 3), so a link to the next page leaves Back off. The next test covers Back.
-    const back = page.getByRole('button', { name: 'Back', exact: true });
-    await expect(back).toBeDisabled();
+    await expectBackDisabled(page, true);
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
@@ -83,8 +94,7 @@ test.describe('engine staged', () => {
     // outline.pdf numbers its pages in roman, so the field and the link name show the labels.
     const jump = page.getByRole('textbox', { name: 'Go to page' });
     await expect(jump).toHaveValue('i');
-    const back = page.getByRole('button', { name: 'Back', exact: true });
-    await expect(back).toBeDisabled();
+    await expectBackDisabled(page, true);
 
     await page
       .locator('[data-page="0"] .page-link-layer')
@@ -92,9 +102,10 @@ test.describe('engine staged', () => {
       .click();
     await expect(jump).toHaveValue('iv');
 
-    await back.click();
+    // Alt+Left is the Back command's default key (the shared shortcut table).
+    await page.keyboard.press('Alt+ArrowLeft');
     await expect(jump).toHaveValue('i');
-    await expect(back).toBeDisabled();
+    await expectBackDisabled(page, true);
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
