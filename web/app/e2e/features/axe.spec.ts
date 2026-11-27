@@ -3,6 +3,7 @@
 // run on every features browser. Dialogs that need a document or an engine session (Save As,
 // Print, Export, and the rest) are S5's, once the engine is staged in the workflow.
 import { expect, test, type Page } from '@playwright/test';
+import { openPreferences } from '../harness/openPreferences';
 import { checkAxe } from './axe';
 import { STAGED, fixture, openApp, openPdf } from './support';
 
@@ -11,11 +12,6 @@ const SCHEMES = ['light', 'dark'] as const;
 async function openStartPage(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.locator('.start-page')).toBeVisible();
-}
-
-async function openPreferences(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Preferences…', exact: true }).click();
-  await expect(page.getByRole('dialog').first()).toBeVisible();
 }
 
 for (const scheme of SCHEMES) {

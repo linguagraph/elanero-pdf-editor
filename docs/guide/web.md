@@ -64,10 +64,10 @@ is reloaded until you press it.
 
 ## Theme and preferences
 
-- **Theme.** The switch in the top bar chooses **System** (the default: follows your computer's
-  light or dark setting, and changes with it), **Light** or **Dark**. The choice is remembered in
-  this browser.
-- **Preferences.** Click **Preferences** in the top bar. The dialog has eight sections. These are the ones that matter here:
+- **Theme.** The switch beside **Search tools** on the ribbon's tab row chooses **System** (the default:
+  follows your computer's light or dark setting, and changes with it), **Light** or **Dark**. The choice is
+  remembered in this browser. On a phone-width window the switch is hidden: use Preferences, Appearance.
+- **Preferences.** Open the **Main menu** (☰) and choose **Preferences…** (or use the command palette). The dialog has eight sections. These are the ones that matter here:
   - **General**: the language (English is the only one for now) and the **Author name**, which is
     saved with each comment and redaction mark you add.
   - **Translation**: an on/off switch and a default language for the translation feature (see
@@ -501,7 +501,7 @@ full policy, with what the desktop app stores, is in the
 
 <!--
 Evidence for the claims on this page (repository paths, checked on main):
-- Web app shell, what is mounted: web/app/src/App.tsx (Ribbon, AppMenu, ThemeSwitch, PreferencesDialog,
+- Web app shell, what is mounted: web/app/src/App.tsx (Ribbon, AppMenu, PreferencesDialog,
   UpdatePrompt, EngineLoadingScreen, ToastRegion).
 - Ribbon icons: web/app/src/ribbon/Ribbon.tsx, web/app/src/theme/Icon.tsx, web/app/src/theme/icons.generated.ts
   (from src/pdfeditor/data/icons), web/src/generated/shortcuts.json (desktop icon names).
@@ -516,7 +516,7 @@ Evidence for the claims on this page (repository paths, checked on main):
   web/app/src/main.tsx (service worker registered in production builds only).
 - Update banner and Reload: web/app/src/pwa/UpdatePrompt.tsx, web/app/src/pwa/update.ts,
   web/app/src/i18n/en.ts (update.ready, update.reload).
-- Theme (system, light, dark; key elanero.theme): web/app/src/theme/theme.ts,
+- Theme (system, light, dark; key elanero.theme): web/app/src/theme/theme.ts, web/app/src/ribbon/Ribbon.tsx (the switch in the tab row),
   web/app/src/theme/ThemeSwitch.tsx.
 - Preferences dialog and sections (General, Appearance, Viewing; Apply and Cancel; Reduce motion;
   Default zoom): web/app/src/prefs/PreferencesDialog.tsx (eight sections, lines 286-519; Translation at
@@ -532,7 +532,7 @@ Evidence for the claims on this page (repository paths, checked on main):
 - Uploaded fonts in the font picker: web/app/src/edit/FontPicker.tsx, web/app/src/edit/uploadedPreview.ts;
   not in marks: web/app/src/marks/marks.ts.
 - Engine files precached by the service worker: web/app/src/pwa/build.ts (lines 105-125), web/app/public/sw.js.
-- Preferences opened from the top bar: web/app/src/App.tsx, web/app/src/commands/catalog.ts.
+- Preferences opened from the Main menu: web/app/src/App.tsx, web/app/src/commands/catalog.ts.
 - Autosave copies in the browser's private storage (OPFS): web/app/src/storage/ (opfs.ts,
   autosaveStore.ts, autosaver.ts, tabId.ts); the copy is read from the engine by save.autosave_bytes
   (src/pdfeditor/webapi/save.py). No IndexedDB or file-picker use in web/app/src, web/app/public or

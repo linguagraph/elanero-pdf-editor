@@ -965,3 +965,53 @@ describe('Ribbon: the comment and redaction tools (W4.3a S7)', () => {
     expect(describedText(el)).toContain(t('disabled.needsDocument'));
   });
 });
+
+describe('the theme switch in the ribbon tab row (#795)', () => {
+  const realWidth = window.innerWidth;
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function setWidth(width: number): void {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  // The switch sits in the tab row between the Search tools box and Help, and its three radios are
+  // named by their theme (the labels are visually hidden, so the names are still there).
+  function expectSwitchInRow(): void {
+    const row = host.querySelector<HTMLElement>('.ribbon-tabrow');
+    const themeSwitch = row?.querySelector<HTMLElement>('.theme-switch') ?? null;
+    expect(themeSwitch).not.toBeNull();
+    expect(themeSwitch?.previousElementSibling?.className).toMatch(/ribbon-search/);
+    expect(themeSwitch?.nextElementSibling?.className).toMatch(/ribbon-help/);
+    expect(
+      [...(themeSwitch?.querySelectorAll('input[type="radio"]') ?? [])].map((input) =>
+        input.closest('label')?.textContent?.trim(),
+      ),
+    ).toEqual([t('theme.system'), t('prefs.theme.light'), t('prefs.theme.dark')]);
+  }
+
+  it('sits after Search tools in the full ribbon, at a desktop width', () => {
+    setWidth(1280);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expectSwitchInRow();
+  });
+
+  it('sits after Search tools in the compact form the medium tier forces', () => {
+    setWidth(1100);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expectSwitchInRow();
+  });
+
+  it('shows in the tablet tier, where the tabs are drop-downs', () => {
+    setWidth(900);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.ribbon-collapsed .theme-switch')).not.toBeNull();
+  });
+
+  it('is left out at the phone width, where Preferences holds the theme', () => {
+    setWidth(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} />);
+    expect(host.querySelector('.theme-switch')).toBeNull();
+  });
+});

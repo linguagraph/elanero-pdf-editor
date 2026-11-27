@@ -42,6 +42,7 @@ import { t } from '../i18n/t';
 import { layoutTierForWidth } from '../layout/breakpoints';
 import { useViewportWidth } from '../layout/useViewportWidth';
 import { Icon } from '../theme/Icon';
+import { ThemeSwitch } from '../theme/ThemeSwitch';
 import { type RibbonForm, ribbonForm } from './form';
 import { HelpButton } from './HelpButton';
 import { SearchTools } from './SearchTools';
@@ -79,8 +80,10 @@ export function Ribbon(props: RibbonProps) {
     compact: props.state.ribbonCompact,
     collapsed: props.state.ribbonCollapsed,
   });
+  // The theme switch needs three 28 px options beside the tabs, so below 768 px (the phone tier) it
+  // is left to Preferences ▸ Appearance.
   return form.collapsedBy === 'tier' ? (
-    <CollapsedRibbon {...props} />
+    <CollapsedRibbon {...props} showTheme={layoutTierForWidth(width) !== 'phone'} />
   ) : (
     <FullRibbon {...props} form={form} wideSearch={width >= SEARCH_BOX_MIN_WIDTH} />
   );
@@ -174,6 +177,7 @@ function FullRibbon({ registry, state, handlers, groupExtras, form, wideSearch }
           ))}
         </TabList>
         <SearchTools iconOnly={!wideSearch || compact || userCollapsed} />
+        <ThemeSwitch />
         <HelpButton tab={current} />
         <CollapseChevron expanded={!userCollapsed} onPress={toggleRibbon} />
       </div>
@@ -241,7 +245,13 @@ function CollapseChevron({ expanded, onPress }: CollapseChevronProps) {
 
 // The collapsed form: one row of tab buttons. A tab opens its groups in a popover, which closes
 // once a command in it runs (W1.6 section 2).
-function CollapsedRibbon({ registry, state, handlers, groupExtras }: RibbonProps) {
+function CollapsedRibbon({
+  registry,
+  state,
+  handlers,
+  groupExtras,
+  showTheme,
+}: RibbonProps & { showTheme: boolean }) {
   const tabs = ribbonLayout(registry, state);
   return (
     <div className="ribbon ribbon-collapsed" data-form="collapsed" data-collapsed-by="tier">
@@ -269,6 +279,7 @@ function CollapsedRibbon({ registry, state, handlers, groupExtras }: RibbonProps
         ))}
       </div>
       <SearchTools iconOnly />
+      {showTheme ? <ThemeSwitch /> : null}
       <HelpButton />
     </div>
   );

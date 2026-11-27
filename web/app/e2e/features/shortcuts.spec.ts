@@ -3,6 +3,7 @@
 // Reset all puts it back. A browser-reserved key is refused with its message, and the dialog is
 // walked with Tab only. The palette's Change shortcuts button opens the same dialog.
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { openPreferences } from '../harness/openPreferences';
 import { expectFocusWithin } from './focus';
 
 async function openStartPage(page: Page): Promise<void> {
@@ -10,10 +11,10 @@ async function openStartPage(page: Page): Promise<void> {
   await expect(page.locator('.start-page')).toBeVisible();
 }
 
-// Preferences, then its Keyboard Shortcuts button. Returns the nested dialog (the last one).
+// Preferences (from the Main menu), then its Keyboard Shortcuts button. Returns the nested dialog
+// (the last one).
 async function openShortcutsFromPreferences(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: 'Preferences…', exact: true }).click();
-  await expect(page.getByRole('dialog').first()).toBeVisible();
+  await openPreferences(page);
   await page.getByRole('button', { name: 'Keyboard Shortcuts…', exact: true }).click();
   const dialog = page.getByRole('dialog').last();
   await expect(dialog).toBeVisible();
@@ -48,6 +49,11 @@ async function record(
 test('a rebound key runs its command, survives a reload, and Reset all restores the default', async ({
   page,
 }) => {
+  // Chromium's Open uses window.showOpenFilePicker, which emits no filechooser event. Removing it
+  // sends Open to the <input type=file> fallback, which does emit one (as open-recent.spec.ts does).
+  await page.addInitScript(() => {
+    delete (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker;
+  });
   await openStartPage(page);
   const dialog = await openShortcutsFromPreferences(page);
 
@@ -68,7 +74,7 @@ test('a rebound key runs its command, survives a reload, and Reset all restores 
   ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Preferences…', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Main menu', exact: true })).toBeFocused();
 
   const chooser = page.waitForEvent('filechooser');
   await page.keyboard.press(ctrl('Alt+O'));
@@ -94,7 +100,7 @@ test('a rebound key runs its command, survives a reload, and Reset all restores 
   ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Preferences…', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Main menu', exact: true })).toBeFocused();
   const defaultChooser = page.waitForEvent('filechooser');
   await page.keyboard.press(ctrl('O'));
   await defaultChooser;

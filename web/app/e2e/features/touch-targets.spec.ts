@@ -5,6 +5,7 @@
 // engine (STAGED), so the spec skips without it, as the other engine specs do.
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { fixture, openApp, openPdf, STAGED } from './support';
+import { openPreferences } from '../harness/openPreferences';
 
 const MIN_PX = 44;
 
@@ -116,9 +117,7 @@ test.describe('engine staged', () => {
       await page.keyboard.press('Escape');
 
       // Preferences, then close it with Escape.
-      await page.getByRole('button', { name: 'Preferences…', exact: true }).click();
-      const prefs = page.getByRole('dialog').first();
-      await expect(prefs).toBeVisible();
+      const prefs = await openPreferences(page);
       await sweep(prefs, 'Preferences');
       await page.keyboard.press('Escape');
 

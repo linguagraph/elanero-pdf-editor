@@ -1,33 +1,36 @@
+/* Icon-only segmented control: three 28 px options that share their borders (the labels are
+   visually hidden in ThemeSwitch.tsx and show as tooltips). */
 .theme-switch {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   margin: 0;
   padding: 0;
   border: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-small);
-}
-
-.theme-switch legend {
-  padding: 0;
-  margin-inline-end: var(--space-1);
+  min-width: 0;
 }
 
 .theme-switch-option {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-base);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: var(--font-size-body);
   cursor: pointer;
 }
 
+.theme-switch-option + .theme-switch-option {
+  margin-inline-start: -1px;
+}
+
 .theme-switch-option:has(input:checked) {
+  z-index: 1;
   border-color: var(--color-accent);
   box-shadow: inset 0 0 0 1px var(--color-accent);
 }

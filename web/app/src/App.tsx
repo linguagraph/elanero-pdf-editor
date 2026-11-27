@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
-import { type CommandHandlers, runCommand } from './commands/run';
+import { type CommandHandlers } from './commands/run';
 import { type CommandState } from './commands/registry';
 import { t } from './i18n/t';
 import { EngineLoadingScreen } from './feedback/LoadingScreen';
@@ -20,7 +20,6 @@ import { NarrowNotice } from './layout/NarrowNotice';
 import { layoutForWidth } from './layout/breakpoints';
 import { useViewportWidth } from './layout/useViewportWidth';
 import { BrandMark } from './theme/BrandMark';
-import { ThemeSwitch } from './theme/ThemeSwitch';
 import { type AppMenuPanelItem, AppMenu } from './ribbon/AppMenu';
 import { QuickAccess } from './ribbon/QuickAccess';
 import { openGuide, WEB_VERSION_PAGE } from './help/guide';
@@ -186,6 +185,16 @@ export function App({
   const [findRequest, setFindRequest] = useState<FindRequest | undefined>(undefined);
   const findCount = useRef(0);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  // Preferences opens from the Main menu, and that menu item is gone once the dialog closes. Focus
+  // goes to the Main menu button (WCAG 2.4.3). It runs after a timeout so it wins over the dialog's
+  // own focus restore, which cannot find the removed item.
+  function closePreferences(): void {
+    setPreferencesOpen(false);
+    window.setTimeout(() => {
+      const menuButton = document.querySelector('.app-menu-button');
+      if (menuButton instanceof HTMLElement) menuButton.focus();
+    }, 0);
+  }
   // The translation languages and privacy link, read from the engine when the page opens (W6.6).
   const loadTranslationInfo = useCallback(
     async () => (await engine.whenReady()).call('translation.info', {}),
@@ -1161,14 +1170,6 @@ export function App({
               <QuickAccess registry={REGISTRY} state={state} handlers={handlers} />
             </div>
             <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
-            <button
-              type="button"
-              className="app-header-prefs"
-              onClick={() => runCommand(REGISTRY, 'preferences', state, handlers)}
-            >
-              {t('command.preferences.label')}
-            </button>
-            <ThemeSwitch />
           </div>
           <NarrowNotice />
           <Ribbon registry={REGISTRY} state={state} handlers={handlers} groupExtras={groupExtras} />
@@ -1191,7 +1192,7 @@ export function App({
       />
       <PreferencesDialog
         isOpen={preferencesOpen}
-        onClose={() => setPreferencesOpen(false)}
+        onClose={closePreferences}
         // Any open tab counts, including one still loading or behind the start page (Open Recent):
         // clearing reloads the page, which would lose its unsaved edits. A file still queued or
         // opening (docs.pending) counts too: it can finish while the confirmation is showing.
