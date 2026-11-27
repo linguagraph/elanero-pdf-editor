@@ -256,6 +256,17 @@ jobs:
           # The budgets run serially: the xdist workers skip them.
           uv run pytest tests/benchmarks
 
+      # The desktop performance numbers for the trend (perf-trend.yml, W8.3 S5). Kept 90 days; not on
+      # pull requests. Written by tests/benchmarks/conftest.py, so it exists only after the budgets ran.
+      - name: Upload the desktop perf results (trend)
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-desktop-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .perf/perf-results.json
+          if-no-files-found: warn
+          retention-days: 90
+
   test-linux:
     # Offscreen Qt differs enough here to find real bugs, but nothing ships for Linux.
     needs: checks
@@ -285,6 +296,17 @@ jobs:
       - run: uv run python scripts/fetch_tessdata.py
       - run: uv run pytest -n "${{ env.PYTEST_WORKERS }}" --ignore=tests/benchmarks
       - run: uv run pytest tests/benchmarks
+
+      # The desktop performance numbers for the trend (perf-trend.yml, W8.3 S5). Kept 90 days; not on
+      # pull requests. Written by tests/benchmarks/conftest.py, so it exists only after the budgets ran.
+      - name: Upload the desktop perf results (trend)
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-desktop-linux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .perf/perf-results.json
+          if-no-files-found: warn
+          retention-days: 90
 
   build:
     # One PyInstaller run writes the portable exe and the app folder, and every package is made
