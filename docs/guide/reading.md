@@ -37,7 +37,7 @@ pages are arranged:
 | Fit Page | Ctrl+0 |
 | Fit Width | Ctrl+2 |
 
-Hold **Ctrl** and turn the mouse wheel to zoom. The zoom box shows the current level. The default zoom for a newly opened document is set in
+Hold **Ctrl** and turn the mouse wheel to zoom. The zoom box shows the current level. The page bar at the bottom of the page area uses icons for its buttons (previous and next page, zoom out and in, the zoom presets, and Fit Width and Fit Page); hover over one to see its name. The default zoom for a newly opened document is set in
 [Preferences](preferences.md#appearance) (Fit Width by default).
 
 ## Rotate the view

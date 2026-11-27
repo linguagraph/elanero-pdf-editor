@@ -395,3 +395,54 @@ test.describe('document tabs in the top bar', () => {
     expect(await horizontalOverflow(page)).toBe(0);
   });
 });
+
+// The canvas pill is the desktop's compact bar (#796): 32 px tall on one row at a fine pointer, with
+// every control at least 24 px square. At a phone width the bar stays visible and nothing scrolls.
+test.describe('page navigation bar size (#796)', () => {
+  test.skip(
+    !ENGINE_STAGED,
+    'engine assets are not staged (scripts/stage_engine_assets.mjs); not run',
+  );
+
+  for (const [width, height] of [
+    [1366, 768],
+    [390, 844],
+  ] as const) {
+    test(`page navigation bar at ${width} px: visible, no horizontal page scroll`, async ({
+      page,
+    }) => {
+      await openAtWidth(page, width, height);
+      await page
+        .locator('input[type="file"]')
+        .first()
+        .setInputFiles({
+          name: 'pill.pdf',
+          mimeType: 'application/pdf',
+          buffer: Buffer.from(ONE_PAGE_PDF),
+        });
+      const pill = page.locator('.canvas-pill');
+      await expect(pill).toBeVisible({ timeout: 180_000 });
+      expect(await horizontalOverflow(page)).toBe(0);
+      if (width !== 1366) return;
+
+      const pillBox = await pill.boundingBox();
+      if (pillBox === null) throw new Error('no pill');
+      expect(Math.abs(pillBox.height - 32)).toBeLessThanOrEqual(1);
+      expect(pillBox.width).toBeLessThanOrEqual(360);
+
+      const controls = await pill.locator('button, input').evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height };
+        }),
+      );
+      const first = controls[0];
+      if (first === undefined) throw new Error('no pill controls');
+      for (const box of controls) {
+        expect(box.w).toBeGreaterThanOrEqual(24);
+        expect(box.h).toBeGreaterThanOrEqual(24);
+        expect(Math.abs(box.y - first.y)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+});
