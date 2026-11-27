@@ -178,9 +178,9 @@
   padding: var(--space-1) var(--space-1);
   background: none;
   border: 1px solid transparent;
+  border-radius: var(--radius-small);
   border-start-start-radius: 0;
   border-end-start-radius: 0;
-  border-radius: var(--radius-small);
   color: var(--color-text);
   cursor: pointer;
 }
@@ -190,6 +190,13 @@
 .ribbon-split-arrow:hover {
   background: var(--color-surface-alt);
   border-color: var(--color-border);
+}
+
+/* A pressed split command keeps its accent border while hovered: this rule comes after the hover
+   rule above, with the same specificity, so it wins over the grey hover border. */
+.ribbon-split > .ribbon-command[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-accent);
 }
 
 .ribbon-split-arrow[data-focus-visible] {
