@@ -12,7 +12,8 @@ export type OrganizerCommandId =
   | 'insert-pages'
   | 'duplicate-pages'
   | 'extract-pages'
-  | 'delete-pages';
+  | 'delete-pages'
+  | 'replace-pages';
 
 export interface OrganizerStatus {
   readonly selected: number;
@@ -28,6 +29,7 @@ export interface OrganizerActions {
   duplicate(): void;
   extract(): void;
   askDelete(): void;
+  replace(): void;
 }
 
 let status: OrganizerStatus | null = null;
@@ -128,6 +130,9 @@ export function runOrganizerAction(id: OrganizerCommandId, panel: OrganizerActio
       return;
     case 'delete-pages':
       panel.askDelete();
+      return;
+    case 'replace-pages':
+      panel.replace();
       return;
   }
 }

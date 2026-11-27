@@ -22,7 +22,9 @@ import { CachedCanvas } from '../view/pixels';
 import { type PlannedRender, RenderScheduler } from '../view/renderScheduler';
 import { thumbnailScaleMilli, type ThumbnailSize } from '../view/thumbnails';
 import { extractName, runExtract } from './extract';
-import { insertFile, insertedCount, PasswordGaveUp } from './insertFile';
+import { PasswordGaveUp } from '../documents/withPassword';
+import { insertFile, insertedCount } from './insertFile';
+import { ReplacePagesDialog } from './ReplacePagesDialog';
 import {
   clearOrganizer,
   hasQueuedOrganizerCommands,
@@ -134,6 +136,7 @@ function OrganizerPanelContent({
   // Whether a queued ribbon command has already preselected the initial page for this document.
   const preselected = useRef(false);
   const [confirming, setConfirming] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   // A new scheduler after each change: the page indexes now mean other pages, so the cache of the
   // old one is left behind rather than drawn wrongly.
   const [scheduler, setScheduler] = useState(() => new RenderScheduler(rpc, handle));
@@ -340,8 +343,20 @@ function OrganizerPanelContent({
     );
   };
 
+  // The source's pages take the selection's place, and become the selection; Undo reverts the step.
+  const replaced = (count: number, history: number) => {
+    setReplacing(false);
+    void reload(insertedSelection(Math.min(...picked), count)).then(
+      () => offerChangeUndo(tp('organizer.replaced', count), history),
+      reportFailure,
+    );
+  };
+
   // The ribbon's view of this panel (issue 736). Each action is the closure a button above runs.
   const actions: OrganizerActions = {
+    replace: () => {
+      if (!busyRef.current && hasSelection) setReplacing(true);
+    },
     rotate: (delta) => rotate(delta),
     insertFile: () => {
       if (!busyRef.current) fileInput.current?.click();
@@ -564,6 +579,16 @@ function OrganizerPanelContent({
           </Button>
         </div>
       </Overlay>
+      <ReplacePagesDialog
+        isOpen={replacing}
+        onClose={() => setReplacing(false)}
+        rpc={rpc}
+        handle={handle}
+        picked={picked}
+        total={total}
+        onReplaced={replaced}
+        prompt={prompt}
+      />
     </Panel>
   );
 }

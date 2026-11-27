@@ -235,7 +235,7 @@ const DECLARED_COMMANDS: readonly CommandDef[] = [
   cmd('rotate-pages-left', 'command.rotate-pages-left.label', 'organize.pages', PAGES_SELECTED),
   cmd('rotate-pages-right', 'command.rotate-pages-right.label', 'organize.pages', PAGES_SELECTED),
   cmd('extract-pages', 'command.extract-pages.label', 'organize.assemble', PAGES_SELECTED),
-  cmd('replace-pages', 'command.replace-pages.label', 'organize.assemble'),
+  cmd('replace-pages', 'command.replace-pages.label', 'organize.assemble', PAGES_SELECTED),
   aliased(
     cmd('split-document', 'command.split-document.label', 'organize.assemble'),
     'command.split-document.keywords',

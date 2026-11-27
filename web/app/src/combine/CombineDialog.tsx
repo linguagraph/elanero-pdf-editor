@@ -13,7 +13,7 @@ import { downloadBytes } from '../files/downloads';
 import { Overlay } from '../layout/Overlay';
 import { parsePageRanges, type PageRangeKind } from '../pages/pageRanges';
 import { mergePreview, type MergePreview, type PreviewRow } from './preview';
-import { PASSWORD_ATTEMPTS } from '../organizer/insertFile';
+import { PASSWORD_ATTEMPTS } from '../documents/withPassword';
 import {
   lockedState,
   type LockedState,

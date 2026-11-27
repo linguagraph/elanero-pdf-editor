@@ -271,6 +271,7 @@ export interface PageRpc {
       | 'comments.list'
       | 'comments.page'
       | 'split.plan'
+      | 'combine.probe'
       | 'system.memory',
   >(
     method: M,
