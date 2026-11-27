@@ -8,6 +8,16 @@ import { PRODUCTION_BASE } from './deploy/base';
 import { CSP_POLICY } from './csp';
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const APP_TRUSTED_TYPES = ['elanero-worker-url', 'elanero-sw-url'];
+
+// The text of every built .js file, concatenated, for the bundle scans.
+async function scriptText(outDir: string): Promise<string> {
+  let text = '';
+  for (const relative of await readdir(outDir, { recursive: true })) {
+    if (relative.endsWith('.js')) text += await readFile(join(outDir, relative), 'utf8');
+  }
+  return text;
+}
 
 describe('production build', () => {
   it('ships only the strict CSP, with no inline script', async () => {
@@ -26,6 +36,19 @@ describe('production build', () => {
 
       expect(html).not.toMatch(/<script(?![^>]*\ssrc=)[^>]*>/i);
       expect(html).toMatch(/<script type="module"[^>]*\ssrc="[^"]+"/);
+
+      // W8.6 S2b (F7): every createPolicy call in the bundle passes a literal app policy name. A
+      // bundled dependency that creates another would throw in production. The service worker's
+      // policy is dead code in this test build (import.meta.env.PROD is false under vitest), so
+      // only the engine's policy is required here; csp.test.ts checks the source for both.
+      const code = await scriptText(outDir);
+      const calls = [...code.matchAll(/createPolicy\(/g)];
+      const literal = [...code.matchAll(/createPolicy\(\s*["'`]([^"'`]+)["'`]/g)];
+      expect(calls.length).toBeGreaterThan(0);
+      expect(literal).toHaveLength(calls.length);
+      const names = new Set(literal.map((match) => match[1] ?? ''));
+      expect(names).toContain('elanero-worker-url');
+      for (const name of names) expect(APP_TRUSTED_TYPES).toContain(name);
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
