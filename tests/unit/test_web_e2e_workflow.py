@@ -77,4 +77,7 @@ def test_feature_step_runs_its_shard_and_artifacts_carry_the_shard() -> None:
         if str(s.get("uses", "")).startswith("actions/upload-artifact")
         and "web-e2e-" in str(s["with"]["name"])
     )
-    assert "matrix.shard" in upload["with"]["name"]
+    name = str(upload["with"]["name"])
+    assert "strategy.job-index" in name
+    assert "replace(" not in name
+    assert "/" not in name

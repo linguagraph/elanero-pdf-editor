@@ -220,8 +220,9 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          # One artifact per job: the shard is in the name ("/" is not allowed in an artifact name).
-          name: web-e2e-${{ matrix.browser }}-${{ replace(matrix.shard, '/', 'of') }}
+          # One artifact per job. The name uses the job index, not the shard: "/" is not allowed in an
+          # artifact name, and GitHub's expressions have no replace(). The index is unique in the run.
+          name: web-e2e-${{ matrix.browser }}-${{ strategy.job-index }}
           if-no-files-found: warn
           path: |
             web/app/playwright-report/
