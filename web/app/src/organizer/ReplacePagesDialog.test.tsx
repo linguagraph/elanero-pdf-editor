@@ -183,6 +183,59 @@ describe('ReplacePagesDialog', () => {
     expect(props.onReplaced).not.toHaveBeenCalled();
   });
 
+  it('a refusal of a locked file keeps the password for the next Replace', async () => {
+    const { rpc, calls } = fakeRpc({
+      pages: 2,
+      locked: 'secret',
+      refuse: 'invalid_source_pages',
+    });
+    const prompt = createPasswordPrompt();
+    const props = render({ rpc, prompt });
+    await choose(pdf());
+    await act(async () => {
+      prompt.answer('secret');
+    });
+    await act(async () => {});
+    await act(async () => {
+      replaceButton().click();
+    });
+    await act(async () => {});
+    expect(alerts()).toContain(t('error.REFUSED.invalidSourcePages'));
+    expect(props.onReplaced).not.toHaveBeenCalled();
+    // The second Replace sends the same password, with no prompt for it.
+    await act(async () => {
+      replaceButton().click();
+    });
+    await act(async () => {});
+    const run = calls.filter((c) => c.method === 'actions.run');
+    expect(run.length).toBe(2);
+    expect(run[1]?.params.args).toMatchObject({ password: 'secret' });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('Escape does not close the dialog while a replace is running', async () => {
+    // A replace that never answers keeps the dialog in its running state.
+    const rpc = {
+      call: vi.fn((method: string) =>
+        method === 'combine.probe'
+          ? Promise.resolve({ page_count: 2, encrypted: false })
+          : new Promise(() => {}),
+      ),
+    } as unknown as PageRpc;
+    const props = render({ rpc });
+    await choose(pdf());
+    await act(async () => {
+      replaceButton().click();
+    });
+    await act(async () => {});
+    const dialog = document.querySelector('[role="dialog"]');
+    if (dialog === null) throw new Error('no dialog');
+    await act(async () => {
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
   it('asks for the password of a locked file, then uses it for the replace', async () => {
     const { rpc, calls } = fakeRpc({ pages: 2, locked: 'secret' });
     const prompt = createPasswordPrompt();

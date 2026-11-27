@@ -25,14 +25,18 @@ export interface ReplacePagesDialogProps {
 }
 
 export function ReplacePagesDialog(props: ReplacePagesDialogProps) {
+  // Lifted out of the form so Escape and an outside click can be refused while a replace runs.
+  const [running, setRunning] = useState(false);
   return (
     <Overlay
       isOpen={props.isOpen}
-      onClose={props.onClose}
+      onClose={() => {
+        if (!running) props.onClose();
+      }}
       title={t('replace.title')}
       showCloseButton={false}
     >
-      <ReplaceForm {...props} />
+      <ReplaceForm {...props} running={running} setRunning={setRunning} />
     </Overlay>
   );
 }
@@ -46,6 +50,11 @@ function failureMessage(failure: unknown): string {
   return t('replace.failed');
 }
 
+interface ReplaceFormProps extends ReplacePagesDialogProps {
+  readonly running: boolean;
+  readonly setRunning: (running: boolean) => void;
+}
+
 // Mounted only while open, so each open starts with no file and no password.
 function ReplaceForm({
   rpc,
@@ -55,16 +64,18 @@ function ReplaceForm({
   onClose,
   onReplaced,
   prompt = passwordPrompt,
-}: ReplacePagesDialogProps) {
+  running,
+  setRunning,
+}: ReplaceFormProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   // The page count, or null for a file too large to count here.
   const [pages, setPages] = useState<number | null>(null);
-  // The password that opened the counted file; the replace call uses it, then it is dropped.
+  // The password that opened the counted file. It stays until a replace succeeds or the dialog
+  // closes, so a refused run does not ask for it again.
   const [password, setPassword] = useState<string | null>(null);
   const [range, setRange] = useState('');
   const [probing, setProbing] = useState(false);
-  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // A file over the probe limit is not counted. A cancelled password or unreadable file clears it.
@@ -112,9 +123,6 @@ function ReplaceForm({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canRun || file === null || source === null) return;
-    // The password serves this one call, then leaves the dialog's state.
-    const first = password;
-    setPassword(null);
     setRunning(true);
     setError(null);
     withPassword(
@@ -131,11 +139,19 @@ function ReplaceForm({
           },
         }),
       prompt,
-      first,
+      password,
     ).then(
       (won) => {
-        if (won?.value.executed) onReplaced(source.length, won.value.state.history);
-        else setRunning(false);
+        if (won?.value.executed) {
+          setPassword(null);
+          setRunning(false);
+          onReplaced(source.length, won.value.state.history);
+          return;
+        }
+        // A refusal keeps the dialog and the password for the next try; a password typed into
+        // the prompt during this run replaces it.
+        if (won !== null) setPassword(won.password);
+        setRunning(false);
       },
       (failure: unknown) => {
         setRunning(false);
