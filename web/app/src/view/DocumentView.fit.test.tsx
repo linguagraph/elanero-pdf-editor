@@ -3,9 +3,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
-import { DocumentView, type DocumentViewHandle } from './DocumentView';
+import type { DocumentViewHandle } from './DocumentView';
 import { fitPageZoom, fitWidthZoom } from './layout';
 import { MAX_RENDER_SCALE_MILLI, quantizeScale, scaleMilli, stepZoom } from './zoom';
+import { ViewWithStatus } from './viewWithStatus.testutil';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -48,7 +49,7 @@ const viewWidth = () => window.innerWidth;
 const viewHeight = () => window.innerHeight;
 
 // The zoom box of the canvas pill shows the zoom as a percentage.
-const zoomText = () => host.querySelector<HTMLInputElement>('.canvas-pill-zoom-input')?.value;
+const zoomText = () => host.querySelector<HTMLInputElement>('.doc-status-zoom-input')?.value;
 
 // A pill button, by its accessible name (the aria-label, else its text).
 const button = (label: string) =>
@@ -61,7 +62,7 @@ function choosePreset(label: string): void {
   act(() => {
     button('Zoom presets')?.click();
   });
-  const preset = [...host.querySelectorAll<HTMLButtonElement>('.canvas-pill-presets button')].find(
+  const preset = [...host.querySelectorAll<HTMLButtonElement>('.doc-status-presets button')].find(
     (b) => b.textContent === label,
   );
   act(() => {
@@ -101,7 +102,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitWidth' });
     const { rpc, renders } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const zoom = fitWidthZoom(LETTER.width, viewWidth());
@@ -115,7 +116,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitPage' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const zoom = fitPageZoom(LETTER.width, LETTER.height, viewWidth(), viewHeight());
@@ -127,7 +128,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'actual' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     expect(zoomText()).toBe('100%');
@@ -137,7 +138,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'actual' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     expect(zoomText()).toBe('100%');
@@ -153,7 +154,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'actual' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     act(() => {
@@ -170,7 +171,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitWidth' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const fitted = fitWidthZoom(LETTER.width, viewWidth());
@@ -185,7 +186,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitPage' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const fitted = fitPageZoom(LETTER.width, LETTER.height, viewWidth(), viewHeight());
@@ -200,7 +201,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'actual' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     act(() => {
@@ -222,7 +223,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitWidth' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const before = window.innerWidth;
@@ -238,7 +239,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitWidth' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const scroller = host.querySelector<HTMLElement>('.doc-view-scroll');
@@ -267,7 +268,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'fitWidth' });
     const { rpc } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const fitted = fitWidthZoom(LETTER.width, viewWidth());
@@ -288,7 +289,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 4 });
     try {
       act(() => {
-        root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+        root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
       });
       await flush();
       // Zoom in from 100 % to the maximum: 1, 1.25, 1.5, 2, 3, 4, 6, 8, 12, 16, 32, 64.
@@ -316,7 +317,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     savePreferences({ defaultZoom: 'actual' });
     const { rpc, renders } = fakeRpc();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     await flush();
@@ -329,7 +330,7 @@ describe('DocumentView fit modes (W5.1e)', () => {
     const { rpc } = fakeRpc();
     const viewRef = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" />);
     });
     await flush();
     act(() => {

@@ -16,6 +16,22 @@ function visibleShare(page: Page, index: number): Promise<number> {
   }, index);
 }
 
+// Back and Forward are in the ribbon's Home > Navigate group, which overflows into the "More commands"
+// menu at this window size. The menu closes when a command runs, so a state is read by opening it.
+async function expectNavDisabled(
+  page: Page,
+  name: 'Back' | 'Forward',
+  disabled: boolean,
+): Promise<void> {
+  await page.getByRole('button', { name: 'More commands', exact: true }).click();
+  const command = page
+    .getByRole('dialog', { name: 'More commands', exact: true })
+    .getByRole('button', { name, exact: true });
+  if (disabled) await expect(command).toBeDisabled();
+  else await expect(command).toBeEnabled();
+  await page.keyboard.press('Escape');
+}
+
 test.describe('engine staged', () => {
   test.skip(!STAGED, 'engine assets are not staged (scripts/stage_engine_assets.mjs); not run');
 
@@ -27,12 +43,12 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const jump = page.getByRole('textbox', { name: 'Go to page' });
-    // The canvas pill's buttons; the ribbon has commands with the same names.
-    const pill = page.locator('.canvas-pill');
+    // The status bar's buttons; the ribbon has commands with the same names.
+    const pill = page.locator('.doc-status-controls');
     const previous = pill.getByRole('button', { name: 'Previous page' });
     const next = pill.getByRole('button', { name: 'Next page' });
     await expect(jump).toHaveValue('1');
-    await expect(page.locator('.canvas-pill-total')).toHaveText('/ 5');
+    await expect(page.locator('.doc-status-total')).toHaveText('/ 5');
     await expect(previous).toBeDisabled();
 
     await next.click();
@@ -81,13 +97,12 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const jump = page.getByRole('textbox', { name: 'Go to page' });
-    // The status bar's Back and Forward. History records the jumps the side panels make (the
-    // thumbnails, bookmarks, search and redaction lists); the Go to Page field does not record.
-    const status = page.locator('.doc-status');
-    const back = status.getByRole('button', { name: 'Back', exact: true });
-    const forward = status.getByRole('button', { name: 'Forward', exact: true });
-    await expect(back).toBeDisabled();
-    await expect(forward).toBeDisabled();
+    // Back and Forward are the ribbon's Home > Navigate commands (#808 removed them from the status
+    // bar). Their states are read in the "More commands" menu, and they run on their default keys
+    // (Alt+Left and Alt+Right, the shared shortcut table). History records the jumps the side panels
+    // make (the thumbnails, bookmarks, search and redaction lists); the Go to Page field does not record.
+    await expectNavDisabled(page, 'Back', true);
+    await expectNavDisabled(page, 'Forward', true);
 
     // The Thumbnails panel is open on a new document; its items are the jump targets.
     const thumbnail = (n: number) => page.getByRole('button', { name: `Go to page ${n} of 5` });
@@ -96,20 +111,24 @@ test.describe('engine staged', () => {
     await expect(jump).toHaveValue('3');
     await thumbnail(5).click();
     await expect(jump).toHaveValue('5');
-    await expect(back).toBeEnabled();
+    await expectNavDisabled(page, 'Back', false);
 
-    await back.click();
+    // Move focus out of the ribbon toolbar, which swallows Alt+Arrow.
+    await thumbnail(5).focus();
+    await page.keyboard.press('Alt+ArrowLeft');
     await expect(jump).toHaveValue('3');
-    await back.click();
+    await page.keyboard.press('Alt+ArrowLeft');
     await expect(jump).toHaveValue('1');
-    await expect(back).toBeDisabled();
-    await expect(forward).toBeEnabled();
+    await expectNavDisabled(page, 'Back', true);
+    await expectNavDisabled(page, 'Forward', false);
 
-    await forward.click();
+    // Move focus out of the ribbon toolbar, which swallows Alt+Arrow.
+    await thumbnail(5).focus();
+    await page.keyboard.press('Alt+ArrowRight');
     await expect(jump).toHaveValue('3');
-    await forward.click();
+    await page.keyboard.press('Alt+ArrowRight');
     await expect(jump).toHaveValue('5');
-    await expect(forward).toBeDisabled();
+    await expectNavDisabled(page, 'Forward', true);
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
@@ -122,7 +141,7 @@ test.describe('engine staged', () => {
     // The field shows the first page's label (roman "i"), and the total is still the page count.
     const jump = page.getByRole('textbox', { name: 'Go to page' });
     await expect(jump).toHaveValue('i');
-    await expect(page.locator('.canvas-pill-total')).toHaveText('/ 8');
+    await expect(page.locator('.doc-status-total')).toHaveText('/ 8');
 
     // The label "A-2" is the fourth page; the field takes the label, not the page number.
     await jump.fill('A-2');

@@ -27,7 +27,7 @@ const PDF_SPECS = pageSpecs(PAGE_COUNT);
 const VISIBLE = PDF_SPECS.map(visibleSize);
 
 async function setZoom(page: Page, percent: number): Promise<void> {
-  const input = page.locator('.canvas-pill-zoom-input');
+  const input = page.locator('.doc-status-zoom-input');
   await input.fill(String(percent));
   await input.press('Enter');
   await expect(input).toHaveValue(`${percent}%`);
@@ -113,15 +113,9 @@ test.describe('engine staged', () => {
       .locator('.doc-view-content')
       .evaluate((el) => parseFloat((el as HTMLElement).style.height));
     expect(Math.abs(contentHeight - expected)).toBeLessThan(1);
-    // The scroller's extent is the content plus the pill clearance, a spacer the CSS adds after it
-    // (canvasPill.css, .doc-view-scroll::after) so the last page can scroll clear of the pill.
-    const scrollHeight = await page.locator('.doc-view-scroll').evaluate((el) => ({
-      scrollHeight: el.scrollHeight,
-      clearance: parseFloat(getComputedStyle(el, '::after').height),
-    }));
-    expect(
-      Math.abs(scrollHeight.scrollHeight - (expected + scrollHeight.clearance)),
-    ).toBeLessThanOrEqual(1);
+    // The scroller's extent is the content: the floating pill's clearance spacer is gone (#808).
+    const scrollHeight = await page.locator('.doc-view-scroll').evaluate((el) => el.scrollHeight);
+    expect(Math.abs(scrollHeight - expected)).toBeLessThanOrEqual(1);
 
     // Only a bounded run of pages is mounted at the top, the middle and the end.
     const mountedAt = async (fraction: number) => {

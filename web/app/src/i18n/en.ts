@@ -1045,13 +1045,8 @@ export const EN = {
   'view.goToPage': 'Go to page',
   'view.jumpInvalid':
     'There is no page "{input}" in this document. Type a page label, or a page number from 1 to {total}.',
-  'view.back': 'Back',
-  'view.forward': 'Forward',
   'view.pageNumber': 'Page {page} of {total}',
   'view.renderFailed': 'This page could not be drawn.',
-  'view.layoutSingle': 'Single column',
-  'view.layoutPage': 'Single page',
-  'view.layoutTwoPage': 'Two pages',
   'links.goTo': 'Go to page {label}',
   'links.noTarget': 'Link with no destination',
   'links.unsupported': 'Unsupported link',

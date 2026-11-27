@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
 import { t } from '../i18n/t';
-import { DocumentView } from './DocumentView';
 import { computeColumn, scrollTopForPage } from './layout';
+import { ViewWithStatus } from './viewWithStatus.testutil';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +40,7 @@ async function flush(): Promise<void> {
 }
 
 function pillField(): HTMLInputElement {
-  const field = host.querySelector<HTMLInputElement>('.canvas-pill-jump input');
+  const field = host.querySelector<HTMLInputElement>('.doc-status-jump input');
   if (field === null) throw new Error('no page field in the pill');
   return field;
 }
@@ -85,7 +85,7 @@ afterEach(() => {
 describe('page labels in the reader', () => {
   it('shows the first page label in the pill and jumps by a typed label, then by a number', async () => {
     act(() => {
-      root.render(<DocumentView rpc={fakeRpc(3, ['i', 'ii', '1'])} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={fakeRpc(3, ['i', 'ii', '1'])} handle="doc-1" />);
     });
     await flush();
     expect(pillField().value).toBe('i');
@@ -111,13 +111,13 @@ describe('page labels in the reader', () => {
 
   it('shows the page number and refuses a page the document does not have', async () => {
     act(() => {
-      root.render(<DocumentView rpc={fakeRpc(3, [])} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={fakeRpc(3, [])} handle="doc-1" />);
     });
     await flush();
     expect(pillField().value).toBe('1');
 
     typeAndSubmit('9');
-    expect(host.querySelector('.canvas-pill-error')?.textContent).toBe(
+    expect(host.querySelector('.doc-status-error')?.textContent).toBe(
       t('view.jumpInvalid', { input: '9', total: 3 }),
     );
   });

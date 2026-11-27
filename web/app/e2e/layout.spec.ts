@@ -566,7 +566,7 @@ test.describe('tab row with a document open (#795)', () => {
           mimeType: 'application/pdf',
           buffer: Buffer.from(ONE_PAGE_PDF),
         });
-      await expect(page.locator('.canvas-pill')).toBeVisible({ timeout: 180_000 });
+      await expect(page.locator('.doc-status-jump input')).toBeVisible({ timeout: 180_000 });
       const fit = await frameFit(page);
       expect(fit.frame).toBeLessThanOrEqual(0);
       expect(fit.row).toBeLessThanOrEqual(0.5);
@@ -576,48 +576,59 @@ test.describe('tab row with a document open (#795)', () => {
   }
 });
 
-// The canvas pill is the desktop's compact bar (#796): 32 px tall on one row at a fine pointer, with
-// every control at least 24 px square. At a phone width the bar stays visible and nothing scrolls.
-test.describe('page navigation bar size (#796)', () => {
+// The status bar holds the page and zoom controls (#808 slice 1). At a fine pointer it is 29 px
+// tall, with every control at least 24 px square on one row. Under a touch pointer its controls are
+// 44 px. At a phone width it wraps, and nothing scrolls.
+test.describe('status bar size (#808)', () => {
   test.skip(
     !ENGINE_STAGED,
     'engine assets are not staged (scripts/stage_engine_assets.mjs); not run',
   );
 
-  for (const [width, height] of [
-    [1366, 768],
-    [390, 844],
-  ] as const) {
-    test(`page navigation bar at ${width} px: visible, no horizontal page scroll`, async ({
-      page,
-    }) => {
-      await openAtWidth(page, width, height);
-      await page
-        .locator('input[type="file"]')
-        .first()
-        .setInputFiles({
-          name: 'pill.pdf',
-          mimeType: 'application/pdf',
-          buffer: Buffer.from(ONE_PAGE_PDF),
-        });
-      const pill = page.locator('.canvas-pill');
-      await expect(pill).toBeVisible({ timeout: 180_000 });
-      expect(await horizontalOverflow(page)).toBe(0);
-      if (width !== 1366) return;
+  async function openOneDocument(
+    page: import('@playwright/test').Page,
+    width: number,
+    height: number,
+  ): Promise<void> {
+    await openAtWidth(page, width, height);
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles({
+        name: 'status.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from(ONE_PAGE_PDF),
+      });
+    await expect(page.locator('.doc-status-jump input')).toBeVisible({ timeout: 180_000 });
+  }
 
-      const pillBox = await pill.boundingBox();
-      if (pillBox === null) throw new Error('no pill');
-      expect(Math.abs(pillBox.height - 32)).toBeLessThanOrEqual(1);
-      expect(pillBox.width).toBeLessThanOrEqual(360);
-
-      const controls = await pill.locator('button, input').evaluateAll((els) =>
+  async function controlBoxes(page: import('@playwright/test').Page) {
+    return page
+      .locator('.doc-status-controls button, .doc-status-controls input')
+      .evaluateAll((els) =>
         els.map((el) => {
           const r = el.getBoundingClientRect();
           return { x: r.x, y: r.y, w: r.width, h: r.height };
         }),
       );
+  }
+
+  for (const [width, height] of [
+    [1366, 768],
+    [390, 844],
+  ] as const) {
+    test(`status bar at ${width} px: visible, no horizontal page scroll`, async ({ page }) => {
+      await openOneDocument(page, width, height);
+      expect(await horizontalOverflow(page)).toBe(0);
+      if (width !== 1366) return;
+
+      const bar = await page.locator('.app-frame-status').boundingBox();
+      if (bar === null) throw new Error('no status bar');
+      expect(Math.abs(bar.height - 29)).toBeLessThanOrEqual(1);
+
+      const controls = await controlBoxes(page);
       const first = controls[0];
-      if (first === undefined) throw new Error('no pill controls');
+      if (first === undefined) throw new Error('no status bar controls');
       for (const box of controls) {
         expect(box.w).toBeGreaterThanOrEqual(24);
         expect(box.h).toBeGreaterThanOrEqual(24);
@@ -625,4 +636,53 @@ test.describe('page navigation bar size (#796)', () => {
       }
     });
   }
+
+  // WCAG reflow width: the bar stays inside the viewport, and the zoom group does not run past the
+  // frame's right edge (the page error and the zoom error are kept inside the frame too).
+  test('status bar at 320 px with a document open: inside the viewport, zoom group inside the frame', async ({
+    page,
+  }) => {
+    await openOneDocument(page, 320, 768);
+    expect(await horizontalOverflow(page)).toBe(0);
+
+    const bar = await page.locator('.app-frame-status').boundingBox();
+    if (bar === null) throw new Error('no status bar');
+    expect(bar.x).toBeGreaterThanOrEqual(0);
+    expect(bar.x + bar.width).toBeLessThanOrEqual(320);
+
+    const frame = await page.locator('.app-frame').boundingBox();
+    if (frame === null) throw new Error('no app frame');
+    const zoomGroup = await page.locator('.doc-status-group').last().boundingBox();
+    if (zoomGroup === null) throw new Error('no zoom group');
+    expect(zoomGroup.x + zoomGroup.width).toBeLessThanOrEqual(frame.x + frame.width);
+  });
+
+  test.describe('under a touch pointer', () => {
+    test.use({ hasTouch: true, isMobile: true });
+
+    test('status bar at 1366 by 768: one row of 44 px controls, the bar at most 50 px', async ({
+      page,
+    }) => {
+      await openOneDocument(page, 1366, 768);
+      const bar = await page.locator('.app-frame-status').boundingBox();
+      if (bar === null) throw new Error('no status bar');
+      expect(bar.height).toBeLessThanOrEqual(50);
+      for (const box of await controlBoxes(page)) {
+        expect(box.w).toBeGreaterThanOrEqual(44);
+        expect(box.h).toBeGreaterThanOrEqual(44);
+      }
+    });
+
+    test('status bar at 390 by 844: at most two rows, the bar at most 100 px, no horizontal scroll', async ({
+      page,
+    }) => {
+      await openOneDocument(page, 390, 844);
+      expect(await horizontalOverflow(page)).toBe(0);
+      const bar = await page.locator('.app-frame-status').boundingBox();
+      if (bar === null) throw new Error('no status bar');
+      expect(bar.height).toBeLessThanOrEqual(100);
+      const rows = new Set((await controlBoxes(page)).map((box) => Math.round(box.y)));
+      expect(rows.size).toBeLessThanOrEqual(2);
+    });
+  });
 });

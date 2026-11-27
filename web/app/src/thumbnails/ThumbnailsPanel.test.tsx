@@ -201,3 +201,40 @@ describe('thumbnails side panel', () => {
     }
   });
 });
+
+describe('thumbnails keyboard', () => {
+  // The shortcut listener is on the document, so Alt+Left must arrive there unprevented.
+  it('lets Alt+ArrowLeft reach the document with a thumbnail focused', async () => {
+    const { rpc } = fakeRpc(3);
+    const scheduler = new RenderScheduler(rpc, 'h');
+    act(() =>
+      root.render(
+        <ThumbnailsPanel
+          rpc={rpc}
+          handle="h"
+          scheduler={scheduler}
+          onSelect={() => {}}
+          onClose={() => {}}
+        />,
+      ),
+    );
+    await flush();
+    const seen: { defaultPrevented: boolean }[] = [];
+    const listener = (event: KeyboardEvent) =>
+      seen.push({ defaultPrevented: event.defaultPrevented });
+    document.addEventListener('keydown', listener);
+    button('Go to page 3 of 3').focus();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      button('Go to page 3 of 3').dispatchEvent(event);
+    });
+    document.removeEventListener('keydown', listener);
+    expect(seen).toEqual([{ defaultPrevented: false }]);
+    expect(event.defaultPrevented).toBe(false);
+  });
+});

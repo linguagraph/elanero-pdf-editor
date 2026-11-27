@@ -450,6 +450,12 @@ export function App({
     [engine, sessionHandle, scheduler],
   );
   const viewRef = useRef<DocumentViewHandle>(null);
+  // The status bar's page field: Go to Page focuses it and selects its text (W4.3b, issue 808).
+  const pageFieldRef = useRef<HTMLInputElement>(null);
+  const focusPageField = () => {
+    pageFieldRef.current?.focus();
+    pageFieldRef.current?.select();
+  };
   // Bumped after the page organizer changes the pages: the view and the thumbnails then mount again
   // and read the page list from the engine.
   const [structureRevision, setStructureRevision] = useState(0);
@@ -782,8 +788,8 @@ export function App({
     ...baseHandlers,
     ...(documentShown
       ? {
-          // Go to Page (W4.3b) focuses the canvas pill's page field.
-          'go-to-page': () => viewRef.current?.focusPageField(),
+          // Go to Page (W4.3b) focuses the status bar's page field.
+          'go-to-page': focusPageField,
           // Select All (W5.4 section 2) selects the text of the whole document under Select.
           'select-all': () => viewRef.current?.selectAll(),
           // Mark Pages (W4.13) opens the dialog that marks whole pages; nothing is applied.
@@ -975,13 +981,16 @@ export function App({
       statusBar={
         documentShown ? (
           <DocumentStatusBar
+            page={viewState.page}
+            total={viewState.pageCount}
+            labels={viewState.labels}
             zoom={viewState.zoom}
-            layout={viewState.layout}
-            canBack={canGoBack(history)}
-            canForward={canGoForward(history)}
-            onBack={() => stepBack(-1)}
-            onForward={() => stepBack(1)}
-            onFocusPageField={() => viewRef.current?.focusPageField()}
+            fit={viewState.fit}
+            pageFieldRef={pageFieldRef}
+            onGoTo={(index) => viewRef.current?.scrollToPage(index)}
+            onStep={(direction) => viewRef.current?.stepPage(direction)}
+            onZoom={(request) => viewRef.current?.zoom(request)}
+            onZoomStep={(direction) => viewRef.current?.zoom({ step: direction })}
           />
         ) : undefined
       }

@@ -74,8 +74,8 @@ function px(value: string | undefined): number {
 
 // The controls the brief lists, with the sizes their coarse rule must set.
 const COARSE_TARGETS: Array<[file: string, selector: string, props: string[]]> = [
-  ['view/canvasPill.css', '.canvas-pill button', ['min-width', 'min-height']],
-  ['view/canvasPill.css', '.canvas-pill input', ['min-width', 'min-height']],
+  ['view/documentView.css', '.doc-status-controls button', ['min-width', 'min-height']],
+  ['view/documentView.css', '.doc-status-controls input', ['min-width', 'min-height']],
   ['tabs/tabs.css', '.doc-tab', ['min-height']],
   ['tabs/tabs.css', '.doc-tab-close', ['width', 'height']],
   ['tabs/tabs.css', '.doc-strip-open', ['min-width', 'min-height']],

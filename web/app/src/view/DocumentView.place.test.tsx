@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { PREFS_STORAGE_KEY } from '../prefs/store';
-import { DocumentView, type DocumentViewHandle } from './DocumentView';
+import type { DocumentViewHandle } from './DocumentView';
 import {
   computeColumn,
   computeSpreads,
@@ -12,6 +12,7 @@ import {
   viewAnchor,
   type PageBox,
 } from './layout';
+import { ViewWithStatus } from './viewWithStatus.testutil';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -98,7 +99,7 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
   it('keeps the page and the offset within it when the zoom changes through the view command', async () => {
     const ref = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView ref={ref} rpc={fakeRpc(10)} handle="doc-1" />);
+      root.render(<ViewWithStatus ref={ref} rpc={fakeRpc(10)} handle="doc-1" />);
     });
     await flush();
     const before = computeColumn(sizes(10), 1).boxes;
@@ -118,7 +119,7 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
 
   it('keeps the place when the zoom changes from the pill preset list', async () => {
     act(() => {
-      root.render(<DocumentView rpc={fakeRpc(10)} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={fakeRpc(10)} handle="doc-1" />);
     });
     await flush();
     const before = computeColumn(sizes(10), 1).boxes;
@@ -127,9 +128,9 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
     act(() => {
       button('Zoom presets')?.click();
     });
-    const preset = [
-      ...host.querySelectorAll<HTMLButtonElement>('.canvas-pill-presets button'),
-    ].find((b) => b.textContent === '200%');
+    const preset = [...host.querySelectorAll<HTMLButtonElement>('.doc-status-presets button')].find(
+      (b) => b.textContent === '200%',
+    );
     act(() => {
       preset?.click();
     });
@@ -140,7 +141,7 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
     window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ defaultZoom: 'fitWidth' }));
     const originalWidth = window.innerWidth;
     act(() => {
-      root.render(<DocumentView rpc={fakeRpc(10)} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={fakeRpc(10)} handle="doc-1" />);
     });
     await flush();
     const zoomBefore = fitWidthZoom(LETTER.width, originalWidth);
@@ -167,7 +168,7 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
   it('keeps the page in view when the layout switches to two pages', async () => {
     const viewRef = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={fakeRpc(10)} handle="doc-1" />);
+      root.render(<ViewWithStatus ref={viewRef} rpc={fakeRpc(10)} handle="doc-1" />);
     });
     await flush();
     const before = computeColumn(sizes(10), 1).boxes;
@@ -186,7 +187,7 @@ describe('DocumentView keeps the reader place (W5.1a S2)', () => {
 
   it('keeps the focused page mounted when the reader scrolls far away from it', async () => {
     act(() => {
-      root.render(<DocumentView rpc={fakeRpc(50)} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={fakeRpc(50)} handle="doc-1" />);
     });
     await flush();
     const column = computeColumn(sizes(50), 1).boxes;
