@@ -66,4 +66,23 @@ test.describe('engine staged', () => {
       await checkAxe(page, testInfo);
     });
   }
+
+  // The Comment tab with the Stamp split button (issue 801), then with its arrow's menu open.
+  test('axe: Comment tab with the Stamp split button @a11y', async ({ page }, testInfo) => {
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+    await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
+    await expect(page.locator('.ribbon-split[data-command-split="stamp"]')).toBeVisible();
+    await checkAxe(page, testInfo);
+  });
+
+  test('axe: Stamp menu open from the split button @a11y', async ({ page }, testInfo) => {
+    await openApp(page);
+    await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
+    await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
+    await page.locator('.stamp-menu-button').click();
+    // The menu is named by its label and its trigger, so the name is matched by substring.
+    await expect(page.getByRole('menu', { name: 'Stamp' })).toBeVisible();
+    await checkAxe(page, testInfo);
+  });
 });

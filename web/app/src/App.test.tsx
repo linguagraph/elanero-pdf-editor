@@ -1190,6 +1190,45 @@ describe('App comment and redaction tools (W4.3a S7)', () => {
     selectTab(t('ribbon.tab.comment'));
     expect(host.querySelector('.stamp-menu-button')).not.toBeNull();
   });
+  it('the Stamp command and its arrow are one split button, the arrow opening the stamp menu', async () => {
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    const split = host.querySelector<HTMLElement>('.ribbon-split[data-command-split="stamp"]');
+    const command = split?.querySelector<HTMLElement>('[data-command="stamp"]');
+    const arrow = split?.querySelector<HTMLElement>('.stamp-menu-button');
+    expect(command).not.toBeNull();
+    expect(split?.contains(arrow ?? null)).toBe(true);
+    // react-aria sets aria-haspopup to "true", which means a menu.
+    expect(arrow?.getAttribute('aria-haspopup')).toBe('true');
+    expect(arrow?.getAttribute('aria-label')).toBe(t('stamp.menuButton'));
+    // The description names the stamp the main part places: Approved, the default.
+    const note = command?.getAttribute('aria-describedby') ?? '';
+    const names = note.split(' ').map((id) => document.getElementById(id)?.textContent ?? '');
+    expect(names).toContain(t('stamp.places', { name: t('stamp.name.Approved') }));
+  });
+  it('the default stamp is per document: a stamp picked in one tab leaves another tab at Approved', async () => {
+    const stampNames = (): string[] => {
+      const note = ribbonButton('stamp').getAttribute('aria-describedby') ?? '';
+      return note.split(' ').map((id) => document.getElementById(id)?.textContent ?? '');
+    };
+    await openDocument();
+    selectTab(t('ribbon.tab.comment'));
+    act(() => {
+      host.querySelector<HTMLElement>('.stamp-menu-button')?.click();
+    });
+    const draft = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent?.trim() === t('stamp.name.Draft'),
+    );
+    if (draft === undefined) throw new Error('no Draft stamp in the menu');
+    act(() => {
+      draft.focus();
+      draft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    await until(() => stampNames().includes(t('stamp.places', { name: t('stamp.name.Draft') })));
+    await openSecondDocument();
+    selectTab(t('ribbon.tab.comment'));
+    expect(stampNames()).toContain(t('stamp.places', { name: t('stamp.name.Approved') }));
+  });
   it('drops the main region padding while a document is shown, so the view has no thick frame', async () => {
     await openDocument();
     expect(host.querySelector('.app-main')?.classList.contains('app-main--document')).toBe(true);

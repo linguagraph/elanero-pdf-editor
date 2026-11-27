@@ -111,6 +111,10 @@ test.describe('engine staged', () => {
         }
       }
 
+      // The Comment tab (issue 801): the Stamp split button's command and its arrow are each 44 px.
+      await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
+      await sweep(page.locator('.ribbon-split[data-command-split="stamp"]'), 'Stamp split button');
+
       // The app menu.
       await page.getByRole('button', { name: 'Main menu' }).click();
       await sweep(page.getByRole('menu').first(), 'app menu');

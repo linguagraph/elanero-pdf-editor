@@ -157,6 +157,59 @@
   border-color: transparent;
 }
 
+/* A split button (issue 801): the command and its arrow sit side by side with one shared border,
+   and hovering either outlines both. The arrow is not a toggle, so only the command shows pressed. */
+.ribbon-split {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.ribbon-split > .ribbon-command {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.ribbon-split-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  margin-inline-start: -1px;
+  padding: var(--space-1) var(--space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.ribbon-split:hover > .ribbon-command,
+.ribbon-split:hover > .ribbon-split-arrow,
+.ribbon-split-arrow:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
+/* A pressed split command keeps its accent border while hovered: this rule comes after the hover
+   rule above, with the same specificity, so it wins over the grey hover border. */
+.ribbon-split > .ribbon-command[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-accent);
+}
+
+.ribbon-split-arrow[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.ribbon-split-arrow[data-pressed],
+.ribbon-split-arrow[aria-expanded='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
 .app-menu-button {
   min-width: 28px;
   min-height: 28px;
@@ -469,11 +522,22 @@
   .ribbon-command[aria-pressed='true'] {
     border-color: CanvasText;
   }
+
+  /* The split button's arrow keeps a visible edge and icon; its focus ring is the system colour. */
+  .ribbon-split-arrow {
+    color: ButtonText;
+    border-color: CanvasText;
+  }
+
+  .ribbon-split-arrow[data-focus-visible] {
+    outline-color: Highlight;
+  }
 }
 
 /* Touch targets are at least 44 px (W1.6, touch). */
 @media (pointer: coarse) {
   .ribbon-command,
+  .ribbon-split-arrow,
   .ribbon-chevron,
   .ribbon-tab {
     min-width: 44px;

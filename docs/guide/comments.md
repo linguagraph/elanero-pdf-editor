@@ -25,8 +25,9 @@ The **Comments** group:
 - **Sticky Note** (**Ctrl+6**): click the page to place a note, then type in it.
 - **Text Box**: drag a rectangle (or click for a default size) and type.
 - **Callout**: a text box with a pointer to the spot it talks about.
-- **Stamp**: choose a standard stamp such as **Approved**, **Draft**, **Confidential** or **Final**,
-  or your own image. Choose **Add Custom Stamp…** to add a PNG or JPEG image as a stamp, and
+- **Stamp**: click it to place the stamp you chose last (Approved at first). The arrow beside it
+  opens the stamp menu, where you choose a standard stamp such as **Approved**, **Draft**,
+  **Confidential** or **Final**, or your own image. Choose **Add Custom Stamp…** to add a PNG or JPEG image as a stamp, and
   **Remove Custom Stamp** to delete one.
 - **Attach File**: click a spot on the page and choose a file to attach to it. In the web
   version the file must be no larger than 100 MB, and an empty file is refused.
@@ -40,8 +41,8 @@ The **Drawing** group:
 - **Pen**: draw freehand. Strokes are smoothed when you release the mouse.
 
 In the web version, the Comment tab has Sticky Note, Text Box, Rectangle, Highlight, Oval,
-Line, Arrow, Callout, Pen, Polygon, Polyline and Attach File. Beside them, the **Stamp** menu lists the 14
-standard stamps (Approved, Draft, Confidential and the rest); choose one, then click a page to
+Line, Arrow, Callout, Pen, Polygon, Polyline and Attach File. The **Stamp** button's arrow opens the
+stamp menu, which lists the 14 standard stamps (Approved, Draft, Confidential and the rest); choose one, then click a page to
 place it centred on the click, or press Enter to place it at the centre of the page. Below the
 standard stamps are your own stamps. **Add Custom Stamp…** keeps a PNG or JPEG image (up to 20 MB)
 in this browser; it is then listed with a thumbnail, and placed at its own size (at most 200 points
