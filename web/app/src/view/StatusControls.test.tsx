@@ -142,9 +142,9 @@ describe('StatusControls (#808 slice 1)', () => {
     type(jump, '99');
     submit(jump);
     expect(onGoTo).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe(
-      t('view.jumpInvalid', { input: '99', total: 10 }),
-    );
+    const error = host.querySelector('.doc-status-jump .doc-status-error');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.textContent).toBe(t('view.jumpInvalid', { input: '99', total: 10 }));
   });
 
   it('applies a typed zoom on submit, and reports one that is not a zoom', () => {

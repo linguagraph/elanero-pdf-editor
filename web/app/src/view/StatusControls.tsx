@@ -170,12 +170,13 @@ export function StatusControls({
               ))}
             </ul>
           ) : null}
-          {invalid === null ? null : (
-            <span role="alert" className="doc-status-error">
-              {invalid}
-            </span>
-          )}
         </form>
+        {/* Outside the form: the form is the presets' anchor, and the error centres on the bar. */}
+        {invalid === null ? null : (
+          <span role="alert" className="doc-status-error">
+            {invalid}
+          </span>
+        )}
         <button
           type="button"
           aria-label={t('view.zoomIn')}

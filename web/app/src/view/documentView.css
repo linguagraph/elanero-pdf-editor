@@ -129,6 +129,7 @@
 
 /* The bar's controls: the page navigator and the zoom group, one row or wrapped to two. */
 .doc-status-controls {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -199,8 +200,7 @@
   padding: 0 var(--space-1);
 }
 
-.doc-status-zoom-form,
-.doc-status-jump {
+.doc-status-zoom-form {
   position: relative;
   display: flex;
   align-items: center;
@@ -255,13 +255,26 @@
   border: 0;
 }
 
+/* The error is anchored to the bar's controls (the nearest positioned box) and centred on them, so it
+   stays inside the frame at 320 px. Its text takes the list's colours (text on surface); the danger
+   token marks the border. */
 .doc-status-error {
   position: absolute;
   bottom: 100%;
-  left: 0;
+  left: 50%;
   z-index: 3;
-  color: var(--color-danger);
-  white-space: nowrap;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  margin: 0 0 var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
 }
 
 /* Touch targets are at least 44 px under a coarse pointer (W1.6, touch; W8.5 S5). The bar wraps

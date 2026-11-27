@@ -528,6 +528,21 @@ describe('App side rails (W4.2a S2)', () => {
     const input = host.querySelector<HTMLInputElement>('#app-panel-left input[type="search"]');
     expect(document.activeElement).toBe(input);
   });
+
+  it('Go to Page (Alt+G) focuses the status bar page field', async () => {
+    await openDocument(false);
+    const pages = host.querySelector<HTMLElement>('[data-panel="pages"]');
+    pages?.focus();
+
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'g', altKey: true, bubbles: true }),
+      );
+    });
+    expect(document.activeElement).toBe(
+      host.querySelector<HTMLInputElement>(`input[aria-label="${t('view.goToPage')}"]`),
+    );
+  });
 });
 
 describe('App help, about and quick access (W4.3a S4)', () => {

@@ -637,6 +637,26 @@ test.describe('status bar size (#808)', () => {
     });
   }
 
+  // WCAG reflow width: the bar stays inside the viewport, and the zoom group does not run past the
+  // frame's right edge (the page error and the zoom error are kept inside the frame too).
+  test('status bar at 320 px with a document open: inside the viewport, zoom group inside the frame', async ({
+    page,
+  }) => {
+    await openOneDocument(page, 320, 768);
+    expect(await horizontalOverflow(page)).toBe(0);
+
+    const bar = await page.locator('.app-frame-status').boundingBox();
+    if (bar === null) throw new Error('no status bar');
+    expect(bar.x).toBeGreaterThanOrEqual(0);
+    expect(bar.x + bar.width).toBeLessThanOrEqual(320);
+
+    const frame = await page.locator('.app-frame').boundingBox();
+    if (frame === null) throw new Error('no app frame');
+    const zoomGroup = await page.locator('.doc-status-group').last().boundingBox();
+    if (zoomGroup === null) throw new Error('no zoom group');
+    expect(zoomGroup.x + zoomGroup.width).toBeLessThanOrEqual(frame.x + frame.width);
+  });
+
   test.describe('under a touch pointer', () => {
     test.use({ hasTouch: true, isMobile: true });
 
