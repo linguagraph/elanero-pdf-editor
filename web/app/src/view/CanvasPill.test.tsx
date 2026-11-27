@@ -305,3 +305,17 @@ describe('CanvasPill width (W4.2a S5)', () => {
     expect(host.querySelector('.canvas-pill')?.hasAttribute('hidden')).toBe(false);
   });
 });
+
+describe('CanvasPill icons (#796)', () => {
+  it('shows an icon, not text, on each button, with its name as the tooltip', () => {
+    render(props({ fit: 'page' }));
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.canvas-pill button')];
+    expect(buttons).toHaveLength(7);
+    for (const el of buttons) {
+      expect(el.querySelector('svg.icon')).not.toBeNull();
+      expect(el.textContent).toBe('');
+      expect(el.getAttribute('title')).toBe(el.getAttribute('aria-label'));
+    }
+    expect(host.querySelectorAll('.canvas-pill-group')).toHaveLength(2);
+  });
+});

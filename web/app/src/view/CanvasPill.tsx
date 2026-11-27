@@ -4,6 +4,7 @@
 // keeps no zoom or page state of its own: the document view passes them in and handles the calls.
 import { type FormEvent, type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { t } from '../i18n/t';
+import { Icon } from '../theme/Icon';
 import { PageJumpField } from './PageJumpField';
 import { MAX_ZOOM, MIN_ZOOM } from './zoom';
 import { parseZoomInput, ZOOM_PRESETS, type ZoomRequest } from './zoomBox';
@@ -177,10 +178,11 @@ export function CanvasPill({
         <button
           type="button"
           aria-label={t('pill.previousPage')}
+          title={t('pill.previousPage')}
           disabled={page <= 1}
           onClick={() => onStep(-1)}
         >
-          {'‹'}
+          <Icon name="chevron-left" />
         </button>
         <PageJumpField
           ref={pageFieldRef}
@@ -192,20 +194,22 @@ export function CanvasPill({
         <button
           type="button"
           aria-label={t('pill.nextPage')}
+          title={t('pill.nextPage')}
           disabled={page >= total}
           onClick={() => onStep(1)}
         >
-          {'›'}
+          <Icon name="chevron-right" />
         </button>
       </div>
       <div className="canvas-pill-group">
         <button
           type="button"
           aria-label={t('view.zoomOut')}
+          title={t('view.zoomOut')}
           disabled={zoom <= MIN_ZOOM}
           onClick={() => onZoomStep(-1)}
         >
-          {'−'}
+          <Icon name="minus" />
         </button>
         <form
           className="canvas-pill-zoom"
@@ -237,6 +241,7 @@ export function CanvasPill({
           <button
             type="button"
             aria-label={t('pill.zoomPresets')}
+            title={t('pill.zoomPresets')}
             aria-expanded={listOpen}
             aria-controls={listId}
             onClick={() => {
@@ -245,7 +250,7 @@ export function CanvasPill({
               hold('listing', open);
             }}
           >
-            {'▾'}
+            <Icon name="chevron-down" />
           </button>
           {listOpen ? (
             <ul id={listId} className="canvas-pill-presets">
@@ -267,22 +272,30 @@ export function CanvasPill({
         <button
           type="button"
           aria-label={t('view.zoomIn')}
+          title={t('view.zoomIn')}
           disabled={zoom >= MAX_ZOOM}
           onClick={() => onZoomStep(1)}
         >
-          {'+'}
+          <Icon name="plus" />
         </button>
-      </div>
-      <div className="canvas-pill-group">
+        {/* The fit buttons are icons, as on the desktop; the name and tooltip carry the words. */}
         <button
           type="button"
+          aria-label={t('view.fitWidth')}
+          title={t('view.fitWidth')}
           aria-pressed={fit === 'width'}
           onClick={() => onZoom({ fit: 'width' })}
         >
-          {t('view.fitWidth')}
+          <Icon name="move-horizontal" />
         </button>
-        <button type="button" aria-pressed={fit === 'page'} onClick={() => onZoom({ fit: 'page' })}>
-          {t('view.fitPage')}
+        <button
+          type="button"
+          aria-label={t('view.fitPage')}
+          title={t('view.fitPage')}
+          aria-pressed={fit === 'page'}
+          onClick={() => onZoom({ fit: 'page' })}
+        >
+          <Icon name="expand" />
         </button>
       </div>
     </div>
