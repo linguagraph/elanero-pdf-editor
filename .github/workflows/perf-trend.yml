@@ -1,0 +1,55 @@
+name: Perf trend
+
+# The performance trend for one scheduled run of CI or Web perf (W8.3 S5; docs/web/design/W8.3-s5-trend-log.md).
+# It reads the perf artifacts of that run and the 14 scheduled runs before it, and writes one table per series
+# to the job summary. A drift is a warning annotation, never a failure. Only a script error (gh fails, or no
+# results at all) makes this run red. It is not a required check.
+#
+# A separate workflow, not steps inside ci.yml or web-perf.yml: the gated workflows and release.yml keep
+# contents: read, and a trend failure can never turn CI or a release red. workflow_run runs the file on the
+# default branch with this token's two read scopes; a pull request's run never matches the if below.
+
+on:
+  workflow_run:
+    workflows: ["CI", "Web perf (W8.3)"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The scheduled CI or Web perf run to report (its database id)."
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  perf-trend:
+    # Scheduled runs of main from this repository only. A release's calls to ci.yml and web-perf.yml are
+    # part of the release run, not runs of those workflows, so they never reach this job.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'schedule' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The default branch's code (for workflow_run); the triggering run's code is never checked out.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      # gh reads the artifacts with this token; the script itself handles no token.
+      - name: Write the trend to the job summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: python scripts/perf_trend.py --run-id "$RUN_ID" >> "$GITHUB_STEP_SUMMARY"

@@ -88,6 +88,19 @@ yet: do it by hand as described, and don't invent one. The detailed Store steps 
    doesn't block the merge; fix it or record why it can wait, and note the run URL in the release PR.
 8. **CI on main.** The PR's CI is green, and the last nightly run on `main` is too:
    `gh run list --workflow ci.yml --branch main --limit 5` (the nightly is a `schedule` run).
+8a. **Performance (W8.3).**
+    1. *Nightly perf is green.* `gh run list --workflow web-perf.yml --branch main --limit 3`: the latest
+       `schedule` run is green. Open the latest "Perf trend" runs for `CI` and `Web perf`
+       (`gh run list --workflow perf-trend.yml --limit 4`), and paste both tables into the release PR. Every
+       `drift` row is fixed or explained in the PR.
+    2. *The 4 s gate on the reference machine (decision 10, `docs/web/plan.md` line 95).* It is not automated.
+       On the reference machine `<reference machine: CPU, RAM, OS, browser version>`: in `web/app`, `npm ci`,
+       stage the engine assets as AGENTS.md says, `npx vite build --base=/ --outDir dist/perf`,
+       `npx vite preview --outDir dist/perf --port 4176`, then
+       `E2E_APP_URL=http://localhost:4176 PERF_RUNS=5 PERF_OUT=perf-release.json npx playwright test -c playwright.perf.config.ts`.
+       Pass: the W2 `median` in `perf-release.json` is at most 4000 ms. Note the value, the machine and the
+       browser version in the release PR. A failure blocks the release, unless the owner records why it can wait.
+
 9. **Tag.** From the merged release commit on `main`:
    `git tag -a vX.Y.Z -m "Elanero X.Y.Z" && git push origin vX.Y.Z`. Pass: `release.yml` starts
    and its `version` job is green.
@@ -95,6 +108,11 @@ yet: do it by hand as described, and don't invent one. The detailed Store steps 
     the only app build), then `github-release`, which attaches `Elanero.exe` and
     `pdfeditor-X.Y.Z-setup.exe`. Pass: release `vX.Y.Z` exists with both files. Re-run only a failed
     job.
+10a. **Move the perf baseline (after a green release).** Open a PR that sets `baseline_ref` in
+    `tests/perf/budgets.json` to `vX.Y.Z`. Its body links the release's web-perf run (CODEOWNERS requires the
+    link). The baseline moves only after the release, because the release's own web-perf run compares with the
+    previous release.
+
 11. **Store (approval).** `microsoft-store` waits in the `microsoft-store` environment. Read the
     What's New text, then approve it in Actions. Pass: the job uploads and submits the MSIX.
     The local MSIX and App Certification Kit checks are steps 5 and 6 under "Making a release".

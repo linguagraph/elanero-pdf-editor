@@ -66,9 +66,13 @@ test.afterAll(() => {
   const body = {
     schema: 1,
     commit: process.env.GITHUB_SHA ?? 'local',
-    runner: process.env.ImageOS ?? process.platform,
+    // ImageOS-ImageVersion, as the desktop harness writes it (tests/benchmarks/conftest.py).
+    runner: process.env.ImageOS
+      ? [process.env.ImageOS, process.env.ImageVersion].filter(Boolean).join('-')
+      : process.platform,
     date: new Date().toISOString().slice(0, 10),
-    attempt: 1,
+    // web-perf.yml sets PERF_ATTEMPT per attempt (1 or 2); a local run is attempt 1.
+    attempt: Number(process.env.PERF_ATTEMPT ?? '1'),
     records,
   };
   writeFileSync(OUT_FILE, JSON.stringify(body, null, 2));

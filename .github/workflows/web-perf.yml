@@ -229,6 +229,7 @@ jobs:
         continue-on-error: true # the compare step decides; a failed round is a failed attempt
         env:
           ATTEMPT: "1"
+          PERF_ATTEMPT: "1"
           PAIRED: ${{ steps.baseline.outputs.paired }}
         working-directory: web/app
         run: |
@@ -280,6 +281,7 @@ jobs:
         continue-on-error: true
         env:
           ATTEMPT: "2"
+          PERF_ATTEMPT: "2"
           PAIRED: ${{ steps.baseline.outputs.paired }}
         working-directory: web/app
         run: |
