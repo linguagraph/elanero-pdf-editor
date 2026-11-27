@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { About } from './about';
 import { REGISTRY } from './commands/catalog';
-import { type CommandHandlers } from './commands/run';
+import { type CommandHandlers, runCommand } from './commands/run';
 import { type CommandState } from './commands/registry';
 import { t } from './i18n/t';
 import { EngineLoadingScreen } from './feedback/LoadingScreen';
@@ -1179,7 +1179,12 @@ export function App({
           />
           <NarrowNotice />
           <div className="doc-strip">
-            <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
+            <DocumentTabs
+              state={docs.tabs}
+              onSelect={docs.selectTab}
+              onClose={closeTab}
+              onOpen={() => runCommand(REGISTRY, 'open', state, handlers)}
+            />
           </div>
         </>
       }

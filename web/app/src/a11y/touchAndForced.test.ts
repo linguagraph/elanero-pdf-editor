@@ -78,6 +78,7 @@ const COARSE_TARGETS: Array<[file: string, selector: string, props: string[]]> =
   ['view/canvasPill.css', '.canvas-pill input', ['min-width', 'min-height']],
   ['tabs/tabs.css', '.doc-tab', ['min-height']],
   ['tabs/tabs.css', '.doc-tab-close', ['width', 'height']],
+  ['tabs/tabs.css', '.doc-strip-open', ['min-width', 'min-height']],
   ['ribbon/ribbon.css', '.ribbon-command', ['min-width', 'min-height']],
   ['ribbon/ribbon.css', '.ribbon-tab', ['min-width', 'min-height']],
   ['ribbon/ribbon.css', '.app-menu-item', ['min-height']],

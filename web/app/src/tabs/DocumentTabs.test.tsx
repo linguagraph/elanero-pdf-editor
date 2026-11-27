@@ -31,11 +31,17 @@ afterEach(() => {
   host.remove();
 });
 
-function render(state: TabState, onSelect = vi.fn(), onClose = vi.fn()) {
+function render(state: TabState, onSelect = vi.fn(), onClose = vi.fn(), onOpen = vi.fn()) {
   act(() => {
-    root.render(<DocumentTabs state={state} onSelect={onSelect} onClose={onClose} />);
+    root.render(
+      <DocumentTabs state={state} onSelect={onSelect} onClose={onClose} onOpen={onOpen} />,
+    );
   });
-  return { onSelect, onClose };
+  return { onSelect, onClose, onOpen };
+}
+
+function openButton(): HTMLButtonElement | null {
+  return host.querySelector<HTMLButtonElement>('.doc-strip-open');
 }
 
 function pdf(name: string) {
@@ -106,7 +112,8 @@ describe('document tabs', () => {
       expect(close.getAttribute('aria-hidden')).toBe('true');
       expect(close.matches('button, a, input, [tabindex]')).toBe(false);
     }
-    expect(host.querySelectorAll('button')).toHaveLength(0);
+    // The one button in the strip is the + button, after the tab list.
+    expect([...host.querySelectorAll('button')]).toEqual([openButton()]);
   });
 
   it('closes the focused tab with Delete', () => {
@@ -231,5 +238,34 @@ describe('document tabs by width', () => {
     const button = host.querySelector<HTMLElement>('.doc-tabs-menu-button');
     expect(button).not.toBeNull();
     expect(button?.textContent).toContain('c.pdf');
+  });
+});
+
+describe('the + button', () => {
+  it('shows only while a document is open', () => {
+    render(EMPTY_TABS);
+    expect(openButton()).toBeNull();
+    act(() => {
+      root.render(
+        <DocumentTabs
+          state={addTab(EMPTY_TABS, pdf('a.pdf'))}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onOpen={vi.fn()}
+        />,
+      );
+    });
+    expect(openButton()).not.toBeNull();
+  });
+
+  it('is named as the open command and runs onOpen when clicked', () => {
+    const { onOpen } = render(addTab(EMPTY_TABS, pdf('a.pdf')));
+    const button = openButton();
+    expect(button?.getAttribute('aria-label')).toBe(t('command.open.label'));
+    expect(button?.getAttribute('title')).toBe(t('command.open.label'));
+    act(() => {
+      button?.click();
+    });
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });

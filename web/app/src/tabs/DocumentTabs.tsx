@@ -1,6 +1,7 @@
 import { useId } from 'react';
-import { Tab, TabList, TabPanel, Tabs } from 'react-aria-components';
+import { Button, Tab, TabList, TabPanel, Tabs } from 'react-aria-components';
 import { useLayoutRegions } from '../layout/LayoutContext';
+import { Icon } from '../theme/Icon';
 import { t } from '../i18n/t';
 import { DocumentTabMenu } from './DocumentTabMenu';
 import type { TabState } from './tabState';
@@ -10,6 +11,8 @@ export interface DocumentTabsProps {
   readonly state: TabState;
   onSelect(id: number): void;
   onClose(id: number): void;
+  // Runs the open command, the same one as the ribbon's Open, for the + button after the strip.
+  onOpen(): void;
 }
 
 // The strip of open documents (W1.6 section 3). The tabs are a react-aria TabList, so the arrow
@@ -22,13 +25,28 @@ export interface DocumentTabsProps {
 // react-aria points the selected tab's aria-controls at a tab panel with the tab's key. The strip
 // renders only that one panel, hidden: the document view is not inside the strip, and an
 // aria-controls to a missing element fails axe.
-export function DocumentTabs({ state, onSelect, onClose }: DocumentTabsProps) {
+export function DocumentTabs({ state, onSelect, onClose, onOpen }: DocumentTabsProps) {
   const { tier } = useLayoutRegions();
-  const hintId = useId();
   if (state.tabs.length === 0) return null;
   if (tier === 'tablet' || tier === 'phone') {
-    return <DocumentTabMenu state={state} onSelect={onSelect} onClose={onClose} />;
+    return (
+      <>
+        <DocumentTabMenu state={state} onSelect={onSelect} onClose={onClose} />
+        <OpenButton onOpen={onOpen} />
+      </>
+    );
   }
+  return (
+    <>
+      <TabStrip state={state} onSelect={onSelect} onClose={onClose} />
+      <OpenButton onOpen={onOpen} />
+    </>
+  );
+}
+
+// The wide-tier tab list (W1.6 section 3), kept apart so the + button can follow it in the strip.
+function TabStrip({ state, onSelect, onClose }: Omit<DocumentTabsProps, 'onOpen'>) {
+  const hintId = useId();
   // react-aria does not pass onKeyDown through Tabs or TabList, so Delete is caught on this wrapper,
   // in the capture phase: react-aria's collection handler may stop the event before it bubbles.
   return (
@@ -95,5 +113,25 @@ export function DocumentTabs({ state, onSelect, onClose }: DocumentTabsProps) {
         )}
       </Tabs>
     </div>
+  );
+}
+
+// The + button after the strip (W1.6 S2.5). Its name is the open command's label, so it reads the
+// same as the ribbon's Open to a screen reader.
+function OpenButton({ onOpen }: { readonly onOpen: () => void }) {
+  const name = t('command.open.label');
+  // react-aria's Button does not pass a title through to the DOM, so the native title is set on
+  // the element once it mounts (the name is fixed, so it never needs updating).
+  return (
+    <Button
+      className="doc-strip-open"
+      aria-label={name}
+      onPress={onOpen}
+      ref={(element) => {
+        element?.setAttribute('title', name);
+      }}
+    >
+      <Icon name="plus" size={16} />
+    </Button>
   );
 }
