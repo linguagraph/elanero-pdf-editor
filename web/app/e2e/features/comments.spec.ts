@@ -15,8 +15,21 @@ import {
   watchPage,
 } from './support';
 
+// On WebKit the first engine calls after a file opens can pass their 3 to 5 s deadline. The app then
+// shows "Elanero is still working", a modal that makes the rest of the page inert until Wait is
+// pressed. Wait only closes it and leaves the engine running (engine.notResponding), so a flow
+// presses it and carries on; the flow's own assertions still check the result.
+async function pressWaitIfStillWorking(page: Page): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: 'Elanero is still working' });
+  await dialog.waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined);
+  if (await dialog.isVisible()) {
+    await dialog.getByRole('button', { name: 'Wait', exact: true }).click();
+  }
+}
+
 // The Comment tab of the ribbon holds the sticky note and the rectangle tool.
 async function openCommentTab(page: Page): Promise<void> {
+  await pressWaitIfStillWorking(page);
   await page.locator('.ribbon [role="tab"]', { hasText: /^Comment$/ }).click();
 }
 
