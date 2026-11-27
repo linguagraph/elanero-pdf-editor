@@ -26,13 +26,13 @@ test.describe('engine staged', () => {
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
-    const zoomText = page.locator('.doc-status-zoom');
+    const zoomText = page.getByRole('textbox', { name: 'Zoom', exact: true });
     const zoomIn = page.getByRole('button', { name: 'Zoom in' });
     const zoomOut = page.getByRole('button', { name: 'Zoom out' });
     const zoomBox = page.getByRole('textbox', { name: 'Zoom', exact: true });
 
     // The start zoom depends on the device pixel ratio, so the steps are checked against it.
-    const percent = async () => Number((await zoomText.textContent())?.replace('%', ''));
+    const percent = async () => Number((await zoomText.inputValue()).replace('%', ''));
     const start = await percent();
     const startWidth = (await pageAndView(page)).w;
     await zoomIn.click();
@@ -45,7 +45,7 @@ test.describe('engine staged', () => {
     // A typed percentage is applied on Enter, and the page is painted at that size.
     await zoomBox.fill('50');
     await zoomBox.press('Enter');
-    await expect(zoomText).toHaveText('50%');
+    await expect(zoomText).toHaveValue('50%');
     await expect.poll(() => inkPixels(page, 0)).toBeGreaterThan(0);
 
     // A zoom that is not a number or a preset is refused with a message.
@@ -55,8 +55,8 @@ test.describe('engine staged', () => {
 
     // A preset from the list sets the zoom to 100 %.
     await page.getByRole('button', { name: 'Zoom presets' }).click();
-    await page.locator('.canvas-pill-presets').getByRole('button', { name: '100%' }).click();
-    await expect(zoomText).toHaveText('100%');
+    await page.locator('.doc-status-presets').getByRole('button', { name: '100%' }).click();
+    await expect(zoomText).toHaveValue('100%');
 
     expect(problems, 'CSP or page errors').toEqual([]);
   });
@@ -66,7 +66,7 @@ test.describe('engine staged', () => {
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
-    const pill = page.locator('.canvas-pill');
+    const pill = page.locator('.app-frame-status');
     const fitPage = pill.getByRole('button', { name: 'Fit page', exact: true });
     const fitWidth = pill.getByRole('button', { name: 'Fit width', exact: true });
 

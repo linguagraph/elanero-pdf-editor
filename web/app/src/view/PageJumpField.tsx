@@ -1,4 +1,4 @@
-// The page jump field (W5.3, W1.6 section 9), shared by the canvas pill: a text field that takes a
+// The page jump field (W5.3, W1.6 section 9), shared by the status bar: a text field that takes a
 // page label or a one-based page number. A bad entry shows the invalid message and does not move.
 import { type FormEvent, forwardRef, useState } from 'react';
 import { t } from '../i18n/t';
@@ -35,7 +35,7 @@ export const PageJumpField = forwardRef<HTMLInputElement, PageJumpFieldProps>(
     };
 
     return (
-      <form className="canvas-pill-jump" onSubmit={submit}>
+      <form className="doc-status-jump" onSubmit={submit}>
         <input
           ref={ref}
           type="text"
@@ -52,9 +52,9 @@ export const PageJumpField = forwardRef<HTMLInputElement, PageJumpFieldProps>(
             setInvalid(null);
           }}
         />
-        <span className="canvas-pill-total">{t('pill.pageCount', { total })}</span>
+        <span className="doc-status-total">{t('pill.pageCount', { total })}</span>
         {invalid === null ? null : (
-          <span role="alert" className="canvas-pill-error">
+          <span role="alert" className="doc-status-error">
             {invalid}
           </span>
         )}

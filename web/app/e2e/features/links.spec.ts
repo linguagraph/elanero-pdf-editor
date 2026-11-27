@@ -69,7 +69,7 @@ test.describe('engine staged', () => {
 
     // A move of one page is not recorded in the history (navigation.ts recordJump, W5.3 design
     // question 3), so a link to the next page leaves Back off. The next test covers Back.
-    const back = page.locator('.doc-status').getByRole('button', { name: 'Back', exact: true });
+    const back = page.getByRole('button', { name: 'Back', exact: true });
     await expect(back).toBeDisabled();
 
     expect(problems, 'CSP or page errors').toEqual([]);
@@ -83,7 +83,7 @@ test.describe('engine staged', () => {
     // outline.pdf numbers its pages in roman, so the field and the link name show the labels.
     const jump = page.getByRole('textbox', { name: 'Go to page' });
     await expect(jump).toHaveValue('i');
-    const back = page.locator('.doc-status').getByRole('button', { name: 'Back', exact: true });
+    const back = page.getByRole('button', { name: 'Back', exact: true });
     await expect(back).toBeDisabled();
 
     await page

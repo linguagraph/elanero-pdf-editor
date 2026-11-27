@@ -2,14 +2,15 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n/t';
-import { CanvasPill, type CanvasPillProps, FADE_AFTER_MS } from './CanvasPill';
+import { createRef } from 'react';
+import { StatusControls, type StatusControlsProps } from './StatusControls';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let host: HTMLDivElement;
 let root: Root;
 
-function props(overrides: Partial<CanvasPillProps> = {}): CanvasPillProps {
+function props(overrides: Partial<StatusControlsProps> = {}): StatusControlsProps {
   return {
     page: 1,
     total: 10,
@@ -24,17 +25,19 @@ function props(overrides: Partial<CanvasPillProps> = {}): CanvasPillProps {
   };
 }
 
-function render(value: CanvasPillProps): void {
+function render(value: StatusControlsProps): void {
   act(() => {
-    root.render(<CanvasPill {...value} />);
+    root.render(<StatusControls {...value} />);
   });
 }
 
-// The pill's own buttons and fields, by accessible name (aria-label, else text), in tab order.
+// The bar's own buttons and fields, by accessible name (aria-label, else text), in tab order.
 function controls(): string[] {
-  return [...host.querySelectorAll<HTMLElement>('.canvas-pill button, .canvas-pill input')].map(
-    (el) => el.getAttribute('aria-label') ?? el.textContent ?? '',
-  );
+  return [
+    ...host.querySelectorAll<HTMLElement>(
+      '.doc-status-controls button, .doc-status-controls input',
+    ),
+  ].map((el) => el.getAttribute('aria-label') ?? el.textContent ?? '');
 }
 
 function button(name: string): HTMLButtonElement {
@@ -82,7 +85,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('CanvasPill controls (W4.2a S5)', () => {
+describe('StatusControls (#808 slice 1)', () => {
   it('lists the navigator, then the zoom, then the fits, in the desktop order', () => {
     render(props());
     expect(controls()).toEqual([
@@ -96,7 +99,9 @@ describe('CanvasPill controls (W4.2a S5)', () => {
       t('view.fitWidth'),
       t('view.fitPage'),
     ]);
-    expect(host.querySelector('.canvas-pill')?.getAttribute('aria-label')).toBe(t('pill.label'));
+    expect(host.querySelector('.doc-status-controls')?.getAttribute('aria-label')).toBe(
+      t('pill.label'),
+    );
   });
 
   it('shows the zoom as a percentage and the page as the field and the total', () => {
@@ -165,7 +170,7 @@ describe('CanvasPill controls (W4.2a S5)', () => {
       button(t('pill.zoomPresets')).click();
     });
     expect(button(t('pill.zoomPresets')).getAttribute('aria-expanded')).toBe('true');
-    const items = [...host.querySelectorAll('.canvas-pill-presets button')];
+    const items = [...host.querySelectorAll('.doc-status-presets button')];
     expect(items.map((item) => item.textContent)).toEqual([
       t('view.fitWidth'),
       t('view.fitPage'),
@@ -181,7 +186,7 @@ describe('CanvasPill controls (W4.2a S5)', () => {
       items[2]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onZoom).toHaveBeenCalledWith({ zoom: 0.5 });
-    expect(host.querySelector('.canvas-pill-presets')).toBeNull();
+    expect(host.querySelector('.doc-status-presets')).toBeNull();
   });
 
   it('closes the preset list on Escape', () => {
@@ -193,7 +198,7 @@ describe('CanvasPill controls (W4.2a S5)', () => {
     act(() => {
       zoom.form?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
-    expect(host.querySelector('.canvas-pill-presets')).toBeNull();
+    expect(host.querySelector('.doc-status-presets')).toBeNull();
   });
 
   it('asks for a fit mode from the fit buttons and shows the one in effect', () => {
@@ -223,99 +228,38 @@ describe('CanvasPill controls (W4.2a S5)', () => {
   });
 });
 
-describe('CanvasPill fade (W4.2a S5)', () => {
-  const shown = () => host.querySelector('.canvas-pill')?.getAttribute('data-shown');
-
-  it('fades after 3 s without pointer, scroll or focus, and comes back on a pointer move', () => {
-    vi.useFakeTimers();
-    render(props());
-    expect(shown()).toBe('true');
-    act(() => {
-      vi.advanceTimersByTime(FADE_AFTER_MS - 1);
-    });
-    expect(shown()).toBe('true');
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(shown()).toBe('false');
-
-    act(() => {
-      host.dispatchEvent(new Event('pointermove', { bubbles: true }));
-    });
-    expect(shown()).toBe('true');
-  });
-
-  it('shows again when the page area scrolls', () => {
-    vi.useFakeTimers();
-    render(props());
-    act(() => {
-      vi.advanceTimersByTime(FADE_AFTER_MS);
-    });
-    expect(shown()).toBe('false');
-    act(() => {
-      host.querySelector('.canvas-pill')?.parentElement?.dispatchEvent(new Event('scroll'));
-    });
-    expect(shown()).toBe('true');
-  });
-
-  it('stays shown while focus is in it, and fades after focus leaves', () => {
-    vi.useFakeTimers();
-    render(props());
-    act(() => {
-      field(t('pill.zoom')).focus();
-    });
-    act(() => {
-      vi.advanceTimersByTime(FADE_AFTER_MS * 2);
-    });
-    expect(shown()).toBe('true');
-    act(() => {
-      field(t('pill.zoom')).blur();
-    });
-    act(() => {
-      vi.advanceTimersByTime(FADE_AFTER_MS);
-    });
-    expect(shown()).toBe('false');
-  });
-
-  it('stays shown while the preset list is open', () => {
-    vi.useFakeTimers();
-    render(props());
-    act(() => {
-      button(t('pill.zoomPresets')).click();
-    });
-    act(() => {
-      vi.advanceTimersByTime(FADE_AFTER_MS * 2);
-    });
-    expect(shown()).toBe('true');
-  });
-});
-
-describe('CanvasPill width (W4.2a S5)', () => {
-  it('is hidden when the page area is narrower than the pill', () => {
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(500);
-    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 300 });
-    render(props());
-    expect(host.querySelector('.canvas-pill')?.hasAttribute('hidden')).toBe(true);
-  });
-
-  it('is shown when the page area is wide enough', () => {
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(500);
-    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 900 });
-    render(props());
-    expect(host.querySelector('.canvas-pill')?.hasAttribute('hidden')).toBe(false);
-  });
-});
-
-describe('CanvasPill icons (#796)', () => {
+describe('StatusControls icons (#796)', () => {
   it('shows an icon, not text, on each button, with its name as the tooltip', () => {
     render(props({ fit: 'page' }));
-    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.canvas-pill button')];
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.doc-status-controls button')];
     expect(buttons).toHaveLength(7);
     for (const el of buttons) {
       expect(el.querySelector('svg.icon')).not.toBeNull();
       expect(el.textContent).toBe('');
       expect(el.getAttribute('title')).toBe(el.getAttribute('aria-label'));
     }
-    expect(host.querySelectorAll('.canvas-pill-group')).toHaveLength(2);
+    expect(host.querySelectorAll('.doc-status-group')).toHaveLength(2);
+  });
+});
+
+describe('StatusControls focus and popups (#808 slice 1)', () => {
+  it('hands its page field to the ref, so the host can focus it', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(props({ pageFieldRef: ref }));
+    expect(ref.current).toBe(field(t('view.goToPage')));
+  });
+
+  it('opens the preset list, and shows the zoom error in its own element', () => {
+    render(props());
+    act(() => {
+      button(t('pill.zoomPresets')).click();
+    });
+    expect(host.querySelector('.doc-status-presets')).not.toBeNull();
+    act(() => {
+      button(t('pill.zoomPresets')).click();
+    });
+    type(field(t('pill.zoom')), 'abc');
+    submit(field(t('pill.zoom')));
+    expect(host.querySelector('.doc-status-error')?.getAttribute('role')).toBe('alert');
   });
 });

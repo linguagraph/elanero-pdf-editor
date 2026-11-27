@@ -627,21 +627,21 @@ describe('document tabs', () => {
     expect(host.textContent).not.toContain(t('app.version', { version: APP_VERSION }));
   });
 
-  it('shows the page as 1 of N in the canvas pill at the start', async () => {
+  it('shows the page as 1 of N in the status bar at the start', async () => {
     dropFiles([pdf('a.pdf')]);
     await until(() => host.querySelector('.doc-page') !== null);
-    expect(host.querySelector<HTMLInputElement>('.canvas-pill-jump input')?.value).toBe('1');
-    expect(host.querySelector('.canvas-pill-total')?.textContent).toBe(
+    expect(host.querySelector<HTMLInputElement>('.doc-status-jump input')?.value).toBe('1');
+    expect(host.querySelector('.doc-status-total')?.textContent).toBe(
       t('pill.pageCount', { total: 3 }),
     );
     // The saved default zoom is Fit width: the pages (612 pt wide) fill the window.
     const percent = Math.round(fitWidthZoom(612, window.innerWidth) * 100);
-    expect(host.querySelector('.doc-status-zoom')?.textContent).toBe(
+    expect(host.querySelector<HTMLInputElement>('.doc-status-zoom-input')?.value).toBe(
       t('view.zoomPercent', { percent }),
     );
   });
 
-  it('updates the canvas pill page when the view scrolls to another page', async () => {
+  it('updates the status bar page when the view scrolls to another page', async () => {
     dropFiles([pdf('a.pdf')]);
     await until(() => host.querySelector('.doc-page') !== null);
     const scroller = host.querySelector<HTMLElement>('.doc-view-scroll');
@@ -651,7 +651,7 @@ describe('document tabs', () => {
     act(() => {
       scroller.dispatchEvent(new Event('scroll'));
     });
-    expect(host.querySelector<HTMLInputElement>('.canvas-pill-jump input')?.value).toBe('2');
+    expect(host.querySelector<HTMLInputElement>('.doc-status-jump input')?.value).toBe('2');
   });
 
   it('keeps the About button in the start page footer and no status bar there', () => {

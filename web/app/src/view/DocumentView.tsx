@@ -117,7 +117,6 @@ import { CachedCanvas } from './pixels';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 import { RenderScheduler } from './renderScheduler';
 import { planPageRenders, tileRect, tilesInViewport } from './tiles';
-import { CanvasPill } from './CanvasPill';
 import { CSS_PX_PER_POINT, DEFAULT_ZOOM, clampZoom, scaleMilli, stepZoom } from './zoom';
 import type { ZoomRequest } from './zoomBox';
 import {
@@ -177,7 +176,7 @@ function watchRange(
 // The page layouts the toolbar offers: the continuous single column, or two-page spreads.
 
 // What the parent can ask the view to do: the ribbon's View and Home commands and the shortcuts reach
-// the view through here (W4.2a S6), as the canvas pill does from inside.
+// the view through here (W4.2a S6), as the status bar does from inside.
 // The one picture a selection names, from the list it was made on; null unless the selection is
 // exactly one object, that object is an image, and the list is at the selection's revision. Replace
 // and Export act on exactly one picture (W6.7b slice 2b).
@@ -199,8 +198,6 @@ export interface DocumentViewHandle {
   zoom(request: ZoomRequest | { readonly step: -1 | 1 }): void;
   // Moves to the next or the previous page, clamped to the document.
   stepPage(direction: -1 | 1): void;
-  // Focuses the canvas pill's page field and selects its text (the status bar's Go to Page, W4.3b).
-  focusPageField(): void;
   // Deletes the objects the Edit tool has selected (the Delete command and key, W6.7a S5). Nothing
   // happens with no selection.
   deleteEditSelection(): void;
@@ -478,8 +475,6 @@ export function DocumentView({
   const [night, setNight] = useState(() => readPreferences().nightReading);
   // The zoom as the latest wheel event left it, so a burst of events builds on each other.
   const zoomRef = useRef(manualZoom);
-  // The canvas pill's page field, which focusPageField reaches; set while the pill is mounted.
-  const pageFieldRef = useRef<HTMLInputElement>(null);
   // A shape add in flight (W6.7b): a second gesture or Enter is ignored until it settles.
   const shapeInFlight = useRef(false);
   const wheelPending = useRef(0);
@@ -864,13 +859,6 @@ export function DocumentView({
     [capturePlace],
   );
 
-  // Leaves any fit mode for a manual zoom: the steps, the wheel and the presets all do this.
-  const zoomTo = (value: number) => {
-    capturePlace();
-    setFit(null);
-    setManualZoom(value);
-  };
-
   const layout = useMemo(
     () =>
       viewLayout === 'single'
@@ -1048,7 +1036,7 @@ export function DocumentView({
     [layout, zoom, capturePlace],
   );
 
-  // Scrolls so the page's top edge is at the top of the viewport; shared by the handle and the pill.
+  // Scrolls so the page's top edge is at the top of the viewport; shared by the handle and the status bar.
   const scrollToPage = useCallback(
     (index: number, topPt?: number) => {
       const element = scrollRef.current;
@@ -1319,7 +1307,7 @@ export function DocumentView({
 
   const total = pageCount;
 
-  // The canvas pill's and the handle's zoom request: a fit mode or a manual zoom. Only setters are
+  // The status bar's and the handle's zoom request: a fit mode or a manual zoom. Only setters are
   // used, so the callback is stable.
   const applyZoom = useCallback(
     (request: ZoomRequest) => {
@@ -1333,7 +1321,7 @@ export function DocumentView({
     },
     [capturePlace],
   );
-  // The next or previous page, clamped to the document (the pill's steps and the handle's).
+  // The next or previous page, clamped to the document (the status bar's steps and the handle's).
   const stepPage = useCallback(
     (direction: -1 | 1) => {
       scrollToPage(Math.min(total - 1, Math.max(0, currentPage - 1 + direction)));
@@ -1355,10 +1343,6 @@ export function DocumentView({
       zoom: (request) =>
         applyZoom('step' in request ? { zoom: stepZoom(zoom, request.step) } : request),
       stepPage,
-      focusPageField: () => {
-        pageFieldRef.current?.focus();
-        pageFieldRef.current?.select();
-      },
       deleteEditSelection,
       deleteCommentSelection,
       replaceEditImage,
@@ -1610,7 +1594,7 @@ export function DocumentView({
           onScroll={measure}
           onKeyDown={scrollByKey}
           onFocus={(event) => {
-            // Focus inside a page pins that page; focus outside the pages (the pill, the scroller) unpins it.
+            // Focus inside a page pins that page; focus outside the pages (the status bar, the scroller) unpins it.
             const page =
               event.target instanceof Element
                 ? event.target.closest<HTMLElement>('.doc-page')
@@ -1900,20 +1884,6 @@ export function DocumentView({
             </div>
           </div>
         </div>
-      )}
-      {sizes === null ? null : (
-        <CanvasPill
-          page={currentPage}
-          total={total}
-          labels={labels}
-          zoom={zoom}
-          fit={fit}
-          onGoTo={scrollToPage}
-          onStep={stepPage}
-          onZoom={applyZoom}
-          onZoomStep={(direction) => zoomTo(stepZoom(zoom, direction))}
-          pageFieldRef={pageFieldRef}
-        />
       )}
       {/* The selection's size, announced politely (W5.4 section 6). Last, so the view's own status
           messages stay the first ones a screen reader meets. */}

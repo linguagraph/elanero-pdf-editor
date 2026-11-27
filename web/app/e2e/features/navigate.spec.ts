@@ -27,12 +27,12 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const jump = page.getByRole('textbox', { name: 'Go to page' });
-    // The canvas pill's buttons; the ribbon has commands with the same names.
-    const pill = page.locator('.canvas-pill');
+    // The status bar's buttons; the ribbon has commands with the same names.
+    const pill = page.locator('.doc-status-controls');
     const previous = pill.getByRole('button', { name: 'Previous page' });
     const next = pill.getByRole('button', { name: 'Next page' });
     await expect(jump).toHaveValue('1');
-    await expect(page.locator('.canvas-pill-total')).toHaveText('/ 5');
+    await expect(page.locator('.doc-status-total')).toHaveText('/ 5');
     await expect(previous).toBeDisabled();
 
     await next.click();
@@ -81,11 +81,11 @@ test.describe('engine staged', () => {
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
 
     const jump = page.getByRole('textbox', { name: 'Go to page' });
-    // The status bar's Back and Forward. History records the jumps the side panels make (the
-    // thumbnails, bookmarks, search and redaction lists); the Go to Page field does not record.
-    const status = page.locator('.doc-status');
-    const back = status.getByRole('button', { name: 'Back', exact: true });
-    const forward = status.getByRole('button', { name: 'Forward', exact: true });
+    // Back and Forward are the ribbon's Home > Navigate commands (#808 removed them from the status
+    // bar). History records the jumps the side panels make (the thumbnails, bookmarks, search and
+    // redaction lists); the Go to Page field does not record.
+    const back = page.getByRole('button', { name: 'Back', exact: true });
+    const forward = page.getByRole('button', { name: 'Forward', exact: true });
     await expect(back).toBeDisabled();
     await expect(forward).toBeDisabled();
 
@@ -122,7 +122,7 @@ test.describe('engine staged', () => {
     // The field shows the first page's label (roman "i"), and the total is still the page count.
     const jump = page.getByRole('textbox', { name: 'Go to page' });
     await expect(jump).toHaveValue('i');
-    await expect(page.locator('.canvas-pill-total')).toHaveText('/ 8');
+    await expect(page.locator('.doc-status-total')).toHaveText('/ 8');
 
     // The label "A-2" is the fourth page; the field takes the label, not the page number.
     await jump.fill('A-2');

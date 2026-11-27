@@ -147,8 +147,8 @@ describe('reduced motion in the stylesheets', () => {
     expect(files.length).toBeGreaterThan(10);
   });
 
-  it('keeps the reduced-motion rules in layout, feedback and the canvas pill', () => {
-    for (const name of ['layout/layout.css', 'feedback/feedback.css', 'view/canvasPill.css']) {
+  it('keeps the reduced-motion rules in layout, feedback and the status bar', () => {
+    for (const name of ['layout/layout.css', 'feedback/feedback.css', 'view/documentView.css']) {
       const file = files.find((f) => f.name === name);
       expect(file, name).toBeDefined();
       expect(splitReduceBlocks(file?.css ?? '').reduce.trim(), name).not.toBe('');

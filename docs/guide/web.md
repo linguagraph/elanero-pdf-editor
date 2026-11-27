@@ -327,11 +327,16 @@ message saying whether it was added.
 
 ## Going to a page
 
-- **Page box.** The status bar under the document shows the page you are reading. Type a page
-  number and press Enter to go to that page. If the number is not in the document, a message says
-  which numbers are valid, and the view does not move.
-- **Back and Forward.** The **Back** and **Forward** buttons in the status bar return to pages you
-  jumped from, or went to from a thumbnail, and go forward again. A small move of one page is not
+- **Page box.** The status bar under the document shows the page you are reading, with the page
+  box, the total and the previous and next buttons. Type a page number and press Enter to go to
+  that page. If the number is not in the document, a message says which numbers are valid, and the
+  view does not move.
+- **Zoom.** The same bar holds the zoom box (type a percentage, or open the list of presets), the
+  zoom minus and plus, and the Fit width and Fit page buttons. The bar is the same height at all
+  times; on a narrow screen its two groups wrap onto two rows.
+- **Back and Forward.** The **Back** and **Forward** buttons are in the ribbon's Home tab, in the
+  Navigate group, and on Alt+Left and Alt+Right. They return to pages you jumped from, or went to
+  from a thumbnail, and go forward again. A small move of one page is not
   recorded, and a new jump after going back clears the forward pages. The history is kept for each
   open document until you reload the page.
 - **Page labels and links.** The status bar shows the document's own page labels (such as i, ii, 1),

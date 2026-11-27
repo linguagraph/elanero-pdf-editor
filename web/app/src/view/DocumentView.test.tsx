@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import type { CommentPageResult, Methods } from '../rpc/generated';
 import { PREFS_STORAGE_KEY, readPreferences, writePreferences } from '../prefs/store';
-import { DocumentView, type DocumentViewHandle, type DocumentViewState } from './DocumentView';
+import type { DocumentViewHandle, DocumentViewState } from './DocumentView';
 import { computeColumn, computeSpreads, scrollTopForPage } from './layout';
+import { ViewWithStatus } from './viewWithStatus.testutil';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -70,7 +71,7 @@ async function flush(): Promise<void> {
 
 // The geometry tests here are at 100 %; the saved default is Fit width otherwise.
 // The zoom box of the canvas pill shows the zoom as a percentage.
-const zoomValue = () => host.querySelector<HTMLInputElement>('.canvas-pill-zoom-input')?.value;
+const zoomValue = () => host.querySelector<HTMLInputElement>('.doc-status-zoom-input')?.value;
 
 function savePreferences(record: Record<string, unknown>): void {
   window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(record));
@@ -100,7 +101,7 @@ describe('DocumentView with a fake engine', () => {
   it('shows a placeholder at the page size before any pixels arrive', async () => {
     const { rpc, renders } = fakeRpc(3);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const pages = host.querySelectorAll<HTMLElement>('.doc-page');
@@ -115,7 +116,7 @@ describe('DocumentView with a fake engine', () => {
   it('labels each page through t()', async () => {
     const { rpc } = fakeRpc(3);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const labels = [...host.querySelectorAll('.doc-page')].map((el) =>
@@ -127,7 +128,7 @@ describe('DocumentView with a fake engine', () => {
   it('draws a render reply onto the canvas at its device size', async () => {
     const { rpc, renders } = fakeRpc(3);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const first = renders[0];
@@ -164,7 +165,7 @@ describe('DocumentView with a fake engine', () => {
   it('asks again at the reported revision when the page changed', async () => {
     const { rpc, renders } = fakeRpc(1);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     await act(async () => {
@@ -195,7 +196,7 @@ describe('DocumentView with a fake engine', () => {
   it('keeps at most two renders in flight', async () => {
     const { rpc, renders } = fakeRpc(6);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     expect(renders.length).toBe(2);
@@ -204,7 +205,7 @@ describe('DocumentView with a fake engine', () => {
   it('zooms with the desktop steps and shows the percentage', async () => {
     const { rpc } = fakeRpc(1);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     expect(zoomValue()).toBe('100%');
@@ -220,7 +221,7 @@ describe('DocumentView with a fake engine', () => {
   it('shows the loading text while the page sizes are read', () => {
     const rpc = { call: vi.fn(() => new Promise(() => undefined)) } as unknown as PageRpc;
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     expect(host.querySelector('[role="status"]')?.textContent).toBe('Loading pages…');
   });
@@ -272,7 +273,7 @@ describe('DocumentView page labels', () => {
     const { rpc } = fakeRpc(3, ['i', 'ii', '1']);
     const onViewChange = vi.fn();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
     });
     await flush();
     expect(onViewChange).toHaveBeenLastCalledWith(
@@ -284,7 +285,7 @@ describe('DocumentView page labels', () => {
     const { rpc } = fakeRpc(3);
     const onViewChange = vi.fn();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
     });
     await flush();
     expect(onViewChange).toHaveBeenLastCalledWith(expect.objectContaining({ labels: [] }));
@@ -297,7 +298,7 @@ describe('DocumentView render retries', () => {
       attempt < 2 ? Promise.reject(new Error('boom')) : Promise.resolve(drawnReply),
     );
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await settle();
     expect(renderCalls(call)).toBe(3);
@@ -308,7 +309,7 @@ describe('DocumentView render retries', () => {
   it('stops after three failures and shows the page as failed', async () => {
     const { rpc, call } = scriptedRpc(() => Promise.reject(new Error('boom')));
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await settle();
     expect(renderCalls(call)).toBe(3);
@@ -323,7 +324,7 @@ describe('DocumentView render retries', () => {
   it('asks once and no more when the engine never answers', async () => {
     const { rpc, call } = scriptedRpc(() => new Promise(() => undefined));
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await settle();
     expect(renderCalls(call)).toBe(1);
@@ -358,7 +359,9 @@ describe('DocumentView layouts and night reading', () => {
   it('pairs pages into two-page spreads and puts page 1 alone when asked', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     const pages = () => [...host.querySelectorAll<HTMLElement>('.doc-page')];
@@ -385,7 +388,9 @@ describe('DocumentView layouts and night reading', () => {
   it('turns night reading on and off with a class on the view, and saves the choice', async () => {
     const { rpc } = fakeRpc(1);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     const view = () => host.querySelector('.doc-view');
@@ -409,7 +414,9 @@ describe('DocumentView layouts and night reading', () => {
     writePreferences({ ...readPreferences(), nightReading: true });
     const { rpc } = fakeRpc(1);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     expect(host.querySelector('.doc-view--night')).not.toBeNull();
@@ -420,7 +427,9 @@ describe('DocumentView layouts and night reading', () => {
     savePreferences({ defaultZoom: 'actual', pageLayout: 'twoPageCover' });
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     expect(pressedOf('Two pages')).toBe('true');
@@ -432,7 +441,9 @@ describe('DocumentView layouts and night reading', () => {
     savePreferences({ defaultZoom: 'actual', pageLayout: 'twoPage' });
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     expect(pressedOf('Two pages')).toBe('true');
@@ -442,7 +453,9 @@ describe('DocumentView layouts and night reading', () => {
   it('applies a changed default layout once, and saving other fields keeps the reader choice', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     const pressed = (label: string) => pressedOf(label);
@@ -473,7 +486,7 @@ describe('DocumentView layouts and night reading', () => {
     const pages: { page: number }[] = [];
     act(() => {
       root.render(
-        <DocumentView rpc={rpc} handle="doc-1" onViewChange={(state) => pages.push(state)} />,
+        <ViewWithStatus rpc={rpc} handle="doc-1" onViewChange={(state) => pages.push(state)} />,
       );
     });
     await flush();
@@ -509,7 +522,9 @@ describe('DocumentView layouts and night reading', () => {
   it('zooms with Ctrl+wheel through the desktop steps and stops the browser zoom', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');
@@ -529,7 +544,9 @@ describe('DocumentView layouts and night reading', () => {
   it('leaves a plain wheel to the browser', async () => {
     const { rpc } = fakeRpc(2);
     act(() => {
-      root.render(<DocumentView ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />);
+      root.render(
+        <ViewWithStatus ref={viewRef} rpc={rpc} handle="doc-1" onViewChange={reportTo} />,
+      );
     });
     await flush();
     const scroll = host.querySelector<HTMLElement>('.doc-view-scroll');
@@ -568,7 +585,7 @@ describe('DocumentView tiles (W5.1b)', () => {
     // 1600 pt square at 100 %: about 4.5 MP on the device, so it is tiled.
     const { rpc, calls } = fakeSizedRpc([{ width: 1600, height: 1600 }]);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const renders = calls.filter((call) => call.method.startsWith('render.'));
@@ -584,7 +601,7 @@ describe('DocumentView tiles (W5.1b)', () => {
   it('draws a page at or under 4 MP as one image, with no tile requests', async () => {
     const { rpc, calls } = fakeSizedRpc([{ width: 612, height: 792 }]);
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" />);
     });
     await flush();
     const methods = calls.map((call) => call.method);
@@ -598,7 +615,7 @@ describe('DocumentView handle: layout, night and the reported view state (W4.3a 
     const { rpc } = fakeRpc(3);
     const onViewChange = vi.fn();
     act(() => {
-      root.render(<DocumentView rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+      root.render(<ViewWithStatus rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
     });
     await flush();
     expect(onViewChange).toHaveBeenLastCalledWith(
@@ -611,7 +628,9 @@ describe('DocumentView handle: layout, night and the reported view state (W4.3a 
     const onViewChange = vi.fn();
     const ref = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView ref={ref} rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+      root.render(
+        <ViewWithStatus ref={ref} rpc={rpc} handle="doc-1" onViewChange={onViewChange} />,
+      );
     });
     await flush();
     act(() => {
@@ -635,7 +654,9 @@ describe('DocumentView handle: layout, night and the reported view state (W4.3a 
     const onViewChange = vi.fn();
     const ref = createRef<DocumentViewHandle>();
     act(() => {
-      root.render(<DocumentView ref={ref} rpc={rpc} handle="doc-1" onViewChange={onViewChange} />);
+      root.render(
+        <ViewWithStatus ref={ref} rpc={rpc} handle="doc-1" onViewChange={onViewChange} />,
+      );
     });
     await flush();
     act(() => {
@@ -677,7 +698,9 @@ describe('DocumentView note popup (W7.1a slice 8)', () => {
 
   it('does not reopen the note when the tool goes away from Select and back', async () => {
     const { rpc } = fakeRpc(1, [], comments);
-    const view = (tool: 'select' | 'hand') => <DocumentView rpc={rpc} handle="doc-1" tool={tool} />;
+    const view = (tool: 'select' | 'hand') => (
+      <ViewWithStatus rpc={rpc} handle="doc-1" tool={tool} />
+    );
     act(() => {
       root.render(view('select'));
     });

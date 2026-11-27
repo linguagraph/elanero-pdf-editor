@@ -97,11 +97,11 @@ test.describe('engine staged', () => {
     expect(offenders, 'reduced motion overrides (saved preference)').toEqual([]);
   });
 
-  test('motion on: the canvas pill keeps its 200 ms transition with both settings off @a11y', async ({
+  test('motion on: the status bar buttons keep their 150 ms hover transition with both settings off @a11y', async ({
     page,
   }) => {
     // Negative check: with the system setting and the app preference both off, the sweep's inputs
-    // are live, so the pill's 200 ms transition shows in its computed style (the sweep can fail).
+    // are live, so the bar's 150 ms hover transition shows in its computed style (the sweep can fail).
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await openDocument(page);
     expect(
@@ -109,9 +109,10 @@ test.describe('engine staged', () => {
     ).toBe(false);
 
     const duration = await page
-      .locator('.canvas-pill')
+      .locator('.doc-status-controls button')
+      .first()
       .evaluate((el) => getComputedStyle(el).transitionDuration);
-    expect(duration, 'canvas pill transition with both settings off').toBe('0.2s');
+    expect(duration, 'status bar transition with both settings off').toBe('0.15s');
   });
 
   test.describe('Chromium only', () => {
@@ -153,10 +154,10 @@ test.describe('engine staged', () => {
         await openDocument(page);
         expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
 
-        // The controls the brief lists: the canvas pill and the document tabs (the ribbon has its own tests).
+        // The controls the brief lists: the status bar and the document tabs (the ribbon has its own tests).
         const selectors = [
-          '.canvas-pill button',
-          '.canvas-pill input',
+          '.doc-status-controls button',
+          '.doc-status-controls input',
           '.doc-tab',
           '.doc-tab-close',
           '.doc-tabs-menu-button',

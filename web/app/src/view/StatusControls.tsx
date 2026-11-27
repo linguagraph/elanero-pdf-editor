@@ -1,21 +1,14 @@
-// The canvas pill (W4.2a S5, W1.6 section 4, the desktop's ui/view/pill.py): the page navigator,
-// the zoom box with its presets, the zoom minus and plus, and the fit width and fit page buttons.
-// It floats at the bottom centre of the page area and fades after a few seconds without use. It
-// keeps no zoom or page state of its own: the document view passes them in and handles the calls.
-import { type FormEvent, type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
+// The page and zoom controls of the status bar (#808 slice 1, the desktop's ui/view/pill.py): the page
+// navigator, the zoom box with its presets, the zoom minus and plus, and the fit width and fit page
+// buttons. They keep no zoom or page state of their own: the host passes them in and handles the calls.
+import { type FormEvent, type Ref, useId, useState } from 'react';
 import { t } from '../i18n/t';
 import { Icon } from '../theme/Icon';
 import { PageJumpField } from './PageJumpField';
 import { MAX_ZOOM, MIN_ZOOM } from './zoom';
 import { parseZoomInput, ZOOM_PRESETS, type ZoomRequest } from './zoomBox';
-import './canvasPill.css';
 
-// How long the pill stays shown after the last pointer move, scroll or focus (desktop: 3 s).
-export const FADE_AFTER_MS = 3000;
-
-type Preset = (typeof ZOOM_PRESETS)[number];
-
-export interface CanvasPillProps {
+export interface StatusControlsProps {
   // One-based page at the middle of the viewport, and the number of pages.
   readonly page: number;
   readonly total: number;
@@ -29,9 +22,11 @@ export interface CanvasPillProps {
   onStep(direction: -1 | 1): void;
   onZoom(request: ZoomRequest): void;
   onZoomStep(direction: -1 | 1): void;
-  // The page field's input, for the host to focus (the status bar's Go to Page, W4.3b).
+  // The page field's input, for the host to focus (the registry's Go to Page command, W4.3b).
   readonly pageFieldRef?: Ref<HTMLInputElement>;
 }
+
+type Preset = (typeof ZOOM_PRESETS)[number];
 
 // The label of a zoom preset in the list: the fit names, or the percentage.
 function presetLabel(preset: Preset): string {
@@ -47,7 +42,7 @@ function presetRequest(preset: Preset): ZoomRequest {
   return { zoom: preset };
 }
 
-export function CanvasPill({
+export function StatusControls({
   page,
   total,
   labels,
@@ -58,76 +53,13 @@ export function CanvasPill({
   onZoom,
   onZoomStep,
   pageFieldRef,
-}: CanvasPillProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const timer = useRef<number | null>(null);
-  // What keeps the pill shown: the pointer over it, focus in it, or the preset list open.
-  const hovered = useRef(false);
-  const focused = useRef(false);
-  const listing = useRef(false);
-  const [shown, setShown] = useState(true);
-  // False when the page area is narrower than the pill: the pill is then hidden (desktop _place).
-  const [fits, setFits] = useState(true);
+}: StatusControlsProps) {
   const [listOpen, setListOpen] = useState(false);
   // The zoom text being typed; null while the box shows the zoom.
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState<string | null>(null);
   const hintId = useId();
   const listId = useId();
-
-  const clearTimer = useCallback(() => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = null;
-  }, []);
-
-  // Shows the pill and, unless something holds it, starts the countdown to the fade.
-  const arm = useCallback(() => {
-    clearTimer();
-    setShown(true);
-    if (hovered.current || focused.current || listing.current) return;
-    timer.current = window.setTimeout(() => {
-      timer.current = null;
-      setShown(false);
-    }, FADE_AFTER_MS);
-  }, [clearTimer]);
-
-  // Records one of the holds and re-arms: a held pill stays shown, a released one fades later.
-  const hold = useCallback(
-    (part: 'hovered' | 'focused' | 'listing', on: boolean) => {
-      if (part === 'hovered') hovered.current = on;
-      else if (part === 'focused') focused.current = on;
-      else listing.current = on;
-      arm();
-    },
-    [arm],
-  );
-
-  // The page area's pointer moves and scrolls show the pill; the area is the parent element. The
-  // width check hides the pill when the area is narrower than the pill itself.
-  useEffect(() => {
-    const pill = ref.current;
-    const area = pill?.parentElement;
-    if (pill === null || area === null || area === undefined) return;
-    const onActivity = () => arm();
-    const measure = () => {
-      const width = area.clientWidth;
-      setFits(width === 0 || pill.offsetWidth <= width);
-    };
-    area.addEventListener('pointermove', onActivity);
-    area.addEventListener('scroll', onActivity, { capture: true, passive: true });
-    window.addEventListener('resize', measure);
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(area);
-    measure();
-    arm();
-    return () => {
-      area.removeEventListener('pointermove', onActivity);
-      area.removeEventListener('scroll', onActivity, { capture: true });
-      window.removeEventListener('resize', measure);
-      observer?.disconnect();
-      clearTimer();
-    };
-  }, [arm, clearTimer]);
 
   const percent = Math.round(zoom * 100);
 
@@ -148,33 +80,12 @@ export function CanvasPill({
     setInvalid(null);
     setDraft(null);
     setListOpen(false);
-    hold('listing', false);
     onZoom(presetRequest(preset));
   };
 
-  const closeList = () => {
-    setListOpen(false);
-    hold('listing', false);
-  };
-
   return (
-    <div
-      ref={ref}
-      className="canvas-pill"
-      role="toolbar"
-      aria-label={t('pill.label')}
-      data-shown={shown ? 'true' : 'false'}
-      hidden={!fits}
-      onPointerEnter={() => hold('hovered', true)}
-      onPointerLeave={() => hold('hovered', false)}
-      onFocus={() => hold('focused', true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          hold('focused', false);
-        }
-      }}
-    >
-      <div className="canvas-pill-group">
+    <div className="doc-status-controls" role="toolbar" aria-label={t('pill.label')}>
+      <div className="doc-status-group">
         <button
           type="button"
           aria-label={t('pill.previousPage')}
@@ -201,7 +112,7 @@ export function CanvasPill({
           <Icon name="chevron-right" />
         </button>
       </div>
-      <div className="canvas-pill-group">
+      <div className="doc-status-group">
         <button
           type="button"
           aria-label={t('view.zoomOut')}
@@ -212,14 +123,14 @@ export function CanvasPill({
           <Icon name="minus" />
         </button>
         <form
-          className="canvas-pill-zoom"
+          className="doc-status-zoom-form"
           onSubmit={submitZoom}
           onKeyDown={(event) => {
-            if (event.key === 'Escape' && listOpen) closeList();
+            if (event.key === 'Escape' && listOpen) setListOpen(false);
           }}
         >
           <input
-            className="canvas-pill-zoom-input"
+            className="doc-status-zoom-input"
             type="text"
             inputMode="text"
             aria-label={t('pill.zoom')}
@@ -235,7 +146,7 @@ export function CanvasPill({
               setInvalid(null);
             }}
           />
-          <span id={hintId} className="canvas-pill-hint">
+          <span id={hintId} className="doc-status-hint">
             {t('pill.zoomHint')}
           </span>
           <button
@@ -244,16 +155,12 @@ export function CanvasPill({
             title={t('pill.zoomPresets')}
             aria-expanded={listOpen}
             aria-controls={listId}
-            onClick={() => {
-              const open = !listOpen;
-              setListOpen(open);
-              hold('listing', open);
-            }}
+            onClick={() => setListOpen(!listOpen)}
           >
             <Icon name="chevron-down" />
           </button>
           {listOpen ? (
-            <ul id={listId} className="canvas-pill-presets">
+            <ul id={listId} className="doc-status-presets">
               {ZOOM_PRESETS.map((preset) => (
                 <li key={String(preset)}>
                   <button type="button" onClick={() => chooseListed(preset)}>
@@ -264,7 +171,7 @@ export function CanvasPill({
             </ul>
           ) : null}
           {invalid === null ? null : (
-            <span role="alert" className="canvas-pill-error">
+            <span role="alert" className="doc-status-error">
               {invalid}
             </span>
           )}

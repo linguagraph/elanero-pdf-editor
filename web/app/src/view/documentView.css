@@ -116,40 +116,159 @@
 }
 
 /* The status bar under the document (W1.6 section 1): Back and Forward, the zoom and the view mode. */
+/* The status bar (#808 slice 1): the page and zoom controls, centred in one row. The footer
+   (.app-frame-status) adds 1 px of border and 2 px of padding above and below, so the bar is 29 px
+   tall with 24 px controls. Colours and spacing come from the theme tokens. */
 .doc-status {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-1) var(--space-3);
-  min-height: 32px;
+  justify-content: center;
+  min-width: 0;
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
 }
 
-/* The two groups of the status bar: Back and Forward on the left, the zoom and the view mode on the right. */
-.doc-status-start,
-.doc-status-end {
+/* The bar's controls: the page navigator and the zoom group, one row or wrapped to two. */
+.doc-status-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  color: var(--color-text);
+}
+
+.doc-status-group {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
+  gap: var(--space-1);
 }
 
-.doc-status-end {
-  flex: 0 0 auto;
+/* The one separator, between the navigator and the zoom group. */
+.doc-status-group + .doc-status-group {
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-1);
 }
 
-.doc-status-mode {
+/* Buttons are bare icons until hovered; the transparent border stays visible in forced colours. */
+.doc-status-controls button {
+  box-sizing: border-box;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-text);
+  transition: background-color 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-status-controls button {
+    transition: none;
+  }
+}
+
+:root[data-reduce-motion='true'] .doc-status-controls button {
+  transition: none;
+}
+
+.doc-status-controls button:hover:not(:disabled) {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
+.doc-status-controls button[aria-pressed='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-focus-ring);
+}
+
+.doc-status-controls button:disabled {
+  color: var(--color-text-disabled);
+}
+
+.doc-status-controls button:focus-visible,
+.doc-status-controls input:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.doc-status-controls input {
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 0 var(--space-1);
+}
+
+.doc-status-zoom-form,
+.doc-status-jump {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.doc-status-jump input {
+  width: 44px;
+  text-align: center;
+}
+
+.doc-status-zoom-input {
+  width: 48px;
+  text-align: center;
+}
+
+.doc-status-total {
   color: var(--color-text-muted);
   white-space: nowrap;
 }
 
-/* Back and Forward are touch targets under a coarse pointer (W1.6, touch; W8.5 S5). This block
-   was lost with the duplicate tool strip's removal; restored here with the token. */
+/* The hint is for screen readers only; the zoom box names itself through it. */
+.doc-status-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The presets list and the two error messages open upward: the bar is at the bottom of the window. */
+.doc-status-presets {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 3;
+  margin: 0 0 var(--space-1);
+  padding: var(--space-1);
+  list-style: none;
+  min-width: 10em;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+}
+
+.doc-status-presets button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+}
+
+.doc-status-error {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 3;
+  color: var(--color-danger);
+  white-space: nowrap;
+}
+
+/* Touch targets are at least 44 px under a coarse pointer (W1.6, touch; W8.5 S5). The bar wraps
+   to two rows on a phone rather than scrolling sideways. */
 @media (pointer: coarse) {
-  .doc-status button {
+  .doc-status-controls button,
+  .doc-status-controls input {
     min-width: var(--size-touch-target);
     min-height: var(--size-touch-target);
   }

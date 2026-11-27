@@ -1,13 +1,8 @@
-import { act, createRef } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n/t';
-import {
-  DocumentStatusBar,
-  type DocumentStatusBarHandle,
-  type DocumentStatusBarProps,
-} from './DocumentStatusBar';
-import { PageJumpField } from './PageJumpField';
+import { DocumentStatusBar, type DocumentStatusBarProps } from './DocumentStatusBar';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,12 +11,15 @@ let root: Root;
 
 function props(overrides: Partial<DocumentStatusBarProps> = {}): DocumentStatusBarProps {
   return {
+    page: 1,
+    total: 3,
+    labels: [],
     zoom: 1,
-    layout: 'continuous',
-    canBack: false,
-    canForward: false,
-    onBack: vi.fn(),
-    onForward: vi.fn(),
+    fit: null,
+    onGoTo: vi.fn(),
+    onStep: vi.fn(),
+    onZoom: vi.fn(),
+    onZoomStep: vi.fn(),
     ...overrides,
   };
 }
@@ -30,12 +28,6 @@ function render(value: DocumentStatusBarProps): void {
   act(() => {
     root.render(<DocumentStatusBar {...value} />);
   });
-}
-
-function buttonNamed(text: string): HTMLButtonElement {
-  const found = [...host.querySelectorAll('button')].find((b) => b.textContent === text);
-  if (found === undefined) throw new Error(`no button ${text}`);
-  return found;
 }
 
 beforeEach(() => {
@@ -49,91 +41,43 @@ afterEach(() => {
     root.unmount();
   });
   host.remove();
-  vi.restoreAllMocks();
 });
 
-describe('status bar', () => {
-  it('has no page field: the canvas pill carries the page jump', () => {
+describe('DocumentStatusBar (#808 slice 1)', () => {
+  it('holds the page and zoom controls in one toolbar, in the desktop order', () => {
     render(props());
-    expect(host.querySelector('input')).toBeNull();
-    expect(host.querySelector('form')).toBeNull();
-  });
-});
-
-describe('back and forward', () => {
-  it('calls the button handlers, and disables a button with no entry', () => {
-    const onBack = vi.fn();
-    render(props({ onBack, canBack: true, canForward: false }));
-    expect(buttonNamed(t('view.back')).disabled).toBe(false);
-    expect(buttonNamed(t('view.forward')).disabled).toBe(true);
-    act(() => buttonNamed(t('view.back')).click());
-    expect(onBack).toHaveBeenCalledTimes(1);
-  });
-
-  it('leaves Alt+Left and Alt+Right to the registry commands, so a key runs one handler', () => {
-    const onBack = vi.fn();
-    const onForward = vi.fn();
-    render(props({ onBack, onForward, canBack: true, canForward: true }));
-    const event = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true });
-    act(() => {
-      document.dispatchEvent(event);
-    });
-    expect(event.defaultPrevented).toBe(false);
-    expect(onBack).not.toHaveBeenCalled();
-    expect(onForward).not.toHaveBeenCalled();
-  });
-});
-
-describe('focusPageField', () => {
-  it('asks the host through onFocusPageField', () => {
-    const onFocusPageField = vi.fn();
-    const ref = createRef<DocumentStatusBarHandle>();
-    act(() => {
-      root.render(<DocumentStatusBar {...props({ onFocusPageField })} ref={ref} />);
-    });
-    act(() => ref.current?.focusPageField());
-    expect(onFocusPageField).toHaveBeenCalledTimes(1);
+    const names = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.doc-status-controls button, .doc-status-controls input',
+      ),
+    ].map((el) => el.getAttribute('aria-label') ?? el.textContent ?? '');
+    expect(names).toEqual([
+      t('pill.previousPage'),
+      t('view.goToPage'),
+      t('pill.nextPage'),
+      t('view.zoomOut'),
+      t('pill.zoom'),
+      t('pill.zoomPresets'),
+      t('view.zoomIn'),
+      t('view.fitWidth'),
+      t('view.fitPage'),
+    ]);
+    expect(host.querySelector('.doc-status-controls')?.getAttribute('role')).toBe('toolbar');
+    expect(host.querySelectorAll('.doc-status-group')).toHaveLength(2);
   });
 
-  it('moves focus into the page input the host focuses', () => {
-    // Stands in for App, which routes the call to the view handle; the field is the pill's input.
-    const fieldRef = createRef<HTMLInputElement>();
-    const barRef = createRef<DocumentStatusBarHandle>();
-    const focusField = () => {
-      fieldRef.current?.focus();
-      fieldRef.current?.select();
-    };
-    act(() => {
-      root.render(
-        <>
-          <DocumentStatusBar {...props({ onFocusPageField: focusField })} ref={barRef} />
-          <PageJumpField ref={fieldRef} page={2} total={5} onGoTo={vi.fn()} />
-        </>,
-      );
-    });
-    act(() => barRef.current?.focusPageField());
-    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${t('view.goToPage')}"]`);
-    expect(input).not.toBeNull();
-    expect(document.activeElement).toBe(input);
-    expect(input?.selectionStart).toBe(0);
-    expect(input?.selectionEnd).toBe(input?.value.length);
-  });
-});
-
-describe('desktop order', () => {
-  it('puts Back and Forward on the left and the zoom and view mode on the right', () => {
-    render(props({ zoom: 1.5, layout: 'twoPage' }));
-    const start = host.querySelector('.doc-status-start');
-    const end = host.querySelector('.doc-status-end');
-    expect(start?.textContent).toBe(`${t('view.back')}${t('view.forward')}`);
-    expect(end?.textContent).toBe(
-      `${t('view.zoomPercent', { percent: 150 })}${t('view.layoutTwoPage')}`,
-    );
-    expect(host.querySelector('.doc-status-mode')?.textContent).toBe(t('view.layoutTwoPage'));
+  it('has no Back, Forward or layout text: those moved to the ribbon', () => {
+    render(props());
+    const labels = [...host.querySelectorAll('button')].map((b) => b.textContent);
+    expect(labels).not.toContain('Back');
+    expect(labels).not.toContain('Forward');
+    expect(host.querySelector('.doc-status-mode')).toBeNull();
+    expect(host.querySelector('.doc-status-zoom')).toBeNull();
   });
 
-  it('shows the single column layout when the reader has it', () => {
-    render(props({ layout: 'continuous' }));
-    expect(host.querySelector('.doc-status-mode')?.textContent).toBe(t('view.layoutSingle'));
+  it('shows the page and the zoom in their fields', () => {
+    render(props({ page: 2, zoom: 1.5 }));
+    expect(host.querySelector<HTMLInputElement>('.doc-status-zoom-input')?.value).toBe('150%');
+    expect(host.querySelector<HTMLInputElement>('.doc-status-jump input')?.value).toBe('2');
   });
 });
