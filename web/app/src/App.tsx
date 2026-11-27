@@ -1159,21 +1159,28 @@ export function App({
       }
       header={
         <>
-          <div className="app-header">
-            <div className="app-header-start">
-              <AppMenu
-                registry={REGISTRY}
-                state={state}
-                handlers={handlers}
-                panelItems={leftRailShown ? undefined : menuPanelItems}
-              />
-              <BrandMark />
-              <QuickAccess registry={REGISTRY} state={state} handlers={handlers} />
-            </div>
+          <Ribbon
+            registry={REGISTRY}
+            state={state}
+            handlers={handlers}
+            groupExtras={groupExtras}
+            start={
+              <div className="ribbon-start">
+                <AppMenu
+                  registry={REGISTRY}
+                  state={state}
+                  handlers={handlers}
+                  panelItems={leftRailShown ? undefined : menuPanelItems}
+                />
+                <BrandMark />
+                <QuickAccess registry={REGISTRY} state={state} handlers={handlers} />
+              </div>
+            }
+          />
+          <NarrowNotice />
+          <div className="doc-strip">
             <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
           </div>
-          <NarrowNotice />
-          <Ribbon registry={REGISTRY} state={state} handlers={handlers} groupExtras={groupExtras} />
         </>
       }
     >

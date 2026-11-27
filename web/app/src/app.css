@@ -42,36 +42,22 @@ body {
   font-size: var(--font-size-body);
 }
 
-.app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-
-/* The app menu button and the logo sit together at the start of the header bar. */
-.app-header-start {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
 .brand {
   color: var(--color-brand);
   font-size: var(--font-size-title);
   font-weight: 600;
 }
 
-/* The top bar logo: the 32 px icon from data/branding. The wordmark text replaces it if it fails. */
+/* The tab row logo: the 32 px icon from data/branding, drawn at 20 px. The wordmark text replaces it
+   if it fails. Below the wide tier (1280 px) the tab row has no room, so neither shows (W1.6 S2.3). */
 .brand-logo {
   display: block;
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
+}
+
+.app-frame:not([data-tier='wide']) .ribbon-start :is(.brand-logo, .brand) {
+  display: none;
 }
 
 .app-main {

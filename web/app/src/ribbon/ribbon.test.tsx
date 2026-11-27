@@ -1015,3 +1015,32 @@ describe('the theme switch in the ribbon tab row (#795)', () => {
     expect(host.querySelector('.theme-switch')).toBeNull();
   });
 });
+
+// The start slot (the app menu, the logo and quick access) comes first in the tab row, in both forms.
+describe('Ribbon start slot (#795)', () => {
+  const realWidth = window.innerWidth;
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  function setWidth(width: number): void {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  }
+
+  const start = <span className="start-test">start</span>;
+
+  it('renders the start controls before the tabs in the full form', () => {
+    setWidth(1280);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} start={start} />);
+    expect(host.querySelector('.ribbon')?.getAttribute('data-form')).toBe('full');
+    expect(host.querySelector('.ribbon-tabrow')?.firstElementChild?.className).toBe('start-test');
+  });
+
+  it('renders the start controls before the tabs in the tier-collapsed form', () => {
+    setWidth(390);
+    render(<Ribbon registry={REGISTRY} state={withDoc} handlers={{}} start={start} />);
+    expect(host.querySelector('.ribbon-collapsed')?.firstElementChild?.className).toBe(
+      'start-test',
+    );
+  });
+});

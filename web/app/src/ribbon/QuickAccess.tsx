@@ -17,12 +17,12 @@ export interface QuickAccessProps {
   handlers: CommandHandlers;
 }
 
-// The quick-access buttons in the header (W1.6 section 2, the desktop's quick actions): icons only,
-// and below 1024 px only Undo, Redo and Save. Each one is the same command as on the ribbon, so
+// The quick-access buttons in the tab row (W1.6 section 2, the desktop's quick actions): icons only,
+// and below 1280 px only Undo, Redo and Save, which saves room at the medium tier. Each one is the same command as on the ribbon, so
 // its enabled rule and its "not available yet" state come from the registry.
 export function QuickAccess({ registry, state, handlers }: QuickAccessProps) {
   const width = useViewportWidth();
-  const ids = width < BREAKPOINTS_PX.medium ? QUICK_ACCESS_NARROW : QUICK_ACCESS;
+  const ids = width < BREAKPOINTS_PX.wide ? QUICK_ACCESS_NARROW : QUICK_ACCESS;
   const defs = ids.flatMap((id) => {
     const def = registry.get(id);
     return def !== undefined && isVisible(def, state) ? [def] : [];

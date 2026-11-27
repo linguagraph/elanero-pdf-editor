@@ -212,7 +212,7 @@ test('desktop width: every right rail button fits its rail and shows its icon', 
   }
 });
 
-// W4.3c: the ribbon sits under the logo bar, full width. Above the tablet breakpoint it shows the
+// W4.3c: the ribbon is full width; its tab row holds the app menu and the logo (#795). Above the tablet breakpoint it shows the
 // tab list; below it, the collapsed form (one row of tabs, groups in popovers).
 test('desktop width (1366 px): the ribbon is mounted with its tabs', async ({ page }) => {
   await openAtWidth(page, 1366, 768);
@@ -353,7 +353,122 @@ for (const width of [390, 800, 1023, 1024, 1279, 1280]) {
   });
 }
 
-// W4.2a S7a: the document tabs sit in the top bar, and below 1024 px they are a drop-down. Opening
+// #795 slices 2a and 2b: the tab row holds the app menu, the logo and quick access, and the document
+// strip sits under the ribbon panel. The targets are the design's (docs/design/795-top-chrome.md S2.2).
+const CHROME_WIDTHS = [1366, 1280, 1100, 1024, 800, 390, 320];
+
+// The app frame is overflow: hidden, so content wider than the frame never moves the document's
+// scroll width. The frame's own scrollWidth still reports that content width, and the tab row is
+// checked against the frame's right edge as well.
+async function frameFit(
+  page: import('@playwright/test').Page,
+): Promise<{ frame: number; row: number }> {
+  return page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>('.app-frame');
+    const row = document.querySelector<HTMLElement>(
+      '.app-frame-header .ribbon-tabrow, .app-frame-header .ribbon-collapsed',
+    );
+    if (frame === null || row === null) throw new Error('no frame or tab row');
+    return {
+      frame: frame.scrollWidth - frame.clientWidth,
+      row: row.getBoundingClientRect().right - frame.getBoundingClientRect().right,
+    };
+  });
+}
+
+// At phone width the tab buttons scroll inside their row (overflow-x auto), and the page does not.
+async function expectPhoneTabsScrollInRow(page: import('@playwright/test').Page) {
+  const tabs = await page
+    .locator('.app-frame-header .ribbon-collapsed > .ribbon-tabs')
+    .evaluate((el) => ({
+      scrolls: el.scrollWidth > el.clientWidth,
+      overflowX: getComputedStyle(el).overflowX,
+    }));
+  expect(tabs.scrolls || tabs.overflowX === 'auto').toBe(true);
+  expect(await page.evaluate(() => window.scrollX)).toBe(0);
+}
+
+for (const width of CHROME_WIDTHS) {
+  test(`tab row at ${width} px: the frame and the tab row fit, no horizontal page scroll on the start page`, async ({
+    page,
+  }) => {
+    await openAtWidth(page, width, 768);
+    expect(await horizontalOverflow(page)).toBe(0);
+    const fit = await frameFit(page);
+    expect(fit.frame).toBeLessThanOrEqual(0);
+    expect(fit.row).toBeLessThanOrEqual(0.5);
+    if (width === 390) await expectPhoneTabsScrollInRow(page);
+  });
+}
+
+// The vertical centre of a box, for checking that controls share one row.
+async function centreY(locator: import('@playwright/test').Locator): Promise<number> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('no box');
+  return box.y + box.height / 2;
+}
+
+test('tab row at 1366 px: the menu button, the tabs and the caret share one row', async ({
+  page,
+}) => {
+  await openAtWidth(page, 1366, 768);
+  const tabs = page.locator('.app-frame-header .ribbon-tabrow .ribbon-tabs');
+  const menu = page.locator('.app-frame-header .ribbon-tabrow .app-menu-button');
+  const caret = page.locator('.app-frame-header .ribbon-chevron');
+  const row = await centreY(tabs);
+  expect(Math.abs((await centreY(menu)) - row)).toBeLessThanOrEqual(4);
+  expect(Math.abs((await centreY(caret)) - row)).toBeLessThanOrEqual(4);
+});
+
+test('tab row: the logo shows at 1366 px and is hidden at 1100 px', async ({ page }) => {
+  await openAtWidth(page, 1366, 768);
+  const logo = page.locator('.app-frame-header .ribbon-start .brand-logo');
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute('alt', 'Elanero logo');
+  await page.setViewportSize({ width: 1100, height: 768 });
+  await expect(logo).toBeHidden();
+});
+
+test('tab row: at 390 px the tabs take a second line below the app menu', async ({ page }) => {
+  await openAtWidth(page, 390, 844);
+  const menu = page.locator('.app-frame-header .ribbon-collapsed .app-menu-button');
+  const tabs = page.locator('.app-frame-header .ribbon-collapsed > .ribbon-tabs');
+  const menuBox = await menu.boundingBox();
+  const tabsBox = await tabs.boundingBox();
+  if (menuBox === null || tabsBox === null) throw new Error('no box');
+  expect(tabsBox.y).toBeGreaterThanOrEqual(menuBox.y + menuBox.height - 1);
+});
+
+test('tab row at a fine pointer: the controls are at least 24 px square', async ({ page }) => {
+  await openAtWidth(page, 1366, 768);
+  const controls = page.locator(
+    '.app-frame-header .ribbon-tabrow :is(.app-menu-button, .ribbon-chevron, .ribbon-help, .quick-access [data-command])',
+  );
+  const count = await controls.count();
+  expect(count).toBeGreaterThan(0);
+  for (let i = 0; i < count; i++) {
+    const box = await controls.nth(i).boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(24);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
+  }
+});
+
+// The header's height on the start page (no strip): the full ribbon at most 108 px, and 32 px once
+// Ctrl+F1 collapses it. The strip is not checked here: it needs a document.
+test('header height on the start page: full ribbon at most 108 px, collapsed at most 32 px', async ({
+  page,
+}) => {
+  await openAtWidth(page, 1366, 768);
+  const header = page.locator('.app-frame-header');
+  expect((await header.boundingBox())?.height ?? 999).toBeLessThanOrEqual(108);
+  await page.keyboard.press('Control+F1');
+  await expect(page.locator('.app-frame-header .ribbon-tabrow')).toBeVisible();
+  await expect(page.locator('.app-frame-header .ribbon-panel')).toHaveCount(0);
+  expect((await header.boundingBox())?.height ?? 999).toBeLessThanOrEqual(32);
+});
+
+// W4.2a S7a: the document tabs sit in the strip under the ribbon, and below 1024 px they are a drop-down
+// (#795). Opening
 // a document needs the staged engine (scripts/stage_engine_assets.mjs), so the check skips without it.
 const ENGINE_STAGED = existsSync(
   fileURLToPath(new URL('../public/engine-assets/pyodide.mjs', import.meta.url)),
@@ -365,13 +480,13 @@ const ONE_PAGE_PDF =
   '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj\n' +
   'trailer << /Root 1 0 R >>\n%%EOF\n';
 
-test.describe('document tabs in the top bar', () => {
+test.describe('document tabs in the document strip', () => {
   test.skip(
     !ENGINE_STAGED,
     'engine assets are not staged (scripts/stage_engine_assets.mjs); not run',
   );
 
-  test('tabs are in the header at 1366 px, and a drop-down at 800 px with no horizontal scroll', async ({
+  test('tabs are in the strip at 1366 px, and a drop-down at 800 px with no horizontal scroll', async ({
     page,
   }) => {
     await openAtWidth(page, 1366, 768);
@@ -384,7 +499,12 @@ test.describe('document tabs in the top bar', () => {
         buffer: Buffer.from(ONE_PAGE_PDF),
       });
     await expect(page.getByRole('tab', { name: /layout\.pdf/ })).toBeVisible({ timeout: 180_000 });
-    await expect(page.getByRole('tablist', { name: 'Open documents' })).toHaveCount(1);
+    const tablist = page.getByRole('tablist', { name: 'Open documents' });
+    await expect(tablist).toHaveCount(1);
+    // The strip is under the ribbon panel: the tabs start at or below the ribbon's tab row.
+    const row = (await page.locator('.app-frame-header .ribbon-tabrow').boundingBox())!;
+    const rowBottom = row.y + row.height;
+    expect((await tablist.boundingBox())!.y).toBeGreaterThanOrEqual(rowBottom);
 
     await page.setViewportSize({ width: 800, height: 1024 });
     await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'tablet');
@@ -394,6 +514,66 @@ test.describe('document tabs in the top bar', () => {
     );
     expect(await horizontalOverflow(page)).toBe(0);
   });
+
+  // The design's height targets with one document open (S2.2): the frame's header is the tab row,
+  // the ribbon panel and the strip. Estimated from the CSS; the web-e2e run measures them for real.
+  test('header height with a document: at most 136 px full, 110 px compact, 60 px collapsed', async ({
+    page,
+  }) => {
+    await openAtWidth(page, 1366, 768);
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles({
+        name: 'height.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from(ONE_PAGE_PDF),
+      });
+    await expect(page.getByRole('tab', { name: /height\.pdf/ })).toBeVisible({ timeout: 180_000 });
+    const header = page.locator('.app-frame-header');
+    const height = async () => (await header.boundingBox())?.height ?? 999;
+    // expect.poll retries: a resize re-renders the ribbon after setViewportSize resolves, so a
+    // single read can still see the previous form's height.
+    await expect.poll(height).toBeLessThanOrEqual(136);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect.poll(height).toBeLessThanOrEqual(136);
+    await page.setViewportSize({ width: 1100, height: 768 });
+    await expect.poll(height).toBeLessThanOrEqual(110);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.keyboard.press('Control+F1');
+    await expect.poll(height).toBeLessThanOrEqual(60);
+  });
+});
+
+// S2.4: the same width loop with one document open, so the document's controls are in the row too.
+// The pill shows once the page is drawn, which is when the engine has opened the file.
+test.describe('tab row with a document open (#795)', () => {
+  test.skip(
+    !ENGINE_STAGED,
+    'engine assets are not staged (scripts/stage_engine_assets.mjs); not run',
+  );
+
+  for (const width of CHROME_WIDTHS) {
+    test(`tab row at ${width} px with a document open: the frame and the tab row fit, no horizontal page scroll`, async ({
+      page,
+    }) => {
+      await openAtWidth(page, width, 768);
+      await page
+        .locator('input[type="file"]')
+        .first()
+        .setInputFiles({
+          name: `chrome-${width}.pdf`,
+          mimeType: 'application/pdf',
+          buffer: Buffer.from(ONE_PAGE_PDF),
+        });
+      await expect(page.locator('.canvas-pill')).toBeVisible({ timeout: 180_000 });
+      const fit = await frameFit(page);
+      expect(fit.frame).toBeLessThanOrEqual(0);
+      expect(fit.row).toBeLessThanOrEqual(0.5);
+      expect(await horizontalOverflow(page)).toBe(0);
+      if (width === 390) await expectPhoneTabsScrollInRow(page);
+    });
+  }
 });
 
 // The canvas pill is the desktop's compact bar (#796): 32 px tall on one row at a fine pointer, with

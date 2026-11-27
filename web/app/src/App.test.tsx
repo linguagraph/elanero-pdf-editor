@@ -249,12 +249,35 @@ describe('App', () => {
         root.render(<App engine={fakeEngine()} />);
       });
       const header = host.querySelector('.app-frame-header');
-      expect(header?.querySelector('.app-header .app-menu-button')).not.toBeNull();
+      expect(header?.querySelector('.ribbon-tabrow .app-menu-button')).not.toBeNull();
       const tabs = header?.querySelectorAll('.ribbon [role="tab"]') ?? [];
       expect(tabs).toHaveLength(7);
       // No document is open, so a document command is disabled with its reason.
       const save = header?.querySelector<HTMLElement>('[data-command="save"]');
       expect(save?.getAttribute('aria-disabled')).toBe('true');
+    } finally {
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    }
+  });
+});
+
+// The top bar is the ribbon's tab row and the document strip (#795): no .app-header, and the strip is
+// empty while no document is open (DocumentTabs renders nothing without tabs).
+describe('App top chrome (#795)', () => {
+  it('has no .app-header, and the document strip has no children with no document open', () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      act(() => {
+        root.render(<App engine={fakeEngine()} />);
+      });
+      expect(host.querySelector('.app-header')).toBeNull();
+      expect(host.querySelector('.doc-strip')?.childNodes.length).toBe(0);
     } finally {
       act(() => {
         root.unmount();
@@ -562,7 +585,7 @@ describe('App help, about and quick access (W4.3a S4)', () => {
 
   it('shows the quick-access buttons in the header, with Save disabled while no document is open', () => {
     renderApp();
-    const save = host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+    const save = host.querySelector<HTMLElement>('.ribbon-start [data-command="save"]');
     expect(save).not.toBeNull();
     expect(save?.getAttribute('aria-disabled')).toBe('true');
   });
@@ -673,7 +696,7 @@ describe('App Save (W4.8 S2)', () => {
   }
 
   function saveButton(): HTMLElement | null {
-    return host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+    return host.querySelector<HTMLElement>('.ribbon-start [data-command="save"]');
   }
 
   it('Save is enabled with a document open and downloads it under the document name, then marks it saved', async () => {
@@ -852,7 +875,7 @@ describe('App comments list refresh (W7.1b S2)', () => {
   }
 
   function saveButton(): HTMLElement | null {
-    return host.querySelector<HTMLElement>('.app-header-start [data-command="save"]');
+    return host.querySelector<HTMLElement>('.ribbon-start [data-command="save"]');
   }
 
   // Waits for the list reads to reach the count, then checks that nothing else reads it.
@@ -1045,7 +1068,7 @@ describe('App Comments panel (W7.1b)', () => {
     const engine = refreshEngine();
     await openDocument(engine);
     act(() => {
-      host.querySelector<HTMLElement>('.app-header-start [data-command="undo"]')?.click();
+      host.querySelector<HTMLElement>('.ribbon-start [data-command="undo"]')?.click();
     });
     await until(() => engine.lists() === 2);
     expect(engine.lists()).toBe(2);
@@ -1055,7 +1078,7 @@ describe('App Comments panel (W7.1b)', () => {
     const engine = refreshEngine();
     await openDocument(engine);
     act(() => {
-      host.querySelector<HTMLElement>('.app-header-start [data-command="redo"]')?.click();
+      host.querySelector<HTMLElement>('.ribbon-start [data-command="redo"]')?.click();
     });
     await until(() => engine.lists() === 2);
     expect(engine.lists()).toBe(2);
