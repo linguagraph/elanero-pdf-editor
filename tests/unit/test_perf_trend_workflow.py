@@ -53,13 +53,19 @@ def _perf_trend_job() -> dict[str, Any]:
     return jobs["perf-trend"]
 
 
-def test_perf_trend_triggers_on_the_two_scheduled_workflows() -> None:
+def test_perf_trend_triggers_on_a_nightly_schedule_and_manual_dispatch() -> None:
     triggers = _triggers(_load(PERF_TREND))
-    run = triggers["workflow_run"]
-    assert run["workflows"] == ["CI", "Web perf (W8.3)"]
-    assert run["types"] == ["completed"]
+    # 07:00 UTC, after CI (03:00) and Web perf (05:00).
+    assert triggers["schedule"] == [{"cron": "0 7 * * *"}]
     dispatch = triggers["workflow_dispatch"]["inputs"]["run_id"]
     assert dispatch["required"] is True
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+
+
+def test_perf_trend_has_no_workflow_run_trigger() -> None:
+    # workflow_run fired after every completed CI or Web perf run on main, so every push started it.
+    triggers = _triggers(_load(PERF_TREND))
+    assert "workflow_run" not in triggers
     assert "pull_request" not in triggers
     assert "pull_request_target" not in triggers
 
@@ -68,24 +74,47 @@ def test_perf_trend_permissions_are_the_two_read_scopes() -> None:
     assert _load(PERF_TREND)["permissions"] == {"contents": "read", "actions": "read"}
 
 
-def test_perf_trend_runs_only_for_scheduled_runs_of_main_in_this_repository() -> None:
-    condition = _perf_trend_job()["if"]
-    assert "workflow_dispatch" in condition
-    assert "github.event.workflow_run.event == 'schedule'" in condition
-    assert "github.event.workflow_run.head_branch == 'main'" in condition
-    assert "github.event.workflow_run.head_repository.full_name == github.repository" in condition
+def test_perf_trend_checkout_keeps_credentials_off_and_pins_no_ref() -> None:
+    checkouts = [
+        s
+        for s in _steps(_perf_trend_job())
+        if str(s.get("uses", "")).startswith("actions/checkout@")
+    ]
+    assert len(checkouts) == 1
+    assert checkouts[0]["with"] == {"persist-credentials": False}
 
 
-def test_perf_trend_never_checks_out_the_triggering_runs_code() -> None:
-    for step in _steps(_perf_trend_job()):
-        ref = str((step.get("with") or {}).get("ref", ""))
-        assert "workflow_run" not in ref
-        assert "head_sha" not in ref
-        assert "head_branch" not in ref
+def test_perf_trend_finds_the_latest_scheduled_run_of_each_workflow_on_main() -> None:
+    step = _step(_perf_trend_job(), "Find the latest scheduled runs")
+    assert step["if"] == "github.event_name == 'schedule'"
+    assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+    run = step["run"]
+    assert 'gh run list --workflow "$workflow" --branch main --event schedule --limit 1' in run
+    assert "--json databaseId --jq '.[0].databaseId'" in run
+    assert '"CI_RUN_ID ci.yml" "WEB_RUN_ID web-perf.yml"' in run
+    assert '>> "$GITHUB_ENV"' in run
+
+
+def test_perf_trend_writes_the_script_output_for_each_scheduled_run() -> None:
+    job = _perf_trend_job()
+    for name, var in (
+        ("Write the CI trend to the job summary", "CI_RUN_ID"),
+        ("Write the Web perf trend to the job summary", "WEB_RUN_ID"),
+    ):
+        step = _step(job, name)
+        assert step["if"] == "github.event_name == 'schedule'"
+        assert step["env"]["RUN_ID"] == f"${{{{ env.{var} }}}}"
+        assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+        assert (
+            step["run"]
+            == 'python scripts/perf_trend.py --run-id "$RUN_ID" >> "$GITHUB_STEP_SUMMARY"'
+        )
 
 
 def test_perf_trend_writes_the_script_output_to_the_summary_with_gh_token() -> None:
     step = _step(_perf_trend_job(), "Write the trend to the job summary")
+    assert step["if"] == "github.event_name == 'workflow_dispatch'"
+    assert step["env"]["RUN_ID"] == "${{ inputs.run_id }}"
     assert "scripts/perf_trend.py --run-id" in step["run"]
     assert step["run"].rstrip().endswith('>> "$GITHUB_STEP_SUMMARY"')
     assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
