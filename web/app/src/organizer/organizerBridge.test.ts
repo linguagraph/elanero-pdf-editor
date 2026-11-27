@@ -7,6 +7,7 @@ import {
   publishOrganizer,
   runOrganizerCommand,
   subscribeOrganizer,
+  hasQueuedOrganizerCommands,
   takeQueuedOrganizerCommands,
 } from './organizerBridge';
 
@@ -18,6 +19,7 @@ function actionsStub() {
     duplicate: vi.fn<() => void>(),
     extract: vi.fn<() => void>(),
     askDelete: vi.fn<() => void>(),
+    replace: vi.fn<() => void>(),
   } satisfies OrganizerActions;
 }
 
@@ -99,11 +101,21 @@ describe('organizer bridge queued commands', () => {
     runOrganizerCommand('duplicate-pages', open);
     runOrganizerCommand('extract-pages', open);
     runOrganizerCommand('delete-pages', open);
+    runOrganizerCommand('replace-pages', open);
 
     expect(actions.rotate).toHaveBeenCalledWith(270);
     expect(actions.insertFile).toHaveBeenCalledTimes(1);
     expect(actions.duplicate).toHaveBeenCalledTimes(1);
     expect(actions.extract).toHaveBeenCalledTimes(1);
     expect(actions.askDelete).toHaveBeenCalledTimes(1);
+    expect(actions.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('a queued Replace opens the panel and its dialog, never a file chooser', () => {
+    const open = vi.fn();
+    runOrganizerCommand('replace-pages', open);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(hasQueuedOrganizerCommands()).toBe(true);
+    expect(takeQueuedOrganizerCommands()).toEqual(['replace-pages']);
   });
 });

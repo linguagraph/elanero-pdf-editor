@@ -4,7 +4,7 @@
 // a row that failed says so, and the job checks the file again when Combine runs.
 import type { EngineClient, EngineConnection } from '../engine/engineConnection';
 import { RpcError } from '../rpc/client';
-import { PASSWORD_ATTEMPTS } from '../organizer/insertFile';
+import { PASSWORD_ATTEMPTS } from '../documents/withPassword';
 import { isImageSourceName, type SourceItem } from './sources';
 
 // The most bytes one probe sends. This is limits.MAX_PROBE_BYTES (64 MiB) in webapi/limits.py: a

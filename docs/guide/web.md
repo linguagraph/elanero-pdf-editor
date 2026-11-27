@@ -269,7 +269,13 @@ message saying whether it was added.
   page (or at the end when nothing is selected); an encrypted PDF asks for its
   password, up to five times. Insert from file on the Organize tab's ribbon cannot open the file
   chooser by itself (the browser allows it only from a press in the panel), so it shows a hint:
-  press Insert from file in the panel. Extract downloads the selected pages as a new PDF named
+  press Insert from file in the panel. Replace (Organize tab, Assemble group) opens a Replace pages
+  dialog: choose a PDF with its own button, then give the source pages (a range such as 4-5, which
+  starts at 1 and defaults to as many pages as you selected). The source may have more or fewer
+  pages than the selection; the pages go where the first selected page was, and every selected
+  page is removed. The dialog names the count on both sides before you replace. A file over 64 MB
+  is not counted in the browser, so its range is checked when you replace. Replace is one change,
+  undone from its notice. Extract downloads the selected pages as a new PDF named
   "<name> (extract).pdf"; the document itself does not change. Each change, other than an
   extract, can be undone from the notice that follows it. Undo on a notice undoes only that change;
   if you have changed the document since, nothing is undone and the notice says so.
@@ -472,7 +478,7 @@ full policy, with what the desktop app stores, is in the
 | Background colour behind the pages (Organize, Marks) | Yes | Yes, with undo; when the document already has a background, Replace, Add New or Remove |
 | Text or image watermark across the pages (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts, size, colour, opacity, angle and Behind page content for text, or a PNG or JPEG picture (up to 50 MB and 25 megapixels) with its width; when the document already has a watermark, Replace, Add New or Remove, and Update asks for the picture again |
 | Header & footer and Bates numbers (Organize, Marks) | Yes | Yes, with undo, on the chosen pages, with the base-14 fonts (uploaded fonts are not available here yet); when the document already has one, Replace, Add New or Remove; the Bates preview shows the first number |
-| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages) and from the Organize tab's ribbon (Insert, Delete, Duplicate, Rotate left and right, Extract); Replace is not available yet; Page labels is available (see Page labels above) |
+| Insert, duplicate, extract and delete pages | Yes | Yes in the Organize pages panel (see Organize pages) and from the Organize tab's ribbon (Insert, Delete, Duplicate, Rotate left and right, Extract, Replace with a PDF's pages; see Organize pages); Page labels is available (see Page labels above) |
 | Split and combine PDFs | Yes | Yes (Organize tab, Assemble group: Split and Combine; Combine takes page ranges per file, shows each PDF's page count and a result preview, and shows a progress bar, and Cancel stops the job; a password-protected PDF unlocks on its row (the password is not saved, and the combined file has no password; one over 64 MB cannot be unlocked in the browser); split offers the parts as separate downloads or as one ZIP file) |
 | Reduce file size (compress) | Yes | Yes (Tools tab, Optimize group, Reduce File Size; shows both sizes and the space by part before and after, and offers the copy only when it is smaller) |
 | Space usage (what takes up the space in the file) | Yes | Yes (Tools tab, Optimize group, Space Usage; shows the total and the size and share of each part, and reads the file only) |

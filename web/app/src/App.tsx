@@ -880,6 +880,7 @@ export function App({
           'duplicate-pages': () => runOrganizerCommand('duplicate-pages', openOrganizerPanel),
           'extract-pages': () => runOrganizerCommand('extract-pages', openOrganizerPanel),
           'delete-pages': () => runOrganizerCommand('delete-pages', openOrganizerPanel),
+          'replace-pages': () => runOrganizerCommand('replace-pages', openOrganizerPanel),
           // Select and Hand (W4.10). Hand pressed again returns to Select, as on the desktop.
           'select-tool': () => {
             if (activeId !== null) setViewTool(activeId, 'select');

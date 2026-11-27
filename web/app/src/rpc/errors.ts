@@ -73,6 +73,7 @@ export const REFUSED_REASON: Readonly<Record<string, MessageId>> = {
   crop_too_large: 'error.REFUSED.cropTooLarge',
   invalid_margins: 'error.REFUSED.invalidMargins',
   invalid_pages: 'error.REFUSED.invalidPages',
+  invalid_source_pages: 'error.REFUSED.invalidSourcePages',
   invalid_label: 'error.REFUSED.invalidLabel',
   duplicate_label_start: 'error.REFUSED.duplicateLabelStart',
   outline_too_deep: 'error.REFUSED.outlineTooDeep',

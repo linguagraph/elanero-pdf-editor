@@ -743,8 +743,8 @@ describe('the organize ribbon page commands', () => {
     ).toBeNull();
   });
 
-  it('leaves Replace and Page labels without a handler, so they still say not available yet', () => {
-    for (const id of ['replace-pages', 'page-labels']) {
+  it('leaves Page labels without a handler, so it still says not available yet', () => {
+    for (const id of ['page-labels']) {
       expect(commandDisabledReason(REGISTRY.get(id)!, withDoc, {})).toBe('notAvailableYet');
     }
   });
