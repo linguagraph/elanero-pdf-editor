@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   web-e2e:
-    name: web-e2e (${{ matrix.browser }})
+    name: web-e2e (${{ matrix.browser }}, ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
@@ -53,6 +53,21 @@ jobs:
         # The nightly (schedule) runs Chromium only; Firefox and WebKit stay off it until the feature
         # failures are fixed (#718). By hand, `browsers` picks one browser, or all three (#420 needs WebKit).
         browser: ${{ fromJSON(github.event_name == 'schedule' && '["chromium"]' || inputs.browsers == 'all' && '["chromium","firefox","webkit"]' || format('["{0}"]', inputs.browsers)) }}
+        # Each browser's feature suite is split by Playwright's --shard. WebKit and Firefox run three
+        # shards each (a WebKit run was cancelled about eight minutes in, so each job is kept shorter);
+        # Chromium runs one. The exclude entries drop the shards a browser does not have.
+        shard: ["1/1", "1/3", "2/3", "3/3"]
+        exclude:
+          - browser: chromium
+            shard: "1/3"
+          - browser: chromium
+            shard: "2/3"
+          - browser: chromium
+            shard: "3/3"
+          - browser: firefox
+            shard: "1/1"
+          - browser: webkit
+            shard: "1/1"
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -127,17 +142,17 @@ jobs:
         working-directory: web/app
         run: npm ci --ignore-scripts
 
-      - name: Install the browser (${{ matrix.browser }}) and its system libraries
+      - name: Install the browser (${{ matrix.browser }}, shard ${{ matrix.shard }}) and its system libraries
         working-directory: web/app
         run: npx playwright install --with-deps ${{ matrix.browser }}
 
-      # One browser per job. The features config builds and previews the app itself (port 4175).
-      - name: Run the feature round trips (${{ matrix.browser }})
+      # One browser and one shard per job. The features config builds and previews the app itself (port 4175).
+      - name: Run the feature round trips (${{ matrix.browser }}, shard ${{ matrix.shard }})
         id: features
         working-directory: web/app
         env:
           PLAYWRIGHT_HTML_OPEN: never
-        run: npx playwright test -c playwright.features.config.ts --project=${{ matrix.browser }} --reporter=list,html
+        run: npx playwright test -c playwright.features.config.ts --project=${{ matrix.browser }} --shard=${{ matrix.shard }} --reporter=list,html
 
       # The W5.1a engine check (e2e/long-document.spec.ts) runs under the main config, Chromium only
       # (W8.1 section 4). Its own --output folder: Playwright clears its output folder at the start of
@@ -194,6 +209,9 @@ jobs:
 
       # The host halves of the round trips (W1.7 section 4.2): pikepdf and pypdfium2 replay the bytes
       # each flow saved. Runs even when the browser run failed, since the manifest is written then too.
+      # It stays in every shard: each job's test-results holds only its own host-checks-<n>.json files
+      # (per worker, not shared across jobs), so no shard depends on another. Dropping it for WebKit and
+      # Firefox would leave their host halves unchecked.
       - name: Replay the recorded host checks (host CPython)
         if: ${{ always() && hashFiles('web/app/test-results/host-checks-*.json') != '' }}
         run: python scripts/web_host_verify.py web/app/test-results/host-checks-*.json
@@ -202,7 +220,9 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: web-e2e-${{ matrix.browser }}
+          # One artifact per job. The name uses the job index, not the shard: "/" is not allowed in an
+          # artifact name, and GitHub's expressions have no replace(). The index is unique in the run.
+          name: web-e2e-${{ matrix.browser }}-${{ strategy.job-index }}
           if-no-files-found: warn
           path: |
             web/app/playwright-report/
