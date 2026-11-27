@@ -532,14 +532,16 @@ test.describe('document tabs in the document strip', () => {
     await expect(page.getByRole('tab', { name: /height\.pdf/ })).toBeVisible({ timeout: 180_000 });
     const header = page.locator('.app-frame-header');
     const height = async () => (await header.boundingBox())?.height ?? 999;
-    expect(await height()).toBeLessThanOrEqual(136);
+    // expect.poll retries: a resize re-renders the ribbon after setViewportSize resolves, so a
+    // single read can still see the previous form's height.
+    await expect.poll(height).toBeLessThanOrEqual(136);
     await page.setViewportSize({ width: 1280, height: 800 });
-    expect(await height()).toBeLessThanOrEqual(136);
+    await expect.poll(height).toBeLessThanOrEqual(136);
     await page.setViewportSize({ width: 1100, height: 768 });
-    expect(await height()).toBeLessThanOrEqual(110);
+    await expect.poll(height).toBeLessThanOrEqual(110);
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.keyboard.press('Control+F1');
-    expect(await height()).toBeLessThanOrEqual(60);
+    await expect.poll(height).toBeLessThanOrEqual(60);
   });
 });
 
