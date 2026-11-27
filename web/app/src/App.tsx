@@ -1177,10 +1177,10 @@ export function App({
               </div>
             }
           />
+          <NarrowNotice />
           <div className="doc-strip">
             <DocumentTabs state={docs.tabs} onSelect={docs.selectTab} onClose={closeTab} />
           </div>
-          <NarrowNotice />
         </>
       }
     >

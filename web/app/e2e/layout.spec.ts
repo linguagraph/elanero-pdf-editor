@@ -357,10 +357,47 @@ for (const width of [390, 800, 1023, 1024, 1279, 1280]) {
 // strip sits under the ribbon panel. The targets are the design's (docs/design/795-top-chrome.md S2.2).
 const CHROME_WIDTHS = [1366, 1280, 1100, 1024, 800, 390, 320];
 
+// The app frame is overflow: hidden, so content wider than the frame never moves the document's
+// scroll width. The frame's own scrollWidth still reports that content width, and the tab row is
+// checked against the frame's right edge as well.
+async function frameFit(
+  page: import('@playwright/test').Page,
+): Promise<{ frame: number; row: number }> {
+  return page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>('.app-frame');
+    const row = document.querySelector<HTMLElement>(
+      '.app-frame-header .ribbon-tabrow, .app-frame-header .ribbon-collapsed',
+    );
+    if (frame === null || row === null) throw new Error('no frame or tab row');
+    return {
+      frame: frame.scrollWidth - frame.clientWidth,
+      row: row.getBoundingClientRect().right - frame.getBoundingClientRect().right,
+    };
+  });
+}
+
+// At phone width the tab buttons scroll inside their row (overflow-x auto), and the page does not.
+async function expectPhoneTabsScrollInRow(page: import('@playwright/test').Page) {
+  const tabs = await page
+    .locator('.app-frame-header .ribbon-collapsed > .ribbon-tabs')
+    .evaluate((el) => ({
+      scrolls: el.scrollWidth > el.clientWidth,
+      overflowX: getComputedStyle(el).overflowX,
+    }));
+  expect(tabs.scrolls || tabs.overflowX === 'auto').toBe(true);
+  expect(await page.evaluate(() => window.scrollX)).toBe(0);
+}
+
 for (const width of CHROME_WIDTHS) {
-  test(`tab row at ${width} px: no horizontal page scroll on the start page`, async ({ page }) => {
+  test(`tab row at ${width} px: the frame and the tab row fit, no horizontal page scroll on the start page`, async ({
+    page,
+  }) => {
     await openAtWidth(page, width, 768);
     expect(await horizontalOverflow(page)).toBe(0);
+    const fit = await frameFit(page);
+    expect(fit.frame).toBeLessThanOrEqual(0);
+    expect(fit.row).toBeLessThanOrEqual(0.5);
+    if (width === 390) await expectPhoneTabsScrollInRow(page);
   });
 }
 
@@ -465,7 +502,8 @@ test.describe('document tabs in the document strip', () => {
     const tablist = page.getByRole('tablist', { name: 'Open documents' });
     await expect(tablist).toHaveCount(1);
     // The strip is under the ribbon panel: the tabs start at or below the ribbon's tab row.
-    const rowBottom = (await page.locator('.app-frame-header .ribbon-tabrow').boundingBox())!.y;
+    const row = (await page.locator('.app-frame-header .ribbon-tabrow').boundingBox())!;
+    const rowBottom = row.y + row.height;
     expect((await tablist.boundingBox())!.y).toBeGreaterThanOrEqual(rowBottom);
 
     await page.setViewportSize({ width: 800, height: 1024 });
@@ -503,6 +541,37 @@ test.describe('document tabs in the document strip', () => {
     await page.keyboard.press('Control+F1');
     expect(await height()).toBeLessThanOrEqual(60);
   });
+});
+
+// S2.4: the same width loop with one document open, so the document's controls are in the row too.
+// The pill shows once the page is drawn, which is when the engine has opened the file.
+test.describe('tab row with a document open (#795)', () => {
+  test.skip(
+    !ENGINE_STAGED,
+    'engine assets are not staged (scripts/stage_engine_assets.mjs); not run',
+  );
+
+  for (const width of CHROME_WIDTHS) {
+    test(`tab row at ${width} px with a document open: the frame and the tab row fit, no horizontal page scroll`, async ({
+      page,
+    }) => {
+      await openAtWidth(page, width, 768);
+      await page
+        .locator('input[type="file"]')
+        .first()
+        .setInputFiles({
+          name: `chrome-${width}.pdf`,
+          mimeType: 'application/pdf',
+          buffer: Buffer.from(ONE_PAGE_PDF),
+        });
+      await expect(page.locator('.canvas-pill')).toBeVisible({ timeout: 180_000 });
+      const fit = await frameFit(page);
+      expect(fit.frame).toBeLessThanOrEqual(0);
+      expect(fit.row).toBeLessThanOrEqual(0.5);
+      expect(await horizontalOverflow(page)).toBe(0);
+      if (width === 390) await expectPhoneTabsScrollInRow(page);
+    });
+  }
 });
 
 // The canvas pill is the desktop's compact bar (#796): 32 px tall on one row at a fine pointer, with

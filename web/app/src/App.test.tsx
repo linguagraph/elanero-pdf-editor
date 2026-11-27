@@ -264,6 +264,29 @@ describe('App', () => {
   });
 });
 
+// The top bar is the ribbon's tab row and the document strip (#795): no .app-header, and the strip is
+// empty while no document is open (DocumentTabs renders nothing without tabs).
+describe('App top chrome (#795)', () => {
+  it('has no .app-header, and the document strip has no children with no document open', () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      act(() => {
+        root.render(<App engine={fakeEngine()} />);
+      });
+      expect(host.querySelector('.app-header')).toBeNull();
+      expect(host.querySelector('.doc-strip')?.childNodes.length).toBe(0);
+    } finally {
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    }
+  });
+});
+
 // Clear all reloads the page, so it must stay disabled while any tab is open, even when Open Recent
 // has put the start page in front of that tab's unsaved work (W4.5 review finding).
 describe('App: Clear all is disabled while a tab is open', () => {
