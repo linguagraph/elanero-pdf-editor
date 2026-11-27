@@ -267,8 +267,22 @@ def replace(
     ensure_idle(session)
     chosen = sorted(set(args.pages))
     source_pages = list(args.source_pages)
+    # Refuse before opening the source, so bad input never asks for a password.
+    if not chosen:
+        raise Refused("Choose the pages to replace.", reason="invalid_pages")
+    _check_pages(session, tuple(chosen))
+    if not source_pages:
+        raise Refused("Choose the source pages.", reason="invalid_source_pages")
     source = _open_source(session, args.data, args.password, password_callback)
     try:
+        with session.lock:
+            source_count = source.page_count
+        for i in source_pages:
+            if not 0 <= i < source_count:
+                raise Refused(
+                    f"Source page {i + 1} is not in the source document.",
+                    reason="invalid_source_pages",
+                )
 
         def op(doc: Document) -> None:
             doc.insert_pages(source, source_pages, chosen[0])
@@ -293,7 +307,7 @@ def replace(
 _MIN_CROP_SIDE = 1.0
 
 
-def _check_crop_pages(session: DocumentSession, pages: tuple[int, ...]) -> None:
+def _check_pages(session: DocumentSession, pages: tuple[int, ...]) -> None:
     with session.lock:
         count = session.page_count
     for i in pages:
@@ -316,7 +330,7 @@ def crop_margins(session: DocumentSession, args: CropMargins) -> ActionResult[No
     margins = (args.left, args.top, args.right, args.bottom)
     if any(not math.isfinite(m) or m < 0 for m in margins):
         raise Refused("Margins cannot be negative.", reason="invalid_margins")
-    _check_crop_pages(session, args.pages)
+    _check_pages(session, args.pages)
     if not args.pages or all(m == 0 for m in margins):
         return ActionResult(label, None, executed=False)
 
@@ -342,7 +356,7 @@ def crop_margins(session: DocumentSession, args: CropMargins) -> ActionResult[No
 def crop_rect(session: DocumentSession, args: CropRect) -> ActionResult[None]:
     ensure_idle(session)
     label = f"Crop {plural(len(args.pages))}"
-    _check_crop_pages(session, args.pages)
+    _check_pages(session, args.pages)
     if not args.pages:
         return ActionResult(label, None, executed=False)
 

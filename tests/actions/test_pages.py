@@ -16,6 +16,7 @@ import pytest
 from PIL import Image
 
 from pdfeditor.actions import pages as page_actions
+from pdfeditor.actions import run
 from pdfeditor.actions.base import ActionResult, Refused, execute_all, snapshot
 from pdfeditor.actions.pages import (
     CropMargins,
@@ -265,6 +266,42 @@ def test_replace_swaps_pages_for_source_pages_and_undo_restores(
     assert result == ActionResult("Replace 2 Pages", None)
     assert texts(s) == [before[0], source[0], source[1], *before[3:]]
     assert s.undo() and texts(s) == before
+
+
+def test_replace_refuses_an_empty_or_out_of_range_selection(open_copy: Opener, fixture_pdf) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    data = fixture_pdf("outline").read_bytes()
+    n = s.page_count
+    cases = [
+        (ReplacePages((), data, (0,)), "invalid_pages"),
+        (ReplacePages((n,), data, (0,)), "invalid_pages"),
+        (ReplacePages((-1,), data, (0,)), "invalid_pages"),
+        (ReplacePages((0,), data, ()), "invalid_source_pages"),
+        (ReplacePages((0,), data, (999,)), "invalid_source_pages"),
+    ]
+    for args, reason in cases:
+        with pytest.raises(Refused) as caught:
+            run(s, "pages.replace", args)
+        assert caught.value.reason == reason
+    assert texts(s) == before and not s.undo()
+
+
+def test_round_trip_replace(open_copy: Opener, tmp_path: Path, fixture_pdf) -> None:
+    s = open_copy("text_multipage")
+    before = texts(s)
+    data = fixture_pdf("outline").read_bytes()
+    source = texts_of_bytes(data)
+    result = run(s, "pages.replace", ReplacePages((1, 2), data, (0, 1)))
+    assert result == ActionResult("Replace 2 Pages", None)
+    out = s.save(tmp_path / "replaced.pdf")
+    reopened = DocumentSession.open(out)
+    try:
+        assert texts(reopened) == [before[0], source[0], source[1], *before[3:]]
+    finally:
+        reopened.close()
+    assert_reads_everywhere(out, len(before))
+    assert s.undo() and texts(s) == before and not s.undo()
 
 
 def test_crop_margins_trims_each_edge_and_undo_restores(open_copy: Opener) -> None:
