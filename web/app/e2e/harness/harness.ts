@@ -153,12 +153,18 @@ async function runSplitJob(pdfBase64: string, name: string): Promise<SplitReport
 // test does not wait on an idle callback. The pool is kept until poolStop(), so the test can look
 // inside the job worker it reused.
 let pool: JobWorkerPool | undefined;
+// How many job workers the current pool has started. The pool-reuse test reads it, so it counts
+// what the pool did, not the workers Playwright happened to report.
+let poolStarts = 0;
 
 function newPool(): JobWorkerPool {
   pool?.dispose();
+  poolStarts = 0;
   pool = createJobWorkerPool({
-    start: () =>
-      startJobWorker({ workerUrl: '/src/engine/jobworker.ts', assetBaseUrl: ASSET_BASE }),
+    start: () => {
+      poolStarts += 1;
+      return startJobWorker({ workerUrl: '/src/engine/jobworker.ts', assetBaseUrl: ASSET_BASE });
+    },
     schedule: (run) => run(),
     // The device policy (no warm-up at 2 GB or less) is unit-tested; the browser run checks the
     // pool itself, whatever memory the test machine reports.
@@ -170,6 +176,8 @@ function newPool(): JobWorkerPool {
 export interface PoolReuseReport {
   // The number of files each job produced, in run order.
   files: number[];
+  // The number of job workers the pool started for both jobs.
+  started: number;
   error?: { name: string; message: string; code?: string };
 }
 
@@ -196,12 +204,12 @@ async function poolReuse(pdfBase64: string, name: string): Promise<PoolReuseRepo
       );
       files.push(found.length);
     }
-    return { files };
+    return { files, started: poolStarts };
   } catch (error) {
-    return { files, error: describe(error) };
+    return { files, started: poolStarts, error: describe(error) };
   }
-  // The engine worker stays up: the test looks inside the job worker and tells it apart from the
-  // engine by its fetch global, and a terminated worker cannot be read.
+  // The engine worker stays up: the test reads the job worker's globals, and a terminated worker
+  // cannot be read.
 }
 
 export interface PoolCancelReport {

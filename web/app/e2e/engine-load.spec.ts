@@ -7,10 +7,6 @@ import type { BootReport, PoolCancelReport, PoolReuseReport } from './harness/ha
 
 const WHEEL = /\/pymupdf-[^/]+\.whl$/;
 const STAGES = ['pyodide', 'packages', 'engine', 'ready'];
-// Quarantine reason for the pool-reuse test, which still fails on the Ubuntu runner. Tracked in #770.
-const QUARANTINE_POOL =
-  'quarantined from the PR-level web-browser job (ci.yml): two job workers started, cause unknown ' +
-  '(see #770). It runs in the nightly web-e2e instead.';
 
 async function openHarness(page: Page): Promise<string[]> {
   // A CSP violation is reported to the console; collect them so a blocked worker or Pyodide fails
@@ -111,7 +107,6 @@ function onePagePdf(): string {
 test('the job pool reuses one job worker for two jobs, and the reused worker stays locked down', async ({
   page,
 }) => {
-  test.fixme(true, QUARANTINE_POOL);
   const workers: Worker[] = [];
   page.on('worker', (worker) => workers.push(worker));
   const violations = await openHarness(page);
@@ -122,24 +117,27 @@ test('the job pool reuses one job worker for two jobs, and the reused worker sta
 
   expect(report.error, 'pool job error').toBeUndefined();
   expect(report.files).toEqual([1, 1]);
-  // The engine worker keeps fetch; a job worker has it removed. Only job workers are counted.
-  const jobWorkers: Worker[] = [];
-  for (const worker of workers.filter((item) => item.url().startsWith('blob:'))) {
-    if ((await worker.evaluate(() => typeof fetch)) === 'undefined') jobWorkers.push(worker);
+  // The pool counts its own starts: one job worker served both jobs.
+  expect(report.started, 'job workers the pool started for two jobs').toBe(1);
+  // Two blob: workers in total: the engine worker and that one job worker. Each one locks down
+  // its globals (engine.worker.ts and jobworker.ts both call lockDownGlobals), so each has no
+  // fetch, XMLHttpRequest, WebSocket or importScripts.
+  const blobWorkers = workers.filter((item) => item.url().startsWith('blob:'));
+  expect(blobWorkers, 'blob workers: the engine worker and one job worker').toHaveLength(2);
+  for (const worker of blobWorkers) {
+    const globals = await worker.evaluate(() => ({
+      fetch: typeof (globalThis as Record<string, unknown>).fetch,
+      XMLHttpRequest: typeof (globalThis as Record<string, unknown>).XMLHttpRequest,
+      WebSocket: typeof (globalThis as Record<string, unknown>).WebSocket,
+      importScripts: typeof (globalThis as Record<string, unknown>).importScripts,
+    }));
+    expect(globals, 'worker globals after lockdown').toEqual({
+      fetch: 'undefined',
+      XMLHttpRequest: 'undefined',
+      WebSocket: 'undefined',
+      importScripts: 'undefined',
+    });
   }
-  expect(jobWorkers, 'job workers started for two jobs').toHaveLength(1);
-  const globals = await jobWorkers[0]!.evaluate(() => ({
-    fetch: typeof (globalThis as Record<string, unknown>).fetch,
-    XMLHttpRequest: typeof (globalThis as Record<string, unknown>).XMLHttpRequest,
-    WebSocket: typeof (globalThis as Record<string, unknown>).WebSocket,
-    importScripts: typeof (globalThis as Record<string, unknown>).importScripts,
-  }));
-  expect(globals, 'reused job worker globals').toEqual({
-    fetch: 'undefined',
-    XMLHttpRequest: 'undefined',
-    WebSocket: 'undefined',
-    importScripts: 'undefined',
-  });
   await page.evaluate(() => window.__harness.poolStop());
   expect(violations, 'CSP or page errors').toEqual([]);
 });
