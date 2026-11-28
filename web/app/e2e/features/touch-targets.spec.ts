@@ -96,9 +96,7 @@ test.describe('engine staged', () => {
       // Each side panel: the rail buttons open one panel, and each panel is swept. There is no right
       // rail any more (issue #827), so the left rail is the only one.
       for (const side of ['left'] as const) {
-        const rail = page.getByRole('toolbar', {
-          name: side === 'left' ? 'Left panels' : 'Right panels',
-        });
+        const rail = page.getByRole('toolbar', { name: 'Left panels' });
         const count = await rail.getByRole('button').count();
         for (let i = 0; i < count; i++) {
           const button = rail.getByRole('button').nth(i);

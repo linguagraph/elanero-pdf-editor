@@ -262,8 +262,7 @@ async function mountPanel(page: import('@playwright/test').Page, tallBlock = fal
       return el;
     };
     const body = document.querySelector('.app-frame-body');
-    const rail = document.querySelector('.app-rail-right');
-    if (body === null || rail === null) throw new Error('no frame');
+    if (body === null) throw new Error('no frame');
     const panel = make('aside', 'app-panel app-panel-right');
     panel.setAttribute('aria-label', 'Test panel');
     const section = make('section', 'panel');
@@ -285,7 +284,8 @@ async function mountPanel(page: import('@playwright/test').Page, tallBlock = fal
     }
     section.append(header, panelBody);
     panel.append(section);
-    body.insertBefore(panel, rail);
+    // The right panel sits after the page area in the body row (AppFrame), where the rail was.
+    body.append(panel);
   }, tallBlock);
 }
 
