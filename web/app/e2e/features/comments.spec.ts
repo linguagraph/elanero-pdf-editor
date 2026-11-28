@@ -23,6 +23,7 @@ async function pressWaitIfStillWorking(page: Page): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'Elanero is still working' });
   await dialog.waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined);
   if (await dialog.isVisible()) {
+    console.log('STILLWORKING', await page.locator('[role=dialog]').first().innerText().catch(() => 'none')); // DIAG probe: TEMPORARY
     await dialog.getByRole('button', { name: 'Wait', exact: true }).click();
   }
 }
@@ -72,6 +73,7 @@ test.describe('engine staged', () => {
     page,
     context,
   }, testInfo) => {
+    page.on('console', (msg) => { if (msg.text().includes('RPCDIAG') || msg.text().includes('FOCUSDIAG')) console.log(msg.text()); }); // DIAG probe: TEMPORARY
     const problems = watchPage(page);
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
@@ -196,6 +198,7 @@ test.describe('engine staged', () => {
     page,
     context,
   }, testInfo) => {
+    page.on('console', (msg) => { if (msg.text().includes('RPCDIAG') || msg.text().includes('FOCUSDIAG')) console.log(msg.text()); }); // DIAG probe: TEMPORARY
     const problems = watchPage(page);
     await openApp(page);
     await openPdf(page, 'text_multipage.pdf', fixture('text_multipage.pdf'));
