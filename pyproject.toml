@@ -22,7 +22,7 @@ dependencies = [
     "fonttools>=4.47",
     "Pillow>=10.0",
     # Digital signing (MIT). Capped: services/signing/_pdf.py hooks pyHanko's stamp internals.
-    "pyhanko>=0.38.1,<0.39",
+    "pyhanko>=0.38.2,<0.39",
     # USB tokens through a PKCS#11 module (MIT); the range is the one pyHanko supports.
     "python-pkcs11~=0.9.3",
     # Microsoft Store updates (MIT, pywinrt), Windows only. Imported lazily, and only by the
