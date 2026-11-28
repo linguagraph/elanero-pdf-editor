@@ -9,6 +9,8 @@ import type { PageRpc } from '../engine/engineConnection';
 import { t, tp } from '../i18n/t';
 import { Panel } from '../layout/Panel';
 import type { HistoryResult, OutlineEntry } from '../rpc/generated';
+import { Icon } from '../theme/Icon';
+import type { IconName } from '../theme/icons.generated';
 import type { ViewPlace } from '../view/layout';
 import { expandedOf, fingerprintOf, setExpandedOf } from './expansion';
 import type { Resolved } from './drop';
@@ -584,6 +586,7 @@ function BookmarkTree({
   const toolbarButtons: {
     readonly id: string;
     readonly label: string;
+    readonly icon: IconName;
     readonly keys: string;
     readonly disabled: boolean;
     readonly hint?: string;
@@ -596,6 +599,7 @@ function BookmarkTree({
       {
         id: 'add',
         label: t('bookmarks.add'),
+        icon: 'bookmark-plus',
         keys: KEYS.add,
         disabled: false,
         action: { kind: 'add', asChild: false },
@@ -603,6 +607,7 @@ function BookmarkTree({
       {
         id: 'addChild',
         label: t('bookmarks.addChild'),
+        icon: 'plus',
         keys: '',
         disabled: level >= MAX_OUTLINE_DEPTH,
         hint: t('bookmarks.addChild.tooDeep'),
@@ -611,6 +616,7 @@ function BookmarkTree({
       {
         id: 'rename',
         label: t('bookmarks.rename'),
+        icon: 'pencil',
         keys: KEYS.rename,
         disabled: false,
         action: { kind: 'rename' },
@@ -618,6 +624,7 @@ function BookmarkTree({
       {
         id: 'delete',
         label: t('bookmarks.delete'),
+        icon: 'trash-2',
         keys: KEYS.delete,
         disabled: false,
         action: { kind: 'edit', edit: { kind: 'delete' } },
@@ -625,6 +632,7 @@ function BookmarkTree({
       {
         id: 'up',
         label: t('bookmarks.moveUp'),
+        icon: 'chevron-up',
         keys: KEYS.up,
         disabled: edgeOf('up'),
         action: { kind: 'edit', edit: { kind: 'move', direction: 'up' } },
@@ -632,6 +640,7 @@ function BookmarkTree({
       {
         id: 'down',
         label: t('bookmarks.moveDown'),
+        icon: 'chevron-down',
         keys: KEYS.down,
         disabled: edgeOf('down'),
         action: { kind: 'edit', edit: { kind: 'move', direction: 'down' } },
@@ -639,6 +648,7 @@ function BookmarkTree({
       {
         id: 'in',
         label: t('bookmarks.indent'),
+        icon: 'arrow-right',
         keys: KEYS.in,
         disabled: edgeOf('in'),
         action: { kind: 'edit', edit: { kind: 'move', direction: 'in' } },
@@ -646,6 +656,7 @@ function BookmarkTree({
       {
         id: 'out',
         label: t('bookmarks.outdent'),
+        icon: 'arrow-left',
         keys: KEYS.out,
         disabled: edgeOf('out'),
         action: { kind: 'edit', edit: { kind: 'move', direction: 'out' } },
@@ -653,6 +664,7 @@ function BookmarkTree({
       {
         id: 'page',
         label: t('bookmarks.setDestination'),
+        icon: 'map-pin',
         keys: '',
         disabled: false,
         action: { kind: 'page' },
@@ -678,14 +690,16 @@ function BookmarkTree({
           className="bookmarks-toolbar"
           aria-label={t('bookmarks.actions')}
         >
+          {/* Icon-only buttons: the label is the accessible name (aria-label) and the tooltip. */}
           {toolbarButtons.map((button) => (
             <button
               key={button.id}
               type="button"
-              className="bookmarks-action"
+              className="bookmarks-action bookmarks-action--icon"
               disabled={button.disabled}
               aria-disabled={locked || undefined}
               aria-keyshortcuts={button.keys || undefined}
+              aria-label={button.label}
               title={
                 button.disabled && button.hint !== undefined
                   ? button.hint
@@ -698,7 +712,7 @@ function BookmarkTree({
                 runToolbar(button.action, current);
               }}
             >
-              {button.label}
+              <Icon name={button.icon} size={16} />
             </button>
           ))}
         </div>

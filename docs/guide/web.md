@@ -204,8 +204,9 @@ message saying whether it was added.
   Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
   With the keyboard, Up and Down move through the entries, Right and Left open and close them,
   and Enter goes to the page.
-  Entries without a page are greyed out. Where the document can be edited, a toolbar sits above the
-  list, and the entry you are on is highlighted. Press F2 to rename it (type the new title, then
+  Entries without a page are greyed out. Where the document can be edited, a toolbar of small icon
+  buttons sits above the list (each button's name shows when you hover over it or focus it), and the
+  entry you are on is highlighted. Press F2 to rename it (type the new title, then
   Enter keeps it and Escape cancels). Press Delete to remove it with everything nested under it.
   Press Alt+Shift+Up or Alt+Shift+Down to move it among its neighbours, and Alt+Shift+Right or
   Alt+Shift+Left to indent it under the entry above or outdent it. The toolbar's Set to Current
