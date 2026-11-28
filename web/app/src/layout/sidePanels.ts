@@ -16,7 +16,7 @@ export type PanelKey =
   | 'organizer';
 
 // Which side each panel docks on. Every panel is on the left, in the left stack; the organizer
-// joined it last (issue #827), after Comments.
+// joined it last (issue 827), after Comments.
 export const PANEL_SIDE: Readonly<Record<PanelKey, Side>> = {
   pages: 'left',
   bookmarks: 'left',

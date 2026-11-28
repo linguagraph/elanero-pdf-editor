@@ -23,7 +23,7 @@ export function layoutTierForWidth(width: number): LayoutTier {
 }
 
 // The left rail hides below 768 px (it lives behind the app menu there, which lists the panels).
-// There is no right rail: every panel docks or floats on the left stack (issue #827).
+// There is no right rail: every panel docks or floats on the left stack (issue 827).
 const REGIONS: Record<LayoutTier, LayoutRegions> = {
   wide: {
     tier: 'wide',

@@ -465,7 +465,7 @@ export function App({
   // Bumped after an Undo or Redo: an add or a remove of an attachment changes no page, so the
   // attachments panel reloads its list on this counter.
   const [attachmentsRevision, setAttachmentsRevision] = useState(0);
-  // The open left panel. Every panel is on the left stack since issue #827, so one is open at a time.
+  // The open left panel. Every panel is on the left stack since issue 827, so one is open at a time.
   const leftPanelOpen = useOpenPanel('left');
   // The organizer panel's status, published while it is open (issue 736); null when it is closed.
   const organizerStatus = useOrganizerStatus();

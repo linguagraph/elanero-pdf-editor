@@ -142,7 +142,7 @@ describe('AppFrame', () => {
     );
     const frame = host.querySelector<HTMLElement>('.app-frame');
     expect(frame?.dataset.rails).toBe('hidden');
-    // The left rail is the only rail: there is no right rail (issue #827).
+    // The left rail is the only rail: there is no right rail (issue 827).
     const rails = host.querySelectorAll('.app-rail');
     expect(rails).toHaveLength(1);
     expect(rails[0]?.getAttribute('role')).toBe('toolbar');
