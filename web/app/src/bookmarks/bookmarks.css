@@ -122,6 +122,26 @@
   cursor: default;
 }
 
+/* The toolbar's icon buttons are square, 24 px on a fine pointer; their labels are tooltips and
+   screen reader names. The empty state's text button keeps .bookmarks-action. */
+.bookmarks-action--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+}
+
+/* Touch screens: each icon button is at least the touch target (W8.5 S7). */
+@media (pointer: coarse) {
+  .bookmarks-action--icon {
+    width: var(--size-touch-target);
+    height: var(--size-touch-target);
+  }
+}
+
 .bookmarks-row--current {
   background: var(--color-surface-alt);
 }

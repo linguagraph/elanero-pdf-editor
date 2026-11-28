@@ -467,9 +467,11 @@ function addingRpc(before: OutlineEntry[], after: OutlineEntry[]) {
   return { rpc: { call } as unknown as PageRpc, call };
 }
 
+// The toolbar's buttons are icons, so a button is found by its accessible name (aria-label); the
+// empty state's text button has no aria-label, so its visible text is checked too.
 function buttonNamed(text: string): HTMLButtonElement {
   const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.textContent === text,
+    (button) => button.getAttribute('aria-label') === text || button.textContent === text,
   );
   if (found === undefined) throw new Error(`no button ${text}`);
   return found;
@@ -581,8 +583,26 @@ describe('bookmarks adding (W5.2 S3)', () => {
     closePanel('left');
     openPanel('bookmarks');
     await mount(26, readOnly);
-    const names = [...host.querySelectorAll('button')].map((button) => button.textContent);
+    const names = [...host.querySelectorAll('button')].map((button) =>
+      button.getAttribute('aria-label'),
+    );
     expect(names).not.toContain('Add Bookmark');
+  });
+
+  it('the toolbar buttons are icons with their names as labels and tooltips', async () => {
+    const { rpc } = editableRpc(outline);
+    openPanel('bookmarks');
+    await mount(26, rpc);
+    await click(item('Part One'));
+    const toolbar = host.querySelector('[role="toolbar"]');
+    const buttons = [...(toolbar?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(button.querySelector('svg.icon')).not.toBeNull();
+      expect(button.textContent).toBe('');
+      expect(button.getAttribute('aria-label')).toBeTruthy();
+      expect(button.getAttribute('title')).toContain(button.getAttribute('aria-label') ?? '');
+    }
   });
 
   it('Set to Current Page sends the view place, offset included', async () => {
