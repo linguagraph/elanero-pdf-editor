@@ -159,11 +159,15 @@ test('nested dialog: Esc closes Keyboard Shortcuts first, then Preferences; focu
 
   // `.last()` is lazy: after Esc it would name Preferences, so the count is what proves the close.
   await page.keyboard.press('Escape');
+  // FOCUSDIAG probe: TEMPORARY, remove before merge
+  console.log('FOCUSDIAG', await page.evaluate(() => { const a = document.activeElement; return a ? (a.tagName + ' ' + (a.getAttribute('aria-label') || a.textContent || '').slice(0, 60) + ' ' + a.className) : 'none'; }));
   await expect(page.getByRole('dialog')).toHaveCount(1);
   await expect(prefs).toBeVisible();
   await expect(shortcutsButton).toBeFocused();
 
   await page.keyboard.press('Escape');
+  // FOCUSDIAG probe: TEMPORARY, remove before merge
+  console.log('FOCUSDIAG', await page.evaluate(() => { const a = document.activeElement; return a ? (a.tagName + ' ' + (a.getAttribute('aria-label') || a.textContent || '').slice(0, 60) + ' ' + a.className) : 'none'; }));
   await expect(prefs).toBeHidden();
 });
 

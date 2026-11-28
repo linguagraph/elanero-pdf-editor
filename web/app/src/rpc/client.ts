@@ -337,9 +337,15 @@ export class RpcClient {
 
     return new Promise<CallValue<M>>((resolve, reject) => {
       let settled = false;
+      const startedAt = Date.now(); // RPCDIAG probe: TEMPORARY, remove before merge
       const settle = (action: () => void): void => {
         if (settled) return;
         settled = true;
+        // RPCDIAG probe: TEMPORARY, remove before merge
+        const elapsedMs = Date.now() - startedAt;
+        if (elapsedMs > 500) {
+          console.log(`RPCDIAG ${method} start=${new Date(startedAt).toISOString()} elapsed=${elapsedMs}ms`);
+        }
         clearTimeout(timer);
         signal?.removeEventListener('abort', onAbort);
         action();
