@@ -52,8 +52,7 @@ PNGs are not regenerated here; a web-e2e update run (`web-ui-snapshots`) refresh
 - Production change about 40 lines, under the 400 cap.
 - Guide `docs/guide/web.md` Side panels: organizer bullet "right rail" becomes "left rail"; the
   Thumbnails and Bookmarks bullets say "right rail" but are already on the left, so they are fixed too.
-- Tablet and phone keep the left `drawer` for the organizer.
-- The empty right rail stays as a 48 px column; follow-up.
+- Tablet and phone use the left `drawer`. The empty right rail is a follow-up.
 
 ## Owner question
 
