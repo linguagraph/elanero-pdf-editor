@@ -146,13 +146,36 @@ jobs:
         working-directory: web/app
         run: npx playwright install --with-deps ${{ matrix.browser }}
 
+      # Logged before and after the feature step, for every browser (small on purpose). WebKit shards were
+      # shut down by the runner (#420, #718); these numbers show whether memory or CPU ran out. The "after"
+      # step runs even when the features failed or were cancelled; a killed runner cannot run it.
+      - name: Resource log before the feature round trips
+        if: ${{ always() }}
+        run: |
+          echo "== before the feature step (${{ matrix.browser }}, shard ${{ matrix.shard }}) =="
+          free -m
+          nproc
+          ps aux --sort=-%mem | head -15
+
       # One browser and one shard per job. The features config builds and previews the app itself (port 4175).
+      # WebKit runs two workers, not the E2E_WORKERS default (4): under WebKit the first engine call after a
+      # file opens exceeds its deadline, and the runner was shut down with four workers (#420, #718).
+      # Chromium and Firefox keep the configured count.
       - name: Run the feature round trips (${{ matrix.browser }}, shard ${{ matrix.shard }})
         id: features
         working-directory: web/app
         env:
           PLAYWRIGHT_HTML_OPEN: never
+          E2E_WORKERS: ${{ matrix.browser == 'webkit' && '2' || vars.E2E_WORKERS || '4' }}
         run: npx playwright test -c playwright.features.config.ts --project=${{ matrix.browser }} --shard=${{ matrix.shard }} --reporter=list,html
+
+      - name: Resource log after the feature round trips
+        if: ${{ always() }}
+        run: |
+          echo "== after the feature step (${{ matrix.browser }}, shard ${{ matrix.shard }}) =="
+          free -m
+          nproc
+          ps aux --sort=-%mem | head -15
 
       # The W5.1a engine check (e2e/long-document.spec.ts) runs under the main config, Chromium only
       # (W8.1 section 4). Its own --output folder: Playwright clears its output folder at the start of

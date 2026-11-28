@@ -66,6 +66,34 @@ def test_shard_matrix_gives_one_chromium_job_and_three_shards_for_webkit_and_fir
     }
 
 
+def test_webkit_feature_step_runs_two_workers_and_other_browsers_keep_the_default() -> None:
+    # The features config reads E2E_WORKERS (CI only); WebKit gets 2, the others keep the variable
+    # or its default of 4 (#420: WebKit runs were shut down by the runner with more workers).
+    steps = _doc()["jobs"]["web-e2e"]["steps"]
+    feature = next(s for s in steps if s.get("id") == "features")
+    workers = str(feature["env"]["E2E_WORKERS"])
+    assert workers.startswith("${{ matrix.browser == 'webkit' && '2' || ")
+    assert workers.endswith("vars.E2E_WORKERS || '4' }}")
+
+
+def test_resource_log_runs_before_and_after_the_feature_step_for_every_browser() -> None:
+    steps = _doc()["jobs"]["web-e2e"]["steps"]
+    names = [str(s.get("name", "")) for s in steps]
+    feature_at = names.index(
+        "Run the feature round trips (${{ matrix.browser }}, shard ${{ matrix.shard }})"
+    )
+    before = steps[feature_at - 1]
+    after = steps[feature_at + 1]
+    assert before["name"] == "Resource log before the feature round trips"
+    assert after["name"] == "Resource log after the feature round trips"
+    for step in (before, after):
+        assert step["if"] == "${{ always() }}"
+        for command in ("free -m", "nproc", "ps aux --sort=-%mem | head -15"):
+            assert command in step["run"]
+    # No browser condition: the log is chromium-agnostic.
+    assert "matrix.browser ==" not in str(before["run"])
+
+
 def test_feature_step_runs_its_shard_and_artifacts_carry_the_shard() -> None:
     steps = _doc()["jobs"]["web-e2e"]["steps"]
     feature = next(s for s in steps if s.get("id") == "features")
