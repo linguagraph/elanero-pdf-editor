@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageRpc } from '../engine/engineConnection';
 import { t } from '../i18n/t';
 import type { OutlineEntry } from '../rpc/generated';
+import { ICONS, type IconName } from '../theme/icons.generated';
 import type { ViewPlace } from '../view/layout';
 import { BookmarksPanel } from './BookmarksPanel';
 import { RailButton } from '../layout/RailButton';
@@ -467,14 +468,44 @@ function addingRpc(before: OutlineEntry[], after: OutlineEntry[]) {
   return { rpc: { call } as unknown as PageRpc, call };
 }
 
-// The toolbar's buttons are icons, so a button is found by its accessible name (aria-label); the
-// empty state's text button has no aria-label, so its visible text is checked too.
-function buttonNamed(text: string): HTMLButtonElement {
+// The toolbar's buttons are icons, so a button is found by its accessible name (aria-label) only.
+function buttonNamed(name: string): HTMLButtonElement {
   const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.getAttribute('aria-label') === text || button.textContent === text,
+    (button) => button.getAttribute('aria-label') === name,
   );
-  if (found === undefined) throw new Error(`no button ${text}`);
+  if (found === undefined) throw new Error(`no button ${name}`);
   return found;
+}
+
+// The empty state's text button has no aria-label, so it is found by its visible text.
+function buttonWithText(text: string): HTMLButtonElement {
+  const found = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === text,
+  );
+  if (found === undefined) throw new Error(`no button with text ${text}`);
+  return found;
+}
+
+// The shape of each icon element, as "tag attr=value ..." (sorted), so two icons compare equal only
+// when their drawn parts match.
+function shapesOf(svg: Element | null): string[] {
+  return [...(svg?.children ?? [])].map(
+    (el) =>
+      `${el.tagName.toLowerCase()} ${[...el.attributes]
+        .map((attr) => `${attr.name}=${attr.value}`)
+        .sort()
+        .join(' ')}`,
+  );
+}
+
+function shapesOfIcon(name: IconName): string[] {
+  return ICONS[name].map(
+    ([tag, attrs]) =>
+      `${tag} ${Object.entries(attrs)
+        .map(([key, value]) => `${key}=${String(value)}`)
+        .sort()
+        .join(' ')}`,
+  );
 }
 
 const ADD_KEYS: KeyboardEventInit = { key: 'N', altKey: true, shiftKey: true, code: 'KeyN' };
@@ -573,7 +604,7 @@ describe('bookmarks adding (W5.2 S3)', () => {
     const { rpc, call } = editableRpc([]);
     openPanel('bookmarks');
     await mount(25, rpc);
-    await click(buttonNamed('Add Bookmark'));
+    await click(buttonWithText('Add Bookmark'));
     expect(call).toHaveBeenCalledWith('actions.run', {
       handle: 'h',
       name: 'outline.add',
@@ -583,25 +614,39 @@ describe('bookmarks adding (W5.2 S3)', () => {
     closePanel('left');
     openPanel('bookmarks');
     await mount(26, readOnly);
-    const names = [...host.querySelectorAll('button')].map((button) =>
-      button.getAttribute('aria-label'),
+    // The empty state's button has no aria-label, so its visible text is its name here.
+    const names = [...host.querySelectorAll('button')].map(
+      (button) => button.getAttribute('aria-label') ?? button.textContent,
     );
     expect(names).not.toContain('Add Bookmark');
   });
 
-  it('the toolbar buttons are icons with their names as labels and tooltips', async () => {
+  it('each toolbar button is icon-only and draws the icon its label names', async () => {
     const { rpc } = editableRpc(outline);
     openPanel('bookmarks');
     await mount(26, rpc);
     await click(item('Part One'));
+    // Each label with the icon that must draw it: swapping two icons changes the shapes and fails.
+    const expected: Array<[string, IconName]> = [
+      [t('bookmarks.add'), 'bookmark-plus'],
+      [t('bookmarks.addChild'), 'plus'],
+      [t('bookmarks.rename'), 'pencil'],
+      [t('bookmarks.delete'), 'trash-2'],
+      [t('bookmarks.moveUp'), 'chevron-up'],
+      [t('bookmarks.moveDown'), 'chevron-down'],
+      [t('bookmarks.indent'), 'arrow-right'],
+      [t('bookmarks.outdent'), 'arrow-left'],
+      [t('bookmarks.setDestination'), 'map-pin'],
+    ];
     const toolbar = host.querySelector('[role="toolbar"]');
-    const buttons = [...(toolbar?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
-    expect(buttons.length).toBeGreaterThan(0);
-    for (const button of buttons) {
-      expect(button.querySelector('svg.icon')).not.toBeNull();
-      expect(button.textContent).toBe('');
-      expect(button.getAttribute('aria-label')).toBeTruthy();
-      expect(button.getAttribute('title')).toContain(button.getAttribute('aria-label') ?? '');
+    expect(toolbar?.querySelectorAll('button')).toHaveLength(expected.length);
+    for (const [label, icon] of expected) {
+      const button = buttonNamed(label);
+      const svg = button.querySelector('svg.icon');
+      expect(svg, label).not.toBeNull();
+      expect(button.textContent, label).toBe('');
+      expect(shapesOf(svg), label).toEqual(shapesOfIcon(icon));
+      expect(button.getAttribute('title'), label).toContain(label);
     }
   });
 

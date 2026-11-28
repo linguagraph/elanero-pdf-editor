@@ -1,6 +1,8 @@
 # Bookmarks panel: icon buttons that take less space (#826)
 
-**Status: approved in the one-PR flow; implementation follows in this PR.**
+**Status: approved in the one-PR flow; implemented in this PR.**
+
+Line numbers in this note refer to 50e87fb (main before this PR).
 
 ## Verified status (main at 50e87fb)
 

@@ -87,6 +87,7 @@ const COARSE_TARGETS: Array<[file: string, selector: string, props: string[]]> =
   ['edit/edit.css', '.edit-style-bar select', ['min-width', 'min-height']],
   ['edit/edit.css', '.edit-font-option', ['min-width', 'min-height']],
   ['theme/ThemeSwitch.css', '.theme-switch-option', ['min-width', 'min-height']],
+  ['bookmarks/bookmarks.css', '.bookmarks-action--icon', ['width', 'height']],
   ['app.css', '.update-banner button', ['min-width', 'min-height']],
   ['combine/combine.css', '.combine-pages input', ['min-width', 'min-height']],
   ['combine/combine.css', '.combine-button', ['min-width', 'min-height']],
