@@ -15,8 +15,8 @@ export type PanelKey =
   | 'comments'
   | 'organizer';
 
-// Which side each panel docks on. Navigation panels are on the left, as the desktop has them; the
-// page organizer stays on the right until its own placement is decided (W6.1).
+// Which side each panel docks on. Every panel is on the left, in the left stack; the organizer
+// joined it last (issue #827), after Comments.
 export const PANEL_SIDE: Readonly<Record<PanelKey, Side>> = {
   pages: 'left',
   bookmarks: 'left',
@@ -25,7 +25,7 @@ export const PANEL_SIDE: Readonly<Record<PanelKey, Side>> = {
   search: 'left',
   redactions: 'left',
   comments: 'left',
-  organizer: 'right',
+  organizer: 'left',
 };
 
 type OpenState = Readonly<Record<Side, PanelKey | null>>;

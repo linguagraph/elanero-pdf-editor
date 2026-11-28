@@ -166,9 +166,10 @@ const LEFT_RAIL_PANELS = [
   'redactions',
   'search',
   'comments',
+  'organizer',
 ];
 
-test('desktop width: the left rail holds seven panels, in order', async ({ page }) => {
+test('desktop width: the left rail holds eight panels, in order', async ({ page }) => {
   await openAtWidth(page, 1366, 768);
   await showRails(page);
   const buttons = page.getByRole('toolbar', { name: 'Left panels' }).locator('button');
@@ -188,18 +189,16 @@ test('tablet width (800 px): left rail shown, no horizontal scroll', async ({ pa
 
 // The rail buttons show icons, with the name as the tooltip and for screen readers. At the real rail
 // width each icon must sit inside its button and inside the rail, so no label is cut off.
-test('desktop width: every right rail button fits its rail and shows its icon', async ({
-  page,
-}) => {
+test('desktop width: every left rail button fits its rail and shows its icon', async ({ page }) => {
   await openAtWidth(page, 1366, 768);
   await showRails(page);
-  const rail = page.getByRole('toolbar', { name: 'Right panels' });
+  const rail = page.getByRole('toolbar', { name: 'Left panels' });
   const buttons = rail.locator('button');
-  await expect(buttons).toHaveCount(1);
+  await expect(buttons).toHaveCount(LEFT_RAIL_PANELS.length);
   const railBox = await rail.boundingBox();
   // 48 px of rail plus its 1 px border.
   expect(railBox?.width).toBeCloseTo(49, 0);
-  for (let i = 0; i < 1; i += 1) {
+  for (let i = 0; i < LEFT_RAIL_PANELS.length; i += 1) {
     const button = buttons.nth(i);
     const box = await button.boundingBox();
     expect(
