@@ -9,11 +9,14 @@ import { openPreferences } from '../harness/openPreferences';
 import { fixture, openApp, STAGED, watchPage } from './support';
 
 // Whether this browser keeps a file in private storage the way the app needs: a probe file that
-// can be written, then removed.
+// can be written, then removed. The app also lists the folder to find kept fonts again, and a
+// browser whose directory handles cannot be listed (WebKit here) keeps nothing, so that is checked
+// too. The app then reports the font as added for this tab only.
 async function canKeepFonts(page: Page): Promise<boolean> {
   return page.evaluate(async () => {
     try {
       const root = await navigator.storage.getDirectory();
+      if (typeof root.keys !== 'function') return false;
       const handle = await root.getFileHandle('elanero-probe.tmp', { create: true });
       const writable = await handle.createWritable();
       await writable.close();
@@ -54,7 +57,14 @@ test.describe('engine staged', () => {
       buffer: fixture('fonts/TestSans-Regular.ttf'),
     });
     await expect(rows.filter({ hasText: 'Test Sans' })).toBeVisible({ timeout: 60_000 });
-    await expect(dialog.getByRole('status')).toContainText('TestSans-Regular.ttf was added.');
+    // Where the browser keeps fonts, the add is kept; where it cannot, the app says the font works
+    // for this tab only (the same check as step 3's branch below).
+    const keepable = await canKeepFonts(page);
+    await expect(dialog.getByRole('status')).toContainText(
+      keepable
+        ? 'TestSans-Regular.ttf was added.'
+        : 'TestSans-Regular.ttf was added, but could not be kept in this browser.',
+    );
 
     // 2. A restricted font and a garbage file, together: each gets its own refusal, no new rows.
     await picker.setInputFiles([
@@ -73,7 +83,7 @@ test.describe('engine staged', () => {
     );
     await expect(rows).toHaveCount(1);
 
-    if (!(await canKeepFonts(page))) {
+    if (!keepable) {
       // No writable private storage: the font works for this tab only, and the section says so.
       await expect(
         dialog.getByText("This browser can't keep fonts after the tab closes."),

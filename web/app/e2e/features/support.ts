@@ -68,7 +68,10 @@ export async function openPdf(page: Page, name: string, buffer: Buffer): Promise
     mimeType: 'application/pdf',
     buffer,
   });
-  await expect(page.getByRole('tab', { name })).toBeVisible({ timeout: 60_000 });
+  // The file waits for the engine to start (the start-up budget in openApp, 180 s). WebKit's cold
+  // start can run past a 60 s wait with four workers loading Pyodide at once, so the wait is the
+  // same length as the start-up's.
+  await expect(page.getByRole('tab', { name })).toBeVisible({ timeout: 180_000 });
 }
 
 // Counts the dark pixels of one rendered page canvas. A blank canvas gives 0; a page with text
