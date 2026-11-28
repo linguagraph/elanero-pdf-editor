@@ -38,7 +38,6 @@ are registered. No panel opens on the right by default any more.
 - `e2e/layout.spec.ts:161-171` (`LEFT_RAIL_PANELS`): add `organizer`.
 - `e2e/layout.spec.ts:191-205`: expects one right rail button; retarget to the left organizer button.
 - `e2e/layout.spec.ts:139`, `:148-157`: right rail visible at the edge; still true, kept.
-- `src/layout/railButton.test.tsx`, `e2e/visual-ui.spec.ts:126-141`: unaffected.
 
 ## Goldens that will change (tests/golden/web/linux)
 
