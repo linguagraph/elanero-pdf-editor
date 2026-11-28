@@ -417,7 +417,7 @@ describe('App side rails (W4.2a S2)', () => {
     expect(frame().dataset.rails).toBe('hidden');
   });
 
-  it('shows the navigation panels on the left and Organize on the right once a document opens, and Ctrl+F opens Search', async () => {
+  it('shows the navigation panels, Organize last, all on the left once a document opens, and Ctrl+F opens Search', async () => {
     const scripted = drawingEngine();
     const jobs = { acquire: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
     act(() => {
@@ -446,12 +446,8 @@ describe('App side rails (W4.2a S2)', () => {
       'redactions',
       'search',
       'comments',
+      'organizer',
     ]);
-    expect(
-      [...host.querySelectorAll<HTMLElement>('.app-rail-right [data-panel]')].map(
-        (button) => button.dataset.panel,
-      ),
-    ).toEqual(['organizer']);
 
     // Pages is open by default, and its button names the panel it controls.
     const pages = host.querySelector<HTMLElement>('[data-panel="pages"]');
@@ -1513,9 +1509,11 @@ describe('App: Organize Pages and the view toggles (W4.3a S6)', () => {
     return el;
   }
 
-  it('Organize Pages from the ribbon opens the organizer panel on the right', async () => {
+  it('Organize Pages from the ribbon opens the organizer panel in the left stack', async () => {
     await openDocument();
-    expect(host.querySelector('#app-panel-right')).toBeNull();
+    expect(host.querySelector('#app-panel-left')?.textContent ?? '').not.toContain(
+      t('organizer.title'),
+    );
 
     openRibbonTab(TAB_LABELS.organize);
     act(() => {
@@ -1525,7 +1523,7 @@ describe('App: Organize Pages and the view toggles (W4.3a S6)', () => {
     expect(host.querySelector('[data-panel="organizer"]')?.getAttribute('aria-expanded')).toBe(
       'true',
     );
-    expect(host.querySelector('#app-panel-right')?.textContent).toContain(t('organizer.title'));
+    expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('organizer.title'));
   });
 
   it('Rotate Pages Right from the ribbon with the panel closed opens it and rotates the current page', async () => {
@@ -1726,6 +1724,28 @@ describe('App Comments panel (W7.1b S1)', () => {
     });
     expect(commentsPanelButton().getAttribute('aria-expanded')).toBe('true');
     expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('comments.title'));
+  });
+
+  it('with the left rail hidden, the app menu lists the organizer and opens it', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await openDocument();
+    act(() => {
+      host.querySelector<HTMLButtonElement>(`button[aria-label="${t('appMenu.label')}"]`)?.click();
+    });
+    const organizerItem = (): HTMLElement | undefined =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (element) => element.textContent?.trim() === t('organizer.title'),
+      );
+    await until(() => organizerItem() !== undefined);
+    const item = organizerItem();
+    if (item === undefined) throw new Error('no organizer menu item');
+    act(() => {
+      item.click();
+    });
+    expect(host.querySelector('[data-panel="organizer"]')?.getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('organizer.title'));
   });
 
   it('the panel Import button opens the Import Comments dialog', async () => {

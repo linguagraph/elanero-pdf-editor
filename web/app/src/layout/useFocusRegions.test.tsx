@@ -19,7 +19,6 @@ function Shell({
       header={<button type="button">Open</button>}
       leftRail={<button type="button">Pages</button>}
       leftPanel={withLeftPanel ? <button type="button">Thumbnail</button> : undefined}
-      rightRail={<button type="button">Organize</button>}
       statusBar={withStatus ? <button type="button">Job</button> : undefined}
     >
       <button type="button">First</button>
@@ -82,15 +81,15 @@ function focusButton(text: string): void {
 }
 
 describe('F6 and Shift+F6', () => {
-  it('cycles ribbon, left, page, right, status and notifications in order', () => {
+  it('cycles ribbon, left, page, status and notifications in order', () => {
     render(<Shell />);
     focusButton('Open');
     const seen: (string | null)[] = [];
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 4; i += 1) {
       press('F6');
       seen.push(active());
     }
-    expect(seen).toEqual(['Pages', 'First', 'Organize', 'Job', 'Undo']);
+    expect(seen).toEqual(['Pages', 'First', 'Job', 'Undo']);
   });
 
   it('Shift+F6 walks the same order backwards', () => {
@@ -106,14 +105,14 @@ describe('F6 and Shift+F6', () => {
     render(<Shell withStatus={false} />);
     focusButton('First');
     press('F6');
-    expect(active()).toBe('Organize');
+    expect(active()).toBe('Undo');
   });
 
   it('puts the keyboard back where it was when it left a region', () => {
     render(<Shell />);
     focusButton('Second');
     press('F6');
-    expect(active()).toBe('Organize');
+    expect(active()).toBe('Job');
     press('F6', { shift: true });
     expect(active()).toBe('Second');
   });
@@ -162,7 +161,7 @@ describe('F6 and Shift+F6', () => {
     render(<Shell />);
     const status = document.querySelector<HTMLElement>('.app-frame-status');
     if (status) status.style.visibility = 'hidden';
-    focusButton('Organize');
+    focusButton('First');
     press('F6');
     expect(active()).toBe('Undo');
   });

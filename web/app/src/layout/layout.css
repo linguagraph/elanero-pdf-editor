@@ -12,15 +12,10 @@
   max-width: 100%;
   overflow: hidden;
   --drawer-left: 0px;
-  --rail-right-width: 0px;
 }
 
-/* The rails take their width only while they show: the start page hides both (W1.6 section 1). The
-   drawer and the overlay offsets follow the rails, so they sit beside them and not under them. */
-.app-frame[data-rails='shown'] {
-  --rail-right-width: var(--layout-rail-width);
-}
-
+/* The rails take their width only while they show: the start page hides them (W1.6 section 1). The
+   drawer offset follows the left rail, so the drawer sits beside it and not under it. */
 .app-frame[data-rails='shown'][data-left-rail='shown'] {
   --drawer-left: var(--layout-rail-width);
 }
@@ -110,10 +105,6 @@
   box-shadow: inset -3px 0 0 var(--color-accent);
 }
 
-.app-rail-right > button[aria-expanded='true'] {
-  box-shadow: inset 3px 0 0 var(--color-accent);
-}
-
 /* The icon of a rail button; the name is read by screen readers and shown as the tooltip. */
 .rail-icon {
   flex: 0 0 auto;
@@ -153,10 +144,6 @@
 .app-rail > button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
-}
-
-.app-rail-right {
-  border-left: 1px solid var(--color-border);
 }
 
 .app-frame[data-left-rail='hidden'] .app-rail-left {
@@ -233,12 +220,12 @@
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
 }
 
-/* A right panel below the wide tier floats over the page area, beside the right rail. */
+/* A right panel below the wide tier floats over the page area, at the window's right edge. */
 .app-frame[data-right-panel='overlay'] .app-panel-right {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: var(--rail-right-width);
+  right: 0;
   z-index: 2;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
 }

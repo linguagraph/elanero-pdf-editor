@@ -19,7 +19,6 @@ export interface AppFrameProps {
   leftPanel?: ReactNode;
   children: ReactNode;
   rightPanel?: ReactNode;
-  rightRail?: ReactNode;
   statusBar?: ReactNode;
   // The start page replaces the rails too (W1.6 section 1), so they are hidden while it shows.
   readonly railsHidden?: boolean;
@@ -36,7 +35,6 @@ export function AppFrame({
   leftPanel,
   children,
   rightPanel,
-  rightRail,
   statusBar,
   railsHidden = false,
   onDismissPanel,
@@ -157,15 +155,6 @@ export function AppFrame({
             />
           </aside>
         ) : null}
-        <div
-          className="app-rail app-rail-right"
-          data-region="right"
-          role="toolbar"
-          aria-orientation="vertical"
-          aria-label={t('layout.rightRail')}
-        >
-          {rightRail}
-        </div>
       </div>
       {statusBar ? (
         <footer

@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 
 describe('side panel store', () => {
-  it('docks the navigation panels on the left and the organizer on the right', () => {
+  it('docks every panel in the left stack, the organizer last', () => {
     expect(PANEL_SIDE).toEqual({
       pages: 'left',
       bookmarks: 'left',
@@ -24,7 +24,7 @@ describe('side panel store', () => {
       search: 'left',
       redactions: 'left',
       comments: 'left',
-      organizer: 'right',
+      organizer: 'left',
     });
   });
 
@@ -36,15 +36,14 @@ describe('side panel store', () => {
     expect(fresh.openPanelOf('right')).toBeNull();
   });
 
-  it('opens a panel on its side, and closes the other panel on that side only', () => {
+  it('opens a panel in the left stack, and a new panel replaces the open one', () => {
     openPanel('pages');
     openPanel('organizer');
-    expect(openPanelOf('left')).toBe('pages');
-    expect(openPanelOf('right')).toBe('organizer');
+    expect(openPanelOf('left')).toBe('organizer');
+    expect(openPanelOf('right')).toBeNull();
 
     openPanel('bookmarks');
     expect(openPanelOf('left')).toBe('bookmarks');
-    expect(openPanelOf('right')).toBe('organizer');
   });
 
   it('toggles a panel: opens it, then closes it from the same key', () => {
@@ -56,8 +55,8 @@ describe('side panel store', () => {
 
   it('closes a side', () => {
     openPanel('organizer');
-    closePanel('right');
-    expect(openPanelOf('right')).toBeNull();
+    closePanel('left');
+    expect(openPanelOf('left')).toBeNull();
   });
 
   it('notifies each subscriber once per change, and not when nothing changes', () => {

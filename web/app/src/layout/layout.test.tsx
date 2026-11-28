@@ -142,9 +142,11 @@ describe('AppFrame', () => {
     );
     const frame = host.querySelector<HTMLElement>('.app-frame');
     expect(frame?.dataset.rails).toBe('hidden');
+    // The left rail is the only rail: there is no right rail (issue 827).
     const rails = host.querySelectorAll('.app-rail');
-    expect(rails).toHaveLength(2);
-    for (const rail of rails) expect(rail.getAttribute('role')).toBe('toolbar');
+    expect(rails).toHaveLength(1);
+    expect(rails[0]?.getAttribute('role')).toBe('toolbar');
+    expect(host.querySelector('.app-rail-right')).toBeNull();
 
     render(
       <AppFrame header={<span>top</span>} leftRail={<span>left</span>}>

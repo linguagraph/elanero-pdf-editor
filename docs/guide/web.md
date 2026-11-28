@@ -196,11 +196,11 @@ message saying whether it was added.
 
 ## Side panels
 
-- **Thumbnails.** The **Thumbnails** button on the right rail opens a panel with a small preview of
+- **Thumbnails.** The **Thumbnails** button on the left rail opens a panel with a small preview of
   every page. Click a preview to go to that page. The panel opens and closes for each open
   document separately, and it is not remembered after a reload. The previews follow the layers you
   show or hide in the Layers panel.
-- **Bookmarks.** The **Bookmarks** button on the right rail opens the document's outline as a tree.
+- **Bookmarks.** The **Bookmarks** button on the left rail opens the document's outline as a tree.
   Use the arrow beside an entry to expand or collapse it, and click an entry to go to its page.
   With the keyboard, Up and Down move through the entries, Right and Left open and close them,
   and Enter goes to the page.
@@ -259,7 +259,7 @@ message saying whether it was added.
   comment's text; Delete (or the Delete key) removes the thread with its replies; Undo reverses either. A locked comment can't be changed. The panel opens
   and closes for each open document, and the list is read again after each change, undo, redo and
   save. A very long list is cut short, and the panel says so.
-- **Organize pages.** The **Organize pages** button on the right rail opens a panel with a
+- **Organize pages.** The **Organize pages** button at the foot of the left rail opens a panel with a
   thumbnail of every page. Click a page to select it, Ctrl-click to add or remove one, and
   Shift-click to select a range. The actions are icon buttons: each one's name shows as a tooltip
   when you rest the pointer on it, and screen readers read the same name. Then rotate the selected

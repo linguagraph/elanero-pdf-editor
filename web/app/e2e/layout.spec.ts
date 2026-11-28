@@ -53,7 +53,8 @@ for (const [width, height] of [
     await openAtWidth(page, width, height);
     await expect(page.locator('.app-frame')).toHaveAttribute('data-rails', 'hidden');
     await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeHidden();
-    await expect(page.getByRole('toolbar', { name: 'Right panels' })).toBeHidden();
+    // No right rail is rendered at any width (issue #827), so none is in the DOM.
+    await expect(page.getByRole('toolbar', { name: 'Right panels' })).toHaveCount(0);
     expect(await horizontalOverflow(page)).toBe(0);
     expect(await pageAreaOverflow(page)).toBe(0);
   });
@@ -136,25 +137,36 @@ test('phone width (390 px): no horizontal scroll, left panels rail hidden by the
   expect(await horizontalOverflow(page)).toBe(0);
   await showRails(page);
   await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeHidden();
-  await expect(page.getByRole('toolbar', { name: 'Right panels' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Right panels' })).toHaveCount(0);
 });
 
-test('desktop width (1366 px): both rails at their edges, panels docked', async ({ page }) => {
+test('desktop width (1366 px): the left rail at its edge, no right rail, panels docked', async ({
+  page,
+}) => {
   await openAtWidth(page, 1366, 768);
   await expect(page.locator('.app-frame')).toHaveAttribute('data-tier', 'wide');
   await showRails(page);
   expect(await horizontalOverflow(page)).toBe(0);
   const left = page.getByRole('toolbar', { name: 'Left panels' });
-  const right = page.getByRole('toolbar', { name: 'Right panels' });
   await expect(left).toBeVisible();
-  await expect(right).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Right panels' })).toHaveCount(0);
   await expect(page.locator('.app-frame')).toHaveAttribute('data-left-rail', 'shown');
   // The left rail sits at the window's left edge, 48 px plus its 1 px border.
   const leftBox = await left.boundingBox();
   expect(leftBox?.x).toBeCloseTo(0, 0);
   expect(leftBox?.width).toBeCloseTo(49, 0);
-  const rightBox = await right.boundingBox();
-  expect((rightBox?.x ?? 0) + (rightBox?.width ?? 0)).toBeCloseTo(1366, 0);
+  // The organizer (issue #827) is a button of the left rail.
+  await expect(left.locator('button[data-panel="organizer"]')).toBeVisible();
+});
+
+test('medium width (1100 px): the left rail shows and no right rail is rendered', async ({
+  page,
+}) => {
+  await openAtWidth(page, 1100, 700);
+  await showRails(page);
+  expect(await horizontalOverflow(page)).toBe(0);
+  await expect(page.getByRole('toolbar', { name: 'Left panels' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Right panels' })).toHaveCount(0);
 });
 
 // The left rail's panels, top to bottom (App.tsx renders them in this order).
@@ -166,9 +178,10 @@ const LEFT_RAIL_PANELS = [
   'redactions',
   'search',
   'comments',
+  'organizer',
 ];
 
-test('desktop width: the left rail holds seven panels, in order', async ({ page }) => {
+test('desktop width: the left rail holds eight panels, in order', async ({ page }) => {
   await openAtWidth(page, 1366, 768);
   await showRails(page);
   const buttons = page.getByRole('toolbar', { name: 'Left panels' }).locator('button');
@@ -188,18 +201,16 @@ test('tablet width (800 px): left rail shown, no horizontal scroll', async ({ pa
 
 // The rail buttons show icons, with the name as the tooltip and for screen readers. At the real rail
 // width each icon must sit inside its button and inside the rail, so no label is cut off.
-test('desktop width: every right rail button fits its rail and shows its icon', async ({
-  page,
-}) => {
+test('desktop width: every left rail button fits its rail and shows its icon', async ({ page }) => {
   await openAtWidth(page, 1366, 768);
   await showRails(page);
-  const rail = page.getByRole('toolbar', { name: 'Right panels' });
+  const rail = page.getByRole('toolbar', { name: 'Left panels' });
   const buttons = rail.locator('button');
-  await expect(buttons).toHaveCount(1);
+  await expect(buttons).toHaveCount(LEFT_RAIL_PANELS.length);
   const railBox = await rail.boundingBox();
   // 48 px of rail plus its 1 px border.
   expect(railBox?.width).toBeCloseTo(49, 0);
-  for (let i = 0; i < 1; i += 1) {
+  for (let i = 0; i < LEFT_RAIL_PANELS.length; i += 1) {
     const button = buttons.nth(i);
     const box = await button.boundingBox();
     expect(
@@ -251,8 +262,7 @@ async function mountPanel(page: import('@playwright/test').Page, tallBlock = fal
       return el;
     };
     const body = document.querySelector('.app-frame-body');
-    const rail = document.querySelector('.app-rail-right');
-    if (body === null || rail === null) throw new Error('no frame');
+    if (body === null) throw new Error('no frame');
     const panel = make('aside', 'app-panel app-panel-right');
     panel.setAttribute('aria-label', 'Test panel');
     const section = make('section', 'panel');
@@ -274,7 +284,8 @@ async function mountPanel(page: import('@playwright/test').Page, tallBlock = fal
     }
     section.append(header, panelBody);
     panel.append(section);
-    body.insertBefore(panel, rail);
+    // The right panel sits after the page area in the body row (AppFrame), where the rail was.
+    body.append(panel);
   }, tallBlock);
 }
 
