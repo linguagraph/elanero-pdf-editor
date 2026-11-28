@@ -45,11 +45,10 @@ describe('layout breakpoints (W1.6 section 8)', () => {
     });
   });
 
-  it('hides the left rail below 768 px and keeps the right rail', () => {
+  it('hides the left rail below 768 px', () => {
     expect(layoutForWidth(390)).toMatchObject({
       tier: 'phone',
       leftRail: false,
-      rightRail: true,
     });
   });
 });

@@ -1726,6 +1726,28 @@ describe('App Comments panel (W7.1b S1)', () => {
     expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('comments.title'));
   });
 
+  it('with the left rail hidden, the app menu lists the organizer and opens it', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await openDocument();
+    act(() => {
+      host.querySelector<HTMLButtonElement>(`button[aria-label="${t('appMenu.label')}"]`)?.click();
+    });
+    const organizerItem = (): HTMLElement | undefined =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (element) => element.textContent?.trim() === t('organizer.title'),
+      );
+    await until(() => organizerItem() !== undefined);
+    const item = organizerItem();
+    if (item === undefined) throw new Error('no organizer menu item');
+    act(() => {
+      item.click();
+    });
+    expect(host.querySelector('[data-panel="organizer"]')?.getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    expect(host.querySelector('#app-panel-left')?.textContent).toContain(t('organizer.title'));
+  });
+
   it('the panel Import button opens the Import Comments dialog', async () => {
     await openDocument();
     act(() => {

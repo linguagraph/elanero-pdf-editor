@@ -465,7 +465,7 @@ export function App({
   // Bumped after an Undo or Redo: an add or a remove of an attachment changes no page, so the
   // attachments panel reloads its list on this counter.
   const [attachmentsRevision, setAttachmentsRevision] = useState(0);
-  // One open panel per side (W4.2a S1): the left rail's panel and the right rail's panel.
+  // The open left panel. Every panel is on the left stack since issue #827, so one is open at a time.
   const leftPanelOpen = useOpenPanel('left');
   // The organizer panel's status, published while it is open (issue 736); null when it is closed.
   const organizerStatus = useOrganizerStatus();
@@ -542,6 +542,14 @@ export function App({
       disabled: !documentShown,
       onAction: () => {
         togglePanel('comments');
+      },
+    },
+    {
+      id: 'organizer',
+      label: t('organizer.title'),
+      disabled: !documentShown,
+      onAction: () => {
+        togglePanel('organizer');
       },
     },
   ];
@@ -879,7 +887,7 @@ export function App({
             nightRef.current = next;
             viewRef.current?.setNight(next);
           },
-          // Organize Pages opens the organizer panel on the right, as its rail button does.
+          // Organize Pages opens the organizer panel in the left stack, as its rail button does.
           'organize-pages': () => openPanel('organizer'),
           // The organize ribbon's page commands run the organizer panel's own actions (issue 736). With the
           // panel closed the handler opens it, and the panel runs the command on the current page.

@@ -12,7 +12,6 @@ export interface LayoutRegions {
   readonly leftRail: boolean;
   // A docked panel takes its own column; a drawer floats over the page area.
   readonly leftPanel: 'docked' | 'drawer';
-  readonly rightRail: boolean;
   readonly rightPanel: 'docked' | 'overlay';
 }
 
@@ -23,15 +22,14 @@ export function layoutTierForWidth(width: number): LayoutTier {
   return 'phone';
 }
 
-// The left rail hides below 768 px (it lives behind the app menu there). The right rail stays at
-// every width, because it is what opens the Properties overlay on narrow screens.
+// The left rail hides below 768 px (it lives behind the app menu there, which lists the panels).
+// There is no right rail: every panel docks or floats on the left stack (issue #827).
 const REGIONS: Record<LayoutTier, LayoutRegions> = {
   wide: {
     tier: 'wide',
     ribbon: 'full',
     leftRail: true,
     leftPanel: 'docked',
-    rightRail: true,
     rightPanel: 'docked',
   },
   medium: {
@@ -39,7 +37,6 @@ const REGIONS: Record<LayoutTier, LayoutRegions> = {
     ribbon: 'compact',
     leftRail: true,
     leftPanel: 'docked',
-    rightRail: true,
     rightPanel: 'overlay',
   },
   tablet: {
@@ -47,7 +44,6 @@ const REGIONS: Record<LayoutTier, LayoutRegions> = {
     ribbon: 'collapsed',
     leftRail: true,
     leftPanel: 'drawer',
-    rightRail: true,
     rightPanel: 'overlay',
   },
   phone: {
@@ -55,7 +51,6 @@ const REGIONS: Record<LayoutTier, LayoutRegions> = {
     ribbon: 'collapsed',
     leftRail: false,
     leftPanel: 'drawer',
-    rightRail: true,
     rightPanel: 'overlay',
   },
 };
